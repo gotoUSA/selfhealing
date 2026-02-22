@@ -23,7 +23,9 @@ class TestNamespaceEmergencySettingsDefaults:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """테스트 전후 싱글톤 초기화."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
         reset_namespace_emergency_settings()
         yield
         reset_namespace_emergency_settings()
@@ -72,7 +74,9 @@ class TestNamespaceEmergencySettingsEnvOverride:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """테스트 전후 싱글톤 초기화."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
         reset_namespace_emergency_settings()
         yield
         reset_namespace_emergency_settings()
@@ -150,7 +154,9 @@ class TestNamespaceEmergencySettingsValidation:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """테스트 전후 싱글톤 초기화."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
         reset_namespace_emergency_settings()
         yield
         reset_namespace_emergency_settings()
@@ -257,14 +263,18 @@ class TestNamespaceEmergencySettingsSingleton:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """테스트 전후 싱글톤 초기화."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
         reset_namespace_emergency_settings()
         yield
         reset_namespace_emergency_settings()
 
     def test_singleton_returns_same_instance(self):
         """싱글톤이 동일한 인스턴스 반환."""
-        from selfhealing.settings.namespace_emergency import get_namespace_emergency_settings
+        from selfhealing.settings.namespace_emergency import (
+            get_namespace_emergency_settings,
+        )
 
         settings1 = get_namespace_emergency_settings()
         settings2 = get_namespace_emergency_settings()

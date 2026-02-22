@@ -9,9 +9,8 @@ Tests for:
 Reference: 34_CHAOS_SAFETY_MECHANISMS.md §5
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timedelta
+from unittest.mock import Mock, patch
+from datetime import timedelta
 
 
 # =============================================================================
@@ -217,7 +216,7 @@ class TestMonotonicTTLMethods:
     
     def test_is_expired_monotonic_uses_helper(self):
         """Test _is_expired_monotonic uses MonotonicTTLHelper."""
-        from selfhealing.services.chaos.base import ChaosExperiment, MonotonicTTLHelper
+        from selfhealing.services.chaos.base import ChaosExperiment
         
         class TestExperiment(ChaosExperiment):
             experiment_type = "test"
@@ -351,7 +350,6 @@ class TestConstantsPackage:
         from selfhealing.services.chaos.constants import (
             CHAOS_DOMAIN_PREFIX,
             CHAOS_METADATA_FLAGS,
-            ExperimentHardCaps,
         )
         
         assert CHAOS_DOMAIN_PREFIX == "chaos_test:"

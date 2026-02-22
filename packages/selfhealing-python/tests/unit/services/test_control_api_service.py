@@ -16,25 +16,25 @@ Tests for services/control_api_service.py - Control API Service.
 - 싱글톤 get_control_api_service()
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
 
-from selfhealing.services.control_api_service import (
-    ReasonClassification,
-    classify_reason,
-    assess_risk_level,
-    ControlRequest,
-    ControlResponse,
-    ControlAPIService,
-    get_control_api_service,
-)
+import pytest
+
 from selfhealing.core.constants import (
     ControlAPIActions,
     ControlAPIEnvironments,
     RiskLevels,
 )
-
+from selfhealing.services.control_api_service import (
+    ControlAPIService,
+    ControlRequest,
+    ControlResponse,
+    ReasonClassification,
+    assess_risk_level,
+    classify_reason,
+    get_control_api_service,
+)
 
 # =============================================================================
 # Fixtures

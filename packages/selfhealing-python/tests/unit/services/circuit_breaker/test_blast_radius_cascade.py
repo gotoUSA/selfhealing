@@ -6,15 +6,10 @@ Test Coverage:
 - 통합 테스트: ServiceConfig + BlastRadius 연동
 """
 
-import pytest
-from datetime import datetime, timezone
 
 from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
-    RecoveryStrategy,
-    CircuitBreakerAdvancedConfig,
 )
-
 
 # =============================================================================
 # 3.2 BlastRadiusIntegration Tests
@@ -71,8 +66,8 @@ class TestBlastRadiusIntegration:
     def test_assess_impact_minimal(self):
         """최소 영향 평가."""
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
-            get_blast_radius_integration,
             BlastRadiusLevel,
+            get_blast_radius_integration,
         )
 
         integration = get_blast_radius_integration()
@@ -91,8 +86,8 @@ class TestBlastRadiusIntegration:
     def test_assess_impact_moderate(self):
         """중간 영향 평가."""
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
-            get_blast_radius_integration,
             BlastRadiusLevel,
+            get_blast_radius_integration,
         )
 
         integration = get_blast_radius_integration()
@@ -116,8 +111,8 @@ class TestBlastRadiusIntegration:
     def test_assess_impact_extensive(self):
         """광범위한 영향 평가."""
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
-            get_blast_radius_integration,
             BlastRadiusLevel,
+            get_blast_radius_integration,
         )
 
         integration = get_blast_radius_integration()
@@ -145,8 +140,8 @@ class TestBlastRadiusIntegration:
     def test_assess_impact_critical_by_count(self):
         """영향 서비스 수로 인한 CRITICAL."""
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
-            get_blast_radius_integration,
             BlastRadiusLevel,
+            get_blast_radius_integration,
         )
 
         integration = get_blast_radius_integration()
@@ -169,8 +164,8 @@ class TestBlastRadiusIntegration:
     def test_assess_impact_critical_by_critical_service(self):
         """critical 서비스 영향으로 인한 CRITICAL."""
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
-            get_blast_radius_integration,
             BlastRadiusLevel,
+            get_blast_radius_integration,
         )
 
         integration = get_blast_radius_integration()
@@ -353,11 +348,11 @@ class TestCascadePreventionIntegration:
 
     def setup_method(self):
         """테스트 전 싱글톤 초기화."""
-        from selfhealing.services.circuit_breaker.service_config import (
-            reset_service_config_manager,
-        )
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
             reset_blast_radius_integration,
+        )
+        from selfhealing.services.circuit_breaker.service_config import (
+            reset_service_config_manager,
         )
 
         reset_service_config_manager()
@@ -365,11 +360,11 @@ class TestCascadePreventionIntegration:
 
     def teardown_method(self):
         """테스트 후 정리."""
-        from selfhealing.services.circuit_breaker.service_config import (
-            reset_service_config_manager,
-        )
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
             reset_blast_radius_integration,
+        )
+        from selfhealing.services.circuit_breaker.service_config import (
+            reset_service_config_manager,
         )
 
         reset_service_config_manager()
@@ -377,11 +372,11 @@ class TestCascadePreventionIntegration:
 
     def test_service_config_and_blast_radius_sync(self):
         """ServiceConfig와 BlastRadius criticality 동기화."""
-        from selfhealing.services.circuit_breaker.service_config import (
-            get_service_config_manager,
-        )
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
             get_blast_radius_integration,
+        )
+        from selfhealing.services.circuit_breaker.service_config import (
+            get_service_config_manager,
         )
 
         # 서비스 설정
@@ -414,12 +409,12 @@ class TestCascadePreventionIntegration:
 
     def test_load_shedding_targets_and_blast_radius(self):
         """Load Shedding 대상과 Blast Radius 조합."""
+        from selfhealing.services.circuit_breaker.blast_radius_integration import (
+            BlastRadiusLevel,
+            get_blast_radius_integration,
+        )
         from selfhealing.services.circuit_breaker.service_config import (
             get_service_config_manager,
-        )
-        from selfhealing.services.circuit_breaker.blast_radius_integration import (
-            get_blast_radius_integration,
-            BlastRadiusLevel,
         )
 
         # 서비스 설정
@@ -450,13 +445,13 @@ class TestCascadePreventionIntegration:
 
     def test_critical_service_protection(self):
         """critical 서비스 보호 확인."""
+        from selfhealing.services.circuit_breaker.blast_radius_integration import (
+            BlastRadiusLevel,
+            get_blast_radius_integration,
+        )
         from selfhealing.services.circuit_breaker.service_config import (
             get_service_config_manager,
             is_critical_service,
-        )
-        from selfhealing.services.circuit_breaker.blast_radius_integration import (
-            get_blast_radius_integration,
-            BlastRadiusLevel,
         )
 
         config_manager = get_service_config_manager()
@@ -487,11 +482,11 @@ class TestModuleLevelConvenienceFunctions:
 
     def setup_method(self):
         """테스트 전 싱글톤 초기화."""
-        from selfhealing.services.circuit_breaker.service_config import (
-            reset_service_config_manager,
-        )
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
             reset_blast_radius_integration,
+        )
+        from selfhealing.services.circuit_breaker.service_config import (
+            reset_service_config_manager,
         )
 
         reset_service_config_manager()
@@ -499,11 +494,11 @@ class TestModuleLevelConvenienceFunctions:
 
     def teardown_method(self):
         """테스트 후 정리."""
-        from selfhealing.services.circuit_breaker.service_config import (
-            reset_service_config_manager,
-        )
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
             reset_blast_radius_integration,
+        )
+        from selfhealing.services.circuit_breaker.service_config import (
+            reset_service_config_manager,
         )
 
         reset_service_config_manager()
@@ -512,11 +507,11 @@ class TestModuleLevelConvenienceFunctions:
     def test_service_config_convenience_functions(self):
         """ServiceConfig 편의 함수."""
         from selfhealing.services.circuit_breaker.service_config import (
-            register_service,
             get_service_config,
             get_services_by_criticality,
             get_shedding_targets,
             is_critical_service,
+            register_service,
         )
 
         # 등록
@@ -554,8 +549,8 @@ class TestModuleLevelConvenienceFunctions:
     def test_blast_radius_convenience_functions(self):
         """BlastRadius 편의 함수."""
         from selfhealing.services.circuit_breaker.blast_radius_integration import (
-            register_service_dependency,
             assess_cb_open_impact,
+            register_service_dependency,
             should_allow_cb_auto_open,
         )
 
@@ -579,27 +574,11 @@ class TestExportsFromInit:
     def test_cascade_prevention_exports_available(self):
         """연쇄 장애 방지 exports가 __init__.py에서 사용 가능한지 확인."""
         from selfhealing.services.circuit_breaker import (
-            # Service Config
-            ServiceConfigManager,
-            get_service_config_manager,
-            reset_service_config_manager,
-            register_service,
-            get_service_config,
-            get_services_by_criticality,
-            get_shedding_targets,
-            is_critical_service,
+            BlastRadiusIntegration,
             # Blast Radius
             BlastRadiusLevel,
-            BlastRadiusAssessment,
-            ServiceDependencyNode,
-            ServiceDependencyGraph,
-            BlastRadiusIntegration,
-            BlastRadiusConfig,
-            get_blast_radius_integration,
-            reset_blast_radius_integration,
-            assess_cb_open_impact,
-            should_allow_cb_auto_open_blast,
-            register_service_dependency,
+            # Service Config
+            ServiceConfigManager,
         )
 
         # 모두 import 가능

@@ -3,9 +3,7 @@ Tests for Metrics Event Handlers.
 """
 
 import logging
-from unittest.mock import Mock, patch, MagicMock
-
-import pytest
+from unittest.mock import Mock, patch
 
 
 class TestEventHandlerHelpers:
@@ -100,7 +98,6 @@ class TestGetSafePendingGauge:
     def test_creates_safe_gauge_wrapper(self):
         """Should create SafeGauge wrapper for raw gauge."""
         from selfhealing.metrics import event_handlers
-        from selfhealing.metrics.safe_gauge import SafeGauge
 
         # Clear cache
         event_handlers._safe_gauge_cache.clear()

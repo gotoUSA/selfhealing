@@ -12,9 +12,8 @@ Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md Â
 from __future__ import annotations
 
 import pytest
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch, PropertyMock
+from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
 
 
 # =============================================================================
@@ -386,7 +385,6 @@ class TestDailyReportGeneration:
     def test_daily_report_data_aggregation(self):
         """DailyReportData should correctly aggregate entries."""
         from selfhealing.services.daily_report.models import DailyReportData, TaskResultEntry
-        from datetime import datetime, timezone
         
         report = DailyReportData()
         

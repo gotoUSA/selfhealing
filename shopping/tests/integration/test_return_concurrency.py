@@ -29,7 +29,6 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.db import connection
-from django.test import TransactionTestCase
 from django.utils import timezone
 
 import pytest

@@ -10,7 +10,7 @@ DLQ Replay Automation 테스트.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 
 # =============================================================================

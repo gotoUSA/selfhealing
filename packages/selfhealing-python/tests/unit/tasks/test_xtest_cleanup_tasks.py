@@ -6,8 +6,9 @@ Celery 태스크 및 Beat Schedule 테스트:
 - get_xtest_cleanup_beat_schedule
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestCleanupXTestArtifactsWrapper:
@@ -32,8 +33,8 @@ class TestCleanupXTestArtifactsWrapper:
     @patch("selfhealing.services.xtest_cleanup_service.get_xtest_cleanup_service")
     def test_cleanup_xtest_artifacts_calls_service(self, mock_get_service):
         """cleanup_xtest_artifacts가 서비스를 호출하는지 검증."""
-        from selfhealing.tasks.xtest_cleanup_tasks import cleanup_xtest_artifacts
         from selfhealing.services.xtest_cleanup_service import XTestCleanupResult
+        from selfhealing.tasks.xtest_cleanup_tasks import cleanup_xtest_artifacts
 
         mock_service = MagicMock()
         mock_service.cleanup_expired_sessions.return_value = XTestCleanupResult(
@@ -127,7 +128,9 @@ class TestGetXTestCleanupBeatSchedule:
 
     def test_beat_schedule_returns_dict(self):
         """Beat 스케줄이 딕셔너리를 반환하는지 검증."""
-        from selfhealing.tasks.xtest_cleanup_tasks import get_xtest_cleanup_beat_schedule
+        from selfhealing.tasks.xtest_cleanup_tasks import (
+            get_xtest_cleanup_beat_schedule,
+        )
 
         schedule = get_xtest_cleanup_beat_schedule()
 
@@ -135,7 +138,9 @@ class TestGetXTestCleanupBeatSchedule:
 
     def test_beat_schedule_contains_cleanup_task(self):
         """Beat 스케줄에 cleanup-xtest-artifacts 태스크가 포함되는지 검증."""
-        from selfhealing.tasks.xtest_cleanup_tasks import get_xtest_cleanup_beat_schedule
+        from selfhealing.tasks.xtest_cleanup_tasks import (
+            get_xtest_cleanup_beat_schedule,
+        )
 
         schedule = get_xtest_cleanup_beat_schedule()
 
@@ -143,7 +148,9 @@ class TestGetXTestCleanupBeatSchedule:
 
     def test_beat_schedule_task_config(self):
         """Beat 스케줄 태스크 설정 검증."""
-        from selfhealing.tasks.xtest_cleanup_tasks import get_xtest_cleanup_beat_schedule
+        from selfhealing.tasks.xtest_cleanup_tasks import (
+            get_xtest_cleanup_beat_schedule,
+        )
 
         schedule = get_xtest_cleanup_beat_schedule()
         task_config = schedule.get("cleanup-xtest-artifacts", {})
@@ -160,7 +167,9 @@ class TestGetXTestCleanupBeatSchedule:
         monkeypatch.setenv("SELFHEALING_XTEST_CLEANUP_CLEANUP_INTERVAL_MINUTES", "15")
         reset_xtest_cleanup_settings()
 
-        from selfhealing.tasks.xtest_cleanup_tasks import get_xtest_cleanup_beat_schedule
+        from selfhealing.tasks.xtest_cleanup_tasks import (
+            get_xtest_cleanup_beat_schedule,
+        )
 
         schedule = get_xtest_cleanup_beat_schedule()
 

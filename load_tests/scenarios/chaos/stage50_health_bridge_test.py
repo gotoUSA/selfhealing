@@ -348,7 +348,7 @@ class HealthBridgeTest:
                 self.log(f"\n{status_icon} {result.phase_name}: {'PASS' if result.success else 'FAIL'}")
                 
                 if not result.success and result.phase_name in ["DB Blackout", "Recovery"]:
-                    self.log(f"  ⚠️  Critical phase failed, stopping test")
+                    self.log("  ⚠️  Critical phase failed, stopping test")
                     break
                     
             except Exception as e:
@@ -382,7 +382,7 @@ class HealthBridgeTest:
         # 핵심 테스트 결과 (Phase 4)
         phase4 = next((r for r in self.results if "Bridge Test" in r.phase_name), None)
         if phase4:
-            self.log(f"\n🎯 CRITICAL TEST (Phase 4 - Bridge During Blackout):")
+            self.log("\n🎯 CRITICAL TEST (Phase 4 - Bridge During Blackout):")
             self.log(f"   Result: {'PASS ✅' if phase4.success else 'FAIL ❌'}")
             if phase4.details:
                 self.log(f"   Success Count: {phase4.details.get('success_count', 0)}/5")

@@ -49,13 +49,10 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
 import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Any
-from collections import defaultdict
+from typing import Dict
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -268,20 +265,20 @@ def _update_phase():
         _rl_stats["phase"] = phase
 
         if phase == "approaching_limit":
-            print(f"\n📈 Phase 2: Approaching Rate Limit")
+            print("\n📈 Phase 2: Approaching Rate Limit")
             print(f"   - Baseline requests: {_rl_stats['phase_metrics']['normal']['requests']}")
             print(f"   - Rate limited: {_rl_stats['phase_metrics']['normal']['rate_limited']}")
         elif phase == "rate_limited":
-            print(f"\n🚫 Phase 3: Rate Limited Scenario")
+            print("\n🚫 Phase 3: Rate Limited Scenario")
             print(f"   - Approaching limit requests: {_rl_stats['phase_metrics']['approaching']['requests']}")
-            print(f"   - Increasing request rate to trigger rate limit")
+            print("   - Increasing request rate to trigger rate limit")
         elif phase == "retry_cascade":
-            print(f"\n🔄 Phase 4: Retry Cascade Observation")
+            print("\n🔄 Phase 4: Retry Cascade Observation")
             print(f"   - Rate limited requests: {_rl_stats['rate_limited_requests']}")
             print(f"   - Retry attempts: {_rl_stats['retry_attempts']}")
-            print(f"   - Observing if retries cause cascade")
+            print("   - Observing if retries cause cascade")
         elif phase == "recovery":
-            print(f"\n✅ Phase 5: Recovery Phase")
+            print("\n✅ Phase 5: Recovery Phase")
             print(f"   - Cascade events: {_rl_stats['retry_cascade_events']}")
             print(f"   - CB state: {_rl_stats['cb_current_state']}")
             _calculate_recovery_metrics()
@@ -453,7 +450,7 @@ def _calculate_recovery_metrics():
 
 def _perform_final_verification():
     """Perform final verification"""
-    print(f"\n📊 Final Verification:")
+    print("\n📊 Final Verification:")
 
     # Check retry respects rate limit
     if _rl_stats["backoff_respected"] + _rl_stats["backoff_ignored"] > 0:
@@ -912,16 +909,16 @@ def on_test_start(environment, **kwargs):
     global _rl_stats
 
     print(f"\n{'='*70}")
-    print(f"🚫 Stage 22: Self-Healing + Rate Limit Conflict Test")
+    print("🚫 Stage 22: Self-Healing + Rate Limit Conflict Test")
     print(f"{'='*70}")
-    print(f"Purpose: Verify retry mechanism doesn't trigger rate limiting (self-DDoS)")
-    print(f"\nConfiguration:")
+    print("Purpose: Verify retry mechanism doesn't trigger rate limiting (self-DDoS)")
+    print("\nConfiguration:")
     print(f"  - Simulated rate limit: {SIMULATED_RATE_LIMIT} req/min")
     print(f"  - Max retry attempts: {MAX_RETRY_ATTEMPTS}")
     print(f"  - Base backoff: {BASE_BACKOFF_S}s")
     print(f"  - Max backoff: {MAX_BACKOFF_S}s")
     print(f"  - Backoff multiplier: {BACKOFF_MULTIPLIER}x")
-    print(f"\nTest Phases:")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_1_NORMAL_BASELINE}s): Normal baseline")
     print(f"  Phase 2 ({PHASE_2_APPROACHING_LIMIT}s): Approaching limit")
     print(f"  Phase 3 ({PHASE_3_RATE_LIMITED}s): Rate limited")
@@ -942,10 +939,10 @@ def on_test_stop(environment, **kwargs):
     _perform_final_verification()
 
     print(f"\n{'='*70}")
-    print(f"📊 Stage 22: Rate Limit Conflict Test Results")
+    print("📊 Stage 22: Rate Limit Conflict Test Results")
     print(f"{'='*70}")
 
-    print(f"\n📈 Request Summary:")
+    print("\n📈 Request Summary:")
     print(f"   - Total requests: {_rl_stats['total_requests']}")
     print(f"   - Successful: {_rl_stats['successful_requests']}")
     print(f"   - Failed: {_rl_stats['failed_requests']}")
@@ -957,14 +954,14 @@ def on_test_stop(environment, **kwargs):
         print(f"   - Success rate: {success_rate:.1%}")
         print(f"   - Rate limit rate: {rate_limit_rate:.1%}")
 
-    print(f"\n🔄 Retry Statistics:")
+    print("\n🔄 Retry Statistics:")
     print(f"   - Total retry attempts: {_rl_stats['retry_attempts']}")
     print(f"   - Retry successes: {_rl_stats['retry_successes']}")
     print(f"   - Retry failures: {_rl_stats['retry_failures']}")
     print(f"   - Retries after rate limit: {_rl_stats['retry_after_rate_limit']}")
     print(f"   - Retry cascade events: {_rl_stats['retry_cascade_events']}")
 
-    print(f"\n⏱️ Backoff Statistics:")
+    print("\n⏱️ Backoff Statistics:")
     print(f"   - Backoff respected: {_rl_stats['backoff_respected']}")
     print(f"   - Backoff ignored: {_rl_stats['backoff_ignored']}")
     print(f"   - Retry-After headers respected: {_rl_stats['retry_after_header_respected']}")
@@ -975,18 +972,18 @@ def on_test_stop(environment, **kwargs):
         print(f"   - Avg backoff: {avg_backoff:.0f}ms")
         print(f"   - Max backoff: {max_backoff:.0f}ms")
 
-    print(f"\n🔌 Circuit Breaker:")
+    print("\n🔌 Circuit Breaker:")
     print(f"   - Current state: {_rl_stats['cb_current_state']}")
     print(f"   - State changes: {len(_rl_stats['cb_state_changes'])}")
     print(f"   - Opened on rate limit: {'Yes' if _rl_stats['cb_opened_on_rate_limit'] else 'No'}")
     print(f"   - Cascade preventions: {_rl_stats['cb_prevented_cascade']}")
 
-    print(f"\n⚠️ Self-DDoS Indicators:")
+    print("\n⚠️ Self-DDoS Indicators:")
     print(f"   - Self-DDoS detected: {'YES ✗' if _rl_stats['self_ddos_detected'] else 'NO ✓'}")
     print(f"   - Self-DDoS events: {_rl_stats['self_ddos_events']}")
     print(f"   - Peak request rate: {_rl_stats['peak_request_rate']:.1f} req/s")
 
-    print(f"\n📊 Phase Metrics:")
+    print("\n📊 Phase Metrics:")
     for phase_name, metrics in _rl_stats["phase_metrics"].items():
         print(f"   {phase_name.capitalize()}:")
         print(f"     - Requests: {metrics['requests']}")
@@ -994,13 +991,13 @@ def on_test_stop(environment, **kwargs):
         if "retry_induced" in metrics:
             print(f"     - Retry induced: {metrics['retry_induced']}")
 
-    print(f"\n📋 Rate Limit Headers:")
+    print("\n📋 Rate Limit Headers:")
     print(f"   - Headers received: {_rl_stats['rate_limit_headers_received']}")
     if _rl_stats["retry_after_values"]:
         avg_retry_after = sum(_rl_stats["retry_after_values"]) / len(_rl_stats["retry_after_values"])
         print(f"   - Avg Retry-After: {avg_retry_after:.0f}s")
 
-    print(f"\n✅ Verification Results:")
+    print("\n✅ Verification Results:")
     all_passed = True
     for check, result in _rl_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
@@ -1008,7 +1005,7 @@ def on_test_stop(environment, **kwargs):
             all_passed = False
         print(f"   - {check}: {status}")
 
-    print(f"\n📈 SLA Metrics:")
+    print("\n📈 SLA Metrics:")
     if _rl_stats["sla"]["rate_limit_recovery_time_s"]:
         print(f"   - Recovery time: {_rl_stats['sla']['rate_limit_recovery_time_s']:.1f}s")
     print(f"   - Cascade prevented: {'✓' if _rl_stats['sla']['cascade_prevented'] else '✗'}")
@@ -1017,9 +1014,9 @@ def on_test_stop(environment, **kwargs):
     # Final verdict
     print(f"\n{'='*70}")
     if all_passed and not _rl_stats["self_ddos_detected"]:
-        print(f"✅ TEST PASSED: No self-DDoS detected, rate limits respected")
+        print("✅ TEST PASSED: No self-DDoS detected, rate limits respected")
     else:
-        print(f"❌ TEST FAILED: Rate limit conflict issues detected")
+        print("❌ TEST FAILED: Rate limit conflict issues detected")
         if _rl_stats["self_ddos_detected"]:
             print(f"   - Self-DDoS detected: {_rl_stats['self_ddos_events']} events")
         if _rl_stats["retry_cascade_events"] > 5:

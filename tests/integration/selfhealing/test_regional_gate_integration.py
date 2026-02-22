@@ -12,7 +12,6 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 """
 
 import os
-import sys
 import pytest
 
 # 이 파일의 모든 테스트는 Redis 필요

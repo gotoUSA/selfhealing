@@ -12,10 +12,12 @@ Scenarios:
 
 from __future__ import annotations
 
-import pytest
 import ssl
-from datetime import datetime, timezone as tz, timedelta
-from unittest.mock import Mock, MagicMock
+from datetime import datetime, timedelta
+from datetime import timezone as tz
+from unittest.mock import Mock
+
+import pytest
 
 
 class TestTLSErrorClassification:
@@ -24,9 +26,9 @@ class TestTLSErrorClassification:
     def test_classify_certificate_expired(self):
         """Expired certificate error classification."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
-            TLSErrorSeverity,
             TLSErrorClassifier,
+            TLSErrorSeverity,
+            TLSErrorType,
         )
 
         error = ssl.SSLError("certificate has expired")
@@ -42,9 +44,9 @@ class TestTLSErrorClassification:
     def test_classify_certificate_not_yet_valid(self):
         """Not yet valid certificate classification."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
-            TLSErrorSeverity,
             TLSErrorClassifier,
+            TLSErrorSeverity,
+            TLSErrorType,
         )
 
         error = ssl.SSLError("certificate is not yet valid")
@@ -57,8 +59,8 @@ class TestTLSErrorClassification:
     def test_classify_certificate_revoked(self):
         """Revoked certificate classification."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
             TLSErrorClassifier,
+            TLSErrorType,
         )
 
         error = ssl.SSLError("certificate revoked")
@@ -70,8 +72,8 @@ class TestTLSErrorClassification:
     def test_classify_hostname_mismatch(self):
         """Hostname mismatch classification."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
             TLSErrorClassifier,
+            TLSErrorType,
         )
 
         error = ssl.SSLError("hostname 'api.example.com' doesn't match")
@@ -83,9 +85,9 @@ class TestTLSErrorClassification:
     def test_classify_self_signed(self):
         """Self-signed certificate classification."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
-            TLSErrorSeverity,
             TLSErrorClassifier,
+            TLSErrorSeverity,
+            TLSErrorType,
         )
 
         error = ssl.SSLError("self signed certificate in certificate chain")
@@ -97,8 +99,8 @@ class TestTLSErrorClassification:
     def test_classify_chain_invalid(self):
         """Invalid certificate chain classification."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
             TLSErrorClassifier,
+            TLSErrorType,
         )
 
         error = ssl.SSLError("unable to get local issuer certificate")
@@ -109,8 +111,8 @@ class TestTLSErrorClassification:
     def test_classify_handshake_timeout_retryable(self):
         """Handshake timeout is retryable."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
             TLSErrorClassifier,
+            TLSErrorType,
         )
 
         error = ssl.SSLError("handshake operation timed out")
@@ -122,8 +124,8 @@ class TestTLSErrorClassification:
     def test_classify_connection_reset_retryable(self):
         """Connection reset is retryable."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
             TLSErrorClassifier,
+            TLSErrorType,
         )
 
         error = Exception("Connection reset by peer")
@@ -135,8 +137,8 @@ class TestTLSErrorClassification:
     def test_classify_protocol_mismatch(self):
         """Protocol version mismatch classification."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
             TLSErrorClassifier,
+            TLSErrorType,
         )
 
         error = ssl.SSLError("unsupported protocol version")
@@ -148,8 +150,8 @@ class TestTLSErrorClassification:
     def test_classify_unknown(self):
         """Unknown error classification."""
         from selfhealing.core.tls_handler import (
-            TLSErrorType,
             TLSErrorClassifier,
+            TLSErrorType,
         )
 
         error = Exception("Some random error")
@@ -165,8 +167,8 @@ class TestCertificateExpiryMonitor:
     def test_certificate_valid(self):
         """Certificate valid for more than 30 days."""
         from selfhealing.core.cert_monitor import (
-            CertificateStatus,
             CertificateExpiryMonitor,
+            CertificateStatus,
         )
 
         monitor = CertificateExpiryMonitor()
@@ -182,8 +184,8 @@ class TestCertificateExpiryMonitor:
     def test_certificate_expiring_soon(self):
         """Certificate expiring in 15 days (warning)."""
         from selfhealing.core.cert_monitor import (
-            CertificateStatus,
             CertificateExpiryMonitor,
+            CertificateStatus,
         )
 
         monitor = CertificateExpiryMonitor()
@@ -198,8 +200,8 @@ class TestCertificateExpiryMonitor:
     def test_certificate_critical(self):
         """Certificate expiring in 3 days (critical)."""
         from selfhealing.core.cert_monitor import (
-            CertificateStatus,
             CertificateExpiryMonitor,
+            CertificateStatus,
         )
 
         monitor = CertificateExpiryMonitor()
@@ -213,8 +215,8 @@ class TestCertificateExpiryMonitor:
     def test_certificate_expired(self):
         """Certificate already expired."""
         from selfhealing.core.cert_monitor import (
-            CertificateStatus,
             CertificateExpiryMonitor,
+            CertificateStatus,
         )
 
         monitor = CertificateExpiryMonitor()
@@ -230,8 +232,8 @@ class TestCertificateExpiryMonitor:
     def test_custom_thresholds(self):
         """Custom warning and critical thresholds."""
         from selfhealing.core.cert_monitor import (
-            CertificateStatus,
             CertificateExpiryMonitor,
+            CertificateStatus,
         )
 
         monitor = CertificateExpiryMonitor(warning_days=60, critical_days=14)
@@ -245,7 +247,6 @@ class TestCertificateExpiryMonitor:
     def test_get_status_message(self):
         """Status message generation."""
         from selfhealing.core.cert_monitor import (
-            CertificateStatus,
             CertificateExpiryMonitor,
         )
 
@@ -267,8 +268,8 @@ class TestCertificateExpiryMonitor:
     def test_naive_datetime_handling(self):
         """Naive datetime is handled correctly."""
         from selfhealing.core.cert_monitor import (
-            CertificateStatus,
             CertificateExpiryMonitor,
+            CertificateStatus,
         )
 
         monitor = CertificateExpiryMonitor()

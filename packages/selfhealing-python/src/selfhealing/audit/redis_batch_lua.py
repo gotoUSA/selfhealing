@@ -99,7 +99,7 @@ class AuditBatchLuaScripts:
     return restored
     """
 
-    def __init__(self, redis_client: "Redis"):
+    def __init__(self, redis_client: Redis):
         """
         AuditBatchLuaScripts 초기화.
 

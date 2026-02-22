@@ -8,9 +8,7 @@ Producer/Consumer 동작을 검증합니다.
 from __future__ import annotations
 
 import json
-import time
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -39,7 +37,6 @@ class TestKafkaPartitionFailure:
     def test_partition_offline_triggers_error_callback(self, mock_kafka_error):
         """파티션 장애 시 에러 콜백이 호출되는지 확인."""
         from selfhealing.adapters.audit.kafka_adapter import KafkaAuditAdapter
-        from selfhealing.interfaces.audit_adapter import AuditEntry
         from selfhealing.settings.kafka import KafkaAuditSettings
 
         mock_producer = MagicMock()

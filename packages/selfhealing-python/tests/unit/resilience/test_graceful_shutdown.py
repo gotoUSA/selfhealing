@@ -9,23 +9,20 @@ Scenarios:
 5. Request context manager
 """
 
-import pytest
-import time
 import threading
-from datetime import datetime, timezone
+import time
 from unittest.mock import Mock
 
-from selfhealing.core.shutdown_coordinator import (
-    ShutdownPhase,
-    RequestState,
-    RequestTracker,
-    GracefulShutdownCoordinator,
-    ShutdownHandler,
-    TrackedRequest,
-)
 from selfhealing.core.request_context import (
     RequestLifecycleContext,
     track_request,
+)
+from selfhealing.core.shutdown_coordinator import (
+    GracefulShutdownCoordinator,
+    RequestState,
+    RequestTracker,
+    ShutdownHandler,
+    ShutdownPhase,
 )
 
 

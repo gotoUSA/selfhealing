@@ -2,7 +2,6 @@
 Tests for Pydantic Settings consistency with legacy dataclass configs.
 """
 
-import pytest
 
 
 class TestPydanticConsistencyWithLegacy:
@@ -14,20 +13,20 @@ class TestPydanticConsistencyWithLegacy:
         """SLAConfig와 SLASettings 기본값 일치."""
         from selfhealing.core.config import SLAConfig
         from selfhealing.settings.sla import SLASettings
-        
+
         legacy = SLAConfig()
         pydantic = SLASettings()
-        
+
         assert pydantic.default_hours == legacy.default_hours
 
     def test_idempotency_consistency(self):
         """IdempotencyConfig와 IdempotencySettings 기본값 일치."""
         from selfhealing.core.config import IdempotencyConfig
         from selfhealing.settings.idempotency import IdempotencySettings
-        
+
         legacy = IdempotencyConfig()
         pydantic = IdempotencySettings()
-        
+
         assert pydantic.default_cache_ttl == legacy.default_cache_ttl
         assert pydantic.extended_cache_ttl == legacy.extended_cache_ttl
         assert pydantic.short_cache_ttl == legacy.short_cache_ttl
@@ -37,10 +36,10 @@ class TestPydanticConsistencyWithLegacy:
         """ForensicConfig와 ForensicSettings 기본값 일치."""
         from selfhealing.core.config import ForensicConfig
         from selfhealing.settings.forensic import ForensicSettings
-        
+
         legacy = ForensicConfig()
         pydantic = ForensicSettings()
-        
+
         assert pydantic.error_message_max_length == legacy.error_message_max_length
         assert pydantic.response_body_max_length == legacy.response_body_max_length
         assert pydantic.max_stack_frames == legacy.max_stack_frames
@@ -50,10 +49,10 @@ class TestPydanticConsistencyWithLegacy:
         """LoggingConfig와 LoggingSettings 기본값 일치."""
         from selfhealing.core.config import LoggingConfig
         from selfhealing.settings.logging_config import LoggingSettings
-        
+
         legacy = LoggingConfig()
         pydantic = LoggingSettings()
-        
+
         assert pydantic.dlq_log_level == legacy.dlq_log_level
         assert pydantic.circuit_breaker_log_level == legacy.circuit_breaker_log_level
         assert pydantic.structured_json == legacy.structured_json
@@ -62,10 +61,10 @@ class TestPydanticConsistencyWithLegacy:
         """MetricsConfig와 MetricsSettings 기본값 일치."""
         from selfhealing.core.config import MetricsConfig
         from selfhealing.settings.metrics import MetricsSettings
-        
+
         legacy = MetricsConfig()
         pydantic = MetricsSettings()
-        
+
         assert pydantic.enabled == legacy.enabled
         assert pydantic.prefix == legacy.prefix
         assert pydantic.collection_interval == legacy.collection_interval
@@ -74,10 +73,10 @@ class TestPydanticConsistencyWithLegacy:
         """NotificationConfig와 NotificationSettings 기본값 일치."""
         from selfhealing.core.config import NotificationConfig
         from selfhealing.settings.notification import NotificationSettings
-        
+
         legacy = NotificationConfig()
         pydantic = NotificationSettings()
-        
+
         assert pydantic.enabled == legacy.enabled
         assert pydantic.critical_threshold == legacy.critical_threshold
         assert pydantic.warning_threshold == legacy.warning_threshold
@@ -87,10 +86,10 @@ class TestPydanticConsistencyWithLegacy:
         """ErrorBudgetConfig와 ErrorBudgetSettings 기본값 일치."""
         from selfhealing.core.config import ErrorBudgetConfig
         from selfhealing.settings.error_budget import ErrorBudgetSettings
-        
+
         legacy = ErrorBudgetConfig()
         pydantic = ErrorBudgetSettings()
-        
+
         assert pydantic.threshold_healthy == legacy.threshold_healthy
         assert pydantic.threshold_caution == legacy.threshold_caution
         assert pydantic.burn_rate_fast_critical == legacy.burn_rate_fast_critical
@@ -100,10 +99,10 @@ class TestPydanticConsistencyWithLegacy:
         """GovernanceConfig와 GovernanceSettings 기본값 일치."""
         from selfhealing.core.config import GovernanceConfig
         from selfhealing.settings.governance import GovernanceSettings
-        
+
         legacy = GovernanceConfig()
         pydantic = GovernanceSettings()
-        
+
         assert pydantic.threshold_operator == legacy.threshold_operator
         assert pydantic.threshold_admin == legacy.threshold_admin
         assert pydantic.emergency_expiry_hours == legacy.emergency_expiry_hours
@@ -113,10 +112,10 @@ class TestPydanticConsistencyWithLegacy:
         """ChaosConfig와 ChaosSettings 기본값 일치."""
         from selfhealing.core.config import ChaosConfig
         from selfhealing.settings.chaos import ChaosSettings
-        
+
         legacy = ChaosConfig()
         pydantic = ChaosSettings()
-        
+
         assert pydantic.max_blast_radius == legacy.max_blast_radius
         assert pydantic.max_failure_rate == legacy.max_failure_rate
         assert pydantic.auto_rollback_enabled == legacy.auto_rollback_enabled
@@ -125,10 +124,10 @@ class TestPydanticConsistencyWithLegacy:
         """DriftThresholdConfig와 DriftThresholdSettings 기본값 일치."""
         from selfhealing.core.config import DriftThresholdConfig
         from selfhealing.settings.drift_threshold import DriftThresholdSettings
-        
+
         legacy = DriftThresholdConfig()
         pydantic = DriftThresholdSettings()
-        
+
         assert pydantic.warning_threshold == legacy.warning_threshold
         assert pydantic.critical_threshold == legacy.critical_threshold
         assert pydantic.alert_enabled == legacy.alert_enabled

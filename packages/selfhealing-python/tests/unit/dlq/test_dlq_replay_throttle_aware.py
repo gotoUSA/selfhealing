@@ -16,21 +16,18 @@ DLQ Replay Throttle-Aware 단위 테스트.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, PropertyMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from selfhealing.interfaces.repositories import FailedOperationData
+from selfhealing.services.dlq.base import DLQServiceBase
+from selfhealing.services.dlq.entry_operations import EntryOperationsMixin
+from selfhealing.services.dlq.query_operations import QueryOperationsMixin
+from selfhealing.services.dlq.replay_operations import ReplayOperationsMixin
+from selfhealing.services.dlq.store_operations import StoreOperationsMixin
 from selfhealing.services.dlq_models import (
     DLQConfig,
-    DLQThrottleBatchReplayResult,
     DLQThrottleReplayResult,
 )
-from selfhealing.services.dlq.replay_operations import ReplayOperationsMixin
-from selfhealing.services.dlq.query_operations import QueryOperationsMixin
-from selfhealing.services.dlq.entry_operations import EntryOperationsMixin
-from selfhealing.services.dlq.store_operations import StoreOperationsMixin
-from selfhealing.services.dlq.base import DLQServiceBase
 
 
 class MockDLQService(

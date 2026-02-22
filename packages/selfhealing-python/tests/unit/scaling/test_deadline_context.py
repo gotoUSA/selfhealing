@@ -14,16 +14,13 @@
 
 from __future__ import annotations
 
-import time
-from unittest.mock import patch
-
 import pytest
 
 from selfhealing.scaling.deadline_context import (
-    DEFAULT_MINIMUM_USEFUL_TIME_MS,
-    DEFAULT_NETWORK_LATENCY_BUFFER_MS,
     DEADLINE_HEADER,
     DEADLINE_META_KEY,
+    DEFAULT_MINIMUM_USEFUL_TIME_MS,
+    DEFAULT_NETWORK_LATENCY_BUFFER_MS,
     _request_deadline,
     clear_deadline,
     deadline_scope,

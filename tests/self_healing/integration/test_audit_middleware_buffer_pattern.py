@@ -16,17 +16,12 @@ Difference from unit tests:
     - 이 통합 테스트는 실제 Django request/response 사이클에서 동작 검증
 """
 
-from datetime import timedelta
-from decimal import Decimal
-from unittest.mock import patch, MagicMock, PropertyMock
-import uuid
-import json
+from unittest.mock import patch, MagicMock
 
 import pytest
-from django.test import RequestFactory, override_settings
-from django.http import HttpResponse, JsonResponse
+from django.test import RequestFactory
+from django.http import HttpResponse
 
-from selfhealing.core.timezone import now
 
 
 # ========================================
@@ -91,7 +86,7 @@ class TestSelfHealingMiddlewareAuditIntegration:
             - 직접 adapter 호출 없음
         """
         from selfhealing.api.django.middleware import SelfHealingMiddleware
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import RequestAuditBuffer
         
         middleware = SelfHealingMiddleware(get_response=lambda r: HttpResponse())
         
@@ -175,7 +170,7 @@ class TestPoolCircuitBreakerAuditIntegration:
             - request의 버퍼에 POOL_CB_REJECTION 이벤트 적재
         """
         from selfhealing.api.django.pool_circuit_breaker import PoolCircuitBreakerMiddleware
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import RequestAuditBuffer
         
         middleware = PoolCircuitBreakerMiddleware(get_response=lambda r: HttpResponse())
         
@@ -268,7 +263,7 @@ class TestGovernanceChecksAuditIntegration:
         Purpose:
             request가 없을 때 직접 adapter를 호출하는지 검증
         """
-        from selfhealing.services.governance_checks import _log_governance_blocked, _get_audit_adapter
+        from selfhealing.services.governance_checks import _log_governance_blocked
         
         with patch('selfhealing.services.governance_checks._get_audit_adapter') as mock_get_adapter:
             mock_adapter = MagicMock()

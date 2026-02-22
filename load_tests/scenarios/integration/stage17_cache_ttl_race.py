@@ -48,11 +48,9 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict
 from collections import defaultdict
 
 # Ensure project root is in sys.path
@@ -188,18 +186,18 @@ def _update_phase():
         _cache_stats["phase"] = phase
 
         if phase == "price_update":
-            print(f"\n💰 Phase 2: Price Update")
-            print(f"   - Updating prices and observing stale reads")
+            print("\n💰 Phase 2: Price Update")
+            print("   - Updating prices and observing stale reads")
         elif phase == "race_condition":
-            print(f"\n🏎️ Phase 3: Race Condition Testing")
-            print(f"   - Heavy reads during TTL window")
+            print("\n🏎️ Phase 3: Race Condition Testing")
+            print("   - Heavy reads during TTL window")
             print(f"   - Stale reads detected: {_cache_stats['stale_reads_detected']}")
         elif phase == "ttl_expiry":
-            print(f"\n⏳ Phase 4: TTL Expiry Wait")
-            print(f"   - Waiting for cache TTL to expire")
+            print("\n⏳ Phase 4: TTL Expiry Wait")
+            print("   - Waiting for cache TTL to expire")
             print(f"   - Cache TTL: {CACHE_TTL_SECONDS}s")
         elif phase == "consistency_check":
-            print(f"\n✅ Phase 5: Consistency Check")
+            print("\n✅ Phase 5: Consistency Check")
             _verify_eventual_consistency()
 
 
@@ -275,7 +273,7 @@ def _record_consistency_check(passed: bool):
 
 def _verify_eventual_consistency():
     """Verify eventual consistency after TTL expiry"""
-    print(f"\n📊 Eventual Consistency Verification:")
+    print("\n📊 Eventual Consistency Verification:")
 
     # Check stale detection
     stale_rate = _cache_stats["stale_reads_detected"] / max(_cache_stats["total_reads_during_race"], 1)
@@ -670,10 +668,10 @@ def on_test_start(environment, **kwargs):
     global _cache_stats
 
     print(f"\n{'='*70}")
-    print(f"🗄️ Stage 17: Cache Invalidation TTL Race Test")
+    print("🗄️ Stage 17: Cache Invalidation TTL Race Test")
     print(f"{'='*70}")
-    print(f"Purpose: Verify cache/DB consistency under TTL race conditions")
-    print(f"\nTest Phases:")
+    print("Purpose: Verify cache/DB consistency under TTL race conditions")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_1_CACHE_WARM_DURATION}s): Cache Warm - Populate cache")
     print(f"  Phase 2 ({PHASE_2_PRICE_UPDATE_DURATION}s): Price Update - Update DB")
     print(f"  Phase 3 ({PHASE_3_RACE_CONDITION_DURATION}s): Race Condition - High read load")
@@ -693,16 +691,16 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Generate final report"""
     print(f"\n{'='*70}")
-    print(f"📊 Stage 17: Cache TTL Race Test Results")
+    print("📊 Stage 17: Cache TTL Race Test Results")
     print(f"{'='*70}")
 
-    print(f"\n📈 Cache Metrics:")
+    print("\n📈 Cache Metrics:")
     print(f"   - Cache hits: {_cache_stats['cache_hits']}")
     print(f"   - Cache misses: {_cache_stats['cache_misses']}")
     cache_hit_rate = _cache_stats["cache_hits"] / max(_cache_stats["cache_hits"] + _cache_stats["cache_misses"], 1)
     print(f"   - Cache hit rate: {cache_hit_rate:.1%}")
 
-    print(f"\n💰 Price Update Metrics:")
+    print("\n💰 Price Update Metrics:")
     print(f"   - Products with price updates: {len(_cache_stats['updated_prices'])}")
     print(f"   - Total reads during race: {_cache_stats['total_reads_during_race']}")
     print(f"   - Stale reads detected: {_cache_stats['stale_reads_detected']}")
@@ -712,12 +710,12 @@ def on_test_stop(environment, **kwargs):
         stale_rate = _cache_stats["stale_reads_detected"] / _cache_stats["total_reads_during_race"]
         print(f"   - Stale read rate: {stale_rate:.1%}")
 
-    print(f"\n📦 Order Validation Metrics:")
+    print("\n📦 Order Validation Metrics:")
     print(f"   - Orders with correct price: {_cache_stats['orders_with_correct_price']}")
     print(f"   - Orders with stale price: {_cache_stats['orders_with_stale_price']}")
     print(f"   - Orders rejected (price mismatch): {_cache_stats['orders_rejected_price_mismatch']}")
 
-    print(f"\n⏱️ Cache Invalidation Timing:")
+    print("\n⏱️ Cache Invalidation Timing:")
     if _cache_stats["invalidation_delays"]:
         avg_delay = sum(_cache_stats["invalidation_delays"]) / len(_cache_stats["invalidation_delays"])
         min_delay = min(_cache_stats["invalidation_delays"])
@@ -726,21 +724,21 @@ def on_test_stop(environment, **kwargs):
         print(f"   - Min delay: {min_delay:.0f}ms")
         print(f"   - Max delay: {max_delay:.0f}ms")
     else:
-        print(f"   - No invalidation delays recorded")
+        print("   - No invalidation delays recorded")
 
-    print(f"\n✅ Consistency Verification:")
+    print("\n✅ Consistency Verification:")
     print(f"   - Checks performed: {_cache_stats['consistency_checks']}")
     print(f"   - Checks passed: {_cache_stats['consistency_passed']}")
     print(f"   - Checks failed: {_cache_stats['consistency_failed']}")
 
-    print(f"\n🔍 Verification Results:")
+    print("\n🔍 Verification Results:")
     for check, result in _cache_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
         print(f"   - {check}: {status}")
 
     # Recovery Latency Report
     recovery = _cache_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
+    print("\n🔄 Recovery Latency Metrics:")
     if _cache_stats["invalidation_delays"]:
         avg_invalidation = sum(_cache_stats["invalidation_delays"]) / len(_cache_stats["invalidation_delays"])
         max_invalidation = max(_cache_stats["invalidation_delays"])
@@ -764,9 +762,9 @@ def on_test_stop(environment, **kwargs):
     # SLA check (consistency should be achieved within TTL)
     recovery["sla_compliant"] = _cache_stats["consistency_failed"] == 0
     if recovery["sla_compliant"]:
-        print(f"   - SLA Status: ✓ Eventual consistency achieved")
+        print("   - SLA Status: ✓ Eventual consistency achieved")
     else:
-        print(f"   - SLA Status: ✗ Consistency failures detected")
+        print("   - SLA Status: ✗ Consistency failures detected")
 
     print(f"\n{'='*70}\n")
 

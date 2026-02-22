@@ -7,8 +7,6 @@ Uses lazy imports to avoid Prometheus registry conflicts.
 
 from unittest.mock import MagicMock, Mock, patch
 
-import pytest
-
 
 class TestConvenienceFunctions:
     """편의 함수 테스트."""
@@ -16,10 +14,10 @@ class TestConvenienceFunctions:
     def test_configure_integration(self):
         """configure_integration 함수."""
         from selfhealing.audit.audit_integration import (
-            configure_integration,
             IntegratedAuditRecorder,
+            configure_integration,
         )
-        
+
         mock_recorder = MagicMock()
         mock_recorder._circuit_breaker = MagicMock()
         mock_recorder._circuit_breaker.state = MagicMock()
@@ -41,7 +39,7 @@ class TestConvenienceFunctions:
     def test_configure_integration_without_callback(self):
         """callback 없이 configure_integration."""
         from selfhealing.audit.audit_integration import configure_integration
-        
+
         mock_recorder = MagicMock()
         mock_recorder._circuit_breaker = MagicMock()
 
@@ -53,7 +51,7 @@ class TestConvenienceFunctions:
     def test_create_command_center_callback(self):
         """Command Center 콜백 생성."""
         from selfhealing.audit.audit_integration import create_command_center_callback
-        
+
         callback = create_command_center_callback(
             endpoint="http://localhost:8000/api/events",
             timeout_seconds=3.0,
@@ -65,7 +63,7 @@ class TestConvenienceFunctions:
     def test_command_center_callback_success(self, mock_urlopen):
         """Command Center 콜백 성공."""
         from selfhealing.audit.audit_integration import create_command_center_callback
-        
+
         mock_response = Mock()
         mock_response.status = 200
         mock_response.__enter__ = Mock(return_value=mock_response)

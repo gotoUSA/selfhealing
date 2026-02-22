@@ -11,17 +11,17 @@ Tests for the dashboard service methods:
 - determine_health_status()
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from datetime import timedelta
-from unittest.mock import Mock, patch, MagicMock
 
 from selfhealing.services.dashboard_service import (
+    AlertInfo,
     DashboardService,
     DashboardSummary,
-    StatusCounts,
-    RecentActivity,
     Distribution,
-    AlertInfo,
+    RecentActivity,
+    StatusCounts,
     get_dashboard_service,
 )
 

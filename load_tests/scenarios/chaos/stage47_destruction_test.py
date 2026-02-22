@@ -20,9 +20,7 @@
 import time
 import random
 import logging
-from typing import Dict, Any, Optional
 from locust import HttpUser, task, between, tag, events
-from locust.runners import MasterRunner, WorkerRunner
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -513,7 +511,7 @@ def on_test_stop(environment, **kwargs):
         db_ok = db['cb_open_detected'] > 0 and fast_fails > 0
         print(f"   - 판정: {'✅ PASS' if db_ok else '❌ FAIL'} - {'CB OPEN + Fast Fail 확인' if db_ok else 'CB OPEN 또는 Fast Fail 미확인'}")
     else:
-        print(f"   - 판정: ⚠️ 데이터 부족")
+        print("   - 판정: ⚠️ 데이터 부족")
         db_ok = False
     
     # 시나리오 2: 에러 버짓 살인마

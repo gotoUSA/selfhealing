@@ -740,7 +740,7 @@ class ExtremeTestRunner:
                 )
                 
                 if resp.status_code in (200, 201):
-                    print(f"      [OK] Chaos injected")
+                    print("      [OK] Chaos injected")
                 else:
                     print(f"      [WARN] Chaos injection: {resp.status_code}")
                 
@@ -757,7 +757,7 @@ class ExtremeTestRunner:
                         "cb_status": cb_data,
                         "timestamp": time.time() - start_time,
                     })
-                    print(f"      [CB] Status captured")
+                    print("      [CB] Status captured")
                 
                 # Emergency 레벨 체크
                 em_resp = self._get(
@@ -871,7 +871,7 @@ class ExtremeTestRunner:
         skipped = sum(1 for r in self.results if r.status == "skipped")
         total = len(self.results)
         
-        print(f"\n[SUMMARY]")
+        print("\n[SUMMARY]")
         print(f"  Total Tests: {total}")
         print(f"  Passed: {passed}")
         print(f"  Failed: {failed}")
@@ -879,7 +879,7 @@ class ExtremeTestRunner:
         print(f"  Skipped: {skipped}")
         
         # 각 테스트 결과
-        print(f"\n[DETAILED RESULTS]")
+        print("\n[DETAILED RESULTS]")
         for r in self.results:
             status_icon = {
                 "passed": "OK",
@@ -892,7 +892,7 @@ class ExtremeTestRunner:
                 print(f"       - {k}: {v:.3f}" if isinstance(v, float) else f"       - {k}: {v}")
         
         # 극한 테스트 기준 충족 여부
-        print(f"\n[EXTREME CRITERIA CHECK]")
+        print("\n[EXTREME CRITERIA CHECK]")
         
         criteria = {
             "DLQ Flood Created": len(self.created_dlq_ids) >= 100,

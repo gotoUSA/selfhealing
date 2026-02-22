@@ -20,28 +20,17 @@ Business Risk:
 
 from __future__ import annotations
 
-import math
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.services.predictive_forecaster.anomaly_detector import (
-    IQRDetector,
-    ZScoreDetector,
-)
 from selfhealing.services.predictive_forecaster.proactive_action import (
-    ProactiveActionTrigger,
     SpikeClassifier,
     SpikeType,
 )
 from selfhealing.services.predictive_forecaster.service import (
     ForecastResult,
     PredictiveForecasterService,
-)
-from selfhealing.services.predictive_forecaster.time_series import (
-    EWMAForecaster,
-    ForecastDataPoint,
-    HoltLinearForecaster,
 )
 from selfhealing.settings.predictive_forecaster import (
     PredictiveForecasterSettings,

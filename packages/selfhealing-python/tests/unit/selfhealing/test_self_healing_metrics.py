@@ -5,13 +5,18 @@ Tests for Prometheus metrics recording, gauge updates, and metric collection.
 """
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from selfhealing.services import (
     collect_all_metrics,
     record_sla_breach,
+)
+from selfhealing.services.metrics import (
+    ALERTING_RULES,
+    get_registered_domains,
+    register_domain,
 )
 from selfhealing.services.metrics.recorders import (
     record_circuit_breaker_open_duration,
@@ -24,12 +29,6 @@ from selfhealing.services.metrics.recorders import (
 from selfhealing.services.metrics.updaters import (
     track_recovery_time,
 )
-from selfhealing.services.metrics import (
-    ALERTING_RULES,
-    get_registered_domains,
-    register_domain,
-)
-
 
 # =============================================================================
 # Domain Registration Tests

@@ -6,11 +6,9 @@ Throttle EventBus 연동 핸들러.
 
 from __future__ import annotations
 
-from typing import Any
-
 import structlog
 
-from . import EventType, SelfHealingEvent
+from . import SelfHealingEvent
 
 logger = structlog.get_logger()
 

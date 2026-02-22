@@ -19,21 +19,17 @@ import threading
 import time
 import zlib
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from selfhealing.audit.wal import (
-    WriteAheadLog,
     WALConfig,
     WALEntry,
     WALError,
-    WALCorruptionError,
     WALState,
-    WALStats,
+    WriteAheadLog,
     create_wal,
 )
-
 
 # =============================================================================
 # Fixtures

@@ -21,10 +21,9 @@ Usage:
 from __future__ import annotations
 
 import threading
-import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable
 
 import structlog
 

@@ -13,24 +13,24 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+
+import pytest
 
 from selfhealing.core.state_backend import MemoryStateBackend
-from selfhealing.services.coordination.enums import RecoveryStatus
-from selfhealing.services.coordination.recovery_state import (
-    RecoveryStepType,
-    RecoveryStep,
-    RecoverySession,
-)
 from selfhealing.services.coordination.distributed_recovery_lock import (
     InMemoryRecoveryLock,
 )
+from selfhealing.services.coordination.enums import RecoveryStatus
 from selfhealing.services.coordination.recovery_coordinator import (
     RecoveryCoordinator,
     get_recovery_coordinator,
     reset_recovery_coordinator,
+)
+from selfhealing.services.coordination.recovery_state import (
+    RecoverySession,
+    RecoveryStep,
+    RecoveryStepType,
 )
 
 
@@ -1402,20 +1402,22 @@ class TestMaxResumeCountContract:
 
     def test_min_bound(self):
         """max_resume_count 최솟값은 1이어야 한다."""
+        from pydantic import ValidationError
+
         from selfhealing.settings.recovery_coordinator import (
             RecoveryCoordinatorSettings,
         )
-        from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             RecoveryCoordinatorSettings(max_resume_count=0)
 
     def test_max_bound(self):
         """max_resume_count 최댓값은 10이어야 한다."""
+        from pydantic import ValidationError
+
         from selfhealing.settings.recovery_coordinator import (
             RecoveryCoordinatorSettings,
         )
-        from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
             RecoveryCoordinatorSettings(max_resume_count=11)

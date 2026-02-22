@@ -28,10 +28,10 @@ class TestIntegratedAuditRecorder:
     def test_attach_observer(self):
         """Observer 등록."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AuditEventObserver,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = self._create_mock_recorder()
         integrated = IntegratedAuditRecorder(mock_recorder)
 
@@ -43,10 +43,10 @@ class TestIntegratedAuditRecorder:
     def test_detach_observer(self):
         """Observer 해제."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AuditEventObserver,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = self._create_mock_recorder()
         integrated = IntegratedAuditRecorder(mock_recorder)
 
@@ -59,10 +59,10 @@ class TestIntegratedAuditRecorder:
     def test_attach_async_logger(self):
         """AsyncLoggerAdapter 연결."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AsyncLoggerAdapter,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = self._create_mock_recorder()
         integrated = IntegratedAuditRecorder(mock_recorder)
 
@@ -78,12 +78,12 @@ class TestIntegratedAuditRecorder:
     def test_notify_observers(self):
         """Observer 알림."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
-            AuditEventObserver,
             AuditEventData,
+            AuditEventObserver,
             AuditObserverEventType,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = self._create_mock_recorder()
         integrated = IntegratedAuditRecorder(mock_recorder)
 
@@ -101,11 +101,11 @@ class TestIntegratedAuditRecorder:
     def test_record_with_events_success(self):
         """record_with_events 성공 시 이벤트 전파."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AuditEventObserver,
             AuditObserverEventType,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = self._create_mock_recorder()
         integrated = IntegratedAuditRecorder(mock_recorder)
 
@@ -126,11 +126,11 @@ class TestIntegratedAuditRecorder:
     def test_record_with_events_failure(self):
         """record_with_events 실패 시 이벤트 전파."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AuditEventObserver,
             AuditObserverEventType,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = self._create_mock_recorder()
         mock_recorder._record_with_integrity.side_effect = Exception("DB error")
 
@@ -153,16 +153,16 @@ class TestIntegratedAuditRecorder:
     def test_circuit_state_change_detection(self):
         """Circuit Breaker 상태 변경 감지."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AuditEventObserver,
             AuditObserverEventType,
+            IntegratedAuditRecorder,
         )
         from selfhealing.audit.resilience import CircuitState
-        
+
         mock_recorder = self._create_mock_recorder()
         # CircuitState enum을 직접 사용
         mock_recorder._circuit_breaker.state = CircuitState.CLOSED
-        
+
         integrated = IntegratedAuditRecorder(mock_recorder)
 
         observer = Mock(spec=AuditEventObserver)
@@ -188,10 +188,10 @@ class TestIntegratedAuditRecorder:
     def test_get_health_status_with_async_logger(self):
         """AsyncLogger 포함 헬스 상태."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AsyncLoggerAdapter,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = self._create_mock_recorder()
         integrated = IntegratedAuditRecorder(mock_recorder)
 
@@ -210,10 +210,10 @@ class TestIntegratedAuditRecorder:
     def test_start_stop(self):
         """시작/중지."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AsyncLoggerAdapter,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = self._create_mock_recorder()
         integrated = IntegratedAuditRecorder(mock_recorder)
 

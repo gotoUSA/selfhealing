@@ -10,8 +10,6 @@ import pytest
 # 이 파일의 모든 테스트는 DB 및 Redis 필요
 pytestmark = [pytest.mark.requires_db, pytest.mark.requires_redis]
 
-from decimal import Decimal
-from unittest.mock import patch
 
 import pytest
 from django.core.cache import cache
@@ -19,7 +17,7 @@ from django.core.cache import cache
 from shopping.models.payment import Payment
 from shopping.models.webhook_event import WebhookEvent
 from shopping.services.payment_service import IDEMPOTENCY_KEY_TTL, PaymentService
-from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
+from shopping.tests.factories import OrderFactory
 from shopping.services.toss_webhook_service import (
     WEBHOOK_EVENT_TTL,
     TossWebhookService,

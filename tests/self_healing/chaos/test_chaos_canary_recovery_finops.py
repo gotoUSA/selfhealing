@@ -10,11 +10,9 @@ Tests for:
 - ChaosExperiment.record_finops_cost()
 """
 
-import pytest
 from datetime import datetime, timezone
 from decimal import Decimal
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any
+from unittest.mock import patch, MagicMock
 
 # Import SafetyGuard at module level for @patch.object decorators
 from selfhealing.services.chaos.safety_guard import SafetyGuard
@@ -440,7 +438,6 @@ class TestPhase3Integration:
         from selfhealing.services.chaos.base import ChaosExperiment
         from selfhealing.services.chaos.experiments import (
             CircuitBreakerOpenExperiment,
-            FailureHypothesis,
         )
         from selfhealing.services.finops.service import FinOpsService
         

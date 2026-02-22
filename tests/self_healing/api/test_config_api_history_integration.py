@@ -20,16 +20,11 @@ from rest_framework import status
 # Import views
 from selfhealing.api.django.views.config import (
     CircuitBreakerConfigView,
-    DLQConfigView,
-    RetryConfigView,
-    SLAConfigView,
-    SecurityConfigView,
 )
 
 # Import serializers
 from selfhealing.api.django.serializers.config import (
     CircuitBreakerConfigSerializer,
-    DLQConfigSerializer,
 )
 
 

@@ -38,17 +38,14 @@ import sys
 import time
 import random
 import json
-import hashlib
 import threading
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from collections import defaultdict
 from enum import Enum
-import pickle
-import base64
 
 # 프로젝트 루트 경로 설정
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -481,7 +478,7 @@ class APIClient:
                     _metrics.record_request(True, elapsed)
                     return data, elapsed, response.status_code, is_poisoned
                     
-                except json.JSONDecodeError as e:
+                except json.JSONDecodeError:
                     # JSON 파싱 실패 = 오염 감지
                     _metrics.record_detection(True, False)
                     _metrics.record_request(True, elapsed, fallback=True)
@@ -490,7 +487,7 @@ class APIClient:
                 _metrics.record_request(False, elapsed)
                 return None, elapsed, response.status_code, False
                 
-        except Exception as e:
+        except Exception:
             elapsed = time.time() - start
             _metrics.record_request(False, elapsed)
             return None, elapsed, 0, False
@@ -543,7 +540,7 @@ class CachePoisonIntegrationTests:
             try:
                 result = test_func()
                 if result["passed"]:
-                    print(f"  ✅ PASSED")
+                    print("  ✅ PASSED")
                     passed += 1
                 else:
                     print(f"  ❌ FAILED: {result.get('error', 'Unknown')}")
@@ -729,7 +726,7 @@ class CachePoisonIntegrationTests:
                 except json.JSONDecodeError:
                     # 파싱 실패 = 오염 감지 성공
                     _metrics.poison_detected += 1
-                except Exception as e:
+                except Exception:
                     _metrics.poison_detected += 1
             
             self._cleanup_cache(cache_key)
@@ -843,7 +840,7 @@ def run_integration_tests():
         return False
     
     # Redis 연결 확인
-    print(f"Checking Redis connection...")
+    print("Checking Redis connection...")
     try:
         redis_client = RedisClient()
         redis_client.client.ping()
@@ -861,22 +858,22 @@ def run_integration_tests():
     print(f"{STAGE_NAME} Final Report")
     print(f"{'='*60}")
     
-    print(f"\n📊 Test Results:")
+    print("\n📊 Test Results:")
     print(f"   Passed:  {results['passed']}/{results['total']}")
     print(f"   Failed:  {results['failed']}/{results['total']}")
     
-    print(f"\n📈 Detection Metrics:")
+    print("\n📈 Detection Metrics:")
     summary = _metrics.get_summary()
     for key, value in summary.items():
         print(f"   {key}: {value}")
     
     # Invariant 검증
-    print(f"\n✅ Invariant Verification:")
+    print("\n✅ Invariant Verification:")
     passed = True
     
     # poison_served == 0 (CRITICAL)
     if _metrics.poison_served == 0:
-        print(f"   ✅ PASS: poison_served == 0 (CRITICAL)")
+        print("   ✅ PASS: poison_served == 0 (CRITICAL)")
     else:
         print(f"   ❌ FAIL: poison_served == 0 (got {_metrics.poison_served})")
         passed = False
@@ -884,7 +881,7 @@ def run_integration_tests():
     # detection_rate >= 99%
     detection_rate = _metrics.get_detection_rate()
     if _metrics.poison_injected == 0:
-        print(f"   ⚠️  SKIP: detection_rate (no poison injected)")
+        print("   ⚠️  SKIP: detection_rate (no poison injected)")
     elif detection_rate >= 0.99:
         print(f"   ✅ PASS: detection_rate >= 99% ({detection_rate*100:.2f}%)")
     else:

@@ -9,8 +9,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import pytest
-
 
 class TestSamplingVerifier:
     """Tests for SamplingVerifier."""
@@ -55,8 +53,8 @@ class TestSamplingVerifier:
     def test_valid_chain_passes(self):
         """Test that valid chain passes verification."""
         from selfhealing.audit.performance import (
-            SamplingVerifier,
             SamplingConfig,
+            SamplingVerifier,
         )
 
         entries = self._create_valid_chain(100)
@@ -72,8 +70,8 @@ class TestSamplingVerifier:
     def test_tampered_chain_detected(self):
         """Test that tampered chain is detected."""
         from selfhealing.audit.performance import (
-            SamplingVerifier,
             SamplingConfig,
+            SamplingVerifier,
         )
 
         entries = self._create_tampered_chain(100, tamper_index=50)
@@ -103,8 +101,8 @@ class TestSamplingVerifier:
     def test_sampling_reduces_checks(self):
         """Test that sampling reduces number of checks."""
         from selfhealing.audit.performance import (
-            SamplingVerifier,
             SamplingConfig,
+            SamplingVerifier,
         )
 
         entries = self._create_valid_chain(1000)

@@ -8,8 +8,7 @@ Config History & Rollback Tests.
 import pytest
 import time
 import json
-from datetime import datetime
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 
 from selfhealing.services.config_history import (
     ConfigVersion,

@@ -24,10 +24,10 @@ Note:
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from datetime import datetime, timezone, timedelta
 from collections.abc import Generator
-from unittest.mock import patch, MagicMock
+from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 # freezegun 사용
 try:

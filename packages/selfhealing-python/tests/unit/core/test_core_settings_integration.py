@@ -8,8 +8,6 @@ Core 모듈과 Settings 연동 테스트.
 import os
 from unittest import mock
 
-import pytest
-
 
 class TestRuntimeFeedbackSettingsIntegration:
     """RuntimeFeedbackLoop과 RuntimeFeedbackSettings 연동 테스트."""
@@ -17,8 +15,8 @@ class TestRuntimeFeedbackSettingsIntegration:
     def test_default_values_match_original_hardcoded(self):
         """기본값이 원래 하드코딩된 값과 일치해야 함."""
         from selfhealing.settings.runtime_feedback import (
-            reset_runtime_feedback_settings,
             get_runtime_feedback_settings,
+            reset_runtime_feedback_settings,
         )
 
         reset_runtime_feedback_settings()
@@ -30,10 +28,10 @@ class TestRuntimeFeedbackSettingsIntegration:
 
     def test_loop_uses_settings_values(self):
         """RuntimeFeedbackLoop이 settings 값을 사용해야 함."""
+        from selfhealing.core.runtime_feedback import RuntimeFeedbackLoop
         from selfhealing.settings.runtime_feedback import (
             reset_runtime_feedback_settings,
         )
-        from selfhealing.core.runtime_feedback import RuntimeFeedbackLoop
 
         reset_runtime_feedback_settings()
 
@@ -61,8 +59,8 @@ class TestRuntimeFeedbackSettingsIntegration:
     def test_environment_variable_override(self):
         """환경변수로 설정값 오버라이드 가능해야 함."""
         from selfhealing.settings.runtime_feedback import (
-            reset_runtime_feedback_settings,
             get_runtime_feedback_settings,
+            reset_runtime_feedback_settings,
         )
 
         reset_runtime_feedback_settings()
@@ -91,8 +89,8 @@ class TestAutoRollbackSettingsIntegration:
     def test_default_values_match_original_hardcoded(self):
         """기본값이 원래 하드코딩된 값과 일치해야 함."""
         from selfhealing.settings.auto_rollback import (
-            reset_auto_rollback_settings,
             get_auto_rollback_settings,
+            reset_auto_rollback_settings,
         )
 
         reset_auto_rollback_settings()
@@ -107,10 +105,10 @@ class TestAutoRollbackSettingsIntegration:
 
     def test_guard_uses_settings_values(self):
         """AutoRollbackGuard가 settings 값을 사용해야 함."""
+        from selfhealing.core.auto_rollback_guard import AutoRollbackGuard
         from selfhealing.settings.auto_rollback import (
             reset_auto_rollback_settings,
         )
-        from selfhealing.core.auto_rollback_guard import AutoRollbackGuard
 
         reset_auto_rollback_settings()
 
@@ -133,8 +131,8 @@ class TestAutoRollbackSettingsIntegration:
     def test_environment_variable_override(self):
         """환경변수로 설정값 오버라이드 가능해야 함."""
         from selfhealing.settings.auto_rollback import (
-            reset_auto_rollback_settings,
             get_auto_rollback_settings,
+            reset_auto_rollback_settings,
         )
 
         reset_auto_rollback_settings()
@@ -163,8 +161,8 @@ class TestAdaptiveJitterSettingsIntegration:
     def test_default_threshold_values(self):
         """기본 임계값이 원래 하드코딩된 값과 일치해야 함."""
         from selfhealing.settings.jitter import (
-            reset_jitter_settings,
             get_jitter_settings,
+            reset_jitter_settings,
         )
 
         reset_jitter_settings()
@@ -177,8 +175,8 @@ class TestAdaptiveJitterSettingsIntegration:
 
     def test_adaptive_jitter_uses_settings(self):
         """AdaptiveJitter가 settings 값을 사용해야 함."""
-        from selfhealing.settings.jitter import reset_jitter_settings
         from selfhealing.core.adaptive_jitter import AdaptiveJitter
+        from selfhealing.settings.jitter import reset_jitter_settings
 
         reset_jitter_settings()
 
@@ -203,8 +201,8 @@ class TestSafetyBoundsSettingsIntegration:
     def test_default_bounds_match_original(self):
         """기본 한계값이 원래 하드코딩된 값과 일치해야 함."""
         from selfhealing.settings.safety_bounds import (
-            reset_safety_bounds_settings,
             get_safety_bounds_settings,
+            reset_safety_bounds_settings,
         )
 
         reset_safety_bounds_settings()
@@ -216,8 +214,8 @@ class TestSafetyBoundsSettingsIntegration:
 
     def test_safety_bounds_uses_settings(self):
         """SafetyBounds가 settings 값을 사용해야 함."""
-        from selfhealing.settings.safety_bounds import reset_safety_bounds_settings
         from selfhealing.core.safety_bounds import SafetyBounds
+        from selfhealing.settings.safety_bounds import reset_safety_bounds_settings
 
         reset_safety_bounds_settings()
 
@@ -230,8 +228,8 @@ class TestSafetyBoundsSettingsIntegration:
     def test_environment_variable_override(self):
         """환경변수로 한계값 오버라이드 가능해야 함."""
         from selfhealing.settings.safety_bounds import (
-            reset_safety_bounds_settings,
             get_safety_bounds_settings,
+            reset_safety_bounds_settings,
         )
 
         reset_safety_bounds_settings()
@@ -258,8 +256,8 @@ class TestStateCacheSettingsIntegration:
     def test_default_values_match_original(self):
         """기본값이 원래 하드코딩된 값과 일치해야 함."""
         from selfhealing.settings.state_cache import (
-            reset_state_cache_settings,
             get_state_cache_settings,
+            reset_state_cache_settings,
         )
 
         reset_state_cache_settings()
@@ -270,8 +268,8 @@ class TestStateCacheSettingsIntegration:
 
     def test_state_cache_uses_settings(self):
         """CBStateCache가 settings 값을 사용해야 함."""
-        from selfhealing.settings.state_cache import reset_state_cache_settings
         from selfhealing.core.state_cache import CBStateCache
+        from selfhealing.settings.state_cache import reset_state_cache_settings
 
         reset_state_cache_settings()
 
@@ -287,8 +285,8 @@ class TestResourceMonitorSettingsIntegration:
     def test_default_safety_margin(self):
         """기본 안전 마진이 원래 하드코딩된 값과 일치해야 함."""
         from selfhealing.settings.resource_monitor import (
-            reset_resource_monitor_settings,
             get_resource_monitor_settings,
+            reset_resource_monitor_settings,
         )
 
         reset_resource_monitor_settings()
@@ -298,8 +296,10 @@ class TestResourceMonitorSettingsIntegration:
 
     def test_resource_monitor_uses_settings(self):
         """CgroupResourceMonitor가 settings 값을 사용해야 함."""
-        from selfhealing.settings.resource_monitor import reset_resource_monitor_settings
         from selfhealing.core.resource_monitor import CgroupResourceMonitor
+        from selfhealing.settings.resource_monitor import (
+            reset_resource_monitor_settings,
+        )
 
         reset_resource_monitor_settings()
 
@@ -309,8 +309,8 @@ class TestResourceMonitorSettingsIntegration:
     def test_environment_variable_override(self):
         """환경변수로 안전 마진 오버라이드 가능해야 함."""
         from selfhealing.settings.resource_monitor import (
-            reset_resource_monitor_settings,
             get_resource_monitor_settings,
+            reset_resource_monitor_settings,
         )
 
         reset_resource_monitor_settings()
@@ -335,8 +335,8 @@ class TestApplyStrategySettingsIntegration:
     def test_default_delays_match_original(self):
         """기본 delay 값이 원래 하드코딩된 값과 일치해야 함."""
         from selfhealing.settings.apply_strategy import (
-            reset_apply_strategy_settings,
             get_apply_strategy_settings,
+            reset_apply_strategy_settings,
         )
 
         reset_apply_strategy_settings()
@@ -349,8 +349,8 @@ class TestApplyStrategySettingsIntegration:
 
     def test_get_default_apply_config_uses_settings(self):
         """get_default_apply_config이 settings 값을 사용해야 함."""
-        from selfhealing.settings.apply_strategy import reset_apply_strategy_settings
         from selfhealing.core.apply_strategy import get_default_apply_config
+        from selfhealing.settings.apply_strategy import reset_apply_strategy_settings
 
         reset_apply_strategy_settings()
 
@@ -367,8 +367,8 @@ class TestDecisionEngineSettingsIntegration:
     def test_default_values_match_original(self):
         """기본값이 원래 하드코딩된 값과 일치해야 함."""
         from selfhealing.settings.decision_engine import (
-            reset_decision_engine_settings,
             get_decision_engine_settings,
+            reset_decision_engine_settings,
         )
 
         reset_decision_engine_settings()
@@ -390,8 +390,8 @@ class TestDecisionEngineSettingsIntegration:
 
     def test_decision_engine_uses_settings(self):
         """DecisionEngine이 settings 값을 사용해야 함."""
-        from selfhealing.settings.decision_engine import reset_decision_engine_settings
         from selfhealing.core.decision_engine import DecisionEngine
+        from selfhealing.settings.decision_engine import reset_decision_engine_settings
 
         reset_decision_engine_settings()
 

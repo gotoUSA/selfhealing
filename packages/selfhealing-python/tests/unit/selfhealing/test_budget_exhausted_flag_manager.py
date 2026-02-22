@@ -9,15 +9,13 @@ BudgetExhaustedFlagManager 단위 테스트.
 5. 싱글톤 패턴 (get_budget_exhausted_flag_manager, reset_budget_exhausted_flag_manager)
 """
 
-import time
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from selfhealing.services.error_budget_gate.redis_flag import (
-    BudgetExhaustedFlagManager,
-    BUDGET_EXHAUSTED_FLAG_KEY,
     BUDGET_EXHAUSTED_BY_SLO_KEY,
+    BUDGET_EXHAUSTED_FLAG_KEY,
     BUDGET_FLAG_TTL_SECONDS,
+    BudgetExhaustedFlagManager,
     get_budget_exhausted_flag_manager,
     reset_budget_exhausted_flag_manager,
 )

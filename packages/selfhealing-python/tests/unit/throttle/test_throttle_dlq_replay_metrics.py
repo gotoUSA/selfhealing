@@ -19,11 +19,6 @@ Throttle DLQ Replay Integration Prometheus 메트릭 등록 단위 테스트.
 import pytest
 
 from selfhealing.services.metrics import definitions
-from selfhealing.services.metrics.registry import (
-    get_or_create_counter,
-    get_or_create_gauge,
-    get_or_create_histogram,
-)
 
 
 class TestThrottleRejectionDlqStoredTotal:

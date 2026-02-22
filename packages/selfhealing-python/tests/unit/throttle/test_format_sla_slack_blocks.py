@@ -11,21 +11,16 @@ SLA Slack Block Kit 포맷터 단위 테스트.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from unittest.mock import patch
-
-import pytest
 
 from tests.unit.throttle.conftest import (
     ALL_URL_ENVS,
     NO_URL_ENVS,
     SVC_PAYMENT,
-    TEST_ADMIN_BASE_URL,
     TEST_DASHBOARD_URL,
-    TEST_RUNBOOK_URL,
+    WARNING_CURRENT_LIMIT,
     WARNING_RTT_MS,
     WARNING_THRESHOLD_MS,
-    WARNING_CURRENT_LIMIT,
 )
 
 
@@ -61,12 +56,12 @@ class TestFormatSlaSlackBlocksStructure:
 
     def test_returns_dict_with_blocks_key(self):
         """반환값에 'blocks' 키가 포함되어야 함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -79,12 +74,12 @@ class TestFormatSlaSlackBlocksStructure:
 
     def test_contains_header_block(self):
         """헤더 블록이 포함되어야 함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -98,12 +93,12 @@ class TestFormatSlaSlackBlocksStructure:
 
     def test_contains_section_with_fields(self):
         """필드가 포함된 섹션 블록이 있어야 함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -117,12 +112,12 @@ class TestFormatSlaSlackBlocksStructure:
 
     def test_contains_details_section(self):
         """Details 메시지 섹션이 포함되어야 함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -140,12 +135,12 @@ class TestFormatSlaSlackBlocksFields:
 
     def test_contains_rtt_field(self):
         """RTT 필드가 포함되어야 함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -160,12 +155,12 @@ class TestFormatSlaSlackBlocksFields:
 
     def test_contains_threshold_field(self):
         """Threshold 필드가 포함되어야 함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -180,12 +175,12 @@ class TestFormatSlaSlackBlocksFields:
 
     def test_contains_current_limit_field(self):
         """Current Limit 필드가 포함되어야 함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -200,12 +195,12 @@ class TestFormatSlaSlackBlocksFields:
 
     def test_contains_service_field(self):
         """Service 필드가 포함되어야 함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -231,12 +226,12 @@ class TestFormatSlaSlackBlocksOptionalFields:
 
     def test_rtt_change_percent_included_when_present(self):
         """rtt_change_percent가 있으면 필드에 포함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -251,12 +246,12 @@ class TestFormatSlaSlackBlocksOptionalFields:
 
     def test_rtt_change_percent_negative(self):
         """음수 변화율도 올바르게 표시."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -271,12 +266,12 @@ class TestFormatSlaSlackBlocksOptionalFields:
 
     def test_rtt_change_percent_excluded_when_none(self):
         """rtt_change_percent가 None이면 필드 미포함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -290,12 +285,12 @@ class TestFormatSlaSlackBlocksOptionalFields:
 
     def test_region_included_when_present(self):
         """region이 있으면 필드에 포함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -310,12 +305,12 @@ class TestFormatSlaSlackBlocksOptionalFields:
 
     def test_region_excluded_when_none(self):
         """region이 None이면 필드 미포함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -340,12 +335,12 @@ class TestFormatSlaSlackBlocksPriorityEmoji:
 
     def test_critical_priority_emoji(self):
         """CRITICAL 우선순위: 🔴 (빨간 원)."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -358,12 +353,12 @@ class TestFormatSlaSlackBlocksPriorityEmoji:
 
     def test_high_priority_emoji(self):
         """HIGH 우선순위: 🟠 (주황 원)."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -376,12 +371,12 @@ class TestFormatSlaSlackBlocksPriorityEmoji:
 
     def test_medium_priority_emoji(self):
         """MEDIUM 우선순위: 🟡 (노란 원)."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -394,12 +389,12 @@ class TestFormatSlaSlackBlocksPriorityEmoji:
 
     def test_low_priority_emoji(self):
         """LOW 우선순위: ⚪ (흰 원, 기본값)."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -416,12 +411,12 @@ class TestFormatSlaSlackBlocksActionableButtons:
 
     def test_no_actions_block_when_no_urls(self):
         """URL이 없으면 actions 블록 미포함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         with patch.dict(os.environ, NO_URL_ENVS, clear=False):
@@ -435,12 +430,12 @@ class TestFormatSlaSlackBlocksActionableButtons:
 
     def test_all_buttons_when_all_urls_set(self):
         """모든 URL이 설정되면 3개 버튼 포함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         with patch.dict(os.environ, ALL_URL_ENVS, clear=False):
@@ -455,12 +450,12 @@ class TestFormatSlaSlackBlocksActionableButtons:
 
     def test_dashboard_button_url(self):
         """Dashboard 버튼 URL이 올바르게 생성."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         with patch.dict(os.environ, ALL_URL_ENVS, clear=False):
@@ -477,12 +472,12 @@ class TestFormatSlaSlackBlocksActionableButtons:
 
     def test_admin_button_has_primary_style(self):
         """Admin 버튼은 primary 스타일."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         with patch.dict(os.environ, ALL_URL_ENVS, clear=False):
@@ -498,12 +493,12 @@ class TestFormatSlaSlackBlocksActionableButtons:
 
     def test_runbook_button_url_with_anchor(self):
         """Runbook 버튼 URL에 앵커 포함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         with patch.dict(os.environ, ALL_URL_ENVS, clear=False):
@@ -519,12 +514,12 @@ class TestFormatSlaSlackBlocksActionableButtons:
 
     def test_only_dashboard_button_when_only_dashboard_url_set(self):
         """Dashboard URL만 설정되면 Dashboard 버튼만 포함."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         partial_env = {
@@ -548,14 +543,14 @@ class TestFormatSlaSlackBlocksDefaultValues:
 
     def test_default_service_name(self):
         """service_name 미설정 시 'default' 사용."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationCategory,
             NotificationPayload,
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         reset_throttle_sla_alert_url_builder()
@@ -575,12 +570,12 @@ class TestFormatSlaSlackBlocksDefaultValues:
 
     def test_default_event_type_for_url_builder(self):
         """event_type 미설정 시 'sla_warning' 기본값."""
+        from selfhealing.services.throttle.throttle_sla_alert_urls import (
+            reset_throttle_sla_alert_url_builder,
+        )
         from selfhealing.services.unified_notification import (
             NotificationPriority,
             format_sla_slack_blocks,
-        )
-        from selfhealing.services.throttle.throttle_sla_alert_urls import (
-            reset_throttle_sla_alert_url_builder,
         )
 
         with patch.dict(os.environ, ALL_URL_ENVS, clear=False):

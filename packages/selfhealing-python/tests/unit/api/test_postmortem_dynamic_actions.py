@@ -13,8 +13,6 @@ Postmortem 동적 Action Items 생성 테스트.
 - Emergency/Kill Switch 이벤트 Action 생성 확인
 """
 
-import pytest
-from datetime import datetime
 
 from selfhealing.utils.postmortem_actions import generate_dynamic_actions
 

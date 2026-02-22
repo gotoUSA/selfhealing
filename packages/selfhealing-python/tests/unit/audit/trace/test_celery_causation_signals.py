@@ -15,22 +15,21 @@ Reference:
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
 
 from selfhealing.context.causation_context import (
-    CausationInfo,
-    CausationContext,
-    _current_causation,
     CELERY_HEADER_CASCADE_ID,
-    CELERY_HEADER_PARENT_EVENT,
     CELERY_HEADER_CHAIN_DEPTH,
     CELERY_HEADER_NAMESPACE,
+    CELERY_HEADER_PARENT_EVENT,
+    CausationContext,
+    CausationInfo,
+    _current_causation,
     get_causation_for_celery,
     restore_causation_from_celery,
 )
-
 
 # =============================================================================
 # _setup_causation_context Tests
@@ -53,8 +52,8 @@ class TestSetupCausationContext:
     def test_setup_with_valid_headers(self):
         """유효한 헤더로 컨텍스트 설정."""
         from selfhealing.context.celery_context_utils import (
-            _setup_causation_context,
             _CAUSATION_TOKEN_ATTR,
+            _setup_causation_context,
         )
 
         # Mock sender with request and headers
@@ -156,8 +155,8 @@ class TestCleanupCausationContext:
     def test_cleanup_removes_context(self):
         """정리 후 컨텍스트 제거됨."""
         from selfhealing.context.celery_context_utils import (
-            _setup_causation_context,
             _cleanup_causation_context,
+            _setup_causation_context,
         )
 
         # 먼저 설정
@@ -362,8 +361,8 @@ class TestCausationSignalIntegration:
     def test_full_celery_task_lifecycle(self):
         """전체 Celery 태스크 라이프사이클 시뮬레이션."""
         from selfhealing.context.celery_context_utils import (
-            _setup_causation_context,
             _cleanup_causation_context,
+            _setup_causation_context,
         )
 
         # 1. 부모 태스크에서 cascade 시작

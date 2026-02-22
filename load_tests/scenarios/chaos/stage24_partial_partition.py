@@ -33,8 +33,7 @@ import sys
 import time
 import random
 import threading
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -279,7 +278,7 @@ class PartialPartitionUser(HttpUser):
 
                 elif response.status_code == 503:
                     # 서비스 불가 - 모든 fallback 실패
-                    response.failure(f"Service unavailable during Redis partition")
+                    response.failure("Service unavailable during Redis partition")
                     record_error("service_unavailable")
 
                 else:
@@ -523,7 +522,7 @@ class PartialPartitionUser(HttpUser):
                     else:
                         print(f"{STAGE_NAME} ⚠ Partial recovery: DB={db_status}, Cache={cache_status}")
 
-                except Exception as e:
+                except Exception:
                     pass  # Health check 응답 파싱 실패 무시
 
             elif response.status_code == 503:
@@ -641,22 +640,22 @@ def on_test_start(environment, **kwargs):
     print(f"{STAGE_NAME} Partial Network Partition Test Starting")
     print(f"{'=' * 60}")
     print(f"Target Host: {environment.host}")
-    print(f"Scenarios:")
-    print(f"  - Redis Down + DB Fallback")
-    print(f"  - External API Down + Retry Queue")
-    print(f"  - DB Down + Cache Read")
-    print(f"  - Partial Latency + Timeout")
+    print("Scenarios:")
+    print("  - Redis Down + DB Fallback")
+    print("  - External API Down + Retry Queue")
+    print("  - DB Down + Cache Read")
+    print("  - Partial Latency + Timeout")
 
     # Toxiproxy Chaos Mode 활성화
     toxiproxy_url = os.environ.get("TOXIPROXY_URL")
     if toxiproxy_url:
-        print(f"\n🔥 CHAOS MODE ENABLED")
+        print("\n🔥 CHAOS MODE ENABLED")
         print(f"   Toxiproxy: {toxiproxy_url}")
         _chaos_controller = ChaosController(toxiproxy_url)
         _chaos_controller.start_chaos_cycle(cycle_seconds=20)
     else:
-        print(f"\n📋 SIMULATION MODE (header-based)")
-        print(f"   Set TOXIPROXY_URL for real network chaos")
+        print("\n📋 SIMULATION MODE (header-based)")
+        print("   Set TOXIPROXY_URL for real network chaos")
 
     print(f"{'=' * 60}\n")
 
@@ -681,17 +680,17 @@ def on_test_stop(environment, **kwargs):
 
     print(f"\n📊 Total Requests: {total}")
 
-    print(f"\n🔌 Partition Scenarios:")
+    print("\n🔌 Partition Scenarios:")
     for scenario, count in _partition_stats["partition_scenarios"].items():
         pct = (count / total) * 100 if total > 0 else 0
         print(f"   {scenario}: {count} ({pct:.1f}%)")
 
-    print(f"\n🔄 Fallback Usage:")
+    print("\n🔄 Fallback Usage:")
     for fallback, count in _partition_stats["fallback_usage"].items():
         pct = (count / total) * 100 if total > 0 else 0
         print(f"   {fallback}: {count} ({pct:.1f}%)")
 
-    print(f"\n🔧 Recovery Stats:")
+    print("\n🔧 Recovery Stats:")
     print(f"   Auto Recovered: {_partition_stats['recovery']['auto_recovered']}")
     print(f"   Manual Intervention: {_partition_stats['recovery']['manual_intervention']}")
     avg_recovery = _partition_stats["recovery"]["recovery_time_sum_ms"] / max(
@@ -699,17 +698,17 @@ def on_test_stop(environment, **kwargs):
     )
     print(f"   Avg Recovery Time: {avg_recovery:.0f}ms")
 
-    print(f"\n⚡ Circuit Breaker States:")
+    print("\n⚡ Circuit Breaker States:")
     for state, count in _partition_stats["circuit_breaker"].items():
         print(f"   {state}: {count}")
 
-    print(f"\n❌ Errors:")
+    print("\n❌ Errors:")
     for error, count in _partition_stats["errors"].items():
         print(f"   {error}: {count}")
 
     # 검증 기준 체크
     print(f"\n{'=' * 60}")
-    print(f"📋 Validation Results")
+    print("📋 Validation Results")
     print(f"{'=' * 60}")
 
     # 1. Fallback 동작 확인
@@ -739,7 +738,7 @@ def on_test_stop(environment, **kwargs):
     if _partition_stats["recovery"]["auto_recovered"] > 0:
         print(f"✅ Auto recovery working: {_partition_stats['recovery']['auto_recovered']} recoveries")
     else:
-        print(f"⚠️ No auto recovery recorded")
+        print("⚠️ No auto recovery recorded")
 
     print(f"{'=' * 60}\n")
 

@@ -2,8 +2,9 @@
 Tests for Emergency Level Adaptive Sampler.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 def _is_otel_available() -> bool:

@@ -7,7 +7,6 @@ and policy boundary conditions.
 Risk Covered: R-015 (Retry storm overwhelming PG)
 """
 
-from decimal import Decimal
 
 import pytest
 

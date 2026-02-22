@@ -454,7 +454,7 @@ def _get_trace_id_safe() -> str | None:
 # =============================================================================
 
 
-def _get_event_bus_safe() -> "SelfHealingEventBus | None":
+def _get_event_bus_safe() -> SelfHealingEventBus | None:
     """
     EventBus를 안전하게 가져옵니다. Import 실패 시 None 반환 (Fail-Open).
     """

@@ -11,7 +11,6 @@ DLQ Throttle Replay Result 데이터클래스 단위 테스트.
 3. DLQ __init__.py 에서 import 가능 확인
 """
 
-import pytest
 
 from selfhealing.services.dlq_models import (
     DLQThrottleBatchReplayResult,

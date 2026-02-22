@@ -38,7 +38,7 @@ class TestRecoveryCeleryBeatSchedule:
         )
         celery_path = os.path.abspath(celery_path)
 
-        with open(celery_path, "r", encoding="utf-8") as f:
+        with open(celery_path, encoding="utf-8") as f:
             content = f.read()
 
         return content

@@ -26,8 +26,6 @@ Predictive Forecaster 엔진 내부 컴포넌트의 계약값과 동작을 검�
 from __future__ import annotations
 
 import math
-from collections import defaultdict
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -48,7 +46,6 @@ from selfhealing.services.predictive_forecaster.scenario_generator import (
     TimeSeriesScenarioGenerator,
 )
 from selfhealing.services.predictive_forecaster.service import (
-    ForecastResult,
     PredictiveForecasterService,
 )
 from selfhealing.services.predictive_forecaster.time_series import (
@@ -61,7 +58,6 @@ from selfhealing.settings.predictive_forecaster import (
     PredictiveForecasterSettings,
     reset_predictive_forecaster_settings,
 )
-
 
 # =============================================================================
 # Fixtures

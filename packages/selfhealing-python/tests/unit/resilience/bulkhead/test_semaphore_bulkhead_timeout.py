@@ -10,8 +10,6 @@ SemaphoreBulkhead try_acquire() timeout 파라미터 단위 테스트.
 import threading
 import time
 
-import pytest
-
 from selfhealing.resilience.bulkhead.semaphore import SemaphoreBulkhead
 
 

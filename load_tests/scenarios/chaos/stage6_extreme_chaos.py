@@ -38,7 +38,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import random
-from locust import HttpUser, task, between, constant, tag, events
+from locust import HttpUser, task, constant, tag, events
 
 from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
 from load_tests.metrics import setup_event_hooks, get_metrics_collector
@@ -393,7 +393,7 @@ class ExtremeChaosUser(HttpUser):
             else:
                 _stats.increment("health_checks", "failure")
                 _stats.add_event("health_failure", {"ping": ping})
-        except Exception as e:
+        except Exception:
             _stats.increment("health_checks", "failure")
 
     @task(4)
@@ -422,7 +422,7 @@ class ExtremeChaosUser(HttpUser):
                         _stats.increment("circuit_breaker", "half_open_detected")
                     else:
                         _stats.increment("circuit_breaker", "closed_detected")
-        except Exception as e:
+        except Exception:
             pass
 
     @task(3)
@@ -446,7 +446,7 @@ class ExtremeChaosUser(HttpUser):
                     _stats.add_event("budget_critical", {"remaining": remaining})
                 elif remaining <= 50:
                     _stats.increment("error_budget", "warning_events")
-        except Exception as e:
+        except Exception:
             pass
 
     @task(2)
@@ -469,7 +469,7 @@ class ExtremeChaosUser(HttpUser):
                     # DLQ 항목이 있으면 이벤트 기록
                     if pending >= 5:
                         _stats.add_event("dlq_high", {"count": pending, "action": "alert"})
-        except Exception as e:
+        except Exception:
             pass
 
     @task(2)
@@ -488,7 +488,7 @@ class ExtremeChaosUser(HttpUser):
                 if is_active:
                     _stats.increment("emergency", "active_detected")
                     _stats.add_event("emergency_active", {"level": level})
-        except Exception as e:
+        except Exception:
             pass
 
     @task(2)
@@ -512,7 +512,7 @@ class ExtremeChaosUser(HttpUser):
                     _stats.add_event("blast_radius_isolated", {"service": service})
                 else:
                     _stats.add_event("blast_radius_leak", {"service": service, "result": result})
-        except Exception as e:
+        except Exception:
             pass
 
     @task(2)
@@ -528,7 +528,7 @@ class ExtremeChaosUser(HttpUser):
             snapshot = self.healing.xtest.get_snapshot()
             if snapshot.get("status") != "error":
                 _stats.increment("observability", "snapshots")
-        except Exception as e:
+        except Exception:
             pass
 
     @task(1)
@@ -559,7 +559,7 @@ class ExtremeChaosUser(HttpUser):
                     service_name=service,
                     details={"stage": "stage6_extreme", "test_type": "controlled_failure"}
                 )
-        except Exception as e:
+        except Exception:
             pass
 
     # =========================================================================
@@ -707,7 +707,7 @@ class ExtremeChaosUser(HttpUser):
                 _stats.increment("dlq", "replay_triggered")
                 _stats.add_event("dlq_replay_triggered", {"pending": pending_count})
                 
-        except Exception as e:
+        except Exception:
             pass
 
     @task(2)
@@ -735,7 +735,7 @@ class ExtremeChaosUser(HttpUser):
                         "max_delay_ms": retry_config.get("max_delay_ms", 10000),
                         "exponential_base": retry_config.get("exponential_base", 2),
                     })
-        except Exception as e:
+        except Exception:
             pass
 
     # =========================================================================
@@ -916,7 +916,7 @@ class ExtremeChaosUser(HttpUser):
                     elif remaining <= 50:
                         _stats.increment("error_budget", "warning_events")
                         
-        except Exception as e:
+        except Exception:
             pass
 
     @task(1)
@@ -963,7 +963,7 @@ class ExtremeChaosUser(HttpUser):
                 self.healing.xtest.trigger_cb_recovery(service_name=service)
                 _stats.increment("circuit_breaker", "recovery_triggered")
                 
-        except Exception as e:
+        except Exception:
             pass
 
     @task(1)
@@ -997,7 +997,7 @@ class ExtremeChaosUser(HttpUser):
                 if emergency.get("is_active"):
                     _stats.increment("emergency", "active_detected")
                     
-        except Exception as e:
+        except Exception:
             pass
 
 

@@ -15,7 +15,7 @@ def reset_manager():
         GracefulDegradationManager,
         get_emergency_manager,
     )
-    
+
     # 싱글톤 인스턴스 초기화
     GracefulDegradationManager._instance = None
     manager = get_emergency_manager()

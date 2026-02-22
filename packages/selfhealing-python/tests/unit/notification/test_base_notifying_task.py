@@ -13,22 +13,22 @@ BaseNotifyingTask 단위 테스트
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock, patch
+
 import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, patch, MagicMock
 
 from selfhealing.tasks.base import (
     BaseNotifyingTask,
-    reset_cooldowns,
     get_cooldown_status,
-)
-from selfhealing.tasks.notification_policy import (
-    NotificationPolicy,
-    NotificationTiming,
-    NotificationThreshold,
+    reset_cooldowns,
 )
 from selfhealing.tasks.daily_report import DailyAutonomousReport
-
+from selfhealing.tasks.notification_policy import (
+    NotificationPolicy,
+    NotificationThreshold,
+    NotificationTiming,
+)
 
 # =============================================================================
 # NotificationTiming 테스트
@@ -191,7 +191,7 @@ class TestDailyAutonomousReport:
             recovered_count=7,
         )
         report1.merge(report2)
-        
+
         assert report1.archived_count == 15
         assert report1.expired_count == 8
         assert report1.purged_count == 2
@@ -239,7 +239,7 @@ class TestBaseNotifyingTask:
         task = BaseNotifyingTask()
         task.name = "test_task"
         result = {"count": 5}
-        
+
         assert task._should_notify(result) is True
 
     def test_should_notify_below_threshold(self):
@@ -251,7 +251,7 @@ class TestBaseNotifyingTask:
             threshold_field="count",
         )
         result = {"count": 5}  # Below threshold
-        
+
         assert task._should_notify(result) is False
 
     def test_should_notify_above_threshold(self):
@@ -263,7 +263,7 @@ class TestBaseNotifyingTask:
             threshold_field="count",
         )
         result = {"count": 15}  # Above threshold
-        
+
         assert task._should_notify(result) is True
 
     def test_should_notify_cooldown(self):
@@ -273,14 +273,14 @@ class TestBaseNotifyingTask:
         task.notification_policy = NotificationPolicy(
             cooldown_seconds=300,
         )
-        
+
         # 첫 번째 알림
         result = {"count": 5}
         assert task._should_notify(result) is True
-        
+
         # 쿨다운 시간 기록
         task._record_alert_sent("test_task:default")
-        
+
         # 두 번째 알림 (쿨다운 중)
         assert task._should_notify(result) is False
 
@@ -291,11 +291,11 @@ class TestBaseNotifyingTask:
         task.notification_policy = NotificationPolicy(
             cooldown_seconds=1,  # 1초
         )
-        
+
         # 과거 시간으로 기록
         past_time = datetime.now(timezone.utc) - timedelta(seconds=10)
         BaseNotifyingTask._last_alert_times["test_task:default"] = past_time
-        
+
         result = {"count": 5}
         assert task._should_notify(result) is True
 
@@ -305,7 +305,7 @@ class TestBaseNotifyingTask:
         task.notification_policy = NotificationPolicy(
             timing=NotificationTiming.AGGREGATED,
         )
-        
+
         # emergency_mode가 없으면 기본 타이밍 반환
         timing = task._get_effective_timing()
         assert timing == NotificationTiming.AGGREGATED
@@ -317,7 +317,7 @@ class TestBaseNotifyingTask:
             timing=NotificationTiming.AGGREGATED,
             escalate_on_emergency=True,
         )
-        
+
         # emergency_mode 모듈이 없는 경우 기본 타이밍 반환
         # 실제 모듈이 있으면 Level 3+에서 REALTIME으로 에스컬레이션
         timing = task._get_effective_timing()
@@ -331,7 +331,7 @@ class TestBaseNotifyingTask:
             timing=NotificationTiming.AGGREGATED,
             escalate_on_emergency=False,
         )
-        
+
         timing = task._get_effective_timing()
         assert timing == NotificationTiming.AGGREGATED
 
@@ -339,14 +339,14 @@ class TestBaseNotifyingTask:
         """에러 결과는 항상 critical."""
         task = BaseNotifyingTask()
         result = {"error": "Something went wrong"}
-        
+
         assert task._get_severity(result) == "critical"
 
     def test_get_severity_success_false(self):
         """success=False는 critical."""
         task = BaseNotifyingTask()
         result = {"success": False}
-        
+
         assert task._get_severity(result) == "critical"
 
     def test_get_severity_default(self):
@@ -354,14 +354,14 @@ class TestBaseNotifyingTask:
         task = BaseNotifyingTask()
         task.notification_policy = NotificationPolicy(default_severity="info")
         result = {"success": True, "count": 5}
-        
+
         assert task._get_severity(result) == "info"
 
     def test_get_summary_message_error(self):
         """에러 결과 메시지."""
         task = BaseNotifyingTask()
         result = {"error": "Test error"}
-        
+
         message = task._get_summary_message(result)
         assert "실패" in message
         assert "Test error" in message
@@ -370,7 +370,7 @@ class TestBaseNotifyingTask:
         """카운트 결과 메시지."""
         task = BaseNotifyingTask()
         result = {"archived_count": 42}
-        
+
         message = task._get_summary_message(result)
         assert "42" in message
 
@@ -378,28 +378,28 @@ class TestBaseNotifyingTask:
         """에러 결과는 의미있음."""
         task = BaseNotifyingTask()
         result = {"error": "Test"}
-        
+
         assert task._has_meaningful_result(result) is True
 
     def test_has_meaningful_result_with_zero_count(self):
         """0건 결과는 의미없음."""
         task = BaseNotifyingTask()
         result = {"count": 0}
-        
+
         assert task._has_meaningful_result(result) is False
 
     def test_has_meaningful_result_with_positive_count(self):
         """양수 카운트는 의미있음."""
         task = BaseNotifyingTask()
         result = {"count": 5}
-        
+
         assert task._has_meaningful_result(result) is True
 
     def test_get_alert_key_with_domain(self):
         """도메인 기반 알림 키."""
         task = BaseNotifyingTask()
         result = {"domain": "payment"}
-        
+
         key = task._get_alert_key(result)
         assert key == "payment"
 
@@ -407,7 +407,7 @@ class TestBaseNotifyingTask:
         """기본 알림 키."""
         task = BaseNotifyingTask()
         result = {"count": 5}
-        
+
         key = task._get_alert_key(result)
         assert key == "default"
 
@@ -416,14 +416,14 @@ class TestBaseNotifyingTask:
         """Audit Trail 기록 확인."""
         mock_logger = Mock()
         mock_get_audit.return_value = mock_logger
-        
+
         task = BaseNotifyingTask()
         task.name = "test_task"
         task.request = Mock(id="task-123")
         result = {"count": 5}
-        
+
         task._record_audit_trail(result)
-        
+
         mock_logger.log_event.assert_called_once()
         call_kwargs = mock_logger.log_event.call_args.kwargs
         assert call_kwargs["event_type"] == "notification_sent"
@@ -445,7 +445,7 @@ class TestCustomTaskImplementation:
 
     def test_custom_task_with_policy(self):
         """커스텀 정책 태스크."""
-        
+
         class MyTask(BaseNotifyingTask):
             notification_policy = NotificationPolicy(
                 timing=NotificationTiming.AGGREGATED,
@@ -454,44 +454,44 @@ class TestCustomTaskImplementation:
                 threshold_field="archived_count",
                 default_severity="info",
             )
-            
+
             def run(self, days=30):
                 return {"archived_count": 10, "days": days}
-            
+
             def _get_summary_message(self, result):
                 return f"📦 아카이브: {result['archived_count']}건"
-        
+
         task = MyTask()
         task.name = "test_archive_task"
-        
+
         # 정책 확인
         assert task.notification_policy.timing == NotificationTiming.AGGREGATED
         assert task.notification_policy.threshold == 5
-        
+
         # 실행
         result = task.run(days=30)
         assert result["archived_count"] == 10
-        
+
         # 메시지 확인
         message = task._get_summary_message(result)
         assert "아카이브: 10건" in message
 
     def test_high_risk_task_requires_approval(self):
         """고위험 태스크 승인 요구."""
-        
+
         class HighRiskTask(BaseNotifyingTask):
             notification_policy = NotificationPolicy(
                 timing=NotificationTiming.BEFORE,
                 requires_approval=True,
                 default_severity="critical",
             )
-            
+
             def run(self, days=90):
                 return {"purged_count": 100}
-        
+
         task = HighRiskTask()
         task.name = "purge_task"
-        
+
         assert task.notification_policy.requires_approval is True
         assert task.notification_policy.timing == NotificationTiming.BEFORE
 
@@ -513,7 +513,7 @@ class TestHelperFunctions:
         # 쿨다운 설정
         BaseNotifyingTask._last_alert_times["test:key"] = datetime.now(timezone.utc)
         assert len(BaseNotifyingTask._last_alert_times) > 0
-        
+
         # 초기화
         reset_cooldowns()
         assert len(BaseNotifyingTask._last_alert_times) == 0
@@ -522,7 +522,7 @@ class TestHelperFunctions:
         """쿨다운 상태 조회."""
         now = datetime.now(timezone.utc)
         BaseNotifyingTask._last_alert_times["test:key"] = now
-        
+
         status = get_cooldown_status()
         assert "test:key" in status
         assert status["test:key"] == now.isoformat()
@@ -546,28 +546,28 @@ class TestIntegrationScenarios:
         """전체 태스크 실행 흐름."""
         mock_audit.return_value = Mock()
         mock_notify.return_value = Mock()
-        
+
         class TestTask(BaseNotifyingTask):
             notification_policy = NotificationPolicy(
                 timing=NotificationTiming.AFTER,
                 default_severity="info",
             )
-            
+
             def run(self, count=5):
                 return {"success": True, "count": count}
-        
+
         task = TestTask()
         task.name = "test_full_flow"
-        
+
         # __call__로 실행 (pre/post 훅 포함)
         result = task(count=10)
-        
+
         assert result["success"] is True
         assert result["count"] == 10
 
     def test_threshold_based_notification(self):
         """임계값 기반 알림 테스트."""
-        
+
         class ThresholdTask(BaseNotifyingTask):
             notification_policy = NotificationPolicy(
                 timing=NotificationTiming.AFTER,
@@ -575,45 +575,45 @@ class TestIntegrationScenarios:
                 threshold_field="suspicious_count",
                 default_severity="warning",
             )
-            
+
             def run(self):
                 return {"suspicious_count": 5}  # Below threshold
-            
+
             def _has_meaningful_result(self, result):
                 # suspicious_count가 있으면 의미있는 결과
                 return result.get("suspicious_count", 0) > 0
-        
+
         task = ThresholdTask()
         task.name = "threshold_task"
-        
+
         result = task.run()
-        
+
         # 임계값 미달로 알림 안함
         assert task._should_notify(result) is False
-        
+
         # 임계값 초과 결과
         result_high = {"suspicious_count": 15}
         assert task._should_notify(result_high) is True
 
     def test_cooldown_prevents_spam(self):
         """쿨다운으로 알림 스팸 방지."""
-        
+
         class FrequentTask(BaseNotifyingTask):
             notification_policy = NotificationPolicy(
                 cooldown_seconds=60,  # 1분
             )
-            
+
             def run(self):
                 return {"count": 1}
-        
+
         task = FrequentTask()
         task.name = "frequent_task"
-        
+
         result = task.run()
-        
+
         # 첫 번째 알림 허용
         assert task._should_notify(result) is True
         task._record_alert_sent("frequent_task:default")
-        
+
         # 두 번째 알림 억제 (쿨다운 중)
         assert task._should_notify(result) is False

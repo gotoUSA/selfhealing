@@ -8,8 +8,7 @@ Tests for:
 """
 
 import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestGenerateCeleryTraceIdOtelCompatibility:
@@ -124,9 +123,9 @@ class TestCeleryContextFunctions:
     def test_set_and_get_celery_context(self):
         """set_celery_context and get_celery_context work correctly."""
         from selfhealing.audit.trace import (
-            set_celery_context,
-            get_celery_context,
             clear_celery_context,
+            get_celery_context,
+            set_celery_context,
         )
 
         set_celery_context(
@@ -147,9 +146,9 @@ class TestCeleryContextFunctions:
     def test_is_celery_task_returns_true_in_context(self):
         """is_celery_task returns True when in Celery context."""
         from selfhealing.audit.trace import (
-            set_celery_context,
-            is_celery_task,
             clear_celery_context,
+            is_celery_task,
+            set_celery_context,
         )
 
         set_celery_context(task_id="task-xyz", task_name="test.task")
@@ -160,7 +159,7 @@ class TestCeleryContextFunctions:
 
     def test_is_celery_task_returns_false_outside_context(self):
         """is_celery_task returns False when not in Celery context."""
-        from selfhealing.audit.trace import is_celery_task, clear_celery_context
+        from selfhealing.audit.trace import clear_celery_context, is_celery_task
 
         clear_celery_context()
         assert is_celery_task() is False
@@ -171,14 +170,14 @@ class TestRestoreTraceFromCelery:
 
     def teardown_method(self):
         """Clean up trace and Celery context after each test."""
-        from selfhealing.audit.trace import clear_trace_id, clear_celery_context
+        from selfhealing.audit.trace import clear_celery_context, clear_trace_id
 
         clear_trace_id()
         clear_celery_context()
 
     def test_restore_from_trace_info(self):
         """Restores trace_id from trace_info when provided."""
-        from selfhealing.audit.trace import restore_trace_from_celery, get_trace_id
+        from selfhealing.audit.trace import get_trace_id, restore_trace_from_celery
 
         trace_info = {"trace_id": "req-abc12345", "source": "celery_propagated"}
 
@@ -188,7 +187,7 @@ class TestRestoreTraceFromCelery:
 
     def test_restore_from_celery_task_id(self):
         """Generates CELERY_{task_id} when trace_info is empty."""
-        from selfhealing.audit.trace import restore_trace_from_celery, get_trace_id
+        from selfhealing.audit.trace import get_trace_id, restore_trace_from_celery
 
         with restore_trace_from_celery(celery_task_id="task-def") as active_id:
             assert active_id == "CELERY_task-def"

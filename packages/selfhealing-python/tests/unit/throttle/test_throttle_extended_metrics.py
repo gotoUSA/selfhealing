@@ -4,8 +4,8 @@ AdaptiveThrottle 확장 메트릭 단위 테스트.
 새롭게 추가된 메트릭들이 올바르게 기록되는지 확인.
 """
 
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 class TestThrottleExtendedMetricsDefinitions:

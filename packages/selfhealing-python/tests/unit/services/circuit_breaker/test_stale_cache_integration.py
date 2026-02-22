@@ -7,20 +7,17 @@ Test Coverage:
 - record_success 캐시 자동 저장 (#234)
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from selfhealing.services.circuit_breaker.models import (
-    ServiceConfig,
-    RecoveryStrategy,
     CanaryRecoveryStageConfig,
+    RecoveryStrategy,
 )
 from selfhealing.services.circuit_breaker.stale_cache_integration import (
     CanaryWithStaleCacheService,
     build_stale_cache_key,
 )
-
 
 # =============================================================================
 # 4.2 CanaryWithStaleCacheService Tests
@@ -95,11 +92,11 @@ class TestCanaryWithStaleCacheService:
 
     def setup_method(self):
         """테스트 전 싱글톤 초기화."""
-        from selfhealing.services.circuit_breaker.stale_cache_integration import (
-            reset_canary_stale_cache_service,
-        )
         from selfhealing.services.circuit_breaker.canary_recovery import (
             reset_canary_recovery_manager,
+        )
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            reset_canary_stale_cache_service,
         )
 
         reset_canary_stale_cache_service()
@@ -107,11 +104,11 @@ class TestCanaryWithStaleCacheService:
 
     def teardown_method(self):
         """테스트 후 정리."""
-        from selfhealing.services.circuit_breaker.stale_cache_integration import (
-            reset_canary_stale_cache_service,
-        )
         from selfhealing.services.circuit_breaker.canary_recovery import (
             reset_canary_recovery_manager,
+        )
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            reset_canary_stale_cache_service,
         )
 
         reset_canary_stale_cache_service()
@@ -172,11 +169,11 @@ class TestCanaryWithStaleCacheService:
 
     def test_half_open_canary_request(self):
         """HALF_OPEN 상태에서 Canary 요청."""
-        from selfhealing.services.circuit_breaker.stale_cache_integration import (
-            get_canary_stale_cache_service,
-        )
         from selfhealing.services.circuit_breaker.canary_recovery import (
             get_canary_recovery_manager,
+        )
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            get_canary_stale_cache_service,
         )
 
         service = get_canary_stale_cache_service()
@@ -203,11 +200,11 @@ class TestCanaryWithStaleCacheService:
 
     def test_half_open_non_canary_uses_stale(self):
         """HALF_OPEN에서 non-canary 요청은 Stale Cache 사용."""
-        from selfhealing.services.circuit_breaker.stale_cache_integration import (
-            get_canary_stale_cache_service,
-        )
         from selfhealing.services.circuit_breaker.canary_recovery import (
             get_canary_recovery_manager,
+        )
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            get_canary_stale_cache_service,
         )
 
         service = get_canary_stale_cache_service()
@@ -238,11 +235,11 @@ class TestCanaryWithStaleCacheService:
 
     def test_record_success_updates_canary(self):
         """성공 기록이 Canary 매니저에 전달됨."""
-        from selfhealing.services.circuit_breaker.stale_cache_integration import (
-            get_canary_stale_cache_service,
-        )
         from selfhealing.services.circuit_breaker.canary_recovery import (
             get_canary_recovery_manager,
+        )
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            get_canary_stale_cache_service,
         )
 
         service = get_canary_stale_cache_service()
@@ -327,11 +324,11 @@ class TestRecordSuccessAutoCacheBehavior:
 
     def setup_method(self):
         """테스트 전 싱글톤 초기화."""
-        from selfhealing.services.circuit_breaker.stale_cache_integration import (
-            reset_canary_stale_cache_service,
-        )
         from selfhealing.services.circuit_breaker.canary_recovery import (
             reset_canary_recovery_manager,
+        )
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            reset_canary_stale_cache_service,
         )
 
         reset_canary_stale_cache_service()
@@ -339,11 +336,11 @@ class TestRecordSuccessAutoCacheBehavior:
 
     def teardown_method(self):
         """테스트 후 정리."""
-        from selfhealing.services.circuit_breaker.stale_cache_integration import (
-            reset_canary_stale_cache_service,
-        )
         from selfhealing.services.circuit_breaker.canary_recovery import (
             reset_canary_recovery_manager,
+        )
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            reset_canary_stale_cache_service,
         )
 
         reset_canary_stale_cache_service()
@@ -417,11 +414,11 @@ class TestRecordSuccessAutoCacheBehavior:
 
     def test_record_success_auto_cache_still_records_metrics(self):
         """캐시 자동 저장 시에도 성공 메트릭은 정상 기록된다."""
-        from selfhealing.services.circuit_breaker.stale_cache_integration import (
-            get_canary_stale_cache_service,
-        )
         from selfhealing.services.circuit_breaker.canary_recovery import (
             get_canary_recovery_manager,
+        )
+        from selfhealing.services.circuit_breaker.stale_cache_integration import (
+            get_canary_stale_cache_service,
         )
 
         service = get_canary_stale_cache_service()

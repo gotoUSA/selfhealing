@@ -687,7 +687,7 @@ class HealingProofTest:
         print(f"Started: {self.report.started_at}")
         print(f"Completed: {self.report.completed_at}")
         
-        print(f"\n[PHASES] Phase Results:")
+        print("\n[PHASES] Phase Results:")
         for phase in self.report.phases:
             status = "[PASS]" if phase.success else "[FAIL]"
             print(f"  {status} {phase.name}: {phase.duration_seconds:.1f}s")
@@ -695,12 +695,12 @@ class HealingProofTest:
                 for error in phase.errors:
                     print(f"      [WARN] {error}")
         
-        print(f"\n[METRICS] Key Metrics:")
+        print("\n[METRICS] Key Metrics:")
         metrics = self.report.summary.get("metrics", {})
         for key, value in metrics.items():
             print(f"  - {key}: {value}")
         
-        print(f"\n[HEALING] Self-Healing Effect:")
+        print("\n[HEALING] Self-Healing Effect:")
         healing = self.report.summary.get("healing_proof", {})
         for key, value in healing.items():
             status = "[YES]" if value else "[NO]"

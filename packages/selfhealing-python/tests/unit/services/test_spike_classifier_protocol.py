@@ -12,13 +12,10 @@ Tests for SpikeClassifier.classify_features() — ClassificationStrategy Protoco
 
 from __future__ import annotations
 
-import pytest
-
 from selfhealing.services.predictive_forecaster.proactive_action import (
     SpikeClassifier,
     SpikeType,
 )
-
 
 # =============================================================================
 # _parse_history 동작 검증

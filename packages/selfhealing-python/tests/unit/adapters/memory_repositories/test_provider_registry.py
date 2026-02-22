@@ -11,12 +11,12 @@ class TestProviderRegistry:
     @pytest.fixture(autouse=True)
     def reset_registry(self):
         """Reset ProviderRegistry before and after each test for isolation."""
-        from selfhealing.factory import ProviderRegistry
         from selfhealing.adapters.memory import (
-            InMemoryFailedOperationRepository,
             InMemoryCircuitBreakerStateRepository,
+            InMemoryFailedOperationRepository,
             InMemorySecurityIncidentRepository,
         )
+        from selfhealing.factory import ProviderRegistry
 
         # Store original state
         original_instances = ProviderRegistry._instances.copy()
@@ -62,12 +62,12 @@ class TestProviderRegistry:
 
     def test_registry_creates_inmemory_repositories(self):
         """Test that registry creates in-memory repositories."""
-        from selfhealing.factory import ProviderRegistry
         from selfhealing.adapters.memory import (
-            InMemoryFailedOperationRepository,
             InMemoryCircuitBreakerStateRepository,
+            InMemoryFailedOperationRepository,
             InMemorySecurityIncidentRepository,
         )
+        from selfhealing.factory import ProviderRegistry
 
         ProviderRegistry.clear_instances()
 
@@ -92,8 +92,8 @@ class TestProviderRegistry:
 
     def test_registry_set_defaults_to_memory(self):
         """Test setting default to memory provider."""
-        from selfhealing.factory import ProviderRegistry
         from selfhealing.adapters.memory import InMemoryFailedOperationRepository
+        from selfhealing.factory import ProviderRegistry
 
         ProviderRegistry.clear_instances()
         ProviderRegistry.set_defaults(repo="memory")

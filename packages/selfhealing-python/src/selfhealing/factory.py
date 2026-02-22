@@ -500,7 +500,7 @@ class ProviderRegistry:
         cls,
         name: str | None = None,
         singleton: bool = True,
-    ) -> "TrafficRoutingAdapter":
+    ) -> TrafficRoutingAdapter:
         """
         Get traffic routing adapter instance.
 
@@ -514,7 +514,6 @@ class ProviderRegistry:
         Raises:
             ValueError: If no adapter registered with the given name
         """
-        from selfhealing.interfaces.traffic_routing import TrafficRoutingAdapter
 
         name = name or cls._default_traffic_routing
 

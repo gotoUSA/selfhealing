@@ -6,9 +6,8 @@ Unit tests for Safe Defaults functionality.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from dataclasses import dataclass, field
-from typing import List
 
 
 # =============================================================================
@@ -483,7 +482,7 @@ class TestValidateStartupConfig:
 
     def test_valid_config_unchanged(self):
         """유효한 설정은 변경되지 않음."""
-        from selfhealing.core.safe_defaults import validate_startup_config, SAFE_DEFAULTS
+        from selfhealing.core.safe_defaults import validate_startup_config
 
         @dataclass
         class MockCircuitBreakerConfig:

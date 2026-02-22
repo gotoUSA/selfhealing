@@ -9,10 +9,9 @@ Tests for:
 5. RuntimeConfig integration
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-from dataclasses import asdict
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # =============================================================================
 # AdaptiveReplayConfig Tests
@@ -96,8 +95,8 @@ class TestAdaptiveReplayManager:
     def test_configure_updates_config(self):
         """configure()가 설정을 업데이트하는지 확인."""
         from selfhealing.services.adaptive_replay import (
-            get_adaptive_replay_manager,
             AdaptiveReplayConfig,
+            get_adaptive_replay_manager,
         )
 
         manager = get_adaptive_replay_manager()
@@ -116,8 +115,8 @@ class TestAdaptiveReplayManager:
     def test_configure_clamps_current_items_to_bounds(self):
         """configure()가 current_items를 새 범위에 맞게 조정하는지 확인."""
         from selfhealing.services.adaptive_replay import (
-            get_adaptive_replay_manager,
             AdaptiveReplayConfig,
+            get_adaptive_replay_manager,
         )
 
         manager = get_adaptive_replay_manager()
@@ -185,8 +184,8 @@ class TestAdaptiveReplayManager:
     def test_min_items_floor(self):
         """min_items 하한선 확인."""
         from selfhealing.services.adaptive_replay import (
-            get_adaptive_replay_manager,
             AdaptiveReplayConfig,
+            get_adaptive_replay_manager,
         )
 
         manager = get_adaptive_replay_manager()
@@ -202,8 +201,8 @@ class TestAdaptiveReplayManager:
     def test_max_items_ceiling(self):
         """max_items 상한선 확인."""
         from selfhealing.services.adaptive_replay import (
-            get_adaptive_replay_manager,
             AdaptiveReplayConfig,
+            get_adaptive_replay_manager,
         )
 
         manager = get_adaptive_replay_manager()
@@ -333,8 +332,8 @@ class TestReplayServiceAdaptiveIntegration:
     ):
         """Adaptive 모드 활성화 시 AdaptiveReplayManager 값 사용."""
         from selfhealing.services.adaptive_replay import (
-            get_adaptive_replay_manager,
             AdaptiveReplayConfig,
+            get_adaptive_replay_manager,
         )
 
         mock_governance.return_value = MagicMock(allowed=True)
@@ -367,8 +366,8 @@ class TestReplayServiceAdaptiveIntegration:
     ):
         """use_adaptive=True 파라미터로 강제 활성화."""
         from selfhealing.services.adaptive_replay import (
-            get_adaptive_replay_manager,
             AdaptiveReplayConfig,
+            get_adaptive_replay_manager,
         )
 
         mock_governance.return_value = MagicMock(allowed=True)
@@ -412,8 +411,9 @@ class TestReplayServiceAdaptiveIntegration:
         self, mock_governance, replay_service, mock_repository
     ):
         """Adaptive 모드에서 배치 결과가 기록되는지 확인."""
-        from selfhealing.services.adaptive_replay import get_adaptive_replay_manager
         from dataclasses import dataclass
+
+        from selfhealing.services.adaptive_replay import get_adaptive_replay_manager
 
         mock_governance.return_value = MagicMock(allowed=True)
 
@@ -473,8 +473,8 @@ class TestRuntimeConfigIntegration:
 
     def test_config_classes_has_replay_automation(self):
         """CONFIG_CLASSES에 replay_automation이 있는지 확인."""
-        from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
         from selfhealing.core.config import ReplayAutomationConfig
+        from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
 
         assert "replay_automation" in CONFIG_CLASSES
         assert CONFIG_CLASSES["replay_automation"] is ReplayAutomationConfig
@@ -500,6 +500,7 @@ class TestThreadSafety:
     def test_concurrent_record_batch_result(self):
         """동시에 여러 스레드가 record_batch_result 호출해도 안전한지."""
         import threading
+
         from selfhealing.services.adaptive_replay import get_adaptive_replay_manager
 
         manager = get_adaptive_replay_manager()
@@ -526,6 +527,7 @@ class TestThreadSafety:
     def test_concurrent_get_current_max_items(self):
         """동시에 여러 스레드가 get_current_max_items 호출해도 안전한지."""
         import threading
+
         from selfhealing.services.adaptive_replay import get_adaptive_replay_manager
 
         manager = get_adaptive_replay_manager()

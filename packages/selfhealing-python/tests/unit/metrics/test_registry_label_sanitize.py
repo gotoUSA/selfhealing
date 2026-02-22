@@ -4,7 +4,6 @@ sanitize_label_value() 단위 테스트.
 Prometheus 메트릭 라벨 값 정규화 함수 테스트.
 """
 
-import pytest
 
 
 class TestSanitizeLabelValue:
@@ -21,8 +20,8 @@ class TestSanitizeLabelValue:
     def test_empty_string_returns_unknown(self):
         """빈 문자열/공백만 입력 시 UNKNOWN_LABEL_VALUE 반환."""
         from selfhealing.services.metrics.registry import (
-            sanitize_label_value,
             UNKNOWN_LABEL_VALUE,
+            sanitize_label_value,
         )
 
         # 소스 상수 참조 (하드코딩 제거)
@@ -36,8 +35,8 @@ class TestSanitizeLabelValue:
     def test_truncates_at_max_length(self):
         """기본 max_length 초과 시 절단."""
         from selfhealing.services.metrics.registry import (
-            sanitize_label_value,
             DEFAULT_LABEL_MAX_LENGTH,
+            sanitize_label_value,
         )
 
         # 소스 상수 참조 (하드코딩 제거)

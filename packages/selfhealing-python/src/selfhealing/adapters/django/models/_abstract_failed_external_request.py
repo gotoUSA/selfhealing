@@ -270,7 +270,7 @@ class AbstractFailedExternalRequest(models.Model if DJANGO_AVAILABLE else object
         response_data: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
         snapshot_data: dict[str, Any] | None = None,
-    ) -> "AbstractFailedExternalRequest":
+    ) -> AbstractFailedExternalRequest:
         """Factory method to create a DLQ entry from an external request failure."""
         from decimal import Decimal
 

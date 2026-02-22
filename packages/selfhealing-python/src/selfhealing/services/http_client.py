@@ -8,9 +8,10 @@ OpenTelemetry 활성화 시 자동 계측을 활용하고,
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Any, Generator
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -167,7 +168,7 @@ class SelfHealingHttpClient:
         method: str,
         url: str,
         **kwargs: Any,
-    ) -> "requests.Response":
+    ) -> requests.Response:
         """
         HTTP 요청 실행 (공통 로직).
 
@@ -256,7 +257,7 @@ class SelfHealingHttpClient:
         self,
         url: str,
         **kwargs: Any,
-    ) -> "requests.Response":
+    ) -> requests.Response:
         """
         GET 요청.
 
@@ -273,7 +274,7 @@ class SelfHealingHttpClient:
         self,
         url: str,
         **kwargs: Any,
-    ) -> "requests.Response":
+    ) -> requests.Response:
         """
         POST 요청.
 
@@ -290,7 +291,7 @@ class SelfHealingHttpClient:
         self,
         url: str,
         **kwargs: Any,
-    ) -> "requests.Response":
+    ) -> requests.Response:
         """PUT 요청."""
         return self._execute_request("put", url, **kwargs)
 
@@ -298,7 +299,7 @@ class SelfHealingHttpClient:
         self,
         url: str,
         **kwargs: Any,
-    ) -> "requests.Response":
+    ) -> requests.Response:
         """DELETE 요청."""
         return self._execute_request("delete", url, **kwargs)
 
@@ -306,7 +307,7 @@ class SelfHealingHttpClient:
         self,
         url: str,
         **kwargs: Any,
-    ) -> "requests.Response":
+    ) -> requests.Response:
         """PATCH 요청."""
         return self._execute_request("patch", url, **kwargs)
 

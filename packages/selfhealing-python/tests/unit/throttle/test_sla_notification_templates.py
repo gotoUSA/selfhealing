@@ -9,29 +9,15 @@ SLA 알림 메시지 템플릿 단위 테스트.
 
 from __future__ import annotations
 
-import pytest
-
 from tests.unit.throttle.conftest import (
-    CRITICAL_CURRENT_LIMIT,
-    CRITICAL_GRADIENT,
-    CRITICAL_PREVIOUS_LIMIT,
     CRITICAL_REDUCTION_PERCENT,
-    CRITICAL_RTT_MS,
-    CRITICAL_THRESHOLD_MS,
-    RECOVERED_NEW_LIMIT,
-    RECOVERED_PREVIOUS_LIMIT,
-    RECOVERED_RTT_MS,
     SVC_DEFAULT,
-    SVC_ORDER,
-    SVC_PAYMENT,
     WARNING_CURRENT_LIMIT,
-    WARNING_GRADIENT,
     WARNING_PREVIOUS_LIMIT,
-    WARNING_RTT_MS,
     WARNING_THRESHOLD_MS,
-    make_warning_event_data,
     make_critical_event_data,
     make_recovered_event_data,
+    make_warning_event_data,
 )
 
 

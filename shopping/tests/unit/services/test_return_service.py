@@ -8,7 +8,6 @@ import pytest
 from django.utils import timezone
 
 from shopping.models.point import PointHistory
-from shopping.models.return_request import Return, ReturnItem
 from shopping.services.return_service import ReturnService
 from shopping.tests.factories import (
     OrderFactory,

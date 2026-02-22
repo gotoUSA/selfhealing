@@ -12,18 +12,15 @@ Idempotent Rollback Chaos 안전 메커니즘 테스트.
 import threading
 import time
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from unittest.mock import patch
 
 from selfhealing.services.chaos.experiments import (
+    Error5xxExperiment,
     ExperimentConfig,
     ExperimentStatus,
     LatencyInjectionExperiment,
-    Error5xxExperiment,
     TimeoutExperiment,
 )
-
 
 # =============================================================================
 # Basic Idempotent Rollback Tests

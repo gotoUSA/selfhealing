@@ -20,7 +20,7 @@ class TestInMemorySecurityIncidentRepository:
     def test_create_incident(self, repo):
         """Test creating a new security incident."""
         from selfhealing.interfaces.repositories import SecurityIncidentStatus
-        
+
         incident = repo.create(
             incident_type="webhook_signature_invalid",
             severity="high",
@@ -61,7 +61,7 @@ class TestInMemorySecurityIncidentRepository:
     def test_update_status(self, repo):
         """Test updating incident status."""
         from selfhealing.interfaces.repositories import SecurityIncidentStatus
-        
+
         incident = repo.create(
             incident_type="rate_limit_abuse",
             severity="medium",
@@ -115,7 +115,7 @@ class TestInMemorySecurityIncidentRepository:
     def test_get_open_incidents(self, repo):
         """Test getting all open incidents."""
         from selfhealing.interfaces.repositories import SecurityIncidentStatus
-        
+
         incident1 = repo.create(incident_type="test", severity="high", description="Open incident")
         incident2 = repo.create(incident_type="test", severity="high", description="Closed incident")
         repo.update_status(incident2.id, SecurityIncidentStatus.RESOLVED.value)
@@ -127,7 +127,7 @@ class TestInMemorySecurityIncidentRepository:
     def test_mark_as_resolved(self, repo):
         """Test marking an incident as resolved."""
         from selfhealing.interfaces.repositories import SecurityIncidentStatus
-        
+
         incident = repo.create(incident_type="test", severity="high", description="Test incident")
 
         result = repo.mark_as_resolved(incident.id, investigation_notes="Issue fixed")

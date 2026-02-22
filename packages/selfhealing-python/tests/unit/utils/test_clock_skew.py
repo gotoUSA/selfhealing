@@ -7,9 +7,8 @@ in distributed systems.
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timedelta, timezone as tz
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timedelta
+from datetime import timezone as tz
 
 
 class TestTimeProvider:
@@ -322,9 +321,9 @@ class TestGlobalTimeProvider:
     def test_get_time_provider_default(self):
         """Default time provider is SystemTimeProvider."""
         from selfhealing.core.time_provider import (
+            SystemTimeProvider,
             get_time_provider,
             reset_time_provider,
-            SystemTimeProvider,
         )
 
         reset_time_provider()
@@ -335,10 +334,10 @@ class TestGlobalTimeProvider:
     def test_set_time_provider(self):
         """Can set custom time provider globally."""
         from selfhealing.core.time_provider import (
-            get_time_provider,
-            set_time_provider,
-            reset_time_provider,
             MockTimeProvider,
+            get_time_provider,
+            reset_time_provider,
+            set_time_provider,
         )
 
         try:
@@ -353,10 +352,10 @@ class TestGlobalTimeProvider:
     def test_convenience_now_uses_global(self):
         """now() function uses global time provider."""
         from selfhealing.core.time_provider import (
-            set_time_provider,
-            reset_time_provider,
             MockTimeProvider,
             now,
+            reset_time_provider,
+            set_time_provider,
         )
 
         try:
@@ -371,10 +370,10 @@ class TestGlobalTimeProvider:
     def test_is_within_clock_skew_convenience(self):
         """is_within_clock_skew() uses global provider."""
         from selfhealing.core.time_provider import (
-            set_time_provider,
-            reset_time_provider,
             MockTimeProvider,
             is_within_clock_skew,
+            reset_time_provider,
+            set_time_provider,
         )
 
         try:
@@ -395,9 +394,9 @@ class TestTimezoneIntegration:
     def test_timezone_now_uses_time_provider(self):
         """timezone.now() uses global TimeProvider."""
         from selfhealing.core.time_provider import (
-            set_time_provider,
-            reset_time_provider,
             MockTimeProvider,
+            reset_time_provider,
+            set_time_provider,
         )
         from selfhealing.core.timezone import now
 
@@ -413,9 +412,9 @@ class TestTimezoneIntegration:
     def test_timezone_utcnow_uses_time_provider(self):
         """timezone.utcnow() uses global TimeProvider."""
         from selfhealing.core.time_provider import (
-            set_time_provider,
-            reset_time_provider,
             MockTimeProvider,
+            reset_time_provider,
+            set_time_provider,
         )
         from selfhealing.core.timezone import utcnow
 
@@ -458,8 +457,8 @@ class TestIdempotencyServiceTimeProvider:
 
     def test_idempotency_service_clock_skew_from_config(self):
         """IdempotencyService uses config clock_skew_tolerance by default."""
-        from selfhealing.services.idempotency_service import IdempotencyService
         from selfhealing.core.config import get_config
+        from selfhealing.services.idempotency_service import IdempotencyService
 
         service = IdempotencyService()
         config = get_config()

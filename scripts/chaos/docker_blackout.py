@@ -263,7 +263,7 @@ class DockerBlackoutTest:
         
         # 초기 CB 상태가 closed인지 확인
         if cb_status and cb_status.get("state") == "closed":
-            self.log(f"✅ CB 초기 상태: CLOSED", "SUCCESS")
+            self.log("✅ CB 초기 상태: CLOSED", "SUCCESS")
             self.add_timeline_event("PHASE_1_COMPLETE", "Pre-chaos state recorded, CB is CLOSED")
             return True
         else:
@@ -418,7 +418,7 @@ class DockerBlackoutTest:
                 self.add_timeline_event("CB_CLOSED", f"Recovered after {recovery_time:.1f}s")
                 break
             elif current_state == "half_open":
-                self.log(f"  CB 상태: HALF_OPEN - 복구 진행 중...", "INFO")
+                self.log("  CB 상태: HALF_OPEN - 복구 진행 중...", "INFO")
                 # 강제 복구 시도
                 self.trigger_cb_recovery("database", force=True)
                 time.sleep(2)
@@ -479,7 +479,7 @@ class DockerBlackoutTest:
         """전체 테스트 실행"""
         print()
         print(f"{Colors.BOLD}{'='*60}")
-        print(f"🔥 Stage 49: Docker Chaos - DB Blackout Test")
+        print("🔥 Stage 49: Docker Chaos - DB Blackout Test")
         print(f"{'='*60}{Colors.RESET}")
         print()
         
@@ -550,7 +550,7 @@ class DockerBlackoutTest:
         """결과 요약 출력"""
         print()
         print(f"{Colors.BOLD}{'='*60}")
-        print(f"🏆 Stage 49 테스트 결과 요약")
+        print("🏆 Stage 49 테스트 결과 요약")
         print(f"{'='*60}{Colors.RESET}")
         print()
         

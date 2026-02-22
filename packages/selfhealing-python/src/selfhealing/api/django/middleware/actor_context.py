@@ -32,7 +32,8 @@ Usage in settings.py:
 from __future__ import annotations
 
 import os
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import structlog
 

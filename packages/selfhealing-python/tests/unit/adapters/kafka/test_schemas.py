@@ -11,6 +11,7 @@ import json
 
 import pytest
 
+from selfhealing.adapters.kafka.config import KafkaSettings
 from selfhealing.adapters.kafka.schemas import (
     AUDIT_EVENT_SCHEMA,
     DLQ_EVENT_SCHEMA,
@@ -20,7 +21,6 @@ from selfhealing.adapters.kafka.schemas import (
     serialize_event_json,
     validate_audit_event,
 )
-from selfhealing.adapters.kafka.config import KafkaSettings
 
 
 class TestValidateAuditEvent:

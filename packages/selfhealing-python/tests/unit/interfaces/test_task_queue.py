@@ -13,19 +13,17 @@ TaskQueueInterface 단위 테스트
 - 모든 어댑터 구현체가 이 테스트를 통과해야 함
 """
 
-import pytest
-import time
 from datetime import datetime, timedelta
-from typing import Callable
-from unittest.mock import MagicMock, patch
 
-from selfhealing.interfaces.task_queue import (
-    TaskQueueInterface,
-    TaskStatus,
-    TaskResult,
-    TaskOptions,
-)
+import pytest
+
 from selfhealing.adapters.queues.sync_adapter import SyncTaskAdapter
+from selfhealing.interfaces.task_queue import (
+    TaskOptions,
+    TaskQueueInterface,
+    TaskResult,
+    TaskStatus,
+)
 
 
 class TestTaskStatus:

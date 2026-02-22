@@ -4,8 +4,9 @@ AutoTuningService Governance 통합 테스트.
 AutoTuningService가 시작 전 Governance 체크를 수행하는지 검증합니다.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, Mock
 
 
 class TestAutoTuningGovernanceIntegration:
@@ -103,7 +104,7 @@ class TestAutoTuningGovernanceIntegration:
         from selfhealing.services.auto_tuning.service import AutoTuningService
 
         service = AutoTuningService(**mock_adapters)
-        
+
         assert hasattr(service, "_check_governance_before_adjustment")
         assert callable(service._check_governance_before_adjustment)
 
@@ -141,7 +142,7 @@ class TestAutoTuningGovernanceIntegration:
             mock_governance.return_value = GovernanceCheckResult.allowed_result()
 
             service = AutoTuningService(**mock_adapters)
-            
+
             # _check_governance_before_adjustment 직접 호출 테스트
             result = service._check_governance_before_adjustment(
                 module="circuit_breaker",

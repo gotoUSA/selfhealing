@@ -10,9 +10,7 @@ Audit System Probe 단위 테스트.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 
 class TestAuditSystemProbeStatus:
@@ -51,7 +49,7 @@ class TestAuditSystemProbeProbe:
 
     def test_probe_returns_result(self):
         """probe가 AuditProbeResult를 반환하는지 확인."""
-        from selfhealing.meta.audit_probe import AuditSystemProbe, AuditProbeResult
+        from selfhealing.meta.audit_probe import AuditProbeResult, AuditSystemProbe
 
         probe = AuditSystemProbe()
         result = probe.probe()
@@ -242,7 +240,7 @@ class TestGetAuditProbe:
 
     def test_returns_audit_system_probe(self):
         """AuditSystemProbe 인스턴스 반환 확인."""
-        from selfhealing.meta.audit_probe import get_audit_probe, AuditSystemProbe
+        from selfhealing.meta.audit_probe import AuditSystemProbe, get_audit_probe
 
         probe = get_audit_probe()
 

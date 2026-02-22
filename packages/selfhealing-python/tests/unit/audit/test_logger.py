@@ -4,15 +4,12 @@ Tests for the main AuditLogger class.
 
 import json
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from selfhealing.audit import (
-    ConfigAuditAction,
     AuditLogger,
+    ConfigAuditAction,
     ConfigChangeEvent,
     LocalFileBackend,
     get_audit_logger,

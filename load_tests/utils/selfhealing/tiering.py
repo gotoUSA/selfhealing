@@ -4,7 +4,7 @@ API Tiering Configuration Client.
 Tier 정의, 매핑, 오버라이드, Dry Run 관련 API.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .base import BaseClient
 

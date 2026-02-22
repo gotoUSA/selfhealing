@@ -288,7 +288,6 @@ class RegionalOverrideConflictScenario(IntegrationScenario):
 
     def execute(self) -> ScenarioResult:
         """8단계 시나리오 실행."""
-        from selfhealing.services.coordination.enums import EmergencyScope
         from selfhealing.services.emergency_mode.enums import EmergencyLevel
         from selfhealing.services.namespace_emergency.tracker import (
             NamespacedEmergencyTracker,
@@ -342,7 +341,7 @@ class RegionalOverrideConflictScenario(IntegrationScenario):
         def step2():
             transition = self._set_regional_state(tracker, target_region, EmergencyLevel.LEVEL_2)
             state_transitions.append(transition)
-            return f"Regional: STRICT (LEVEL_2)"
+            return "Regional: STRICT (LEVEL_2)"
 
         if not self._execute_step(
             2,

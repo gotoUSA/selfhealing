@@ -8,8 +8,8 @@ DNA 가용성 대비 목표 달성률 분석
 Phase 3 구현
 """
 
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, List, Any, Tuple
+from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
 import logging

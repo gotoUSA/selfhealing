@@ -19,15 +19,15 @@ class TestAuditLazyImport:
         """Core API symbols should be directly importable."""
         from selfhealing.audit import (
             AuditLogger,
-            get_audit_logger,
-            log_config_change,
-            mask_ip,
-            mask_email,
-            hash_for_audit,
-            get_trace_id,
-            set_trace_id,
-            generate_trace_id,
             HashChainManager,
+            generate_trace_id,
+            get_audit_logger,
+            get_trace_id,
+            hash_for_audit,
+            log_config_change,
+            mask_email,
+            mask_ip,
+            set_trace_id,
         )
 
         # All core symbols should be available
@@ -45,8 +45,8 @@ class TestAuditLazyImport:
     def test_lazy_import_logger_extras(self):
         """Extra logger symbols should be lazily loaded."""
         from selfhealing.audit import (
-            ConfigChangeEvent,
             ConfigAuditAction,
+            ConfigChangeEvent,
         )
 
         assert ConfigChangeEvent is not None
@@ -55,8 +55,8 @@ class TestAuditLazyImport:
     def test_lazy_import_masking_extras(self):
         """Extra masking symbols should be lazily loaded."""
         from selfhealing.audit import (
-            mask_sensitive_fields,
             extract_ip_from_request,
+            mask_sensitive_fields,
         )
 
         assert callable(mask_sensitive_fields)
@@ -85,8 +85,8 @@ class TestAuditLazyImport:
     def test_lazy_import_backends(self):
         """Backend symbols should be lazily loaded."""
         from selfhealing.audit import (
-            AuditBackend,
             AsyncAuditBackend,
+            AuditBackend,
             BackendHealth,
             BackendStatus,
             BufferedBackend,
@@ -117,17 +117,17 @@ class TestAuditLazyImport:
     def test_lazy_import_resilience(self):
         """Resilience symbols should be lazily loaded."""
         from selfhealing.audit import (
-            CircuitBreaker,
             AuditCircuitBreakerConfig,
+            AuditMetrics,
+            CircuitBreaker,
             CircuitBreakerRegistry,
             CircuitState,
-            AuditMetrics,
-            SyslogFallback,
             DegradedModeManager,
-            get_circuit_breaker,
+            SyslogFallback,
             get_audit_metrics,
-            get_syslog_fallback,
+            get_circuit_breaker,
             get_degraded_mode_manager,
+            get_syslog_fallback,
             log_critical_to_syslog,
         )
 
@@ -147,11 +147,11 @@ class TestAuditLazyImport:
     def test_lazy_import_env_snapshot(self):
         """Env snapshot symbols should be lazily loaded."""
         from selfhealing.audit import (
-            collect_env_snapshot,
-            log_env_snapshot_to_audit,
-            get_env_snapshot_summary,
-            TRACKED_PREFIXES,
             SENSITIVE_KEYWORDS,
+            TRACKED_PREFIXES,
+            collect_env_snapshot,
+            get_env_snapshot_summary,
+            log_env_snapshot_to_audit,
         )
 
         assert callable(collect_env_snapshot)
@@ -163,8 +163,8 @@ class TestAuditLazyImport:
     def test_lazy_import_config(self):
         """Config symbols should be lazily loaded."""
         from selfhealing.audit import (
-            AuditConfig,
             COMPLIANCE_RETENTION_DAYS,
+            AuditConfig,
             get_recommended_retention,
         )
 
@@ -181,9 +181,9 @@ class TestAuditLazyImport:
     def test_lazy_import_ring_buffer(self):
         """Ring buffer symbols should be lazily loaded."""
         from selfhealing.audit import (
+            BackpressureStrategy,
             RingBuffer,
             RingBufferStats,
-            BackpressureStrategy,
         )
 
         assert RingBuffer is not None
@@ -193,8 +193,8 @@ class TestAuditLazyImport:
     def test_lazy_import_self_audit(self):
         """Self-audit symbols should be lazily loaded."""
         from selfhealing.audit import (
-            SelfAuditLogger,
             SelfAuditEvent,
+            SelfAuditLogger,
             SelfAuditStats,
             self_audit,
         )
@@ -207,16 +207,16 @@ class TestAuditLazyImport:
     def test_lazy_import_checksum(self):
         """Checksum symbols should be lazily loaded."""
         from selfhealing.audit import (
-            compute_crc32,
-            compute_sha256,
-            verify_crc32,
-            verify_sha256,
-            compute_checksum,
-            verify_checksum,
             ChecksumResult,
             checksum_dict,
             checksum_file,
+            compute_checksum,
+            compute_crc32,
+            compute_sha256,
+            verify_checksum,
+            verify_crc32,
             verify_file_checksum,
+            verify_sha256,
         )
 
         assert callable(compute_crc32)
@@ -243,13 +243,13 @@ class TestAuditLazyImport:
     def test_lazy_import_wal(self):
         """WAL symbols should be lazily loaded."""
         from selfhealing.audit import (
-            WriteAheadLog,
             WALConfig,
+            WALCorruptionError,
             WALEntry,
             WALError,
-            WALCorruptionError,
             WALState,
             WALStats,
+            WriteAheadLog,
             create_wal,
         )
 
@@ -268,9 +268,9 @@ class TestAuditLazyImport:
             AuditWatchdog,
             AuditWatchdogConfig,
             AuditWatchdogStatus,
-            WatchdogStats,
             HeartbeatTarget,
             WatchdogChecker,
+            WatchdogStats,
             get_watchdog,
             start_watchdog,
             stop_watchdog,
@@ -290,9 +290,9 @@ class TestAuditLazyImport:
         """Verify integrity symbols should be lazily loaded."""
         from selfhealing.audit import (
             AuditIntegrityVerifier,
+            OutputFormat,
             VerificationResult,
             VerificationSummary,
-            OutputFormat,
         )
 
         assert AuditIntegrityVerifier is not None
@@ -303,13 +303,13 @@ class TestAuditLazyImport:
     def test_lazy_import_integration(self):
         """Integration symbols should be lazily loaded."""
         from selfhealing.audit import (
-            EventSeverity,
-            AsyncLoggerConfig,
             AsyncLoggerAdapter,
-            AuditEventType,
+            AsyncLoggerConfig,
+            AsyncLoggerObserver,
             AuditEventData,
             AuditEventObserver,
-            AsyncLoggerObserver,
+            AuditEventType,
+            EventSeverity,
             IntegratedAuditRecorder,
             configure_integration,
             create_command_center_callback,
@@ -331,9 +331,9 @@ class TestAuditLazyImport:
         from selfhealing.audit import (
             AuditExporter,
             ExportFormat,
-            ExportTarget,
             ExportOptions,
             ExportStats,
+            ExportTarget,
         )
 
         assert AuditExporter is not None
@@ -345,11 +345,11 @@ class TestAuditLazyImport:
     def test_lazy_import_signed_manifest(self):
         """Signed manifest symbols should be lazily loaded."""
         from selfhealing.audit import (
-            MerkleTree,
-            RFC3161Timestamp,
-            RFC3161Client,
-            SignedManifest,
             ManifestEntry,
+            MerkleTree,
+            RFC3161Client,
+            RFC3161Timestamp,
+            SignedManifest,
         )
 
         assert MerkleTree is not None
@@ -441,14 +441,14 @@ class TestAuditLazyImportIntegration:
 
     def test_audit_logger_works(self):
         """AuditLogger should work correctly."""
-        from selfhealing.audit import get_audit_logger, AuditLogger
+        from selfhealing.audit import AuditLogger, get_audit_logger
 
         logger = get_audit_logger()
         assert isinstance(logger, AuditLogger)
 
     def test_masking_functions_work(self):
         """Masking functions should work correctly."""
-        from selfhealing.audit import mask_ip, mask_email, hash_for_audit
+        from selfhealing.audit import hash_for_audit, mask_email, mask_ip
 
         # Test mask_ip
         masked_ip = mask_ip("192.168.1.100")

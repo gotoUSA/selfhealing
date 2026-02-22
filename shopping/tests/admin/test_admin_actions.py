@@ -9,13 +9,9 @@ Verifies that:
 
 import pytest
 from django.urls import reverse
-from django.utils import timezone
-from unittest.mock import patch, MagicMock
 
 from shopping.models import FailedOperation
 from shopping.tests.factories import (
-    OrderFactory,
-    PaymentFactory,
     UserFactory,
 )
 

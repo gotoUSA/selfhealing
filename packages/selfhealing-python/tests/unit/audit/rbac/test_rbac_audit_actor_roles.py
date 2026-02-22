@@ -8,47 +8,45 @@ RBAC-Audit Actor Roles 테스트
 - AuditEntry에 actor_roles 필드 추가 및 자동 채우기
 """
 
-import pytest
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from selfhealing.context.actor_context import (
-    Actor,
-    ActorContext,
-    SYSTEM_ACTOR,
     ANONYMOUS_ACTOR,
     RBAC_ROLE_PRIORITY,
+    SYSTEM_ACTOR,
+    Actor,
+    ActorContext,
     get_actor_for_celery,
-    restore_actor_from_celery,
     get_audit_actor_info,
+    restore_actor_from_celery,
 )
 from selfhealing.interfaces.audit_adapter import (
-    AuditEntry,
     AuditAction,
+    AuditEntry,
     _get_default_actor,
 )
 
 
 class TestActorRolesField:
     """Actor 클래스 roles 필드 테스트."""
-    
+
     def test_actor_has_roles_field(self):
         """Actor 클래스에 roles 필드가 있는지 확인."""
         actor = Actor(actor_id="test@example.com")
         assert hasattr(actor, "roles")
         assert isinstance(actor.roles, list)
-    
+
     def test_actor_roles_default_empty(self):
         """roles 기본값이 빈 리스트인지 확인."""
         actor = Actor(actor_id="test@example.com")
         assert actor.roles == []
-    
+
     def test_actor_with_roles(self):
         """roles를 명시적으로 설정할 수 있는지 확인."""
         roles = ["selfhealing_admin", "selfhealing_operator"]
         actor = Actor(actor_id="admin@example.com", roles=roles)
         assert actor.roles == roles
-    
+
     def test_actor_highest_role_admin(self):
         """highest_role 프로퍼티가 가장 높은 권한을 반환하는지 확인."""
         actor = Actor(
@@ -56,7 +54,7 @@ class TestActorRolesField:
             roles=["selfhealing_viewer", "selfhealing_admin", "selfhealing_operator"],
         )
         assert actor.highest_role == "selfhealing_admin"
-    
+
     def test_actor_highest_role_operator(self):
         """operator가 가장 높은 역할일 때 반환되는지 확인."""
         actor = Actor(
@@ -64,7 +62,7 @@ class TestActorRolesField:
             roles=["selfhealing_viewer", "selfhealing_operator"],
         )
         assert actor.highest_role == "selfhealing_operator"
-    
+
     def test_actor_highest_role_viewer(self):
         """viewer만 있을 때 반환되는지 확인."""
         actor = Actor(
@@ -72,12 +70,12 @@ class TestActorRolesField:
             roles=["selfhealing_viewer"],
         )
         assert actor.highest_role == "selfhealing_viewer"
-    
+
     def test_actor_highest_role_fallback_to_actor_type(self):
         """roles가 비어있으면 actor_type을 반환하는지 확인."""
         actor = Actor(actor_id="user@example.com", actor_type="user")
         assert actor.highest_role == "user"
-    
+
     def test_actor_to_dict_includes_roles(self):
         """to_dict()에 roles가 포함되는지 확인."""
         roles = ["selfhealing_admin"]
@@ -85,11 +83,11 @@ class TestActorRolesField:
         result = actor.to_dict()
         assert "roles" in result
         assert result["roles"] == roles
-    
+
     def test_system_actor_has_empty_roles(self):
         """SYSTEM_ACTOR의 roles가 빈 리스트인지 확인."""
         assert SYSTEM_ACTOR.roles == []
-    
+
     def test_anonymous_actor_has_empty_roles(self):
         """ANONYMOUS_ACTOR의 roles가 빈 리스트인지 확인."""
         assert ANONYMOUS_ACTOR.roles == []
@@ -97,12 +95,12 @@ class TestActorRolesField:
 
 class TestRBACRolePriority:
     """RBAC 역할 우선순위 상수 테스트."""
-    
+
     def test_role_priority_exists(self):
         """RBAC_ROLE_PRIORITY 상수가 존재하는지 확인."""
         assert RBAC_ROLE_PRIORITY is not None
         assert isinstance(RBAC_ROLE_PRIORITY, dict)
-    
+
     def test_admin_highest_priority(self):
         """admin이 가장 높은 우선순위를 가지는지 확인."""
         assert RBAC_ROLE_PRIORITY["selfhealing_admin"] > RBAC_ROLE_PRIORITY["selfhealing_operator"]
@@ -111,7 +109,7 @@ class TestRBACRolePriority:
 
 class TestSetActorWithRoles:
     """set_actor() roles 파라미터 테스트."""
-    
+
     def test_set_actor_with_roles(self):
         """set_actor()로 roles를 설정할 수 있는지 확인."""
         roles = ["selfhealing_admin"]
@@ -123,12 +121,12 @@ class TestSetActorWithRoles:
             assert actor.roles == roles
             current = ActorContext.get_current()
             assert current.roles == roles
-    
+
     def test_set_actor_roles_default_empty(self):
         """set_actor()에 roles를 지정하지 않으면 빈 리스트인지 확인."""
         with ActorContext.set_actor(actor_id="user@example.com") as actor:
             assert actor.roles == []
-    
+
     def test_set_actor_roles_none_becomes_empty_list(self):
         """set_actor()에 roles=None을 전달하면 빈 리스트가 되는지 확인."""
         with ActorContext.set_actor(
@@ -140,7 +138,7 @@ class TestSetActorWithRoles:
 
 class TestExtractSelfhealingRoles:
     """_extract_selfhealing_roles() 테스트."""
-    
+
     def test_extract_roles_from_django_user(self):
         """Django User에서 selfhealing_ 역할이 추출되는지 확인."""
         # Django User 모킹
@@ -149,48 +147,48 @@ class TestExtractSelfhealingRoles:
             "selfhealing_admin",
             "selfhealing_operator",
         ]
-        
+
         roles = ActorContext._extract_selfhealing_roles(mock_user)
-        
+
         assert "selfhealing_admin" in roles
         assert "selfhealing_operator" in roles
         mock_user.groups.filter.assert_called_once_with(name__startswith="selfhealing_")
-    
+
     def test_extract_roles_no_groups(self):
         """groups 속성이 없으면 빈 리스트를 반환하는지 확인."""
         mock_user = MagicMock(spec=[])  # groups 속성 없음
         roles = ActorContext._extract_selfhealing_roles(mock_user)
         assert roles == []
-    
+
     def test_extract_roles_exception_returns_empty(self):
         """예외 발생 시 빈 리스트를 반환하는지 확인."""
         mock_user = MagicMock()
         mock_user.groups.filter.side_effect = Exception("DB Error")
-        
+
         roles = ActorContext._extract_selfhealing_roles(mock_user)
         assert roles == []
 
 
 class TestGetHighestRole:
     """_get_highest_role() 테스트."""
-    
+
     def test_get_highest_role_admin(self):
         """admin이 가장 높은 역할로 반환되는지 확인."""
         roles = ["selfhealing_viewer", "selfhealing_admin"]
         result = ActorContext._get_highest_role(roles)
         assert result == "selfhealing_admin"
-    
+
     def test_get_highest_role_operator(self):
         """operator가 가장 높은 역할로 반환되는지 확인."""
         roles = ["selfhealing_viewer", "selfhealing_operator"]
         result = ActorContext._get_highest_role(roles)
         assert result == "selfhealing_operator"
-    
+
     def test_get_highest_role_empty_returns_user(self):
         """빈 리스트일 때 'user'를 반환하는지 확인."""
         result = ActorContext._get_highest_role([])
         assert result == "user"
-    
+
     def test_get_highest_role_unknown_role(self):
         """알 수 없는 역할만 있을 때 해당 역할을 반환하는지 확인."""
         roles = ["unknown_role"]
@@ -201,7 +199,7 @@ class TestGetHighestRole:
 
 class TestSetActorFromDjangoRequest:
     """set_actor_from_django_request() RBAC 역할 추출 테스트."""
-    
+
     def test_extracts_roles_from_authenticated_user(self):
         """인증된 사용자에서 RBAC 역할이 추출되는지 확인."""
         # Django Request 모킹
@@ -215,11 +213,11 @@ class TestSetActorFromDjangoRequest:
         mock_request.method = "POST"
         mock_request.META = {"HTTP_USER_AGENT": "TestAgent"}
         mock_request.session.session_key = None
-        
+
         with ActorContext.set_actor_from_django_request(mock_request) as actor:
             assert "selfhealing_admin" in actor.roles
             assert actor.actor_type == "selfhealing_admin"  # 가장 높은 역할
-    
+
     def test_actor_type_is_highest_role(self):
         """actor_type이 가장 높은 RBAC 역할로 설정되는지 확인."""
         mock_request = MagicMock()
@@ -233,10 +231,10 @@ class TestSetActorFromDjangoRequest:
         mock_request.method = "GET"
         mock_request.META = {}
         mock_request.session.session_key = None
-        
+
         with ActorContext.set_actor_from_django_request(mock_request) as actor:
             assert actor.actor_type == "selfhealing_operator"
-    
+
     def test_anonymous_user_has_empty_roles(self):
         """인증되지 않은 사용자는 빈 roles를 가지는지 확인."""
         mock_request = MagicMock()
@@ -245,11 +243,11 @@ class TestSetActorFromDjangoRequest:
         mock_request.method = "GET"
         mock_request.META = {}
         mock_request.session.session_key = None
-        
+
         with ActorContext.set_actor_from_django_request(mock_request) as actor:
             assert actor.roles == []
             assert actor.actor_type == "anonymous"
-    
+
     def test_user_without_selfhealing_roles(self):
         """selfhealing_ 역할이 없는 사용자는 actor_type='user'인지 확인."""
         mock_request = MagicMock()
@@ -260,7 +258,7 @@ class TestSetActorFromDjangoRequest:
         mock_request.method = "GET"
         mock_request.META = {}
         mock_request.session.session_key = None
-        
+
         with ActorContext.set_actor_from_django_request(mock_request) as actor:
             assert actor.roles == []
             assert actor.actor_type == "user"
@@ -268,19 +266,19 @@ class TestSetActorFromDjangoRequest:
 
 class TestAuditEntryActorRoles:
     """AuditEntry actor_roles 필드 테스트."""
-    
+
     def test_audit_entry_has_actor_roles_field(self):
         """AuditEntry에 actor_roles 필드가 있는지 확인."""
         entry = AuditEntry(action=AuditAction.CB_FORCE_OPEN)
         assert hasattr(entry, "actor_roles")
         assert isinstance(entry.actor_roles, list)
-    
+
     def test_audit_entry_actor_roles_default_empty(self):
         """actor_roles 기본값이 빈 리스트인지 확인."""
         entry = AuditEntry(action=AuditAction.CB_FORCE_OPEN)
         # ActorContext가 설정되어 있지 않으면 빈 리스트
         assert entry.actor_roles == []
-    
+
     def test_audit_entry_explicit_actor_roles(self):
         """actor_roles를 명시적으로 설정할 수 있는지 확인."""
         roles = ["selfhealing_admin"]
@@ -291,7 +289,7 @@ class TestAuditEntryActorRoles:
             actor_roles=roles,
         )
         assert entry.actor_roles == roles
-    
+
     def test_audit_entry_auto_fills_roles_from_context(self):
         """ActorContext에서 actor_roles가 자동으로 채워지는지 확인."""
         roles = ["selfhealing_admin", "selfhealing_operator"]
@@ -304,7 +302,7 @@ class TestAuditEntryActorRoles:
             assert entry.actor_id == "admin@example.com"
             assert entry.actor_type == "selfhealing_admin"
             assert entry.actor_roles == roles
-    
+
     def test_audit_entry_to_dict_includes_actor_roles(self):
         """to_dict()에 actor_roles가 포함되는지 확인."""
         roles = ["selfhealing_admin"]
@@ -319,13 +317,13 @@ class TestAuditEntryActorRoles:
 
 class TestGetDefaultActor:
     """_get_default_actor() 함수 테스트."""
-    
+
     def test_returns_tuple_with_three_elements(self):
         """3개 요소 튜플을 반환하는지 확인 (actor_id, actor_type, roles)."""
         result = _get_default_actor()
         assert isinstance(result, tuple)
         assert len(result) == 3
-    
+
     def test_returns_roles_from_context(self):
         """ActorContext에서 roles를 가져오는지 확인."""
         roles = ["selfhealing_admin"]
@@ -338,7 +336,7 @@ class TestGetDefaultActor:
             assert actor_id == "admin@example.com"
             assert actor_type == "selfhealing_admin"
             assert actor_roles == roles
-    
+
     def test_returns_empty_roles_when_no_context(self):
         """ActorContext가 없을 때 빈 roles를 반환하는지 확인."""
         # 컨텍스트 외부에서 호출
@@ -349,7 +347,7 @@ class TestGetDefaultActor:
 
 class TestCeleryActorRoles:
     """Celery Task에서 roles 전달 테스트."""
-    
+
     def test_get_actor_for_celery_includes_roles(self):
         """get_actor_for_celery()가 roles를 포함하는지 확인."""
         roles = ["selfhealing_admin"]
@@ -361,7 +359,7 @@ class TestCeleryActorRoles:
             actor_info = get_actor_for_celery()
             assert "roles" in actor_info
             assert actor_info["roles"] == roles
-    
+
     def test_restore_actor_from_celery_restores_roles(self):
         """restore_actor_from_celery()가 roles를 복원하는지 확인."""
         actor_info = {
@@ -370,26 +368,26 @@ class TestCeleryActorRoles:
             "source": "celery_from_api",
             "roles": ["selfhealing_admin", "selfhealing_operator"],
         }
-        
+
         with restore_actor_from_celery(actor_info) as actor:
             assert actor.roles == ["selfhealing_admin", "selfhealing_operator"]
             current = ActorContext.get_current()
             assert current.roles == actor_info["roles"]
-    
+
     def test_restore_actor_from_celery_empty_roles(self):
         """actor_info에 roles가 없으면 빈 리스트인지 확인."""
         actor_info = {
             "actor_id": "user@example.com",
             "actor_type": "user",
         }
-        
+
         with restore_actor_from_celery(actor_info) as actor:
             assert actor.roles == []
 
 
 class TestGetAuditActorInfo:
     """get_audit_actor_info() 함수 테스트."""
-    
+
     def test_includes_actor_roles(self):
         """get_audit_actor_info()가 actor_roles를 포함하는지 확인."""
         roles = ["selfhealing_admin"]
@@ -401,7 +399,7 @@ class TestGetAuditActorInfo:
             info = get_audit_actor_info()
             assert "actor_roles" in info
             assert info["actor_roles"] == roles
-    
+
     def test_empty_roles_when_no_roles(self):
         """roles가 없으면 빈 리스트인지 확인."""
         with ActorContext.set_actor(actor_id="user@example.com"):

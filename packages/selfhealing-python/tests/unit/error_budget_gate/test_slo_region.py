@@ -4,10 +4,8 @@ SLO 리전 필드 테스트.
 SLO dataclass의 region 필드 존재 및 기본값 검증.
 """
 
-import pytest
 
 from selfhealing.slo import SLI, SLO
-
 
 # =============================================================================
 # 계약 검증: SLO region 필드

@@ -5,7 +5,6 @@
 TestOrderCancelNegativeInputs: 이미 취소된 주문, 배송 완료 주문, 다른 사용자 주문 등
 """
 
-import json
 
 import pytest
 from rest_framework import status

@@ -26,7 +26,6 @@ from selfhealing.adapters.django.signal_hooks import (
 )
 from selfhealing.services.security.session_registry import (
     UserSessionRegistry,
-    get_user_session_registry,
     reset_user_session_registry,
 )
 

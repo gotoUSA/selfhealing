@@ -13,19 +13,16 @@ Phase 5.6: 알림 템플릿 테스트
 - recovery_circuit_breaker_trip_notification
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
 
 from selfhealing.services.coordination.recovery_notifications import (
-    recovery_started_notification,
-    recovery_completed_notification,
-    recovery_failed_notification,
     recovery_aborted_notification,
     recovery_approval_required_notification,
-    recovery_stale_approval_reminder,
     recovery_circuit_breaker_trip_notification,
+    recovery_completed_notification,
+    recovery_failed_notification,
+    recovery_stale_approval_reminder,
+    recovery_started_notification,
 )
-
 
 # =============================================================================
 # recovery_started_notification Tests

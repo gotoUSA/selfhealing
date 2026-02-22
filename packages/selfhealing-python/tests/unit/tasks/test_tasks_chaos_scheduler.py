@@ -2,9 +2,7 @@
 Tests for Chaos Scheduler Tasks.
 """
 
-from unittest.mock import Mock, patch, MagicMock
-
-import pytest
+from unittest.mock import Mock, patch
 
 
 class TestRunScheduledExperiments:
@@ -119,6 +117,7 @@ class TestThinTaskArchitecture:
     def test_run_scheduled_experiments_is_thin(self):
         """Should have minimal logic in task."""
         import inspect
+
         from selfhealing.tasks.chaos_scheduler import run_scheduled_experiments
 
         source = inspect.getsource(run_scheduled_experiments)
@@ -130,6 +129,7 @@ class TestThinTaskArchitecture:
     def test_generate_daily_resilience_report_is_thin(self):
         """Should have minimal logic in task."""
         import inspect
+
         from selfhealing.tasks.chaos_scheduler import generate_daily_resilience_report
 
         source = inspect.getsource(generate_daily_resilience_report)
@@ -140,6 +140,7 @@ class TestThinTaskArchitecture:
     def test_cleanup_expired_approvals_is_thin(self):
         """Should have minimal logic in task."""
         import inspect
+
         from selfhealing.tasks.chaos_scheduler import cleanup_expired_approvals
 
         source = inspect.getsource(cleanup_expired_approvals)

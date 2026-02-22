@@ -10,17 +10,15 @@ Circuit Breaker Enhancements 단위 테스트.
 Reference: Circuit Breaker 리뷰 피드백
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timezone
 
 from selfhealing.services.circuit_breaker import (
-    CircuitBreakerService,
     CircuitBreakerConfig,
-    CircuitState,
     CircuitBreakerFallbackResult,
+    CircuitBreakerService,
 )
-
 
 # =============================================================================
 # Fixtures

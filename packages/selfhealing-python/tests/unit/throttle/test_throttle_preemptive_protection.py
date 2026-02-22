@@ -4,11 +4,13 @@ AdaptiveThrottle 선제적 보호(Preemptive Protection) 단위 테스트.
 Burn Rate 기반 예산 소진 예측으로 선제적 limit 감소 동작 검증.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
 from dataclasses import dataclass
+from unittest.mock import MagicMock, patch
 
-from selfhealing.services.throttle.adaptive import AdaptiveThrottle, reset_adaptive_throttle
+from selfhealing.services.throttle.adaptive import (
+    AdaptiveThrottle,
+    reset_adaptive_throttle,
+)
 from selfhealing.services.throttle.config import ThrottleConfig
 
 

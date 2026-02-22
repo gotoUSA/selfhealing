@@ -8,7 +8,6 @@ AdaptiveThrottle 상태 동기화 테스트.
 4. TTL 캐싱 동작
 """
 
-import pytest
 import time
 from unittest.mock import MagicMock, patch
 

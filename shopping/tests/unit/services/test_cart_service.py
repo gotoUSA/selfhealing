@@ -8,7 +8,6 @@
 - cleanup_unavailable_items: 비활성/품절/재고부족 처리
 """
 
-from decimal import Decimal
 from unittest.mock import MagicMock
 
 import pytest

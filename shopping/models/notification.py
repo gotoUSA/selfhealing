@@ -6,7 +6,7 @@ from django.conf import settings
 from django.db import models
 
 if TYPE_CHECKING:
-    from shopping.models.user import User
+    pass
 
 
 class Notification(models.Model):

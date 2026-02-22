@@ -36,7 +36,6 @@ from selfhealing.services.correlation_engine.incident_timeline import (
     TimelinePhase,
     TimelineStatus,
     _calc_speedup_factor,
-    _format_duration,
     _humanize_event_type,
     _resolve_severity,
     _sanitize_value,
@@ -47,7 +46,6 @@ from selfhealing.services.correlation_engine.root_cause_ranker import (
     RootCauseAnalysis,
     RootCauseCandidate,
 )
-
 
 # =============================================================================
 # Fixtures (이 파일 전용)

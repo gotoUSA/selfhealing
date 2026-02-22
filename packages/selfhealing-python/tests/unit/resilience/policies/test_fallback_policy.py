@@ -15,7 +15,6 @@ UNIT_TEST_GUIDELINES.md 준수:
 
 from __future__ import annotations
 
-import asyncio
 import warnings
 from dataclasses import dataclass, field
 from unittest.mock import MagicMock
@@ -25,7 +24,6 @@ import pytest
 from selfhealing.core.fallback_strategy import (
     FallbackMode,
     FallbackResult,
-    FallbackStrategy,
     SimpleFallback,
 )
 from selfhealing.interfaces.resilience_policy import (
@@ -39,7 +37,6 @@ from selfhealing.resilience.policies import (
     partition_aware_chain,
 )
 from selfhealing.resilience.policies.fallback import _FALLBACK_MODE_TO_OUTCOME
-
 
 # =============================================================================
 # Fixtures — 1개 파일 전용이므로 파일 내부 배치 (§5.1)

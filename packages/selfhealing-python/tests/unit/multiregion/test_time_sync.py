@@ -8,8 +8,6 @@ Time Sync Checker 테스트.
 
 from unittest import mock
 
-import pytest
-
 from selfhealing.multiregion.time_sync import (
     TimeSyncChecker,
     TimeSyncStatus,

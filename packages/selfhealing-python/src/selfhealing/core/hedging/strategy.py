@@ -14,7 +14,8 @@ Bulkhead/Backpressure 연동 및 동적 설정 변경을 지원합니다.
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import structlog
 
@@ -476,10 +477,6 @@ class HedgingStrategyCompat:
             "HedgingStrategyCompat is deprecated. Use HedgingPolicy instead.",
             DeprecationWarning,
             stacklevel=2,
-        )
-        from selfhealing.interfaces.resilience_policy import (
-            PolicyOutcome,
-            PolicyResult,
         )
 
         result = self._policy.execute(primary_fn)

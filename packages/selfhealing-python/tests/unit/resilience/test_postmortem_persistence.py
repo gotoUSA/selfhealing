@@ -9,10 +9,8 @@ NOTE: Django API 함수 (add_healing_incident, get_healing_incidents 등)는
       이 파일에서는 순수 로직만 테스트합니다.
 """
 
-import pytest
-from datetime import datetime, timezone as dt_timezone
-from unittest.mock import MagicMock, patch
-import uuid
+from datetime import datetime
+from datetime import timezone as dt_timezone
 
 
 class TestAbstractPostmortemRecordModel:

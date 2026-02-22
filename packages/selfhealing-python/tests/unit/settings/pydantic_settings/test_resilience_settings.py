@@ -18,17 +18,21 @@ class TestErrorBudgetPropagationSettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.error_budget_propagation import reset_error_budget_propagation_settings
+        from selfhealing.settings.error_budget_propagation import (
+            reset_error_budget_propagation_settings,
+        )
         reset_error_budget_propagation_settings()
         yield
         reset_error_budget_propagation_settings()
 
     def test_default_values(self):
         """기본값 검증."""
-        from selfhealing.settings.error_budget_propagation import ErrorBudgetPropagationSettings
-        
+        from selfhealing.settings.error_budget_propagation import (
+            ErrorBudgetPropagationSettings,
+        )
+
         settings = ErrorBudgetPropagationSettings()
-        
+
         assert settings.decay_per_hop == 0.5
         assert settings.max_hops == 3
         assert settings.base_multiplier == 5.0
@@ -38,31 +42,37 @@ class TestErrorBudgetPropagationSettings:
 
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
-        from selfhealing.settings.error_budget_propagation import ErrorBudgetPropagationSettings
-        
+        from selfhealing.settings.error_budget_propagation import (
+            ErrorBudgetPropagationSettings,
+        )
+
         monkeypatch.setenv("SELFHEALING_ERROR_BUDGET_PROPAGATION_MAX_HOPS", "5")
-        
+
         settings = ErrorBudgetPropagationSettings()
-        
+
         assert settings.max_hops == 5
 
     def test_validation_decay_range(self):
         """decay_per_hop 범위 (0.1-1.0) 검증."""
-        from selfhealing.settings.error_budget_propagation import ErrorBudgetPropagationSettings
-        
+        from selfhealing.settings.error_budget_propagation import (
+            ErrorBudgetPropagationSettings,
+        )
+
         with pytest.raises(ValidationError):
             ErrorBudgetPropagationSettings(decay_per_hop=0.05)  # < 0.1
-        
+
         with pytest.raises(ValidationError):
             ErrorBudgetPropagationSettings(decay_per_hop=1.5)  # > 1.0
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.error_budget_propagation import get_error_budget_propagation_settings
-        
+        from selfhealing.settings.error_budget_propagation import (
+            get_error_budget_propagation_settings,
+        )
+
         settings1 = get_error_budget_propagation_settings()
         settings2 = get_error_budget_propagation_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -80,9 +90,9 @@ class TestAntiFlappingSettings:
     def test_default_values(self):
         """기본값 검증."""
         from selfhealing.settings.anti_flapping import AntiFlappingSettings
-        
+
         settings = AntiFlappingSettings()
-        
+
         assert settings.level_cooldown_seconds == 300
         assert settings.cooldown_after_recovery_seconds == 600
         assert settings.min_stable_duration_before_recovery_seconds == 600
@@ -91,30 +101,30 @@ class TestAntiFlappingSettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.anti_flapping import AntiFlappingSettings
-        
+
         monkeypatch.setenv("SELFHEALING_ANTI_FLAPPING_LEVEL_COOLDOWN_SECONDS", "600")
-        
+
         settings = AntiFlappingSettings()
-        
+
         assert settings.level_cooldown_seconds == 600
 
     def test_validation_cooldown_range(self):
         """level_cooldown_seconds 범위 (30-3600) 검증."""
         from selfhealing.settings.anti_flapping import AntiFlappingSettings
-        
+
         with pytest.raises(ValidationError):
             AntiFlappingSettings(level_cooldown_seconds=10)  # < 30
-        
+
         with pytest.raises(ValidationError):
             AntiFlappingSettings(level_cooldown_seconds=5000)  # > 3600
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
         from selfhealing.settings.anti_flapping import get_anti_flapping_settings
-        
+
         settings1 = get_anti_flapping_settings()
         settings2 = get_anti_flapping_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -124,7 +134,9 @@ class TestDistributedLockSettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.distributed_lock import reset_distributed_lock_settings
+        from selfhealing.settings.distributed_lock import (
+            reset_distributed_lock_settings,
+        )
         reset_distributed_lock_settings()
         yield
         reset_distributed_lock_settings()
@@ -132,9 +144,9 @@ class TestDistributedLockSettings:
     def test_default_values(self):
         """기본값 검증."""
         from selfhealing.settings.distributed_lock import DistributedLockSettings
-        
+
         settings = DistributedLockSettings()
-        
+
         assert settings.timeout_minutes == 30
         assert settings.retry_interval_seconds == 0.1
         assert settings.max_retry_attempts == 100
@@ -144,30 +156,30 @@ class TestDistributedLockSettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.distributed_lock import DistributedLockSettings
-        
+
         monkeypatch.setenv("SELFHEALING_DISTRIBUTED_LOCK_TIMEOUT_MINUTES", "60")
-        
+
         settings = DistributedLockSettings()
-        
+
         assert settings.timeout_minutes == 60
 
     def test_validation_timeout_range(self):
         """timeout_minutes 범위 (1-120) 검증."""
         from selfhealing.settings.distributed_lock import DistributedLockSettings
-        
+
         with pytest.raises(ValidationError):
             DistributedLockSettings(timeout_minutes=0)  # < 1
-        
+
         with pytest.raises(ValidationError):
             DistributedLockSettings(timeout_minutes=200)  # > 120
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
         from selfhealing.settings.distributed_lock import get_distributed_lock_settings
-        
+
         settings1 = get_distributed_lock_settings()
         settings2 = get_distributed_lock_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -185,9 +197,9 @@ class TestCriticalWorkerSettings:
     def test_default_values(self):
         """기본값 검증."""
         from selfhealing.settings.critical_worker import CriticalWorkerSettings
-        
+
         settings = CriticalWorkerSettings()
-        
+
         assert settings.critical_queue_name == "selfhealing.critical"
         assert settings.high_priority_queue_name == "selfhealing.high"
         assert settings.default_queue_name == "selfhealing.default"
@@ -196,18 +208,18 @@ class TestCriticalWorkerSettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.critical_worker import CriticalWorkerSettings
-        
+
         monkeypatch.setenv("SELFHEALING_CRITICAL_WORKER_CRITICAL_QUEUE_NAME", "custom.critical")
-        
+
         settings = CriticalWorkerSettings()
-        
+
         assert settings.critical_queue_name == "custom.critical"
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
         from selfhealing.settings.critical_worker import get_critical_worker_settings
-        
+
         settings1 = get_critical_worker_settings()
         settings2 = get_critical_worker_settings()
-        
+
         assert settings1 is settings2

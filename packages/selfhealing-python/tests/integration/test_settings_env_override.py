@@ -34,12 +34,12 @@ class TestStressTestSettingsEnvOverride:
             "SELFHEALING_STRESS_TEST_DEFAULT_LOCK_TIMEOUT_MS": "5"
         }):
             from selfhealing.settings.stress_test import (
-                reset_stress_test_settings,
                 get_stress_test_settings,
+                reset_stress_test_settings,
             )
             reset_stress_test_settings()
             settings = get_stress_test_settings()
-            
+
             assert settings.default_lock_timeout_ms == 5
 
     def test_multiple_fields_override(self):
@@ -50,12 +50,12 @@ class TestStressTestSettingsEnvOverride:
             "SELFHEALING_STRESS_TEST_MAX_CONCURRENT_LOCKS": "150",
         }):
             from selfhealing.settings.stress_test import (
-                reset_stress_test_settings,
                 get_stress_test_settings,
+                reset_stress_test_settings,
             )
             reset_stress_test_settings()
             settings = get_stress_test_settings()
-            
+
             assert settings.default_lock_timeout_ms == 3
             assert settings.max_burst_duration_seconds == 45
             assert settings.max_concurrent_locks == 150
@@ -78,12 +78,12 @@ class TestCleanupSettingsEnvOverride:
             "SELFHEALING_CLEANUP_ARCHIVE_OLDER_THAN_DAYS": "60"
         }):
             from selfhealing.settings.cleanup import (
-                reset_cleanup_settings,
                 get_cleanup_settings,
+                reset_cleanup_settings,
             )
             reset_cleanup_settings()
             settings = get_cleanup_settings()
-            
+
             assert settings.archive_older_than_days == 60
 
     def test_purge_older_than_days_override(self):
@@ -92,12 +92,12 @@ class TestCleanupSettingsEnvOverride:
             "SELFHEALING_CLEANUP_PURGE_OLDER_THAN_DAYS": "180"
         }):
             from selfhealing.settings.cleanup import (
-                reset_cleanup_settings,
                 get_cleanup_settings,
+                reset_cleanup_settings,
             )
             reset_cleanup_settings()
             settings = get_cleanup_settings()
-            
+
             assert settings.purge_older_than_days == 180
 
 
@@ -119,10 +119,10 @@ class TestJitterSettingsEnvOverride:
         }):
             from selfhealing.settings.jitter import reset_jitter_settings
             from selfhealing.utils.jitter import JitterConfig
-            
+
             reset_jitter_settings()
             config = JitterConfig.from_settings()
-            
+
             assert config.max_delay_seconds == 120.0
 
     def test_enabled_override(self):
@@ -132,10 +132,10 @@ class TestJitterSettingsEnvOverride:
         }):
             from selfhealing.settings.jitter import reset_jitter_settings
             from selfhealing.utils.jitter import JitterConfig
-            
+
             reset_jitter_settings()
             config = JitterConfig.from_settings()
-            
+
             assert config.enabled is False
 
 
@@ -156,12 +156,12 @@ class TestPoolMonitorSettingsEnvOverride:
             "SELFHEALING_POOL_MONITOR_WARNING_THRESHOLD": "80.0"
         }):
             from selfhealing.settings.pool_monitor import (
-                reset_pool_monitor_settings,
                 get_pool_monitor_settings,
+                reset_pool_monitor_settings,
             )
             reset_pool_monitor_settings()
             settings = get_pool_monitor_settings()
-            
+
             assert settings.warning_threshold == 80.0
 
     def test_critical_threshold_override(self):
@@ -170,12 +170,12 @@ class TestPoolMonitorSettingsEnvOverride:
             "SELFHEALING_POOL_MONITOR_CRITICAL_THRESHOLD": "95.0"
         }):
             from selfhealing.settings.pool_monitor import (
-                reset_pool_monitor_settings,
                 get_pool_monitor_settings,
+                reset_pool_monitor_settings,
             )
             reset_pool_monitor_settings()
             settings = get_pool_monitor_settings()
-            
+
             assert settings.critical_threshold == 95.0
 
 
@@ -195,12 +195,12 @@ class TestBackoffSettingsEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_BACKOFF_EXPONENTIAL_BASE_DELAY": "2.0"
         }):
-            from selfhealing.settings.backoff import reset_backoff_settings
             from selfhealing.core.backoff import ExponentialBackoff
-            
+            from selfhealing.settings.backoff import reset_backoff_settings
+
             reset_backoff_settings()
             backoff = ExponentialBackoff.from_settings()
-            
+
             assert backoff.base_delay == 2.0
 
     def test_linear_increment_override(self):
@@ -208,12 +208,12 @@ class TestBackoffSettingsEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_BACKOFF_LINEAR_INCREMENT": "5.0"
         }):
-            from selfhealing.settings.backoff import reset_backoff_settings
             from selfhealing.core.backoff import LinearBackoff
-            
+            from selfhealing.settings.backoff import reset_backoff_settings
+
             reset_backoff_settings()
             backoff = LinearBackoff.from_settings()
-            
+
             assert backoff.increment == 5.0
 
     def test_constant_delay_override(self):
@@ -221,12 +221,12 @@ class TestBackoffSettingsEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_BACKOFF_CONSTANT_DELAY": "10.0"
         }):
-            from selfhealing.settings.backoff import reset_backoff_settings
             from selfhealing.core.backoff import ConstantBackoff
-            
+            from selfhealing.settings.backoff import reset_backoff_settings
+
             reset_backoff_settings()
             backoff = ConstantBackoff.from_settings()
-            
+
             assert backoff.delay == 10.0
 
 
@@ -236,10 +236,10 @@ class TestMultiModuleEnvOverride:
     @pytest.fixture(autouse=True)
     def reset_all_settings(self):
         """Reset all settings before and after each test."""
-        from selfhealing.settings.stress_test import reset_stress_test_settings
         from selfhealing.settings.cleanup import reset_cleanup_settings
         from selfhealing.settings.jitter import reset_jitter_settings
-        
+        from selfhealing.settings.stress_test import reset_stress_test_settings
+
         reset_stress_test_settings()
         reset_cleanup_settings()
         reset_jitter_settings()
@@ -255,28 +255,31 @@ class TestMultiModuleEnvOverride:
             "SELFHEALING_CLEANUP_ARCHIVE_OLDER_THAN_DAYS": "45",
             "SELFHEALING_JITTER_MAX_DELAY_SECONDS": "90.0",
         }):
-            from selfhealing.settings.stress_test import (
-                reset_stress_test_settings, get_stress_test_settings
-            )
             from selfhealing.settings.cleanup import (
-                reset_cleanup_settings, get_cleanup_settings
+                get_cleanup_settings,
+                reset_cleanup_settings,
             )
             from selfhealing.settings.jitter import (
-                reset_jitter_settings, get_jitter_settings
+                get_jitter_settings,
+                reset_jitter_settings,
             )
-            
+            from selfhealing.settings.stress_test import (
+                get_stress_test_settings,
+                reset_stress_test_settings,
+            )
+
             reset_stress_test_settings()
             reset_cleanup_settings()
             reset_jitter_settings()
-            
+
             stress_settings = get_stress_test_settings()
             cleanup_settings = get_cleanup_settings()
             jitter_settings = get_jitter_settings()
-            
+
             assert stress_settings.default_lock_timeout_ms == 7
             assert cleanup_settings.archive_older_than_days == 45
             assert jitter_settings.max_delay_seconds == 90.0
-            
+
             # 다른 필드는 기본값 유지
             assert stress_settings.max_burst_duration_seconds == 30
             assert cleanup_settings.purge_older_than_days == 90

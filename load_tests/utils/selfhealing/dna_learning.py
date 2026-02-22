@@ -10,8 +10,8 @@ Self-Learning DNA - 자가 학습 및 최적화
 Phase 3 구현
 """
 
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from collections import deque
 import statistics

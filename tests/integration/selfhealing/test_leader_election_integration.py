@@ -17,7 +17,6 @@ from selfhealing.coordination import (
     LeaderElectionSettings,
     LeadershipState,
     RedisLeaderElector,
-    get_leader_elector,
     reset_leader_electors,
     reset_leader_election_settings,
 )

@@ -4,16 +4,15 @@ HealthCheckService 단위 테스트.
 Health Check 비즈니스 로직 서비스 테스트.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from selfhealing.services.health_check import (
-    HealthCheckService,
-    SystemHealthSummary,
-    ReadinessStatus,
-    PoolHealthSummary,
     DatabaseCheck,
+    HealthCheckService,
+    PoolHealthSummary,
     PoolInfo,
+    ReadinessStatus,
+    SystemHealthSummary,
     get_health_check_service,
 )
 

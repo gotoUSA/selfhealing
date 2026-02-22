@@ -17,16 +17,13 @@ Reference:
 from __future__ import annotations
 
 import pytest
-from unittest.mock import patch, MagicMock
 
 from selfhealing.audit.cascade_config import (
     AuditBackpressureConfig,
-    get_audit_backpressure_config,
 )
 from selfhealing.audit.cascade_event import (
     CascadeEventPriority,
     get_priority_for_trigger,
-    TRIGGER_TYPE_PRIORITY,
 )
 from selfhealing.audit.cascade_load_shedding import (
     CascadeLoadShedding,
@@ -34,7 +31,6 @@ from selfhealing.audit.cascade_load_shedding import (
     get_cascade_load_shedding,
     reset_cascade_load_shedding,
 )
-
 
 # =============================================================================
 # AuditBackpressureConfig Tests

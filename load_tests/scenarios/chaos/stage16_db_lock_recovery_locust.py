@@ -111,7 +111,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -854,10 +854,10 @@ class Stage16DBLockUser(HttpUser):
             
             if response.status_code == 423:
                 error_type = "lock_timeout"
-                response.failure(f"Lock timeout: 423")
+                response.failure("Lock timeout: 423")
             elif response.status_code == 409:
                 error_type = "conflict"
-                response.failure(f"Conflict: 409")
+                response.failure("Conflict: 409")
             elif response.status_code in [500, 502, 503]:
                 error_type = "server_error"
                 response.failure(f"Server error: {response.status_code}")
@@ -1304,7 +1304,7 @@ class Stage16DBLockUser(HttpUser):
                 if response.status_code == 423 or "deadlock" in response.text.lower():
                     _metrics.deadlock_detected += 1
                     response.success()  # 데드락 감지는 성공!
-                    logger.info(f"🔥 Deadlock detected and handled!")
+                    logger.info("🔥 Deadlock detected and handled!")
                 elif response.status_code in [200, 201, 202]:
                     response.success()
                 elif response.status_code in [400, 404]:
@@ -1597,7 +1597,7 @@ class Stage16DBLockUser(HttpUser):
                     
                     logger.info(f"🔥🔥 DLQ Status: pending={pending}, replayed={replayed}")
                     response.success()
-                except Exception as e:
+                except Exception:
                     response.success()
             else:
                 response.success()  # 실패해도 OK
@@ -1619,7 +1619,7 @@ def on_test_start(environment, **kwargs):
     logger.info(f"\n{'='*70}")
     logger.info(f"{STAGE_NAME} DB LOCK / DEADLOCK RECOVERY TEST STARTED")
     logger.info(f"{'='*70}")
-    logger.info(f"Purpose: Validate resilience under database lock pressure")
+    logger.info("Purpose: Validate resilience under database lock pressure")
     logger.info(f"Load: {CONCURRENT_USERS_MIN}-{CONCURRENT_USERS_MAX} concurrent users")
     logger.info(f"Duration: {TEST_DURATION_SECONDS} seconds")
     logger.info(f"Spawn Rate: {SPAWN_RATE} users/second (gradual)")
@@ -1790,7 +1790,7 @@ def print_test_summary():
     failed = _metrics.failed_requests
     failure_rate = (failed / total * 100)
     
-    logger.info(f"\n📊 BASIC STATISTICS:")
+    logger.info("\n📊 BASIC STATISTICS:")
     logger.info(f"   Total Requests: {total}")
     logger.info(f"   Successful: {success}")
     logger.info(f"   Failed: {failed}")
@@ -1799,24 +1799,24 @@ def print_test_summary():
     logger.info(f"   RPS: {total/duration:.1f}" if duration > 0 else "   RPS: N/A")
     
     # HTTP 상태 분포
-    logger.info(f"\n📈 HTTP STATUS DISTRIBUTION:")
+    logger.info("\n📈 HTTP STATUS DISTRIBUTION:")
     for status, count in sorted(_metrics.status_distribution.items()):
         percentage = (count / total * 100)
         logger.info(f"   {status}: {count} ({percentage:.1f}%)")
     
     # 재시도 관련 통계
-    logger.info(f"\n🔄 RETRY-RELATED STATISTICS:")
+    logger.info("\n🔄 RETRY-RELATED STATISTICS:")
     logger.info(f"   Retry-related responses (423/409/503/429): {_metrics.retry_related_responses}")
     logger.info(f"   Potential lock waits (>{SLOW_RESPONSE_THRESHOLD_MS}ms): {_metrics.potential_lock_waits}")
     
     # Self-Healing 통계
-    logger.info(f"\n🛡️ SELF-HEALING STATISTICS:")
+    logger.info("\n🛡️ SELF-HEALING STATISTICS:")
     logger.info(f"   CB Open Count: {_metrics.cb_open_count}")
     logger.info(f"   DLQ Enqueued: {_metrics.dlq_enqueued}")
     logger.info(f"   DLQ Replayed: {_metrics.dlq_replayed}")
     
     # 🔥 PLATINUM 통계
-    logger.info(f"\n🔥 PLATINUM TEST STATISTICS:")
+    logger.info("\n🔥 PLATINUM TEST STATISTICS:")
     logger.info(f"   Lock Hog Injected: {_metrics.lock_hog_injected}")
     logger.info(f"   Lock Hog Victims (timeout): {_metrics.lock_hog_victims}")
     logger.info(f"   Idempotency Attacks: {_metrics.idempotency_attacks}")
@@ -1827,7 +1827,7 @@ def print_test_summary():
     logger.info(f"   Pool Starvation Events: {_metrics.pool_starvation_events}")
     
     # 🔥🔥 HELLMODE 통계
-    logger.info(f"\n🔥🔥 HELLMODE STATISTICS:")
+    logger.info("\n🔥🔥 HELLMODE STATISTICS:")
     logger.info(f"   Phase Reached: {_metrics.hellmode_phase}")
     logger.info(f"   Lock Timeout Count: {_metrics.lock_timeout_count} (target: 100+)")
     logger.info(f"   Max Lock Wait: {_metrics.max_lock_wait_ms:.0f}ms")
@@ -1839,7 +1839,7 @@ def print_test_summary():
     logger.info(f"   System Breakdown: {'YES' if _metrics.system_breakdown_detected else 'NO'}")
     
     # 오류 유형
-    logger.info(f"\n❌ ERROR BREAKDOWN:")
+    logger.info("\n❌ ERROR BREAKDOWN:")
     for error_type, count in _metrics.errors_by_type.items():
         logger.info(f"   {error_type}: {count}")
     
@@ -1852,7 +1852,7 @@ def print_test_summary():
         avg = sum(response_times) / len(response_times)
         max_rt = max(response_times)
         
-        logger.info(f"\n⏱️ RESPONSE TIME ANALYSIS:")
+        logger.info("\n⏱️ RESPONSE TIME ANALYSIS:")
         logger.info(f"   Average: {avg:.0f}ms")
         logger.info(f"   P50: {p50:.0f}ms")
         logger.info(f"   P95: {p95:.0f}ms")
@@ -1860,7 +1860,7 @@ def print_test_summary():
         logger.info(f"   Max: {max_rt:.0f}ms")
         
         # 페이즈별 응답 시간 비교 (지연 시간 증가 검출)
-        logger.info(f"\n📉 LATENCY GROWTH ANALYSIS:")
+        logger.info("\n📉 LATENCY GROWTH ANALYSIS:")
         for phase, times in _metrics.response_times_by_phase.items():
             if times:
                 phase_avg = sum(times) / len(times)
@@ -1868,7 +1868,7 @@ def print_test_summary():
     
     # 성공 기준 검증
     logger.info(f"\n{'='*70}")
-    logger.info(f"✅ SUCCESS CRITERIA VERIFICATION:")
+    logger.info("✅ SUCCESS CRITERIA VERIFICATION:")
     logger.info(f"{'='*70}")
     
     # 1. 중복 성공 작업 없음
@@ -1915,7 +1915,7 @@ def print_test_summary():
     deadlock_recovery = _metrics.deadlock_detected > 0 or _metrics.deadlock_induced == 0
     _metrics.criteria_deadlock_recovery = deadlock_recovery
     
-    logger.info(f"\n🔥 PLATINUM CRITERIA:")
+    logger.info("\n🔥 PLATINUM CRITERIA:")
     logger.info(f"   [{'✓' if idempotency_protection else '✗'}] Idempotency Protection (>90% blocked)")
     logger.info(f"       Attacks: {_metrics.idempotency_attacks}, Blocked: {_metrics.idempotency_blocked}")
     logger.info(f"   [{'✓' if deadlock_recovery else '✗'}] Deadlock Detection & Recovery")
@@ -1927,7 +1927,7 @@ def print_test_summary():
     hellmode_dlq_recovery = _metrics.dlq_replay_success >= _metrics.dlq_auto_enqueued * 0.9 if _metrics.dlq_auto_enqueued > 0 else False
     hellmode_system_recovery = _metrics.criteria_system_recovery
     
-    logger.info(f"\n🔥🔥 HELLMODE CRITERIA (시스템 강제 붕괴 → 자동 복구):")
+    logger.info("\n🔥🔥 HELLMODE CRITERIA (시스템 강제 붕괴 → 자동 복구):")
     logger.info(f"   [{'✓' if hellmode_lock_timeout else '✗'}] Lock Timeout Flood (100+ timeouts)")
     logger.info(f"       Lock Timeouts: {_metrics.lock_timeout_count}")
     logger.info(f"   [{'✓' if hellmode_dlq_enqueue else '✗'}] DLQ Auto Enqueue (10+ entries)")
@@ -1942,18 +1942,18 @@ def print_test_summary():
     
     logger.info(f"\n{'='*70}")
     if hellmode_passed:
-        logger.info(f"🏆🔥 HELLMODE COMPLETE - SYSTEM BREAKDOWN & FULL RECOVERY VERIFIED!")
+        logger.info("🏆🔥 HELLMODE COMPLETE - SYSTEM BREAKDOWN & FULL RECOVERY VERIFIED!")
         logger.info(f"   ✓ {_metrics.lock_timeout_count} lock timeouts induced")
         logger.info(f"   ✓ {_metrics.dlq_auto_enqueued} operations auto-enqueued to DLQ")
         logger.info(f"   ✓ {_metrics.dlq_replay_success} operations auto-recovered")
     elif platinum_passed:
-        logger.info(f"🏆 PLATINUM GRADE ACHIEVED - SYSTEM IS BATTLE-TESTED")
+        logger.info("🏆 PLATINUM GRADE ACHIEVED - SYSTEM IS BATTLE-TESTED")
     elif all_passed:
-        logger.info(f"🎉 BASIC CRITERIA PASSED - HELLMODE CRITERIA PARTIALLY MET")
+        logger.info("🎉 BASIC CRITERIA PASSED - HELLMODE CRITERIA PARTIALLY MET")
         logger.info(f"   Lock Timeouts: {_metrics.lock_timeout_count}/100")
         logger.info(f"   DLQ Enqueued: {_metrics.dlq_auto_enqueued}")
     else:
-        logger.info(f"⚠️ SOME CRITERIA FAILED - REVIEW REQUIRED")
+        logger.info("⚠️ SOME CRITERIA FAILED - REVIEW REQUIRED")
     logger.info(f"{'='*70}\n")
 
 
@@ -1976,9 +1976,9 @@ if __name__ == "__main__":
         "--html=load_tests/results/stage16/stage16_hellmode_report.html",
     ]
     
-    print(f"🔥🔥 HELLMODE TEST - 시스템 강제 붕괴 → 자동 복구")
+    print("🔥🔥 HELLMODE TEST - 시스템 강제 붕괴 → 자동 복구")
     print(f"{'='*60}")
-    print(f"   Target: lock_timeout 100건 → DLQ 자동 적재 → 100건 자동 재처리")
+    print("   Target: lock_timeout 100건 → DLQ 자동 적재 → 100건 자동 재처리")
     print(f"{'='*60}")
     print(f"   Users: {CONCURRENT_USERS_MAX}")
     print(f"   Spawn Rate: {SPAWN_RATE}/sec")
@@ -1989,12 +1989,12 @@ if __name__ == "__main__":
     print(f"   Deadlock Chain Depth: {DEADLOCK_CHAIN_DEPTH}")
     print(f"   Pool Starvation Concurrent: {POOL_STARVATION_CONCURRENT}개")
     print(f"{'='*60}")
-    print(f"\nPhases:")
-    print(f"   Phase 1 (0-15s): Ramp-up → 300 users")
-    print(f"   Phase 2 (15-60s): CHAOS - Lock Hog flood")
-    print(f"   Phase 3 (60-120s): BREAKDOWN - Timeouts cascade")
-    print(f"   Phase 4 (120-150s): WAIT - DLQ processing")
-    print(f"   Phase 5 (150-180s): VERIFY - Recovery check")
+    print("\nPhases:")
+    print("   Phase 1 (0-15s): Ramp-up → 300 users")
+    print("   Phase 2 (15-60s): CHAOS - Lock Hog flood")
+    print("   Phase 3 (60-120s): BREAKDOWN - Timeouts cascade")
+    print("   Phase 4 (120-150s): WAIT - DLQ processing")
+    print("   Phase 5 (150-180s): VERIFY - Recovery check")
     print(f"{'='*60}")
     print(f"\nExecuting: {' '.join(cmd)}")
     subprocess.run(cmd)

@@ -138,7 +138,7 @@ class LeaderElectionSettings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def validate_timing_constraints(self) -> "LeaderElectionSettings":
+    def validate_timing_constraints(self) -> LeaderElectionSettings:
         """타이밍 제약 조건 검증."""
         effective_interval = self.get_effective_renew_interval()
 

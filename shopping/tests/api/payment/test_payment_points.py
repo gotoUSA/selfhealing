@@ -7,7 +7,6 @@ import pytest
 from django.utils import timezone
 from rest_framework import status
 
-from shopping.models.order import OrderItem
 from shopping.models.point import PointHistory
 from shopping.services.point_service import PointService
 from shopping.tests.factories import (

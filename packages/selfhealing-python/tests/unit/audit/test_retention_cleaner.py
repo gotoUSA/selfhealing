@@ -11,10 +11,6 @@ from __future__ import annotations
 
 import os
 import time
-from pathlib import Path
-from unittest.mock import patch, MagicMock
-
-import pytest
 
 
 class TestWALRetentionCleaner:
@@ -159,8 +155,8 @@ class TestRetentionCleanupScheduler:
     def test_scheduler_starts_and_stops(self, tmp_path):
         """스케줄러 시작/중지 확인."""
         from selfhealing.audit.retention_cleaner import (
-            WALRetentionCleaner,
             RetentionCleanupScheduler,
+            WALRetentionCleaner,
         )
 
         cleaner = WALRetentionCleaner(wal_dir=tmp_path, retention_days=90)
@@ -178,8 +174,8 @@ class TestRetentionCleanupScheduler:
     def test_scheduler_calls_cleanup(self, tmp_path):
         """스케줄러가 cleanup을 호출하는지 확인."""
         from selfhealing.audit.retention_cleaner import (
-            WALRetentionCleaner,
             RetentionCleanupScheduler,
+            WALRetentionCleaner,
         )
 
         cleaner = WALRetentionCleaner(wal_dir=tmp_path, retention_days=90)
@@ -204,8 +200,8 @@ class TestRetentionCleanupScheduler:
     def test_scheduler_prevents_double_start(self, tmp_path):
         """중복 시작 방지 확인."""
         from selfhealing.audit.retention_cleaner import (
-            WALRetentionCleaner,
             RetentionCleanupScheduler,
+            WALRetentionCleaner,
         )
 
         cleaner = WALRetentionCleaner(wal_dir=tmp_path)

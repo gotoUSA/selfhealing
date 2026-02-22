@@ -172,7 +172,6 @@ class TestResolveTierWithFallback:
         """Static critical paths should be protected even when engine fails."""
         from selfhealing.api.django.tiering import (
             TierRegistry,
-            TierFallbackReason,
             get_tiering_circuit_breaker,
         )
 

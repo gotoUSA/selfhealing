@@ -4,7 +4,6 @@ from django.urls import reverse
 import pytest
 from rest_framework import status
 
-from shopping.models.user import User
 
 
 @pytest.mark.django_db

@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 
 class TestMigrateExistingPostmortems:
@@ -141,7 +139,6 @@ class TestMigrateExistingPostmortems:
         """postmortem_store import 실패 처리."""
         from selfhealing.services.postmortem.revision import (
             PostmortemRevisionManager,
-            migrate_existing_postmortems,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -179,7 +176,6 @@ class TestMigrateExistingPostmortems:
     def test_migration_uses_singleton_manager_by_default(self):
         """기본적으로 싱글턴 매니저 사용."""
         from selfhealing.services.postmortem.revision import (
-            get_postmortem_revision_manager,
             migrate_existing_postmortems,
             reset_postmortem_revision_manager,
         )

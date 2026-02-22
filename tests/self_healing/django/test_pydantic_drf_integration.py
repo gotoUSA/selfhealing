@@ -22,7 +22,6 @@ from selfhealing.settings import (
     RateLimitSettings,
     SecuritySettings,
     SLASettings,
-    SLOSettings,
     NotificationSettings,
     ErrorBudgetSettings,
     GovernanceSettings,

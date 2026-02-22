@@ -7,14 +7,13 @@ AdaptiveThrottle Chaos Experiment 시나리오 테스트.
 3. is_chaos_experiment 메타데이터 처리
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from selfhealing.services.event_bus import (
     EventType,
     SelfHealingEvent,
-    _on_emergency_level_changed_throttle,
     _on_emergency_deactivated_throttle,
+    _on_emergency_level_changed_throttle,
 )
 from selfhealing.services.throttle.adaptive import (
     get_adaptive_throttle,

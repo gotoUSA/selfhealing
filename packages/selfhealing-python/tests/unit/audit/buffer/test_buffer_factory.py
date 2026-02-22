@@ -10,11 +10,10 @@ from __future__ import annotations
 import os
 import shutil
 import tempfile
-from typing import Generator
+from collections.abc import Generator
 from unittest import mock
 
 import pytest
-
 
 # LMDB 설치 여부 확인
 try:

@@ -275,7 +275,7 @@ class ErrorBudgetGateSettings(BaseSettings):
         return self.critical_threshold_percent, self.warning_threshold_percent
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ErrorBudgetGateSettings":
+    def from_dict(cls, data: dict[str, Any]) -> ErrorBudgetGateSettings:
         """딕셔너리에서 설정 생성 (runtime config 지원)."""
         valid_keys = {k: v for k, v in data.items() if k in cls.model_fields}
         return cls(**valid_keys)

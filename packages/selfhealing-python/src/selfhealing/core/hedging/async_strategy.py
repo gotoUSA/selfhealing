@@ -7,7 +7,8 @@ Bulkhead/Backpressure 연동 및 동적 설정 변경을 지원합니다.
 
 from __future__ import annotations
 
-from typing import Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
 import structlog
 

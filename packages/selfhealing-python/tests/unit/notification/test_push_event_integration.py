@@ -5,11 +5,7 @@ Tests for verifying that DLQService and CircuitBreakerService
 properly emit push events for metric updates.
 """
 
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, Mock, patch, call, PropertyMock
-
-import pytest
-
+from unittest.mock import MagicMock, patch
 
 # =============================================================================
 # DLQService Push Event Integration Tests
@@ -25,7 +21,7 @@ class TestDLQServicePushEvents:
         Purpose:
             Verify store_failure calls on_item_created event handler.
         """
-        from selfhealing.services.dlq_service import DLQService, DLQConfig
+        from selfhealing.services.dlq_service import DLQConfig, DLQService
 
         # Arrange
         mock_repo = MagicMock()
@@ -55,7 +51,7 @@ class TestDLQServicePushEvents:
 
         # Verify the handler has expected methods
         assert hasattr(DLQMetricEventHandler, "on_item_resolved")
-        assert callable(getattr(DLQMetricEventHandler, "on_item_resolved"))
+        assert callable(DLQMetricEventHandler.on_item_resolved)
 
     @patch("selfhealing.metrics.event_handlers.DLQMetricEventHandler.on_item_created")
     def test_event_handler_import_works(self, mock_on_item_created):
@@ -63,7 +59,7 @@ class TestDLQServicePushEvents:
         Purpose:
             Verify store_failure correctly calls event handler.
         """
-        from selfhealing.services.dlq_service import DLQService, DLQConfig
+        from selfhealing.services.dlq_service import DLQConfig, DLQService
 
         # Arrange
         mock_repo = MagicMock()
@@ -213,8 +209,8 @@ class TestCircuitBreakerPushEvents:
         Purpose:
             Verify automatic circuit open on failure threshold emits event.
         """
-        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
 
         # Arrange - minimum_calls=1 to allow testing with fewer calls
         config = CircuitBreakerConfig(
@@ -261,8 +257,9 @@ class TestSafeGaugeIntegration:
         Purpose:
             Verify SafeGauge prevents negative values on dec().
         """
-        from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock
+
+        from selfhealing.metrics.safe_gauge import SafeGauge
 
         # Arrange
         mock_gauge = MagicMock()
@@ -283,8 +280,9 @@ class TestSafeGaugeIntegration:
         Purpose:
             Verify SafeGauge maintains correct balance with inc/dec.
         """
-        from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock
+
+        from selfhealing.metrics.safe_gauge import SafeGauge
 
         # Arrange
         mock_gauge = MagicMock()
@@ -307,8 +305,9 @@ class TestSafeGaugeIntegration:
         Purpose:
             Verify SafeGauge.set() clamps negative values to 0.
         """
-        from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock
+
+        from selfhealing.metrics.safe_gauge import SafeGauge
 
         # Arrange
         mock_gauge = MagicMock()

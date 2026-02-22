@@ -26,13 +26,10 @@ from __future__ import annotations
 
 from collections import deque
 
-import pytest
-
 from selfhealing.adapters.memory.circuit_breaker import (
     InMemoryCircuitBreakerStateRepository,
 )
 from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
-
 
 # =============================================================================
 # Sliding Window 계약 검증 (Contract)

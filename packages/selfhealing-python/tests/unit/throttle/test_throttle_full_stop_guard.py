@@ -13,15 +13,12 @@ FullStopGuard 단위 테스트.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from selfhealing.resilience.policies.guards.full_stop import (
     FullStopGuard,
     create_default_full_stop_guard,
 )
-
 
 # =============================================================================
 # name 계약 검증

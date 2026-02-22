@@ -9,8 +9,6 @@ IPC 예외 클래스 단위 테스트.
 
 from __future__ import annotations
 
-import pytest
-
 from selfhealing.adapters.ipc.exceptions import (
     IPCAuthenticationError,
     IPCAuthorizationError,

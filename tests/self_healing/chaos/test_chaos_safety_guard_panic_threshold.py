@@ -10,10 +10,7 @@ Tests for:
 Reference: 32_CHAOS_SYSTEM_INTEGRATION.md §12.1 Phase 2
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any, List
+from unittest.mock import patch, MagicMock
 
 # Import at module level for @patch.object decorators
 from selfhealing.services.chaos.safety_guard import SafetyGuard

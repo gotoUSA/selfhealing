@@ -15,7 +15,6 @@ Run:
 """
 
 import os
-import time
 import threading
 import concurrent.futures
 import pytest

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.db import transaction
@@ -146,7 +146,6 @@ class PasswordResetService:
             PasswordResetConfirmResult: 처리 결과
         """
         from shopping.models.email_verification import EmailLog
-        from shopping.models.password_reset import PasswordResetToken
 
         logger.info(f"비밀번호 재설정 확인 시작: user_id={user.id}")
 

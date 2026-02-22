@@ -12,10 +12,6 @@ Scenarios:
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timezone as tz
-from unittest.mock import Mock, patch
-
 
 class TestPartitionState:
     """Tests for PartitionState detection."""
@@ -82,9 +78,9 @@ class TestConnectionHealthMonitor:
     def test_register_and_check_healthy(self):
         """Healthy connection check."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
-            ConnectionType,
             ConnectionStatus,
+            ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         monitor = DefaultConnectionHealthMonitor()
@@ -102,9 +98,9 @@ class TestConnectionHealthMonitor:
     def test_unregistered_connection_unknown(self):
         """Unregistered connection returns UNKNOWN status."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
-            ConnectionType,
             ConnectionStatus,
+            ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         monitor = DefaultConnectionHealthMonitor()
@@ -115,9 +111,9 @@ class TestConnectionHealthMonitor:
     def test_single_failure_degraded(self):
         """Single failure results in DEGRADED status."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
-            ConnectionType,
             ConnectionStatus,
+            ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         monitor = DefaultConnectionHealthMonitor()
@@ -131,9 +127,9 @@ class TestConnectionHealthMonitor:
     def test_consecutive_failures_unhealthy(self):
         """3 consecutive failures result in UNHEALTHY status."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
-            ConnectionType,
             ConnectionStatus,
+            ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         monitor = DefaultConnectionHealthMonitor(failure_threshold=3)
@@ -152,9 +148,9 @@ class TestConnectionHealthMonitor:
     def test_recovery_after_failure(self):
         """Successful check resets failure count."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
-            ConnectionType,
             ConnectionStatus,
+            ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         check_result = [False]  # Mutable for closure
@@ -176,9 +172,9 @@ class TestConnectionHealthMonitor:
     def test_exception_treated_as_failure(self):
         """Exception in health check is treated as failure."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
-            ConnectionType,
             ConnectionStatus,
+            ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         monitor = DefaultConnectionHealthMonitor()
@@ -194,8 +190,8 @@ class TestConnectionHealthMonitor:
     def test_get_partition_state(self):
         """get_partition_state aggregates all connections."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
             ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         monitor = DefaultConnectionHealthMonitor()
@@ -223,9 +219,9 @@ class TestConnectionHealthMonitor:
     def test_unregister_health_check(self):
         """Can unregister a health check."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
-            ConnectionType,
             ConnectionStatus,
+            ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         monitor = DefaultConnectionHealthMonitor()
@@ -259,7 +255,10 @@ class TestFallbackStrategy:
     def test_explicit_fallback_used(self):
         """Explicit fallback function is tried first."""
         from selfhealing.core.connection_health import PartitionState
-        from selfhealing.core.fallback_strategy import PartitionAwareFallback, FallbackMode
+        from selfhealing.core.fallback_strategy import (
+            FallbackMode,
+            PartitionAwareFallback,
+        )
 
         state = PartitionState(db_available=True, cache_available=True)
         strategy = PartitionAwareFallback(state)
@@ -276,7 +275,10 @@ class TestFallbackStrategy:
     def test_cache_down_db_fallback(self):
         """Cache down triggers DB fallback."""
         from selfhealing.core.connection_health import PartitionState
-        from selfhealing.core.fallback_strategy import PartitionAwareFallback, FallbackMode
+        from selfhealing.core.fallback_strategy import (
+            FallbackMode,
+            PartitionAwareFallback,
+        )
 
         state = PartitionState(db_available=True, cache_available=False)
 
@@ -294,7 +296,10 @@ class TestFallbackStrategy:
     def test_db_down_cache_fallback(self):
         """DB down triggers cache fallback."""
         from selfhealing.core.connection_health import PartitionState
-        from selfhealing.core.fallback_strategy import PartitionAwareFallback, FallbackMode
+        from selfhealing.core.fallback_strategy import (
+            FallbackMode,
+            PartitionAwareFallback,
+        )
 
         state = PartitionState(db_available=False, cache_available=True)
 
@@ -312,7 +317,10 @@ class TestFallbackStrategy:
     def test_all_fallbacks_fail_use_default(self):
         """All fallbacks fail uses default value."""
         from selfhealing.core.connection_health import PartitionState
-        from selfhealing.core.fallback_strategy import PartitionAwareFallback, FallbackMode
+        from selfhealing.core.fallback_strategy import (
+            FallbackMode,
+            PartitionAwareFallback,
+        )
 
         state = PartitionState(db_available=False, cache_available=False)
         strategy = PartitionAwareFallback(state)
@@ -328,7 +336,10 @@ class TestFallbackStrategy:
     def test_complete_failure(self):
         """No fallbacks and no default results in FAIL_FAST."""
         from selfhealing.core.connection_health import PartitionState
-        from selfhealing.core.fallback_strategy import PartitionAwareFallback, FallbackMode
+        from selfhealing.core.fallback_strategy import (
+            FallbackMode,
+            PartitionAwareFallback,
+        )
 
         state = PartitionState(db_available=False, cache_available=False)
         strategy = PartitionAwareFallback(state)
@@ -361,7 +372,7 @@ class TestSimpleFallback:
 
     def test_simple_fallback_uses_fallback(self):
         """Fallback used on primary failure."""
-        from selfhealing.core.fallback_strategy import SimpleFallback, FallbackMode
+        from selfhealing.core.fallback_strategy import FallbackMode, SimpleFallback
 
         strategy = SimpleFallback()
         result = strategy.execute(

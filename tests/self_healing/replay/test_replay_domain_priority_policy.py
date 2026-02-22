@@ -11,7 +11,7 @@ Domain Priority Policy (도메인별 차등 정책) 테스트.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 
 # =============================================================================
@@ -171,7 +171,6 @@ class TestGetEntriesByPriority:
 
     def test_priority_order_critical_first(self, replay_service, mock_repository):
         """Critical 도메인이 먼저 처리되는지 확인."""
-        from selfhealing.interfaces.repositories import FailedOperationData
 
         # Setup mock entries
         payment_entry = MagicMock()

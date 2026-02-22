@@ -153,7 +153,7 @@ class ComplianceService:
     _instance: ComplianceService | None = None
     _lock = Lock()
 
-    def __new__(cls) -> "ComplianceService":
+    def __new__(cls) -> ComplianceService:
         """싱글톤 패턴"""
         with cls._lock:
             if cls._instance is None:

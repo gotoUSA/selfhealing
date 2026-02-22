@@ -12,11 +12,10 @@ Reference:
 - docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_ROADMAP.md
 """
 
-import os
-import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch, PropertyMock
+from datetime import datetime, timedelta, timezone
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # =============================================================================
 # GovernanceConfig Tests
@@ -91,8 +90,8 @@ class TestRuntimeConfigManagerGovernance:
 
     def test_governance_in_config_classes(self):
         """Test governance is registered in CONFIG_CLASSES."""
-        from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
         from selfhealing.core.config import GovernanceConfig
+        from selfhealing.services.runtime_config.constants import CONFIG_CLASSES
 
         assert "governance" in CONFIG_CLASSES
         assert CONFIG_CLASSES["governance"] == GovernanceConfig
@@ -270,7 +269,10 @@ class TestEmergencyModeTracker:
         mock_backend_instance.get.return_value = None
         mock_backend.return_value = mock_backend_instance
 
-        from selfhealing.services.governance import EmergencyModeTracker, GovernanceEmergencyState
+        from selfhealing.services.governance import (
+            EmergencyModeTracker,
+            GovernanceEmergencyState,
+        )
 
         tracker = EmergencyModeTracker()
 
@@ -299,7 +301,10 @@ class TestEmergencyModeTracker:
         mock_backend_instance.get.return_value = None
         mock_backend.return_value = mock_backend_instance
 
-        from selfhealing.services.governance import EmergencyModeTracker, GovernanceEmergencyState
+        from selfhealing.services.governance import (
+            EmergencyModeTracker,
+            GovernanceEmergencyState,
+        )
 
         tracker = EmergencyModeTracker()
 
@@ -404,7 +409,6 @@ class TestGovernanceTask:
         mock_backend_instance.get.return_value = None
         mock_backend.return_value = mock_backend_instance
 
-        from selfhealing.services.governance import EmergencyModeTracker, GovernanceEmergencyState
         from selfhealing.tasks.governance import check_emergency_mode_expiry
 
         # Set up tracker with 4.5 hour old state
@@ -496,7 +500,6 @@ class TestGovernanceIntegration:
         mock_backend.return_value = mock_backend_instance
 
         from selfhealing.services.runtime_config import RuntimeConfigManager
-        from selfhealing.core.config import GovernanceConfig
 
         # 1. Create and configure governance
         manager = RuntimeConfigManager()
@@ -526,8 +529,6 @@ class TestGovernanceIntegration:
 
         from selfhealing.services.governance import (
             EmergencyModeTracker,
-            is_emergency_mode_active,
-            get_current_operation_mode,
         )
 
         tracker = EmergencyModeTracker()

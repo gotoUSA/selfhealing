@@ -10,14 +10,10 @@ WAL 디스크 풀 Fail-Open 및 멀티 프로세스 안전성 테스트.
 
 import os
 import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from selfhealing.audit.wal import (
     WALConfig,
-    WALEntry,
     WALState,
     WriteAheadLog,
 )

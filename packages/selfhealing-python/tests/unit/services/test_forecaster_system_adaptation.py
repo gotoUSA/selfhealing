@@ -18,7 +18,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # =============================================================================
 # 히스토리 Settings 기본값 계약 검증
 # =============================================================================
@@ -222,7 +221,6 @@ class TestDecisionEngineConfidenceWithPredictionBehavior:
     def test_prediction_context_boosts_confidence(self):
         """prediction_context가 제공되면 신뢰도가 부스트된다."""
         from selfhealing.core.decision_engine import (
-            AdjustmentPriority,
             AdjustmentRule,
             DecisionEngine,
         )
@@ -513,12 +511,12 @@ class TestHoltWintersSeasonAutoDetectBehavior:
 
     def test_detect_no_seasonality_in_stable_data(self):
         """안정적(계절성 없는) 데이터에서 None을 반환한다."""
+        # 약간의 노이즈가 있는 일정한 값
+        import random
+
         from selfhealing.services.predictive_forecaster.time_series import (
             HoltWintersForecaster,
         )
-
-        # 약간의 노이즈가 있는 일정한 값
-        import random
 
         random.seed(42)
         values = [100.0 + random.gauss(0, 1) for _ in range(200)]

@@ -12,7 +12,8 @@ RateController와 GracefulDegradation을 통합합니다.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 from django.http import HttpRequest, HttpResponse

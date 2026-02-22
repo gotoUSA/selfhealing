@@ -21,7 +21,6 @@ Tests for Settings Modules - Defaults and Validation.
 import pytest
 from pydantic import ValidationError
 
-
 # =============================================================================
 # StressTestSettings Tests
 # =============================================================================
@@ -143,7 +142,9 @@ class TestPrecomputedCacheSettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.precomputed_cache import reset_precomputed_cache_settings
+        from selfhealing.settings.precomputed_cache import (
+            reset_precomputed_cache_settings,
+        )
 
         reset_precomputed_cache_settings()
         yield
@@ -162,7 +163,9 @@ class TestPrecomputedCacheSettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.precomputed_cache import get_precomputed_cache_settings
+        from selfhealing.settings.precomputed_cache import (
+            get_precomputed_cache_settings,
+        )
 
         settings1 = get_precomputed_cache_settings()
         settings2 = get_precomputed_cache_settings()
@@ -285,7 +288,9 @@ class TestNamespaceEmergencySettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         reset_namespace_emergency_settings()
         yield
@@ -305,7 +310,9 @@ class TestNamespaceEmergencySettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.namespace_emergency import get_namespace_emergency_settings
+        from selfhealing.settings.namespace_emergency import (
+            get_namespace_emergency_settings,
+        )
 
         settings1 = get_namespace_emergency_settings()
         settings2 = get_namespace_emergency_settings()
@@ -415,7 +422,9 @@ class TestChaosSafetyCapsSettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.chaos_safety_caps import reset_chaos_safety_caps_settings
+        from selfhealing.settings.chaos_safety_caps import (
+            reset_chaos_safety_caps_settings,
+        )
 
         reset_chaos_safety_caps_settings()
         yield
@@ -451,7 +460,9 @@ class TestChaosSafetyCapsSettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.chaos_safety_caps import get_chaos_safety_caps_settings
+        from selfhealing.settings.chaos_safety_caps import (
+            get_chaos_safety_caps_settings,
+        )
 
         settings1 = get_chaos_safety_caps_settings()
         settings2 = get_chaos_safety_caps_settings()
@@ -470,7 +481,9 @@ class TestAuditReconcilerSettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.audit_reconciler import reset_audit_reconciler_settings
+        from selfhealing.settings.audit_reconciler import (
+            reset_audit_reconciler_settings,
+        )
 
         reset_audit_reconciler_settings()
         yield
@@ -608,7 +621,9 @@ class TestGracefulDegradationSettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.graceful_degradation import reset_graceful_degradation_settings
+        from selfhealing.settings.graceful_degradation import (
+            reset_graceful_degradation_settings,
+        )
 
         reset_graceful_degradation_settings()
         yield
@@ -616,7 +631,9 @@ class TestGracefulDegradationSettings:
 
     def test_default_values(self):
         """기본값이 graceful_degradation/enums.py와 일치하는지 검증."""
-        from selfhealing.settings.graceful_degradation import GracefulDegradationSettings
+        from selfhealing.settings.graceful_degradation import (
+            GracefulDegradationSettings,
+        )
 
         settings = GracefulDegradationSettings()
 
@@ -634,7 +651,9 @@ class TestGracefulDegradationSettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.graceful_degradation import get_graceful_degradation_settings
+        from selfhealing.settings.graceful_degradation import (
+            get_graceful_degradation_settings,
+        )
 
         settings1 = get_graceful_degradation_settings()
         settings2 = get_graceful_degradation_settings()

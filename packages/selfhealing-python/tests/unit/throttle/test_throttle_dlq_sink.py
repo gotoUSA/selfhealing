@@ -13,10 +13,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.services.throttle.dlq_sink import ThrottleDLQSink
-
 
 # =============================================================================
 # handle_rejection() 동작 검증

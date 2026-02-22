@@ -23,7 +23,7 @@ import time
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, List
 import requests
 
 logger = logging.getLogger(__name__)

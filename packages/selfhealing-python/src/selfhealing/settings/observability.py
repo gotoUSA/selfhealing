@@ -5,7 +5,6 @@ Provides environment-based configuration for OpenTelemetry SDK.
 Supports adaptive sampling based on EmergencyLevel.
 """
 
-from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field

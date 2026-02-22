@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.adapters.django.signal_hooks import (
     on_user_login_register_session,
     on_user_logout_unregister_session,

@@ -34,7 +34,6 @@ from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
-import json
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -441,17 +440,17 @@ class EventInvalidationSimulator:
         print("📊 EVENT-BASED CACHE INVALIDATION TEST RESULTS")
         print("=" * 60)
         
-        print(f"\n📈 Cache Statistics:")
+        print("\n📈 Cache Statistics:")
         print(f"  Hits: {cache_stats['hits']}")
         print(f"  Misses: {cache_stats['misses']}")
         print(f"  Invalidations: {cache_stats['invalidations']}")
         print(f"  Stale Reads: {cache_stats['stale_reads']}")
         
-        print(f"\n📨 Event Statistics:")
+        print("\n📨 Event Statistics:")
         print(f"  Events Published: {event_stats['published']}")
         print(f"  Events Processed: {event_stats['processed']}")
         
-        print(f"\n⏱️  Latency Statistics:")
+        print("\n⏱️  Latency Statistics:")
         print(f"  Avg Invalidation Latency: {cache_stats['avg_invalidation_latency_ms']:.2f}ms")
         print(f"  Max Invalidation Latency: {cache_stats['max_invalidation_latency_ms']:.2f}ms")
         
@@ -459,7 +458,7 @@ class EventInvalidationSimulator:
         stale_after_update = sum(1 for r in self.reads_after_update if r['is_stale'])
         total_after_update = len(self.reads_after_update)
         
-        print(f"\n🔍 Post-Update Read Analysis:")
+        print("\n🔍 Post-Update Read Analysis:")
         print(f"  Total Checks: {total_after_update}")
         print(f"  Stale Reads After Event: {stale_after_update}")
         
@@ -490,7 +489,7 @@ class EventInvalidationSimulator:
         print(f"    └─ Completion rate: {event_completion:.1f}%")
         
         # 4. TTL 만료 전 무효화 (시뮬레이션이므로 항상 true)
-        print(f"  invalidation_before_ttl: ✅ PASS (event-based)")
+        print("  invalidation_before_ttl: ✅ PASS (event-based)")
         
         # 최종 결과
         # stale_after_event가 0이 아니어도 latency가 낮으면 PASS (이벤트 처리 시간 고려)

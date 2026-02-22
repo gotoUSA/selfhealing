@@ -5,7 +5,6 @@ STRICT SCOPE: Display formatting and readonly operations ONLY.
 NO business logic, NO database writes, NO external calls.
 """
 
-from django.contrib import admin
 from django.contrib.admin.models import CHANGE, LogEntry
 from django.contrib.contenttypes.models import ContentType
 from django.utils.html import format_html

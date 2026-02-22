@@ -19,10 +19,9 @@ Note:
 from typing import Dict, List, Optional, Any, Tuple, Callable, Union
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import deque
 import threading
-import json
 import copy
 import logging
 
@@ -710,36 +709,36 @@ class BlastRadiusController:
         if scope == BlastRadiusScope.ISOLATED:
             actions.extend([
                 f"Circuit Breaker 활성화: {failed_service}",
-                f"Fallback 서비스로 라우팅",
+                "Fallback 서비스로 라우팅",
             ])
         
         elif scope == BlastRadiusScope.LIMITED:
             actions.extend([
                 f"Bulkhead 패턴 적용: {', '.join(affected)}",
-                f"Rate Limit 강화",
-                f"Cache 우선 모드 활성화",
+                "Rate Limit 강화",
+                "Cache 우선 모드 활성화",
             ])
         
         elif scope == BlastRadiusScope.MODERATE:
             actions.extend([
-                f"Emergency Mode Level 1 활성화",
-                f"비핵심 기능 일시 중단",
-                f"DLQ 모드로 전환",
+                "Emergency Mode Level 1 활성화",
+                "비핵심 기능 일시 중단",
+                "DLQ 모드로 전환",
             ])
         
         elif scope == BlastRadiusScope.EXTENSIVE:
             actions.extend([
-                f"Emergency Mode Level 2 활성화",
-                f"읽기 전용 모드 전환",
-                f"관리자 알림 발송",
+                "Emergency Mode Level 2 활성화",
+                "읽기 전용 모드 전환",
+                "관리자 알림 발송",
             ])
         
         else:  # CRITICAL
             actions.extend([
-                f"Emergency Mode Level 3 (전체 보호)",
-                f"모든 쓰기 작업 중단",
-                f"즉시 수동 개입 필요",
-                f"인시던트 티켓 자동 생성",
+                "Emergency Mode Level 3 (전체 보호)",
+                "모든 쓰기 작업 중단",
+                "즉시 수동 개입 필요",
+                "인시던트 티켓 자동 생성",
             ])
         
         return actions

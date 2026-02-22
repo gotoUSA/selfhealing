@@ -14,15 +14,12 @@ from __future__ import annotations
 
 import gzip
 import json
-import tempfile
 import threading
-import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 
 # ============================================================================
 # Cold Storage Tests
@@ -72,7 +69,7 @@ class TestLocalFileColdStorage:
         assert checksum_path.exists()
 
         # Checksum should be 64 characters (SHA256 hex)
-        with open(checksum_path, "r") as f:
+        with open(checksum_path) as f:
             checksum = f.read().strip()
 
         assert len(checksum) == 64

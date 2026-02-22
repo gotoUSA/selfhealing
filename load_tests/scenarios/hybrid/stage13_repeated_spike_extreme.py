@@ -59,9 +59,8 @@ import sys
 import time
 import random
 import json
-import traceback
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -1043,7 +1042,7 @@ class RepeatedSpikeExtremeUser(HttpUser):
 @events.test_start.add_listener
 def on_test_start(environment, **kwargs):
     """Test start handler."""
-    _debug_log(f"🏁 Stage 13 EXTREME Test Starting", "INFO")
+    _debug_log("🏁 Stage 13 EXTREME Test Starting", "INFO")
     _debug_log(f"   Cycles: {NUM_CYCLES}", "INFO")
     _debug_log(f"   Cycle Duration: {CYCLE_DURATION}s", "INFO")
     _debug_log(f"   Max Users: {SPIKE_USERS}", "INFO")
@@ -1058,7 +1057,7 @@ def on_test_stop(environment, **kwargs):
     print("=" * 80)
     
     # Summary
-    print(f"\n📋 Test Summary:")
+    print("\n📋 Test Summary:")
     print(f"   Total Cycles: {len(_extreme_stats['cycles'])}")
     print(f"   Debug Mode: {DEBUG_MODE}")
     
@@ -1089,14 +1088,14 @@ def on_test_stop(environment, **kwargs):
     
     # Circuit Breaker analysis
     cb = _extreme_stats["circuit_breaker"]
-    print(f"\n🔌 Circuit Breaker Statistics:")
+    print("\n🔌 Circuit Breaker Statistics:")
     print(f"   Total Opens: {cb['total_opens']}")
     print(f"   Total Closes: {cb['total_closes']}")
     print(f"   Half-Opens: {cb['total_half_opens']}")
     print(f"   Affected Services: {list(cb['services_affected'])}")
     
     # Recovery consistency
-    print(f"\n🔄 Recovery Consistency:")
+    print("\n🔄 Recovery Consistency:")
     recovery = _extreme_stats["recovery"]
     if recovery_times:
         avg_recovery = sum(recovery_times) / len(recovery_times)
@@ -1130,11 +1129,11 @@ def on_test_stop(environment, **kwargs):
         if sla_breaches > 0:
             print(f"   ⚠️ SLA Breaches: {sla_breaches}/{len(recovery_times)} cycles > 2min")
         else:
-            print(f"   ✅ All cycles under 2min SLA")
+            print("   ✅ All cycles under 2min SLA")
     
     # Emergency mode
     em = _extreme_stats["emergency"]
-    print(f"\n🚨 Emergency Mode:")
+    print("\n🚨 Emergency Mode:")
     print(f"   Max Level: LEVEL_{em['max_level_reached']}")
     print(f"   Escalations: {len(em['escalations'])}")
     print(f"   Recovery Success: {em['recovery_successes']}")
@@ -1142,7 +1141,7 @@ def on_test_stop(environment, **kwargs):
     
     # Chaos statistics
     chaos = _extreme_stats["chaos"]
-    print(f"\n💥 Chaos Injection:")
+    print("\n💥 Chaos Injection:")
     print(f"   Failures Injected: {chaos.get('failures_injected', 0)}")
     print(f"   Latency Injections: {chaos.get('latency_injections', 0)}")
     print(f"   Blast Radius Tests: {chaos.get('blast_radius_tests', 0)}")
@@ -1150,13 +1149,13 @@ def on_test_stop(environment, **kwargs):
     
     # DLQ
     dlq = _extreme_stats["dlq"]
-    print(f"\n📬 DLQ Statistics:")
+    print("\n📬 DLQ Statistics:")
     print(f"   Max Pending: {dlq['max_pending']}")
     print(f"   Total Replayed: {dlq['total_replayed']}")
     
     # Throttle
     throttle = _extreme_stats["throttle"]
-    print(f"\n⚡ Adaptive Throttle:")
+    print("\n⚡ Adaptive Throttle:")
     print(f"   Limit Adjustments: {throttle['limit_adjustments']}")
     if throttle["avg_rtt_ms"]:
         avg_rtt = sum(throttle["avg_rtt_ms"]) / len(throttle["avg_rtt_ms"])
@@ -1164,24 +1163,24 @@ def on_test_stop(environment, **kwargs):
     
     # Malicious Payload (리뷰 피드백 #2)
     malicious = _extreme_stats["malicious_payload"]
-    print(f"\n🔐 Malicious Payload Tests (The Gauntlet):")
+    print("\n🔐 Malicious Payload Tests (The Gauntlet):")
     print(f"   L1 SQL Injection: {malicious['l1_sql_injection_tests']} tests, {malicious['l1_blocked']} blocked")
     print(f"   L2 Signature Forgery: {malicious['l2_signature_forgery_tests']} tests, {malicious['l2_blocked']} blocked")
     print(f"   L3 Extreme Values: {malicious['l3_extreme_value_tests']} tests, {malicious['l3_blocked']} blocked")
     print(f"   Total: {malicious['total_tests']} tests, {malicious['total_blocked']} blocked")
     if malicious['bypass_detected']:
-        print(f"   🚨 SECURITY ALERT: Bypass detected!")
+        print("   🚨 SECURITY ALERT: Bypass detected!")
     else:
-        print(f"   ✅ No bypass detected")
+        print("   ✅ No bypass detected")
     
     # Token Refresh (리뷰 피드백 #3)
     token = _extreme_stats["token_refresh"]
-    print(f"\n🔑 Token Refresh:")
+    print("\n🔑 Token Refresh:")
     print(f"   Refresh Count: {token['refresh_count']}")
     print(f"   Refresh Failures: {token['refresh_failures']}")
     
     # 🔥 V2.8 Aggressive Healing Statistics
-    print(f"\n🔥 V2.8 Aggressive Healing:")
+    print("\n🔥 V2.8 Aggressive Healing:")
     aggressive_cb = _extreme_stats["aggressive_cb"]
     print(f"   XTest Errors → CB Count: {aggressive_cb['xtest_errors_counted']}")
     print(f"   Forced CB Opens (3회 실패): {aggressive_cb['forced_opens']}")
@@ -1198,13 +1197,13 @@ def on_test_stop(environment, **kwargs):
     
     # SLA verdict
     sla = _extreme_stats["sla"]
-    print(f"\n⚖️ SLA Verdict:")
+    print("\n⚖️ SLA Verdict:")
     print(f"   P99 Max: {sla['p99_max_ms']:.0f}ms (threshold: {SLA_P99_THRESHOLD_MS}ms)")
     if sla["p99_max_ms"] > SLA_P99_THRESHOLD_MS:
         sla["sla_passed"] = False
-        print(f"   Status: ❌ FAILED")
+        print("   Status: ❌ FAILED")
     else:
-        print(f"   Status: ✅ PASSED")
+        print("   Status: ✅ PASSED")
     
     # Save report
     _save_report(recovery_times)
@@ -1527,7 +1526,7 @@ def _save_markdown_report(path: str, data: dict, recovery_times: List[float]):
         for phase, metrics in cycle_data.get("phases", {}).items():
             md_content += f"| {phase} | {metrics['requests']} | {metrics['errors']} | {metrics['error_rate']:.1f}% | {metrics['avg_response_ms']:.0f} | {metrics['p99_ms']:.0f} |\n"
 
-    md_content += f"""
+    md_content += """
 ---
 
 ## 🎯 결론

@@ -777,7 +777,7 @@ class RedisAuditBuffer:
 
         for processing_key, worker_id, age in orphaned:
             logger.warning(
-                f"[RedisAuditBuffer] Orphaned queue detected",  # noqa: G004
+                "[RedisAuditBuffer] Orphaned queue detected",  # noqa: G004
                 extra={
                     "processing_key": processing_key,
                     "worker_id": worker_id,

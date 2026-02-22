@@ -4,23 +4,18 @@
 L2 복구 후 L1/L2 상태 불일치 해결 시나리오 테스트.
 """
 
-import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from selfhealing.adapters.memory.circuit_breaker import (
     LayeredCircuitBreakerStateRepository,
     InMemoryCircuitBreakerStateRepository,
-    DriftReconciler,
-    DriftReconciliationResult,
     get_shadow_logger,
     get_drift_reconciler,
 )
 from selfhealing.interfaces.repositories import (
     CircuitBreakerStateData,
-    CircuitBreakerStateEnum,
 )
 
 

@@ -15,12 +15,9 @@ import pytest
 pytestmark = pytest.mark.requires_db
 
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
-from django.db import transaction
 from celery.exceptions import WorkerLostError, Retry
 
-from shopping.models import Order, OrderItem, Payment, Product, User
-from shopping.models.payment import PaymentLog
+from shopping.models import Payment
 from shopping.tasks.payment_tasks import call_toss_confirm_api, finalize_payment_confirm
 from shopping.tests.factories import (
     OrderFactory,

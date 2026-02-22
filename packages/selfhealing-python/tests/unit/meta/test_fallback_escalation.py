@@ -5,9 +5,7 @@ FallbackEscalationHandler 테스트.
 """
 
 import json
-import tempfile
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -50,7 +48,7 @@ class TestFallbackEscalationHandler:
 
         # 파일 확인
         if temp_log_path.exists():
-            with open(temp_log_path, "r") as f:
+            with open(temp_log_path) as f:
                 line = f.readline()
                 data = json.loads(line)
             assert data["component"] == "redis"
@@ -71,7 +69,7 @@ class TestFallbackEscalationHandler:
 
         # 파일 확인
         if temp_log_path.exists():
-            with open(temp_log_path, "r") as f:
+            with open(temp_log_path) as f:
                 lines = f.readlines()
             assert len(lines) == 5
 
@@ -209,7 +207,7 @@ class TestJsonSerialization:
             error_message="Connection timeout",
         )
 
-        with open(temp_log_path, "r") as f:
+        with open(temp_log_path) as f:
             line = f.readline()
             loaded = json.loads(line)
 

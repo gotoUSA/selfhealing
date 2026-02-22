@@ -10,11 +10,9 @@ WAL 복구 시 중복 제거 테스트.
 """
 
 import json
-import os
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -60,7 +58,10 @@ class TestWALRecoveryDeduplication:
 
     def test_idempotency_key_for_wal_recovery_format(self):
         """IdempotencyKey.for_wal_recovery() 키 형식 확인."""
-        from selfhealing.services.idempotency_service import IdempotencyKey, IdempotencyDomain
+        from selfhealing.services.idempotency_service import (
+            IdempotencyDomain,
+            IdempotencyKey,
+        )
 
         key = IdempotencyKey.for_wal_recovery(
             wal_entry_id="123",

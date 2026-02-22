@@ -10,22 +10,18 @@ AdaptiveThrottle Emergency Mode 연동 테스트.
 6. _on_emergency_deactivated_throttle 핸들러
 """
 
-import pytest
-from datetime import datetime, timezone
 
 from selfhealing.services.event_bus import (
     EventType,
     SelfHealingEvent,
-    _on_emergency_level_changed_throttle,
     _on_emergency_deactivated_throttle,
+    _on_emergency_level_changed_throttle,
 )
 from selfhealing.services.throttle.adaptive import (
-    AdaptiveThrottle,
     EMERGENCY_LEVEL_LIMIT_MULTIPLIERS,
     get_adaptive_throttle,
     reset_adaptive_throttle,
 )
-from selfhealing.services.throttle.config import ThrottleConfig
 
 
 class TestEmergencyLevelLimitMultipliers:

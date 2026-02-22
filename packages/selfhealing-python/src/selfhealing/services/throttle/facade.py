@@ -23,7 +23,7 @@ from typing import Any
 
 import structlog
 
-from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
+from selfhealing.services.throttle.config import ThrottleResult
 
 logger = structlog.get_logger()
 

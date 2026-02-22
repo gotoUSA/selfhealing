@@ -11,16 +11,13 @@ Django 의존성 없이 selfhealing 패키지만으로 테스트합니다.
 """
 
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
-from typing import Any, Dict, Optional
+from unittest.mock import MagicMock, patch
 
 from selfhealing.context.actor_context import (
     Actor,
     ActorContext,
     get_actor_for_celery,
     restore_actor_from_celery,
-    SYSTEM_ACTOR,
 )
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditAction
 

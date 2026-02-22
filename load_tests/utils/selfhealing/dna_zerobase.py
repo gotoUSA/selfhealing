@@ -10,11 +10,10 @@ Zero-Base DNA - 미분류 시나리오 탐험
 Phase 4 구현
 """
 
-from typing import Dict, List, Optional, Any, Callable, Set, Tuple
+from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime
-import json
 import logging
 
 logger = logging.getLogger(__name__)

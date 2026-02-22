@@ -2,7 +2,6 @@
 GradientCalculator.get_snapshot() 단위 테스트.
 """
 
-import pytest
 
 
 class TestGradientCalculatorSnapshot:

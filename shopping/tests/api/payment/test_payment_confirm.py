@@ -1,14 +1,12 @@
 from decimal import Decimal
-from unittest.mock import Mock
 
 import pytest
 from rest_framework import status
 
-from shopping.models.cart import Cart, CartItem
+from shopping.models.cart import Cart
 from shopping.models.order import Order
 from shopping.models.payment import Payment, PaymentLog
 from shopping.models.point import PointHistory
-from shopping.models.product import Product
 from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,

@@ -280,7 +280,6 @@ class TestRedactionMaskingBehavior:
 
     def test_jwt_token_masked_in_trace(self, otlp_endpoint, tempo_endpoint):
         """JWT 토큰이 Trace 속성에서 마스킹되는지 확인"""
-        import json
         import time
 
         import requests

@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -377,7 +376,7 @@ def main() -> int:
 
     stats = run(args.target, dry_run=args.dry_run)
 
-    print(f"\n--- 결과 ---")
+    print("\n--- 결과 ---")
     print(f"  스캔:      {stats.files_scanned}")
     print(f"  변경:      {stats.files_changed}")
     print(f"  f-string:  {stats.fstring_calls_converted}")

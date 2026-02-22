@@ -12,14 +12,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.services.learning.models import (
-    BlacklistReason,
     BlacklistedParameter,
+    BlacklistReason,
 )
 from selfhealing.services.learning.service import (
     LearningService,
     ParameterBlacklist,
 )
-
 
 # =============================================================================
 # BlacklistedParameter Model Tests

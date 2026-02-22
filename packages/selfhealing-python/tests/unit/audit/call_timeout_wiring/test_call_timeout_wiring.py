@@ -15,7 +15,6 @@ call_timeout_seconds 연결 단위 테스트.
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -35,7 +34,6 @@ from selfhealing.settings.resilient_recorder import (
     ResilientRecorderSettings,
     reset_resilient_recorder_settings,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixture

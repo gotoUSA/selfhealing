@@ -3,8 +3,9 @@ Tests for OpenTelemetry Settings.
 """
 
 import os
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 
 class TestOpenTelemetrySettings:
@@ -131,11 +132,12 @@ class TestOpenTelemetrySettings:
 
     def test_traces_sampler_arg_validation(self):
         """Test that sampler arg is clamped to 0.0-1.0."""
+        from pydantic import ValidationError
+
         from selfhealing.settings.observability import (
             OpenTelemetrySettings,
             reset_otel_settings,
         )
-        from pydantic import ValidationError
 
         reset_otel_settings()
 

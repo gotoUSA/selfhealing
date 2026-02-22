@@ -44,7 +44,6 @@ from selfhealing.services.predictive_forecaster.proactive_action import (
 )
 from selfhealing.services.predictive_forecaster.time_series import (
     EWMAForecaster,
-    ForecastDataPoint,
     HoltLinearForecaster,
 )
 from selfhealing.settings.predictive_forecaster import (

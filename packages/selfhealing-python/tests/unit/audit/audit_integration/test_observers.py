@@ -6,9 +6,6 @@ Uses lazy imports to avoid Prometheus registry conflicts.
 """
 
 import time
-from unittest.mock import Mock
-
-import pytest
 
 
 class TestAuditEventObserver:
@@ -17,8 +14,8 @@ class TestAuditEventObserver:
     def test_observer_interface(self):
         """Observer 인터페이스 검증."""
         from selfhealing.audit.audit_integration import (
-            AuditEventObserver,
             AuditEventData,
+            AuditEventObserver,
             AuditObserverEventType,
         )
 
@@ -49,7 +46,7 @@ class TestAsyncLoggerObserver:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         flushed = []
         adapter = AsyncLoggerAdapter(flush_callback=lambda e: flushed.extend(e))
         observer = AsyncLoggerObserver(adapter)
@@ -74,7 +71,7 @@ class TestAsyncLoggerObserver:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         adapter = AsyncLoggerAdapter()
         observer = AsyncLoggerObserver(adapter)
 
@@ -96,7 +93,7 @@ class TestAsyncLoggerObserver:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         flushed = []
         adapter = AsyncLoggerAdapter(flush_callback=lambda e: flushed.extend(e))
         observer = AsyncLoggerObserver(adapter)
@@ -120,7 +117,7 @@ class TestAsyncLoggerObserver:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         flushed = []
         adapter = AsyncLoggerAdapter(flush_callback=lambda e: flushed.extend(e))
         observer = AsyncLoggerObserver(adapter)
@@ -142,7 +139,7 @@ class TestAsyncLoggerObserver:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         adapter = AsyncLoggerAdapter()
         observer = AsyncLoggerObserver(adapter)
 
@@ -166,7 +163,7 @@ class TestAsyncLoggerObserver:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         flushed = []
         adapter = AsyncLoggerAdapter(flush_callback=lambda e: flushed.extend(e))
         observer = AsyncLoggerObserver(adapter)
@@ -188,7 +185,7 @@ class TestAsyncLoggerObserver:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         adapter = AsyncLoggerAdapter()
         observer = AsyncLoggerObserver(adapter)
 
@@ -212,7 +209,7 @@ class TestAsyncLoggerObserver:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         flushed = []
         adapter = AsyncLoggerAdapter(flush_callback=lambda e: flushed.extend(e))
         observer = AsyncLoggerObserver(adapter)

@@ -9,12 +9,10 @@ Grafana 대시보드 프로비저닝 및 Loki/Tempo 연동 테스트
 4. Tempo 트레이스 수집 및 조회
 5. 로그-트레이스 상관관계 (trace_id 연동)
 """
-import json
 import os
 import time
 import uuid
 
-import pytest
 import requests
 
 

@@ -11,12 +11,11 @@ self_audit.py의 self._logger가 stdlib logging → structlog.BoundLogger로 전
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-import structlog
 
-from selfhealing.audit.self_audit import SelfAuditEvent, SelfAuditLogger, self_audit
+from selfhealing.audit.self_audit import SelfAuditEvent, SelfAuditLogger
 
 
 @pytest.fixture(autouse=True)

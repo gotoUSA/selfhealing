@@ -26,15 +26,13 @@ Reference:
 import os
 import sys
 import time
-import random
 import threading
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from collections import deque
-import json
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -310,7 +308,7 @@ class BackpressureSimulator:
         print("📊 BACKPRESSURE TEST RESULTS")
         print("=" * 60)
         
-        print(f"\n📈 Traffic Statistics:")
+        print("\n📈 Traffic Statistics:")
         print(f"  Total Accepted: {stats['total_accepted']}")
         print(f"  Total Rejected: {stats['total_rejected']}")
         print(f"  Total Processed: {stats['total_processed']}")
@@ -343,7 +341,7 @@ class BackpressureSimulator:
         retry_after_present = all(
             'timestamp' in r for r in self.manager.rejected
         )  # 모든 거부에 타임스탬프 있음 (Retry-After 대용)
-        print(f"  Retry-After header present: ✅ PASS")  # 시뮬레이션에서 항상 포함
+        print("  Retry-After header present: ✅ PASS")  # 시뮬레이션에서 항상 포함
         
         # 4. 복구 후 수락 재개
         recovery_works = any(

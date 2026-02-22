@@ -15,12 +15,11 @@ Usage:
 
 from __future__ import annotations
 
-import structlog
 import threading
-import time
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
-from selfhealing.coordination.base import LeadershipState
+import structlog
+
 from selfhealing.coordination.factory import get_leader_elector
 from selfhealing.coordination.shutdown_integration import (
     register_for_graceful_shutdown,

@@ -14,18 +14,9 @@ Test Cases:
 Reference: docs/testing/SELF_HEALING_TEST_SPECIFICATIONS.md §8.2
 """
 
-import time
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
 
 import pytest
-from django.utils import timezone
 
-from selfhealing.services import (
-    CircuitBreakerConfig,
-    CircuitBreakerService,
-    CircuitState,
-)
 from selfhealing.services import DLQConfig, DLQService
 
 

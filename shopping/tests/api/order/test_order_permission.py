@@ -6,7 +6,7 @@ import pytest
 from rest_framework import status
 
 from shopping.models.cart import Cart, CartItem
-from shopping.models.order import Order, OrderItem
+from shopping.models.order import OrderItem
 from shopping.models.user import User
 
 from .conftest import TEST_ADMIN_PASSWORD, TEST_USER_PASSWORD

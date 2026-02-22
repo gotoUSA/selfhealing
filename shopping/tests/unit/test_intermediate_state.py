@@ -12,14 +12,10 @@ from decimal import Decimal
 
 import pytest
 
-from shopping.models.cart import Cart, CartItem
-from shopping.models.order import Order
 from shopping.services.cart_service import CartService
 from shopping.tests.factories import (
     CartFactory,
-    CartItemFactory,
     OrderFactory,
-    OrderItemFactory,
     ProductFactory,
     UserFactory,
 )

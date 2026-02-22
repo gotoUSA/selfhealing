@@ -10,9 +10,7 @@ Tests the tier-based rate limiting system:
 - Dry Run / Simulation
 """
 
-import re
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -536,8 +534,6 @@ class TestTierRegistry:
         """Override tier should take precedence over path-based tier."""
         from selfhealing.api.django.tiering import (
             TierRegistry,
-            TierOverride,
-            OverrideIdentifierType,
         )
         
         registry = TierRegistry.__new__(TierRegistry)
@@ -559,7 +555,7 @@ class TestTierRegistry:
 
     def test_set_tiers_validates(self):
         """Should validate tiers before setting."""
-        from selfhealing.api.django.tiering import TierRegistry, TierDefinition
+        from selfhealing.api.django.tiering import TierRegistry
         
         registry = TierRegistry.__new__(TierRegistry)
         registry._init()
@@ -593,7 +589,6 @@ class TestTierRegistry:
         from selfhealing.api.django.tiering import (
             TierRegistry,
             TierDefinition,
-            DEFAULT_TIER_DEFINITIONS,
         )
         
         registry = TierRegistry.__new__(TierRegistry)
@@ -652,7 +647,6 @@ class TestTierSimulation:
         """Should detect changes when config differs."""
         from selfhealing.api.django.tiering import (
             TierRegistry,
-            TierDefinition,
             TierMapping,
             PatternType,
             DEFAULT_TIER_DEFINITIONS,
@@ -1184,7 +1178,6 @@ class TestResolveTierWithFallback:
         """Static critical paths should be protected even when engine fails."""
         from selfhealing.api.django.tiering import (
             TierRegistry,
-            TierFallbackReason,
             get_tiering_circuit_breaker,
         )
         

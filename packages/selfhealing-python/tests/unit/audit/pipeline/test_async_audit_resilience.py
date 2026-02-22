@@ -19,12 +19,8 @@ from __future__ import annotations
 import queue
 import tempfile
 import threading
-import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
-
+from unittest.mock import patch
 
 # =============================================================================
 # AsyncHealingLogger Tests
@@ -37,9 +33,9 @@ class TestPriorityQueue:
     def test_critical_events_have_highest_priority(self):
         """CRITICAL 이벤트가 가장 높은 우선순위를 가진다."""
         from selfhealing.utils.async_logger import (
-            LogFlushPriority,
-            EventSeverity,
             SEVERITY_PRIORITY_MAP,
+            EventSeverity,
+            LogFlushPriority,
         )
 
         # CRITICAL이 가장 낮은 숫자 (높은 우선순위)

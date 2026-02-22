@@ -36,10 +36,9 @@ import time
 import random
 import threading
 import hashlib
-import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Any, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
 from enum import Enum
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -754,25 +753,25 @@ def on_test_stop(environment, **kwargs):
     print(f"Total Requests: {_stats.total_requests}")
     print(f"  - Region A: {_stats.region_a_requests}")
     print(f"  - Region B: {_stats.region_b_requests}")
-    print(f"\nFailover Statistics:")
+    print("\nFailover Statistics:")
     print(f"  - Total Failovers: {_stats.failover_count}")
     print(f"  - Successful: {_stats.failover_success}")
     if _stats.failover_count > 0:
         avg_failover_time = _stats.failover_time_sum_ms / _stats.failover_count
         print(f"  - Avg Failover Time: {avg_failover_time:.2f}ms")
-    print(f"\nData Consistency:")
+    print("\nData Consistency:")
     print(f"  - Duplicate Orders Prevented: {_stats.duplicate_orders_prevented}")
     print(f"  - Duplicate Payments Prevented: {_stats.duplicate_payments_prevented}")
     print(f"  - Idempotency Hits: {_stats.idempotency_hits}")
-    print(f"\nClock Skew:")
+    print("\nClock Skew:")
     print(f"  - Detections: {_stats.clock_skew_detections}")
     print(f"  - Rejections: {_stats.clock_skew_rejections}")
-    print(f"\nRecovery:")
+    print("\nRecovery:")
     print(f"  - Recovery Count: {_stats.recovery_count}")
     if _stats.recovery_count > 0:
         avg_recovery_time = _stats.recovery_time_sum_ms / _stats.recovery_count
         print(f"  - Avg Recovery Time: {avg_recovery_time:.2f}ms")
-    print(f"\nErrors:")
+    print("\nErrors:")
     print(f"  - Packet Loss: {_stats.packet_loss_errors}")
     print(f"  - Timeout: {_stats.timeout_errors}")
     print(f"  - Consistency: {_stats.consistency_errors}")

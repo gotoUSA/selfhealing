@@ -28,11 +28,9 @@ Prerequisites:
 import os
 import sys
 import time
-import json
 import random
-import threading
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 프로젝트 루트 경로 추가
@@ -46,7 +44,7 @@ if _project_root not in sys.path:
 from locust import HttpUser, task, between, tag, events
 
 from load_tests.utils import LoginHelper
-from load_tests.metrics import setup_event_hooks, get_metrics_collector
+from load_tests.metrics import setup_event_hooks
 
 # V2 Optimization Utilities
 try:
@@ -270,7 +268,7 @@ def init_v2_utilities():
         # AsyncHealingLogger 초기화 검증
         async_stats = AsyncHealingLogger.get_stats()
         if not async_stats.get("is_running"):
-            print(f"⚠️ AsyncHealingLogger failed to start!")
+            print("⚠️ AsyncHealingLogger failed to start!")
         else:
             print(f"   ✓ AsyncHealingLogger running (queue_size: {async_stats.get('queue_size', 0)})")
         
@@ -308,7 +306,7 @@ def init_v2_utilities():
         SafeDefaults.enter_degraded_mode(reason="Hell Mode Test Initialization")
         if SafeDefaults.is_degraded():
             _hell_stats["safe_defaults"]["degraded_mode_entries"] += 1
-            print(f"   ✓ SafeDefaults degraded mode working")
+            print("   ✓ SafeDefaults degraded mode working")
         SafeDefaults.exit_degraded_mode()  # Reset
         
         # 4. AdaptiveJitter 검증
@@ -1483,20 +1481,20 @@ def on_test_stop(environment, **kwargs):
     print("🛠️  V2 OPTIMIZATION UTILITIES STATS")
     print("-" * 80)
     
-    print(f"\n📨 AsyncHealingLogger:")
+    print("\n📨 AsyncHealingLogger:")
     print(f"   Events Logged: {stats['async_logger']['events_logged']}")
     print(f"   Avg Log Time: {stats['async_logger']['avg_log_time_us']:.2f}μs (target: < 1000μs)")
     
-    print(f"\n🧠 CBStateCache:")
+    print("\n🧠 CBStateCache:")
     print(f"   Cache Hits: {stats['state_cache']['cache_hits']}")
     print(f"   Cache Misses: {stats['state_cache']['cache_misses']}")
     print(f"   Hit Rate: {stats['state_cache']['hit_rate_percent']:.1f}% (target: > 70%)")
     
-    print(f"\n🛡️  SafeDefaults:")
+    print("\n🛡️  SafeDefaults:")
     print(f"   Degraded Mode Entries: {stats['safe_defaults']['degraded_mode_entries']}")
     print(f"   Total Degraded Time: {stats['safe_defaults']['total_degraded_time_seconds']:.2f}s")
     
-    print(f"\n⚡ AdaptiveJitter:")
+    print("\n⚡ AdaptiveJitter:")
     print(f"   Relaxed: {stats['adaptive_jitter']['relaxed_count']}")
     print(f"   Normal: {stats['adaptive_jitter']['normal_count']}")
     print(f"   Stressed: {stats['adaptive_jitter']['stressed_count']}")
@@ -1507,14 +1505,14 @@ def on_test_stop(environment, **kwargs):
     print("🚀 V3 OPTIMIZATION UTILITIES STATS (Netflix Gradient + Shield)")
     print("-" * 80)
     
-    print(f"\n🎚️  Netflix Gradient Adaptive Throttle:")
+    print("\n🎚️  Netflix Gradient Adaptive Throttle:")
     print(f"   Total Requests: {stats['adaptive_throttle']['total_requests']}")
     print(f"   Allowed: {stats['adaptive_throttle']['allowed']}")
     print(f"   Denied: {stats['adaptive_throttle']['denied']}")
     print(f"   Current Limit: {stats['adaptive_throttle'].get('current_limit', 'N/A')}")
     print(f"   Avg RTT: {stats['adaptive_throttle']['avg_rtt_ms']:.1f}ms")
     
-    print(f"\n🛡️  Corruption Shield (L1+L2+L3):")
+    print("\n🛡️  Corruption Shield (L1+L2+L3):")
     print(f"   Total Validations: {stats['corruption_shield']['total_validations']}")
     print(f"   Passed: {stats['corruption_shield']['passed']}")
     print(f"   Blocked: {stats['corruption_shield']['blocked']}")

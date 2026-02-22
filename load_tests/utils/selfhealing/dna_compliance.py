@@ -20,8 +20,8 @@ Phase 2 구현: 금융권 필수 규제 (DORA 2025, PCI-DSS 4.0, SOC2 Type II)
 - governance.py: get_compliance_status(), run_compliance_check()
 """
 
-from typing import Dict, List, Optional, Any, Set
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime, timedelta
 import json

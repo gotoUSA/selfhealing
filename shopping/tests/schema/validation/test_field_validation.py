@@ -223,11 +223,11 @@ class TestOrderFieldValidation:
         data = response.json()
 
         # 필드 타입 검증
-        assert isinstance(data["id"], int), f"id 타입 불일치"
-        assert isinstance(data["status"], str), f"status 타입 불일치"
-        assert isinstance(data["created_at"], str), f"created_at 타입 불일치"
+        assert isinstance(data["id"], int), "id 타입 불일치"
+        assert isinstance(data["status"], str), "status 타입 불일치"
+        assert isinstance(data["created_at"], str), "created_at 타입 불일치"
         # total_amount는 Decimal → str 직렬화
-        assert isinstance(data["total_amount"], (int, float, str)), f"total_amount 타입 불일치"
+        assert isinstance(data["total_amount"], (int, float, str)), "total_amount 타입 불일치"
 
     def test_order_list_items_required_fields(self, client, auth_headers, schema_test_order):
         """
@@ -316,9 +316,9 @@ class TestUserFieldValidation:
         data = response.json()
 
         # 필드 타입 검증
-        assert isinstance(data["id"], int), f"id 타입 불일치"
-        assert isinstance(data["username"], str), f"username 타입 불일치"
-        assert isinstance(data["email"], str), f"email 타입 불일치"
+        assert isinstance(data["id"], int), "id 타입 불일치"
+        assert isinstance(data["username"], str), "username 타입 불일치"
+        assert isinstance(data["email"], str), "email 타입 불일치"
 
     def test_user_schema_helper_validation(self, client, auth_headers):
         """
@@ -457,9 +457,9 @@ class TestCategoryFieldValidation:
         data = response.json()
 
         # 필드 타입 검증
-        assert isinstance(data["id"], int), f"id 타입 불일치"
-        assert isinstance(data["name"], str), f"name 타입 불일치"
-        assert isinstance(data["slug"], str), f"slug 타입 불일치"
+        assert isinstance(data["id"], int), "id 타입 불일치"
+        assert isinstance(data["name"], str), "name 타입 불일치"
+        assert isinstance(data["slug"], str), "slug 타입 불일치"
 
     def test_category_list_items_required_fields(self, client, schema_test_category):
         """

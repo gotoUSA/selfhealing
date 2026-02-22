@@ -8,11 +8,10 @@ import pytest
 
 from selfhealing.core.test_mode_context import TestModeContext
 from selfhealing.settings.namespace import (
+    SYNTHETIC_KEY_PREFIX,
     NamespaceSettings,
     get_effective_key_prefix,
-    get_key_prefix,
     reset_namespace_settings,
-    SYNTHETIC_KEY_PREFIX,
 )
 
 

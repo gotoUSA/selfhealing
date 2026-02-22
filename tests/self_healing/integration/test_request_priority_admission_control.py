@@ -8,7 +8,6 @@ RateController ↔ TrafficGate priority 전파에 대한 통합 테스트.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 from selfhealing.scaling.config import (
     BackpressureLevel,
@@ -19,7 +18,6 @@ from selfhealing.scaling.config import (
 from selfhealing.scaling.rate_controller import (
     PRIORITY_WATERMARKS,
     RateController,
-    TokenBucket,
     reset_rate_controller,
 )
 from selfhealing.scaling.traffic_gate import (

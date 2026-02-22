@@ -4,7 +4,7 @@ DLQ (Dead Letter Queue) API Client.
 DLQ 조회, 재시도, 리플레이, 아카이브 관련 API.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .base import BaseClient
 

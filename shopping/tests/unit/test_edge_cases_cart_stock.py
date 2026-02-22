@@ -14,7 +14,6 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from shopping.models.cart import Cart, CartItem
-from shopping.models.product import Product
 from shopping.tests.factories import (
     CartFactory,
     CartItemFactory,

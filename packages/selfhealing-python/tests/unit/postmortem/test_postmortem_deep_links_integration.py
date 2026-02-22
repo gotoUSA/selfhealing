@@ -8,11 +8,9 @@ causation_chain, evidence_hash 필드가 올바르게 생성되는지 테스트�
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from unittest import mock
 
 import pytest
-
 
 # =============================================================================
 # 공통 Fixture: generate_postmortem_data의 무거운 의존성 Mock
@@ -368,7 +366,6 @@ class TestDeepLinksWithCascadeEvent:
     def test_audit_evidence_link_generated_with_cascade_event(self, mock_get_auditor):
         """CascadeEvent가 있을 때 audit_evidence_link가 생성됨."""
         from selfhealing.audit.cascade_event import (
-            CascadeEffect,
             CascadeEvent,
             CascadeTrigger,
         )

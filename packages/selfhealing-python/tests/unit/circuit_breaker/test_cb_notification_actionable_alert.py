@@ -11,7 +11,6 @@ Actionable Alert: 신중한 보수주의
 """
 
 import os
-import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -245,7 +244,9 @@ class TestActionableUrls:
 
     def test_to_dict(self):
         """to_dict 메서드 테스트."""
-        from selfhealing.services.circuit_breaker.actionable_alert_urls import ActionableUrls
+        from selfhealing.services.circuit_breaker.actionable_alert_urls import (
+            ActionableUrls,
+        )
 
         urls = ActionableUrls(
             dashboard_url="https://dashboard.test",
@@ -261,14 +262,18 @@ class TestActionableUrls:
 
     def test_has_any_url_true(self):
         """has_any_url이 True인 경우 테스트."""
-        from selfhealing.services.circuit_breaker.actionable_alert_urls import ActionableUrls
+        from selfhealing.services.circuit_breaker.actionable_alert_urls import (
+            ActionableUrls,
+        )
 
         urls = ActionableUrls(dashboard_url="https://test.com")
         assert urls.has_any_url() is True
 
     def test_has_any_url_false(self):
         """has_any_url이 False인 경우 테스트."""
-        from selfhealing.services.circuit_breaker.actionable_alert_urls import ActionableUrls
+        from selfhealing.services.circuit_breaker.actionable_alert_urls import (
+            ActionableUrls,
+        )
 
         urls = ActionableUrls()
         assert urls.has_any_url() is False
@@ -316,9 +321,9 @@ class TestCBNotificationHandlerActionableUrls:
             reset_actionable_alert_url_builder,
         )
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_opened_notify,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_opened_notify,
         )
 
         # 환경변수 설정
@@ -351,9 +356,9 @@ class TestCBNotificationHandlerActionableUrls:
             reset_actionable_alert_url_builder,
         )
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_opened_notify,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_opened_notify,
         )
 
         # 환경변수 제거
@@ -388,10 +393,10 @@ class TestSlackBlockKitFormatter:
     def test_format_cb_slack_blocks_structure(self):
         """Slack Block Kit 메시지 구조 확인."""
         from selfhealing.services.unified_notification import (
-            format_cb_slack_blocks,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            format_cb_slack_blocks,
         )
 
         payload = NotificationPayload(
@@ -434,10 +439,10 @@ class TestSlackBlockKitFormatter:
     def test_format_cb_slack_blocks_without_urls(self):
         """Actionable URL이 없는 경우 버튼이 생성되지 않는지 확인."""
         from selfhealing.services.unified_notification import (
-            format_cb_slack_blocks,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            format_cb_slack_blocks,
         )
 
         payload = NotificationPayload(
@@ -465,10 +470,10 @@ class TestSlackBlockKitFormatter:
     def test_format_cb_slack_blocks_with_trace_url(self):
         """Trace URL이 있을 때 Jaeger 링크가 포함되는지 확인."""
         from selfhealing.services.unified_notification import (
-            format_cb_slack_blocks,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            format_cb_slack_blocks,
         )
 
         payload = NotificationPayload(
@@ -502,10 +507,10 @@ class TestSlackBlockKitFormatter:
     def test_format_cb_slack_blocks_priority_emoji(self):
         """우선순위별 이모지 매핑 확인."""
         from selfhealing.services.unified_notification import (
-            format_cb_slack_blocks,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            format_cb_slack_blocks,
         )
 
         test_cases = [
@@ -534,10 +539,10 @@ class TestSlackBlockKitFormatter:
     def test_admin_button_has_primary_style(self):
         """Admin Panel 버튼에 primary 스타일이 적용되는지 확인."""
         from selfhealing.services.unified_notification import (
-            format_cb_slack_blocks,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            format_cb_slack_blocks,
         )
 
         payload = NotificationPayload(
@@ -566,7 +571,9 @@ class TestFormatCBNotificationWithActions:
 
     def test_function_exists(self):
         """format_cb_notification_with_actions 함수가 존재하는지 확인."""
-        from selfhealing.services.unified_notification import format_cb_notification_with_actions
+        from selfhealing.services.unified_notification import (
+            format_cb_notification_with_actions,
+        )
 
         assert callable(format_cb_notification_with_actions)
 
@@ -574,10 +581,10 @@ class TestFormatCBNotificationWithActions:
     def test_emergency_level_escalation_applied(self, mock_manager):
         """Emergency Level에 따른 우선순위 에스컬레이션이 적용되는지 확인."""
         from selfhealing.services.unified_notification import (
-            format_cb_notification_with_actions,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            format_cb_notification_with_actions,
         )
 
         mock_em = MagicMock()
@@ -602,10 +609,10 @@ class TestFormatCBNotificationWithActions:
     def test_handles_import_error_gracefully(self):
         """EmergencyModeManager import 실패 시 graceful 처리 확인."""
         from selfhealing.services.unified_notification import (
-            format_cb_notification_with_actions,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            format_cb_notification_with_actions,
         )
 
         with patch(

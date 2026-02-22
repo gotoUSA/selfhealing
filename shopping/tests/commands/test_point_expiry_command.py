@@ -6,7 +6,7 @@
 
 from datetime import timedelta
 from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command

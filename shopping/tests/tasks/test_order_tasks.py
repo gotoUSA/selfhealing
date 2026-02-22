@@ -5,12 +5,9 @@ Phase 2: Task 2-1에서 구현한 process_order_heavy_tasks 테스트
 """
 
 import pytest
-from decimal import Decimal
-from unittest.mock import patch
 
 from shopping.models.cart import Cart, CartItem
-from shopping.models.order import Order, OrderItem
-from shopping.models.product import Product
+from shopping.models.order import Order
 from shopping.tasks.order_tasks import process_order_heavy_tasks
 
 

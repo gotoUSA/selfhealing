@@ -9,7 +9,6 @@ Unit tests for TokenBucket and RateController.
 - RateController AIMD Rate 조절
 """
 
-import threading
 import time
 from unittest.mock import patch
 

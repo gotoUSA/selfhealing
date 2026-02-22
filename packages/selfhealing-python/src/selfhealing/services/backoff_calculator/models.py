@@ -7,7 +7,7 @@ Dataclasses and value types for the backoff calculator package.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from selfhealing.settings import get_config
 
@@ -88,7 +88,7 @@ class GlobalThrottleState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "GlobalThrottleState":
+    def from_dict(cls, data: dict) -> GlobalThrottleState:
         """딕셔너리에서 객체 생성."""
         return cls(
             cluster_avg_rtt_ms=data.get("cluster_avg_rtt_ms", 0.0),

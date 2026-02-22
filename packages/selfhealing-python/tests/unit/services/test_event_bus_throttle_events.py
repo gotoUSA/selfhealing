@@ -8,9 +8,8 @@ Throttle 이벤트 4종:
 - THROTTLE_LIMIT_RECOVERED: limit 정상 범위 회복
 """
 
-import pytest
 
-from selfhealing.services.event_bus import EventType, SelfHealingEvent, EventPriority
+from selfhealing.services.event_bus import EventPriority, EventType, SelfHealingEvent
 
 
 class TestThrottleEventTypes:

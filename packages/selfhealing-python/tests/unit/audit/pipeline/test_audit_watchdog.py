@@ -25,10 +25,10 @@ import pytest
 
 from selfhealing.audit.audit_watchdog import (
     AuditWatchdog,
-    HeartbeatTarget,
-    WatchdogChecker,
     AuditWatchdogConfig,
     AuditWatchdogStatus,
+    HeartbeatTarget,
+    WatchdogChecker,
     WatchdogStats,
     get_watchdog,
     start_watchdog,
@@ -258,7 +258,7 @@ class TestAuditWatchdogLocalFile:
             # 파일이 생성되었는지 확인
             assert os.path.exists(heartbeat_file)
 
-            with open(heartbeat_file, "r") as f:
+            with open(heartbeat_file) as f:
                 data = json.load(f)
 
             assert "timestamp" in data
@@ -270,8 +270,8 @@ class TestAuditWatchdogLocalFile:
 
     def test_local_file_invalid_path(self):
         """잘못된 경로에 로컬 파일 heartbeat 테스트."""
-        import tempfile
         import os
+        import tempfile
 
         # Windows/Linux 모두에서 실패하는 경로 사용
         # 존재하지 않는 드라이브/디렉토리 조합

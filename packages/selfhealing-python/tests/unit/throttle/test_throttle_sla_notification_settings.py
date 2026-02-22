@@ -15,7 +15,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 # 환경변수 prefix 상수
 SETTINGS_ENV_PREFIX = "SELFHEALING_THROTTLE_SLA_NOTIFICATION"
 

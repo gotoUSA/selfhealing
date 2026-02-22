@@ -12,7 +12,6 @@ Note: Uses in-memory repositories for parallel execution.
 
 import pytest
 from datetime import timedelta
-from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
 from selfhealing.core.timezone import now
@@ -30,7 +29,6 @@ from .conftest import (
     InMemoryFailedOperationRepository,
     MockUser,
     MockOrder,
-    MockPayment,
 )
 
 

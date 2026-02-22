@@ -14,8 +14,6 @@ import pytest
 from django.utils import timezone
 from rest_framework import status
 
-from shopping.models.order import Order
-from shopping.models.payment import Payment
 from shopping.models.point import PointHistory
 from shopping.tests.factories import (
     CartFactory,

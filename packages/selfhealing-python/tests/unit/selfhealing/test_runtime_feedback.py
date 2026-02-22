@@ -5,59 +5,56 @@ Stage 36: 실시간 메트릭 기반 자율 튜닝 시스템 테스트
 패키지 내부 테스트용
 """
 
-import pytest
 from unittest.mock import Mock
 
-from selfhealing.core.runtime_feedback import (
-    RuntimeFeedbackLoop,
-    FeedbackLoopState,
-)
-from selfhealing.core.decision_engine import (
-    DecisionEngine,
-    AdjustmentDecision,
-    AdjustmentPriority,
-)
-from selfhealing.core.safety_bounds import SafetyBounds
+from selfhealing.adapters.metrics.auto_tuning_adapter import MockMetricsAdapter
 from selfhealing.core.auto_rollback_guard import (
     AutoRollbackGuard,
     GuardState,
     RollbackSeverity,
 )
+from selfhealing.core.decision_engine import (
+    DecisionEngine,
+)
+from selfhealing.core.runtime_feedback import (
+    FeedbackLoopState,
+    RuntimeFeedbackLoop,
+)
+from selfhealing.core.safety_bounds import SafetyBounds
 from selfhealing.services.auto_tuning.adjustment_recorder import AdjustmentRecorder
 from selfhealing.services.auto_tuning.models import TuningState
-from selfhealing.adapters.metrics.auto_tuning_adapter import MockMetricsAdapter
 
 
 class TestSafetyBounds:
     """SafetyBounds 테스트"""
-    
+
     def test_default_bounds_exist(self):
         """기본 한계 설정 존재 확인"""
         bounds = SafetyBounds()
         assert bounds.get_bounds("timeout_ms") is not None
         assert bounds.get_bounds("retry_count") is not None
-    
+
     def test_within_bounds_valid(self):
         """유효한 범위 내 값 확인"""
         bounds = SafetyBounds()
         assert bounds.is_within_bounds("timeout_ms", 5000)
-    
+
     def test_within_bounds_invalid_too_low(self):
         """최소값 미만 거부"""
         bounds = SafetyBounds()
         assert not bounds.is_within_bounds("timeout_ms", 50)
-    
+
     def test_within_bounds_invalid_too_high(self):
         """최대값 초과 거부"""
         bounds = SafetyBounds()
         assert not bounds.is_within_bounds("timeout_ms", 50000)
-    
+
     def test_change_ratio_limit(self):
         """변경폭 제한 확인"""
         bounds = SafetyBounds()
         assert bounds.is_within_bounds("timeout_ms", 6000, current_value=5000)  # 20% OK
         assert not bounds.is_within_bounds("timeout_ms", 8000, current_value=5000)  # 60% 거부
-    
+
     def test_clamp_to_bounds(self):
         """범위 내 클램핑"""
         bounds = SafetyBounds()
@@ -67,14 +64,14 @@ class TestSafetyBounds:
 
 class TestDecisionEngine:
     """DecisionEngine 테스트"""
-    
+
     def setup_method(self):
         self.config_provider = Mock()
         self.config_provider.get = Mock(side_effect=lambda key, default=None: {
             "timeout_ms": 5000.0,
             "retry_count": 3.0,
         }.get(key, default))
-    
+
     def test_no_adjustment_needed(self):
         """조정 불필요 상황"""
         engine = DecisionEngine(self.config_provider)
@@ -82,7 +79,7 @@ class TestDecisionEngine:
         decisions = engine.analyze(metrics)
         timeout_decisions = [d for d in decisions if d.parameter == "timeout_ms"]
         assert len(timeout_decisions) == 0
-    
+
     def test_timeout_adjustment_needed(self):
         """타임아웃 조정 필요 상황"""
         engine = DecisionEngine(self.config_provider)
@@ -91,7 +88,7 @@ class TestDecisionEngine:
         timeout_decisions = [d for d in decisions if d.parameter == "timeout_ms"]
         assert len(timeout_decisions) == 1
         assert timeout_decisions[0].suggested_value == 6000.0
-    
+
     def test_disabled_engine(self):
         """비활성화 상태"""
         engine = DecisionEngine(self.config_provider, enabled=False)
@@ -102,14 +99,14 @@ class TestDecisionEngine:
 
 class TestAdjustmentRecorder:
     """AdjustmentRecorder 테스트"""
-    
+
     def test_record_adjustment(self):
         """조정 기록"""
         recorder = AdjustmentRecorder()
         record = recorder.record("timeout_ms", 5000, 6000, "reason")
         assert record.parameter == "timeout_ms"
         assert record.old_value == 5000
-    
+
     def test_mark_rollback(self):
         """롤백 마킹"""
         recorder = AdjustmentRecorder()
@@ -117,7 +114,7 @@ class TestAdjustmentRecorder:
         recorder.mark_rollback(record.record_id)
         updated = recorder.get_record(record.record_id)
         assert updated.rollback_performed is True
-    
+
     def test_session_management(self):
         """세션 관리"""
         recorder = AdjustmentRecorder()
@@ -130,14 +127,14 @@ class TestAdjustmentRecorder:
 
 class TestMockMetricsAdapter:
     """MockMetricsAdapter 테스트"""
-    
+
     def test_fetch_metrics(self):
         """메트릭 조회"""
         adapter = MockMetricsAdapter()
         metrics = adapter.fetch_current_metrics()
         assert "error_rate" in metrics
         assert "p99_latency_ms" in metrics
-    
+
     def test_simulate_degradation(self):
         """저하 시뮬레이션"""
         adapter = MockMetricsAdapter()
@@ -148,7 +145,7 @@ class TestMockMetricsAdapter:
 
 class TestAutoRollbackGuard:
     """AutoRollbackGuard 테스트"""
-    
+
     def setup_method(self):
         self.metrics_provider = Mock()
         self.metrics_provider.get_error_rate = Mock(return_value=0.02)
@@ -156,7 +153,7 @@ class TestAutoRollbackGuard:
         self.metrics_provider.get_throughput = Mock(return_value=1000)
         self.config_applier = Mock()
         self.config_applier.apply = Mock(return_value=True)
-    
+
     def test_initial_state(self):
         """초기 상태"""
         guard = AutoRollbackGuard(
@@ -165,7 +162,7 @@ class TestAutoRollbackGuard:
             enabled=False,
         )
         assert guard.state == GuardState.INACTIVE
-    
+
     def test_degradation_assessment(self):
         """저하 수준 평가"""
         guard = AutoRollbackGuard(
@@ -174,7 +171,7 @@ class TestAutoRollbackGuard:
         )
         assert guard._assess_degradation(0.02, 200) == RollbackSeverity.NONE
         assert guard._assess_degradation(0.35, 12000) == RollbackSeverity.CRITICAL
-    
+
     def test_start_stop(self):
         """시작/중지"""
         guard = AutoRollbackGuard(
@@ -190,7 +187,7 @@ class TestAutoRollbackGuard:
 
 class TestRuntimeFeedbackLoop:
     """RuntimeFeedbackLoop 테스트"""
-    
+
     def setup_method(self):
         self.metrics_adapter = MockMetricsAdapter()
         self.config_provider = Mock()
@@ -204,7 +201,7 @@ class TestRuntimeFeedbackLoop:
         self.decision_engine = DecisionEngine(self.config_provider)
         self.safety_bounds = SafetyBounds()
         self.audit_adapter = Mock()
-    
+
     def test_initial_state(self):
         """초기 상태"""
         loop = RuntimeFeedbackLoop(
@@ -217,7 +214,7 @@ class TestRuntimeFeedbackLoop:
             enabled=False,
         )
         assert loop.state == FeedbackLoopState.STOPPED
-    
+
     def test_start_stop(self):
         """시작/중지"""
         loop = RuntimeFeedbackLoop(
@@ -233,7 +230,7 @@ class TestRuntimeFeedbackLoop:
         assert loop.state == FeedbackLoopState.RUNNING
         loop.stop()
         assert loop.state == FeedbackLoopState.STOPPED
-    
+
     def test_pause_resume(self):
         """일시정지/재개"""
         loop = RuntimeFeedbackLoop(
@@ -250,7 +247,7 @@ class TestRuntimeFeedbackLoop:
         loop.resume()
         assert loop.state == FeedbackLoopState.RUNNING
         loop.stop()
-    
+
     def test_get_status(self):
         """상태 조회"""
         loop = RuntimeFeedbackLoop(

@@ -295,7 +295,7 @@ class WriteAheadLog(
 
             self._current_file = None
 
-    def __enter__(self) -> "WriteAheadLog":
+    def __enter__(self) -> WriteAheadLog:
         return self
 
     def __exit__(self, *args: Any) -> None:

@@ -8,7 +8,6 @@ Risk Covered: R-015 (Thundering herd from identical retry times)
 """
 
 import statistics
-from collections import Counter
 
 import pytest
 

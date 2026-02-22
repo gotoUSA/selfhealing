@@ -6,18 +6,18 @@ Phase 3: StateRefresherConfig, EmergencyStateRefresher 단위 테스트.
 Reference: docs/self_healing/middleware_system/74_CANARY_SAFETY_INTERLOCK.md
 """
 
-import pytest
 from unittest.mock import MagicMock
 
-from selfhealing.services.canary.state_refresher import (
-    StateRefresherConfig,
-    EmergencyStateRefresher,
-)
+import pytest
+
 from selfhealing.services.canary.interlock import (
     CanarySafetyInterlock,
 )
+from selfhealing.services.canary.state_refresher import (
+    EmergencyStateRefresher,
+    StateRefresherConfig,
+)
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
-
 
 # =============================================================================
 # Fixtures
@@ -54,7 +54,7 @@ class TestStateRefresherConfig:
     def test_default_values(self):
         """기본값 확인."""
         config = StateRefresherConfig()
-        
+
         assert config.refresh_interval_seconds == 30
         assert config.jitter_max_seconds == 5
         assert config.enabled is True
@@ -70,7 +70,7 @@ class TestStateRefresherConfig:
             on_refresh_failure_action="fail_closed",
             max_consecutive_failures=5,
         )
-        
+
         assert config.refresh_interval_seconds == 60
         assert config.jitter_max_seconds == 10
         assert config.enabled is False
@@ -89,7 +89,7 @@ class TestEmergencyStateRefresher:
     def test_init_with_defaults(self):
         """기본값으로 초기화."""
         refresher = EmergencyStateRefresher()
-        
+
         assert refresher.is_running is False
         assert refresher.last_known_levels == {}
 
@@ -97,16 +97,16 @@ class TestEmergencyStateRefresher:
         """설정과 함께 초기화."""
         config = StateRefresherConfig(refresh_interval_seconds=60)
         refresher = EmergencyStateRefresher(config=config)
-        
+
         assert refresher._config.refresh_interval_seconds == 60
 
     def test_start_when_disabled(self):
         """비활성화 상태에서 start() 호출 시 False 반환."""
         config = StateRefresherConfig(enabled=False)
         refresher = EmergencyStateRefresher(config=config)
-        
+
         result = refresher.start()
-        
+
         assert result is False
         assert refresher.is_running is False
 
@@ -117,16 +117,16 @@ class TestEmergencyStateRefresher:
             refresh_interval_seconds=100,  # 길게 설정
         )
         refresher = EmergencyStateRefresher(config=config)
-        
+
         # 시작
         result = refresher.start()
         assert result is True
         assert refresher.is_running is True
-        
+
         # 중복 시작 시도
         result2 = refresher.start()
         assert result2 is False
-        
+
         # 중지
         refresher.stop()
         assert refresher.is_running is False
@@ -134,9 +134,9 @@ class TestEmergencyStateRefresher:
     def test_force_refresh_without_interlock(self):
         """safety_interlock 없이 force_refresh 호출."""
         refresher = EmergencyStateRefresher()
-        
+
         result = refresher.force_refresh()
-        
+
         assert result is None
 
     def test_force_refresh_with_mock_interlock(self, mock_tracker):
@@ -144,17 +144,17 @@ class TestEmergencyStateRefresher:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.NORMAL, namespace="test"
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
         refresher = EmergencyStateRefresher(safety_interlock=interlock)
-        
+
         # 초기 상태 설정
         refresher._last_known_level["test"] = 0
-        
+
         result = refresher.force_refresh()
-        
+
         # 레벨 변경 없으므로 None
         assert result is None
         assert refresher.last_known_levels["test"] == 0
@@ -164,23 +164,23 @@ class TestEmergencyStateRefresher:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_2, namespace="test"
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
         mock_service = MagicMock()
         mock_service.get_active_rollouts.return_value = []
-        
+
         refresher = EmergencyStateRefresher(
             safety_interlock=interlock,
             canary_service=mock_service,
         )
-        
+
         # 이전 상태: NORMAL (0)
         refresher._last_known_level["test"] = 0
-        
+
         result = refresher.force_refresh()
-        
+
         # 레벨 상승 감지됨
         assert result is not None
         assert refresher.last_known_levels["test"] == 2
@@ -192,10 +192,10 @@ class TestEmergencyStateRefresher:
         mock_rollout2 = MagicMock(id="rollout-2")
         mock_service.get_active_rollouts.return_value = [mock_rollout1, mock_rollout2]
         mock_service.pause.return_value = True
-        
+
         refresher = EmergencyStateRefresher(canary_service=mock_service)
-        
+
         count = refresher._pause_all_active_rollouts(reason="Test reason")
-        
+
         assert count == 2
         assert mock_service.pause.call_count == 2

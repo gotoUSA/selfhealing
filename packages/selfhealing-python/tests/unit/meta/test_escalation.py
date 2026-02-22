@@ -4,10 +4,8 @@ EscalationManager 테스트.
 PagerDuty, Slack 에스컬레이션 테스트.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest import mock
-
-import pytest
 
 from selfhealing.meta.config import MetaWatchdogSettings
 from selfhealing.meta.escalation import (

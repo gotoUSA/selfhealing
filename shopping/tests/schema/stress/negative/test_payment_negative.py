@@ -5,7 +5,6 @@
 TestPaymentNegativeInputs: 결제 API에 잘못된 입력 주입
 """
 
-import json
 
 import pytest
 from rest_framework import status

@@ -19,7 +19,6 @@ Self-Healing 시스템이 올바르게 동작하는지 검증합니다.
 import os
 import time
 import json
-import threading
 from datetime import datetime
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
@@ -677,7 +676,7 @@ class TestStage39ContainerRestart:
             return http_client.health_check()
 
         # 재시작과 동시에 요청 전송
-        print(f"\n[CHAOS] Restarting container while sending requests...")
+        print("\n[CHAOS] Restarting container while sending requests...")
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             # 재시작 시작
@@ -798,7 +797,7 @@ class TestStage39ContainerPause:
         """
         metrics = ChaosTestMetrics(test_name="rapid_pause_flapping")
 
-        print(f"\n[CHAOS] Starting rapid pause/unpause cycle...")
+        print("\n[CHAOS] Starting rapid pause/unpause cycle...")
 
         flap_count = 5
         for i in range(flap_count):
@@ -874,7 +873,7 @@ class TestStage39RapidRestartLoop:
         """
         metrics = ChaosTestMetrics(test_name="rapid_restarts")
 
-        print(f"\n[CHAOS] Starting rapid restart cycle...")
+        print("\n[CHAOS] Starting rapid restart cycle...")
 
         restart_count = 3
         for i in range(restart_count):

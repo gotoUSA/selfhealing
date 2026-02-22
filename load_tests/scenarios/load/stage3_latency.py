@@ -28,7 +28,6 @@ Reference:
 import os
 import sys
 import uuid
-from datetime import datetime
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(os.path.dirname(_current_dir))
@@ -37,7 +36,6 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 import time
-import random
 from locust import HttpUser, task, between, tag, events
 
 from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
@@ -171,7 +169,7 @@ class LatencyUser(HttpUser):
                 else:
                     response.failure(f"Admin login failed: {response.status_code}")
                     return False
-        except Exception as e:
+        except Exception:
             return False
 
     def _get_admin_headers(self) -> dict:
@@ -280,7 +278,7 @@ class LatencyUser(HttpUser):
                     if latency_injected:
                         _latency_stats["recovery_failure"] += 1
 
-        except Exception as e:
+        except Exception:
             _latency_stats["timeout_count"] += 1
             if latency_injected:
                 _latency_stats["recovery_failure"] += 1
@@ -643,7 +641,7 @@ class LatencyUser(HttpUser):
                 else:
                     response.failure(f"Recovery failed: {response.status_code}")
                     _latency_stats["recovery_failure"] += 1
-        except Exception as e:
+        except Exception:
             _latency_stats["timeout_count"] += 1
             _latency_stats["recovery_failure"] += 1
 
@@ -698,7 +696,7 @@ class LatencyUser(HttpUser):
                             _healing_action_stats["cb_force_open"]["verified"] += 1
                             # CB OPEN 상태에서 결제 요청을 보내 503 확인
                             self._verify_cb_blocking()
-                except Exception as e:
+                except Exception:
                     # 파싱 실패 시에도 200이면 성공으로 간주
                     _healing_action_stats["cb_force_open"]["success"] += 1
             elif response.status_code in [403, 429]:
@@ -1353,48 +1351,48 @@ def on_test_stop(environment, **kwargs):
     cb_open = _healing_action_stats["cb_force_open"]
     cb_close = _healing_action_stats["cb_force_close"]
     
-    print(f"\n[CB] Circuit Breaker Actions:")
-    print(f"   [FORCE OPEN]")
+    print("\n[CB] Circuit Breaker Actions:")
+    print("   [FORCE OPEN]")
     print(f"      - 시도: {cb_open['attempts']}")
     print(f"      - 성공: {cb_open['success']}")
     print(f"      - 검증(실제 OPEN 확인): {cb_open['verified']}")
     
-    print(f"   [FORCE CLOSE]")
+    print("   [FORCE CLOSE]")
     print(f"      - 시도: {cb_close['attempts']}")
     print(f"      - 성공: {cb_close['success']}")
     print(f"      - 검증(실제 CLOSED 확인): {cb_close['verified']}")
     
-    print(f"   [CB에 의한 요청 차단 (503)]")
+    print("   [CB에 의한 요청 차단 (503)]")
     print(f"      - 차단된 요청 수: {_healing_action_stats['blocked_by_cb']}")
     
     # =========================================================================
     # 🆕 NEW: CB 고급 기능 테스트 결과
     # =========================================================================
-    print(f"\n[CB-ADVANCED] Circuit Breaker Advanced Features:")
+    print("\n[CB-ADVANCED] Circuit Breaker Advanced Features:")
     
     # CB 자동 OPEN (record_failure 기반)
     cb_auto = _healing_action_stats["cb_auto_open"]
-    print(f"   [AUTO OPEN via Failures]")
+    print("   [AUTO OPEN via Failures]")
     print(f"      - 시도: {cb_auto['attempts']}")
     print(f"      - 성공: {cb_auto['success']}")
     print(f"      - 검증: {cb_auto['verified']}")
     
     # Rate Limit Cascade
     rlc = _healing_action_stats["rate_limit_cascade"]
-    print(f"   [RATE LIMIT CASCADE]")
+    print("   [RATE LIMIT CASCADE]")
     print(f"      - 체크 횟수: {rlc['attempts']}")
     print(f"      - Cascade 감지: {rlc['detected']}")
     print(f"      - CB 자동 트리거: {rlc['cb_triggered']}")
     
     # Self-DDoS Protection
     sddos = _healing_action_stats["self_ddos_protection"]
-    print(f"   [SELF-DDOS PROTECTION]")
+    print("   [SELF-DDOS PROTECTION]")
     print(f"      - 체크 횟수: {sddos['checks']}")
     print(f"      - 백오프 권고: {sddos['backoff_suggested']}")
     
     # Fallback Strategy
     fb = _healing_action_stats["cb_fallback"]
-    print(f"   [FALLBACK STRATEGY]")
+    print("   [FALLBACK STRATEGY]")
     print(f"      - 체크 횟수: {fb['checks']}")
     print(f"      - Cache 사용: {fb['cache_used']}")
     print(f"      - DLQ 사용: {fb['dlq_used']}")
@@ -1402,14 +1400,14 @@ def on_test_stop(environment, **kwargs):
     
     # Half-Open Transition
     ho = _healing_action_stats["half_open_transition"]
-    print(f"   [HALF-OPEN TRANSITION]")
+    print("   [HALF-OPEN TRANSITION]")
     print(f"      - 체크 횟수: {ho['attempts']}")
     print(f"      - 전환 감지: {ho['success']}")
     print(f"      - 자동 복구 감지: {_healing_action_stats['cb_auto_recovery']['detected']}")
     
     # DLQ 실제 동작
     dlq = _healing_action_stats["dlq_created"]
-    print(f"\n[DLQ] Dead Letter Queue Actions:")
+    print("\n[DLQ] Dead Letter Queue Actions:")
     print(f"   - Create Attempts: {dlq['attempts']}")
     print(f"   - Create Success: {dlq['success']}")
     print(f"   - Items Found on List: {_healing_action_stats['dlq_items_found']}")
@@ -1417,18 +1415,18 @@ def on_test_stop(environment, **kwargs):
     # Emergency Mode 실제 동작
     em_trigger = _healing_action_stats["emergency_trigger"]
     em_release = _healing_action_stats["emergency_release"]
-    print(f"\n[EMERGENCY] Emergency Mode Actions:")
-    print(f"   [TRIGGER]")
+    print("\n[EMERGENCY] Emergency Mode Actions:")
+    print("   [TRIGGER]")
     print(f"      - 시도: {em_trigger['attempts']}")
     print(f"      - 성공: {em_trigger['success']}")
-    print(f"   [RELEASE]")
+    print("   [RELEASE]")
     print(f"      - 시도: {em_release['attempts']}")
     print(f"      - 성공: {em_release['success']}")
     print(f"   [활성화 감지]: {_selfhealing_stats['emergency_mode']['active_detected']}")
     
     # 서버 장애 주입
     fault = _healing_action_stats["server_fault_inject"]
-    print(f"\n[CHAOS] Server Fault Injection:")
+    print("\n[CHAOS] Server Fault Injection:")
     print(f"   - Attempts: {fault['attempts']}")
     print(f"   - Success: {fault['success']}")
 
@@ -1440,7 +1438,7 @@ def on_test_stop(environment, **kwargs):
     health = _selfhealing_stats["health_checks"]
     health_total = health["success"] + health["failure"]
     health_rate = (health["success"] / health_total * 100) if health_total > 0 else 0
-    print(f"\n   [HEALTH] Health Checks:")
+    print("\n   [HEALTH] Health Checks:")
     print(f"      - Total: {health_total}")
     print(f"      - Success: {health['success']}")
     print(f"      - Failure: {health['failure']}")
@@ -1448,21 +1446,21 @@ def on_test_stop(environment, **kwargs):
 
     # Circuit Breaker 모니터링
     cb = _selfhealing_stats["circuit_breaker"]
-    print(f"\n   [CB] Circuit Breaker Monitoring:")
+    print("\n   [CB] Circuit Breaker Monitoring:")
     print(f"      - Status Checks: {cb['status_checks']}")
     print(f"      - Pool Status Checks: {cb['pool_status_checks']}")
     print(f"      - Recovery Transitions Detected: {cb['recovery_transitions']}")
 
     # L2 Storage
     l2 = _selfhealing_stats["l2_storage"]
-    print(f"\n   [L2] L2 Storage:")
+    print("\n   [L2] L2 Storage:")
     print(f"      - Status Checks: {l2['status_checks']}")
     print(f"      - Healthy: {l2['healthy']}")
     print(f"      - Degraded: {l2['degraded']}")
 
     # Error Budget
     eb = _selfhealing_stats["error_budget"]
-    print(f"\n   [BUDGET] Error Budget:")
+    print("\n   [BUDGET] Error Budget:")
     print(f"      - Checks: {eb['checks']}")
     if eb["remaining_percent"]:
         avg_remaining = sum(eb["remaining_percent"]) / len(eb["remaining_percent"])
@@ -1481,7 +1479,7 @@ def on_test_stop(environment, **kwargs):
         p95_idx = int(len(sorted_latencies) * 0.95)
         p95_latency = sorted_latencies[p95_idx] if p95_idx < len(sorted_latencies) else max_latency
         
-        print(f"\n   [LATENCY] Recovery Latency Metrics:")
+        print("\n   [LATENCY] Recovery Latency Metrics:")
         print(f"      - Samples: {len(latencies)}")
         print(f"      - Avg: {avg_latency:.1f}ms")
         print(f"      - Min: {min_latency:.1f}ms")
@@ -1489,14 +1487,14 @@ def on_test_stop(environment, **kwargs):
         print(f"      - P95: {p95_latency:.1f}ms")
         
         if max_latency < 2000:
-            print(f"      [PASS] SLA Status: Under 2s threshold")
+            print("      [PASS] SLA Status: Under 2s threshold")
         else:
-            print(f"      [WARN] SLA Status: Exceeded 2s threshold")
+            print("      [WARN] SLA Status: Exceeded 2s threshold")
 
     # 전체 통계
     collector = get_metrics_collector()
     summary = collector.get_summary()
-    print(f"\n[OVERALL] Overall Metrics:")
+    print("\n[OVERALL] Overall Metrics:")
     print(f"   - Total Requests: {summary['total_requests']}")
     print(f"   - Error Rate: {summary['overall_error_rate']}%")
     
@@ -1516,7 +1514,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   [PASS] [1/10] CB Force OPEN: VERIFIED ({cb_open['verified']} confirmed)")
     else:
-        print(f"   [FAIL] [1/10] CB Force OPEN: NOT VERIFIED")
+        print("   [FAIL] [1/10] CB Force OPEN: NOT VERIFIED")
     
     # 2. CB Force CLOSE (Recovery) 동작
     cb_close_ok = cb_close['verified'] > 0
@@ -1524,7 +1522,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   [PASS] [2/10] CB Force CLOSE: VERIFIED ({cb_close['verified']} confirmed)")
     else:
-        print(f"   [FAIL] [2/10] CB Force CLOSE: NOT VERIFIED")
+        print("   [FAIL] [2/10] CB Force CLOSE: NOT VERIFIED")
     
     # 3. DLQ 생성 동작
     dlq_ok = dlq['success'] > 0
@@ -1532,7 +1530,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   [PASS] [3/10] DLQ Create: SUCCESS ({dlq['success']} created)")
     else:
-        print(f"   [N/A]  [3/10] DLQ Create: NOT AVAILABLE (API or permission issue)")
+        print("   [N/A]  [3/10] DLQ Create: NOT AVAILABLE (API or permission issue)")
     
     # 4. Emergency Mode 동작
     em_ok = em_trigger['success'] > 0
@@ -1540,7 +1538,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   [PASS] [4/10] Emergency Mode: TRIGGERED ({em_trigger['success']} times)")
     else:
-        print(f"   [N/A]  [4/10] Emergency Mode: NOT AVAILABLE")
+        print("   [N/A]  [4/10] Emergency Mode: NOT AVAILABLE")
     
     # 5. CB에 의한 요청 차단 확인
     blocked = _healing_action_stats['blocked_by_cb']
@@ -1549,9 +1547,9 @@ def on_test_stop(environment, **kwargs):
         print(f"   [PASS] [5/10] CB Request Blocking: CONFIRMED ({blocked} blocked)")
     elif cb_open_ok:
         passed_tests += 1
-        print(f"   [PASS] [5/10] CB State Control: CB OPEN/CLOSE verified (503 N/A - architecture)")
+        print("   [PASS] [5/10] CB State Control: CB OPEN/CLOSE verified (503 N/A - architecture)")
     else:
-        print(f"   [N/A]  [5/10] CB Request Blocking: NOT OBSERVED")
+        print("   [N/A]  [5/10] CB Request Blocking: NOT OBSERVED")
     
     # 6. Recovery Rate (또는 Recovery Success)
     recovery_success = _latency_stats["recovery_success"]
@@ -1562,7 +1560,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   [PASS] [6/10] Recovery Success: {recovery_success} recoveries")
     elif total_injected == 0:
-        print(f"   [N/A]  [6/10] Recovery Rate: No latency injected")
+        print("   [N/A]  [6/10] Recovery Rate: No latency injected")
     else:
         print(f"   [FAIL] [6/10] Recovery Rate: {recovery_rate:.1f}% (below 70%)")
     
@@ -1576,7 +1574,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   [PASS] [7/10] CB Auto OPEN (failures): {cb_auto['verified']} verified, {cb_auto['success']} triggered")
     else:
-        print(f"   [N/A]  [7/10] CB Auto OPEN: API not available or test env only")
+        print("   [N/A]  [7/10] CB Auto OPEN: API not available or test env only")
     
     # 8. Rate Limit Cascade Detection
     rlc_ok = rlc['detected'] > 0 or rlc['cb_triggered'] > 0
@@ -1586,9 +1584,9 @@ def on_test_stop(environment, **kwargs):
     elif rlc['attempts'] > 0:
         # 시도는 했지만 cascade 없음 - 시스템이 안정적
         passed_tests += 1
-        print(f"   [PASS] [8/10] Rate Limit Cascade: No cascade (system stable)")
+        print("   [PASS] [8/10] Rate Limit Cascade: No cascade (system stable)")
     else:
-        print(f"   [N/A]  [8/10] Rate Limit Cascade: Not checked")
+        print("   [N/A]  [8/10] Rate Limit Cascade: Not checked")
     
     # 9. Self-DDoS Protection
     sddos_ok = sddos['checks'] > 0
@@ -1597,7 +1595,7 @@ def on_test_stop(environment, **kwargs):
         backoff_info = f", {sddos['backoff_suggested']} backoff suggested" if sddos['backoff_suggested'] > 0 else ""
         print(f"   [PASS] [9/10] Self-DDoS Protection: {sddos['checks']} checks{backoff_info}")
     else:
-        print(f"   [N/A]  [9/10] Self-DDoS Protection: Not checked")
+        print("   [N/A]  [9/10] Self-DDoS Protection: Not checked")
     
     # 10. Half-Open Transition
     ho_ok = ho['success'] > 0 or _healing_action_stats['cb_auto_recovery']['detected'] > 0
@@ -1607,9 +1605,9 @@ def on_test_stop(environment, **kwargs):
     elif ho['attempts'] > 0:
         # 시도는 했지만 HALF_OPEN 상태가 없음 - CB가 안정적
         passed_tests += 1
-        print(f"   [PASS] [10/10] Half-Open Transition: No OPEN CBs (system stable)")
+        print("   [PASS] [10/10] Half-Open Transition: No OPEN CBs (system stable)")
     else:
-        print(f"   [N/A]  [10/10] Half-Open Transition: Not checked")
+        print("   [N/A]  [10/10] Half-Open Transition: Not checked")
     
     print(f"\n   *** FINAL RESULT: {passed_tests}/{total_tests} tests passed ***")
     

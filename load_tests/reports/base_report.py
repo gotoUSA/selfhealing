@@ -269,7 +269,7 @@ class BaseReport(ABC):
         status_icon = "✅" if self.metrics.passed else "❌"
         status_text = "PASSED" if self.metrics.passed else "FAILED"
         
-        lines = [f"## 🎯 Result\n"]
+        lines = ["## 🎯 Result\n"]
         lines.append(f"**{status_icon} {status_text}**")
         
         if not self.metrics.passed and self.metrics.failure_reasons:

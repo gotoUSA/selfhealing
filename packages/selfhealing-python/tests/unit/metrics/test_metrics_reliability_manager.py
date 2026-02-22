@@ -3,9 +3,6 @@ Tests for Metric Reliability Manager.
 """
 
 import time
-from unittest.mock import Mock, patch
-
-import pytest
 
 
 class TestReliabilityLevel:
@@ -72,8 +69,8 @@ class TestMetricReliabilityState:
         """Should have correct default values."""
         from selfhealing.metrics.reliability_manager import (
             MetricReliabilityState,
-            ReliabilityLevel,
             OperatingMode,
+            ReliabilityLevel,
         )
 
         state = MetricReliabilityState(domain="payment")
@@ -162,8 +159,8 @@ class TestReliabilityManagerStateManagement:
         """Unknown reliability should default to strict operating mode."""
         from selfhealing.metrics.reliability_manager import (
             MetricReliabilityState,
-            ReliabilityLevel,
             OperatingMode,
+            ReliabilityLevel,
         )
 
         # Design philosophy: "모르면 일단 막아라"

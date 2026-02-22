@@ -4,8 +4,6 @@
 
 from datetime import datetime, timezone
 
-import pytest
-
 
 class TestIntegrationScenarios:
     """Integration tests for complete workflows."""
@@ -14,7 +12,7 @@ class TestIntegrationScenarios:
         """Test complete DLQ workflow using in-memory repositories."""
         from selfhealing.adapters.memory import InMemoryFailedOperationRepository
         from selfhealing.interfaces.repositories import FailedOperationStatus
-        
+
         repo = InMemoryFailedOperationRepository()
 
         # 1. Create failed operation
@@ -54,7 +52,7 @@ class TestIntegrationScenarios:
         """Test complete circuit breaker workflow."""
         from selfhealing.adapters.memory import InMemoryCircuitBreakerStateRepository
         from selfhealing.interfaces.repositories import CircuitBreakerStateEnum
-        
+
         repo = InMemoryCircuitBreakerStateRepository()
         service_name = "toss_payment_api"
 
@@ -99,7 +97,7 @@ class TestIntegrationScenarios:
         """Test complete security incident workflow."""
         from selfhealing.adapters.memory import InMemorySecurityIncidentRepository
         from selfhealing.interfaces.repositories import SecurityIncidentStatus
-        
+
         repo = InMemorySecurityIncidentRepository()
 
         # 1. Detect and record incident

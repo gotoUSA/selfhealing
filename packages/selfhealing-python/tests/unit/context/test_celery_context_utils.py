@@ -8,19 +8,26 @@ Celery 태스크 컨텍스트 통합 복원/정리 유틸리티 검증.
 
 from __future__ import annotations
 
-import contextvars
 import os
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from selfhealing.context.causation_context import (
+    CELERY_HEADER_CASCADE_ID,
+    CELERY_HEADER_CHAIN_DEPTH,
+    CELERY_HEADER_NAMESPACE,
+    CELERY_HEADER_PARENT_EVENT,
+    CausationContext,
+    _current_causation,
+)
 from selfhealing.context.celery_context_utils import (
+    _CAUSATION_TOKEN_ATTR,
+    _CONTEXT_TOKENS_ATTR,
     CONTEXT_CRITICALITY,
     ContextCriticality,
     SelfHealingContextError,
     TaskContextTokens,
-    _CAUSATION_TOKEN_ATTR,
-    _CONTEXT_TOKENS_ATTR,
     _cleanup_causation_context,
     _detect_causation_source,
     _get_task_request,
@@ -32,16 +39,7 @@ from selfhealing.context.celery_context_utils import (
     cleanup_all_task_context,
     restore_all_task_context,
 )
-from selfhealing.context.causation_context import (
-    CELERY_HEADER_CASCADE_ID,
-    CELERY_HEADER_CHAIN_DEPTH,
-    CELERY_HEADER_NAMESPACE,
-    CELERY_HEADER_PARENT_EVENT,
-    CausationContext,
-    _current_causation,
-)
 from selfhealing.context.cell_context import _current_cell_id
-
 
 # =============================================================================
 # 계약 검증 (Contract Tests)

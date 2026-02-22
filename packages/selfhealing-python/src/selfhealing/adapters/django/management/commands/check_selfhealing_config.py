@@ -24,9 +24,9 @@ Reference:
 
 import json
 import sys
-from typing import Any, Dict
+from typing import Any
 
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
@@ -101,11 +101,11 @@ class Command(BaseCommand):
         else:
             sys.exit(0)
 
-    def _output_json(self, data: Dict[str, Any]):
+    def _output_json(self, data: dict[str, Any]):
         """JSON 형식으로 출력."""
         self.stdout.write(json.dumps(data, indent=2, ensure_ascii=False))
 
-    def _output_text(self, data: Dict[str, Any], verbose: int, fatal_configs: Dict[str, set]):
+    def _output_text(self, data: dict[str, Any], verbose: int, fatal_configs: dict[str, set]):
         """텍스트 형식으로 출력."""
         self.stdout.write("")
         self.stdout.write("=" * 60)

@@ -5,7 +5,6 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 """
 
 import os
-import pytest
 from unittest.mock import patch
 
 
@@ -100,8 +99,8 @@ class TestQuarantineMode:
         """리셋하면 Quarantine Mode도 초기화."""
         from selfhealing.core.cluster_identity import (
             is_quarantine_mode,
-            set_quarantine_mode,
             reset_cluster_identity,
+            set_quarantine_mode,
         )
 
         set_quarantine_mode(True)
@@ -130,9 +129,9 @@ class TestPropagatorQuarantineMode:
         """Quarantine Mode에서는 전파가 차단됨."""
         from selfhealing.core.cluster_identity import set_quarantine_mode
         from selfhealing.services.config.propagator import (
-            GlobalConfigPropagator,
-            GlobalConfigChange,
             ConfigScope,
+            GlobalConfigChange,
+            GlobalConfigPropagator,
             PropagationTier,
         )
 

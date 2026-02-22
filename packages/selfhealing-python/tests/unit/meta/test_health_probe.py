@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.meta.config import MetaWatchdogSettings
 from selfhealing.meta.health_probe import (
     CircuitBreakerProbe,
     DLQProbe,

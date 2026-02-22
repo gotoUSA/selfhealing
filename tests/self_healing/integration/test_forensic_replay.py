@@ -15,14 +15,12 @@ Compliance:
 Note: Uses in-memory repositories for parallel execution.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 
-import pytest
 
 from selfhealing.core.timezone import now
-from selfhealing.services import ReplayResult
 
 from .conftest import (
     InMemoryFailedOperationRepository,

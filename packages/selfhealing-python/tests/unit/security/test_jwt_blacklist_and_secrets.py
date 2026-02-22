@@ -7,7 +7,6 @@ apps.py의 _register_jwt_blacklist_hook()과 _validate_secrets()의
 
 from __future__ import annotations
 
-from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,7 +15,6 @@ from selfhealing.adapters.django.apps import SelfHealingConfig
 from selfhealing.services.security.hooks import (
     get_session_invalidation_hooks,
 )
-
 
 # =============================================================================
 # Fixtures

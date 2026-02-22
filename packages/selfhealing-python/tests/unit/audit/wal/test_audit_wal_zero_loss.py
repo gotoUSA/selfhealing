@@ -9,10 +9,7 @@ WAL 기반 Zero-Loss 테스트
 """
 
 import os
-import tempfile
-import threading
-import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -189,7 +186,7 @@ class TestAuditSyncWorker:
     def test_sync_batch_with_mock_wal(self, tmp_path):
         """배치 동기화 테스트 (Mock WAL)."""
         from selfhealing.audit.sync_worker import AuditSyncWorker, SyncWorkerConfig
-        from selfhealing.audit.wal import WriteAheadLog, WALConfig
+        from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
         # 실제 WAL 생성
         wal_config = WALConfig(wal_dir=str(tmp_path / "wal"))
@@ -220,8 +217,9 @@ class TestAuditSyncWorker:
     def test_sync_worker_retry_on_failure(self, tmp_path):
         """어댑터 실패 시 재시도."""
         from unittest.mock import patch
+
         from selfhealing.audit.sync_worker import AuditSyncWorker, SyncWorkerConfig
-        from selfhealing.audit.wal import WriteAheadLog, WALConfig
+        from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
         wal_config = WALConfig(wal_dir=str(tmp_path / "wal"))
         wal = WriteAheadLog(config=wal_config)
@@ -302,7 +300,7 @@ class TestAuditReconciler:
     def test_reconcile_now(self, tmp_path):
         """즉시 정합성 검증."""
         from selfhealing.audit.reconciler import AuditReconciler, ReconcilerConfig
-        from selfhealing.audit.wal import WriteAheadLog, WALConfig
+        from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
         wal_config = WALConfig(wal_dir=str(tmp_path / "wal"))
         wal = WriteAheadLog(config=wal_config)
@@ -343,7 +341,7 @@ class TestAuditReconciler:
     def test_reconcile_missing_callback(self, tmp_path):
         """누락 발견 콜백 호출."""
         from selfhealing.audit.reconciler import AuditReconciler, ReconcilerConfig
-        from selfhealing.audit.wal import WriteAheadLog, WALConfig
+        from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
         wal_config = WALConfig(wal_dir=str(tmp_path / "wal"))
         wal = WriteAheadLog(config=wal_config)
@@ -491,10 +489,10 @@ class TestIntegrationWALFlow:
     @pytest.fixture(autouse=True)
     def setup_teardown(self, tmp_path):
         """테스트 환경 설정."""
-        from selfhealing.services import audit_helpers
-        from selfhealing.audit.sync_worker import AuditSyncWorker
         from selfhealing.audit.reconciler import AuditReconciler
         from selfhealing.audit.resilience import AuditMetrics
+        from selfhealing.audit.sync_worker import AuditSyncWorker
+        from selfhealing.services import audit_helpers
 
         # 초기화 — 빠른 stop 후 reset (timeout=0.05s)
         audit_helpers.disable_wal()
@@ -521,10 +519,9 @@ class TestIntegrationWALFlow:
 
     def test_end_to_end_wal_flow(self):
         """E2E: 이벤트 발생 → WAL 기록 → Sync → Reconcile."""
-        from selfhealing.services import audit_helpers
-        from selfhealing.audit.sync_worker import AuditSyncWorker, SyncWorkerConfig
-        from selfhealing.audit.reconciler import AuditReconciler, ReconcilerConfig
         from selfhealing.audit.resilience import AuditMetrics
+        from selfhealing.audit.sync_worker import AuditSyncWorker, SyncWorkerConfig
+        from selfhealing.services import audit_helpers
 
         # 1. WAL 활성화
         with patch.dict(os.environ, {"AUDIT_WAL_DIR": self.wal_dir}):

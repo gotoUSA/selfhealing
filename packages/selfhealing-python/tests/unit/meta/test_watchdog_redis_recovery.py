@@ -7,7 +7,6 @@ _attempt_recovery() 쿨다운 동작 검증.
 
 import time
 from datetime import datetime, timezone
-from unittest import mock
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,7 +15,6 @@ from selfhealing.meta.config import MetaWatchdogSettings
 from selfhealing.meta.health_probe import HealthStatus, ProbeResult
 from selfhealing.meta.recovery_adapter import RecoveryAction, RecoveryResult
 from selfhealing.meta.watchdog import SelfHealerWatchdog
-
 
 # =============================================================================
 # Fixtures

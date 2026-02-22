@@ -41,11 +41,10 @@ import threading
 import uuid
 import tracemalloc
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import deque
-import json
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -677,7 +676,7 @@ def on_test_stop(environment, **kwargs):
     print(f"Succeeded: {stats['total_succeeded']}")
     print(f"Failed: {stats['total_failed']}")
     print(f"Re-DLQ: {stats['re_dlq_size']}")
-    print(f"\nCircuit Breaker Events:")
+    print("\nCircuit Breaker Events:")
     print(f"  - OPEN: {_stats.cb_open_events}")
     print(f"  - HALF_OPEN: {_stats.cb_half_open_events}")
     print(f"  - CLOSED: {_stats.cb_closed_events}")

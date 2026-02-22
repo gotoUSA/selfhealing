@@ -12,14 +12,13 @@ Google SRE 표준에 맞춘 trigger, detection, resolution, root_cause_hypothesi
 6. 빈 타임라인 처리 테스트
 """
 
-import pytest
 
 from selfhealing.utils.postmortem_root_cause import (
-    extract_trigger_info,
+    build_postmortem_root_cause_fields,
     extract_detection_info,
     extract_resolution_info,
+    extract_trigger_info,
     generate_root_cause_hypothesis,
-    build_postmortem_root_cause_fields,
 )
 
 
@@ -416,7 +415,9 @@ class TestPostmortemDataIntegration:
         affected = ["database"]
 
         # 실제 observability.py가 호출하는 것과 동일한 함수 호출
-        from selfhealing.utils.postmortem_root_cause import build_postmortem_root_cause_fields
+        from selfhealing.utils.postmortem_root_cause import (
+            build_postmortem_root_cause_fields,
+        )
 
         result = build_postmortem_root_cause_fields(timeline, affected)
 

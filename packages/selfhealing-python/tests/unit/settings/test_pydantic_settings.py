@@ -204,7 +204,7 @@ class TestDLQSettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.dlq import get_dlq_settings, reset_dlq_settings
+        from selfhealing.settings.dlq import get_dlq_settings
 
         settings1 = get_dlq_settings()
         settings2 = get_dlq_settings()
@@ -279,7 +279,7 @@ class TestRetrySettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.retry import get_retry_settings, reset_retry_settings
+        from selfhealing.settings.retry import get_retry_settings
 
         settings1 = get_retry_settings()
         settings2 = get_retry_settings()
@@ -354,7 +354,6 @@ class TestRateLimitSettings:
         """싱글톤 패턴이 동작하는지 검증."""
         from selfhealing.settings.rate_limit import (
             get_rate_limit_settings,
-            reset_rate_limit_settings,
         )
 
         settings1 = get_rate_limit_settings()
@@ -438,7 +437,6 @@ class TestSecuritySettings:
         """싱글톤 패턴이 동작하는지 검증."""
         from selfhealing.settings.security import (
             get_security_settings,
-            reset_security_settings,
         )
 
         settings1 = get_security_settings()

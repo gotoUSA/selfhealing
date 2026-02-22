@@ -13,10 +13,8 @@ Migrated from: shopping/tests/integration/chaos/test_slow_degradation.py
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
 
 import pytest
-
 
 # =============================================================================
 # Memory Pressure Simulator

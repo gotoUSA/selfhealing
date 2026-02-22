@@ -8,7 +8,6 @@ RegionHeartbeat / MultiRegionShutdownHandler 단위 테스트.
 
 from __future__ import annotations
 
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,7 +20,6 @@ from selfhealing.multiregion.heartbeat import (
     MultiRegionShutdownHandler,
     RegionHeartbeat,
 )
-
 
 # =============================================================================
 # RegionHeartbeat 계약 검증 (Contract)

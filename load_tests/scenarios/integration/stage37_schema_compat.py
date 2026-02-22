@@ -37,15 +37,11 @@ import sys
 import time
 import random
 import threading
-import json
-import hashlib
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple, Set
-from collections import defaultdict
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
 from enum import Enum
 from decimal import Decimal
-from contextlib import contextmanager
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -538,37 +534,37 @@ if LOCUST_AVAILABLE and events:
         integrity = _simulator.verify_data_integrity()
         metrics = _simulator.get_metrics()
         
-        print(f"\n📊 Operation Metrics:")
+        print("\n📊 Operation Metrics:")
         print(f"   V1 Writes:              {metrics['v1_writes']}")
         print(f"   V2 Writes:              {metrics['v2_writes']}")
         print(f"   V1 Reads:               {metrics['v1_reads']}")
         print(f"   V2 Reads:               {metrics['v2_reads']}")
         print(f"   Cross-Version Reads:    {metrics['cross_version_reads']}")
         
-        print(f"\n🔄 Compatibility Metrics:")
+        print("\n🔄 Compatibility Metrics:")
         print(f"   Schema Mismatch Handled: {metrics['schema_mismatch_handled']}")
         print(f"   Conversion Success:      {metrics['conversion_success']}")
         print(f"   Conversion Failure:      {metrics['conversion_failure']}")
         
-        print(f"\n🔍 Integrity Check:")
+        print("\n🔍 Integrity Check:")
         print(f"   Total Records:           {integrity['total_records']}")
         print(f"   Issues Found:            {integrity['issues_found']}")
         print(f"   Data Corruption:         {metrics['data_corruption_detected']}")
         
         # Invariant 검증
-        print(f"\n✅ Invariant Verification:")
+        print("\n✅ Invariant Verification:")
         passed = True
         
         if metrics['data_corruption_detected'] > 0:
             print(f"   ❌ FAIL: data_corruption == 0 (got {metrics['data_corruption_detected']})")
             passed = False
         else:
-            print(f"   ✅ PASS: data_corruption == 0")
+            print("   ✅ PASS: data_corruption == 0")
         
         if metrics['schema_mismatch_handled'] > 0:
             print(f"   ✅ PASS: schema_mismatch_errors handled gracefully ({metrics['schema_mismatch_handled']} handled)")
         else:
-            print(f"   ⚠️  WARN: No cross-version reads occurred")
+            print("   ⚠️  WARN: No cross-version reads occurred")
         
         conversion_total = metrics['conversion_success'] + metrics['conversion_failure']
         if conversion_total > 0:
@@ -911,16 +907,16 @@ def run_standalone_test():
     print("\n🔍 Phase 4: Integrity verification...")
     result = simulator.verify_data_integrity()
     
-    print(f"\n📊 Final Metrics:")
+    print("\n📊 Final Metrics:")
     for key, value in result["metrics"].items():
         print(f"   {key}: {value}")
     
-    print(f"\n✅ Integrity Check:")
+    print("\n✅ Integrity Check:")
     print(f"   Total Records: {result['total_records']}")
     print(f"   Issues Found:  {result['issues_found']}")
     
     if result["issues"]:
-        print(f"\n⚠️  Issues:")
+        print("\n⚠️  Issues:")
         for issue in result["issues"]:
             print(f"   - Order {issue['order_id']}: {issue['issue']}")
     

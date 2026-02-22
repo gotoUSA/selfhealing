@@ -9,7 +9,6 @@ Verifies that:
 
 import pytest
 from django.contrib import admin
-from django.contrib.admin.sites import AdminSite
 
 
 @pytest.mark.django_db

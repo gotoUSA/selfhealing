@@ -66,7 +66,7 @@ class DistributedRateLimitChannel:
     _instance: DistributedRateLimitChannel | None = None
     _instance_lock = threading.Lock()
 
-    def __init__(self, kafka_bus: "KafkaEventBus | None" = None):
+    def __init__(self, kafka_bus: KafkaEventBus | None = None):
         """
         분산 Rate Limit 채널 초기화.
 
@@ -95,7 +95,7 @@ class DistributedRateLimitChannel:
                 cls._instance.stop()
             cls._instance = None
 
-    def _ensure_kafka_bus(self) -> "KafkaEventBus":
+    def _ensure_kafka_bus(self) -> KafkaEventBus:
         """Kafka EventBus 인스턴스 확보 (지연 초기화)."""
         if self._kafka_bus is None:
             try:
@@ -195,7 +195,7 @@ class DistributedRateLimitChannel:
                 error=e,
             )
 
-    def _dispatch_to_handlers(self, event: "ConsumedEvent") -> bool:
+    def _dispatch_to_handlers(self, event: ConsumedEvent) -> bool:
         """
         Kafka 이벤트를 등록된 핸들러들에 전달.
 

@@ -260,7 +260,7 @@ class MmapBuffer:
             self._file = None
         logger.info("mmap_buffer.closed")
 
-    def __enter__(self) -> "MmapBuffer":
+    def __enter__(self) -> MmapBuffer:
         """Context manager 진입."""
         return self
 

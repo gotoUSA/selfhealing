@@ -19,7 +19,6 @@ from selfhealing.tasks.cleanup_tasks import (
     get_cleanup_beat_schedule,
 )
 
-
 # =============================================================================
 # Behavior Tests — Thin Wrapper 동작 검증
 # =============================================================================

@@ -6,12 +6,9 @@ and Override Escalation features.
 import time
 from unittest import mock
 
-import pytest
-
 from selfhealing.core.config import ErrorBudgetConfig
 from selfhealing.services.error_budget_service import (
     FreezeDecisionRecorder,
-    DeploymentPolicyAdvisor,
     OverrideType,
 )
 
@@ -24,7 +21,6 @@ class TestHeartbeatMetrics:
         from selfhealing.services.metrics import (
             emit_heartbeat,
             selfhealing_heartbeat_timestamp,
-            selfhealing_heartbeat_count,
         )
 
         before = time.time()
@@ -77,8 +73,8 @@ class TestRecoveryAlerts:
     def test_alert_adapter_recovery_method(self):
         """AlertAdapter should have alert_failsafe_recovered method."""
         from selfhealing.interfaces.alert_adapter import (
-            AlertAdapter,
             Alert,
+            AlertAdapter,
             AlertSeverity,
         )
 
@@ -149,8 +145,8 @@ class TestOverrideEscalation:
     def test_record_override_escalation_increments_counter(self):
         """record_override_escalation should increment the counter."""
         from selfhealing.services.metrics import (
-            record_override_escalation,
             override_escalation_total,
+            record_override_escalation,
         )
 
         initial = override_escalation_total.labels(override_type="hotfix")._value.get()
@@ -164,8 +160,8 @@ class TestOverrideEscalation:
     def test_alert_adapter_escalation_method(self):
         """AlertAdapter should have alert_override_escalation method."""
         from selfhealing.interfaces.alert_adapter import (
-            AlertAdapter,
             Alert,
+            AlertAdapter,
             AlertSeverity,
         )
 
@@ -208,7 +204,7 @@ class TestOverrideEscalation:
             "escalation_mention": "@test-user",
         }
 
-        from selfhealing.interfaces.alert_adapter import AlertAdapter, Alert
+        from selfhealing.interfaces.alert_adapter import Alert, AlertAdapter
 
         class MockAlertAdapter(AlertAdapter):
             def __init__(self):
@@ -257,7 +253,7 @@ class TestOverrideEscalation:
             "escalation_enabled": False,
         }
 
-        from selfhealing.interfaces.alert_adapter import AlertAdapter, Alert
+        from selfhealing.interfaces.alert_adapter import Alert, AlertAdapter
 
         class MockAlertAdapter(AlertAdapter):
             def __init__(self):

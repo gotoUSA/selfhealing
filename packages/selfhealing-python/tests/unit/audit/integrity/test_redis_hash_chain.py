@@ -12,29 +12,20 @@ Refactored to use Factory Pattern (Phase 4):
 - MockRedisClient → factories.MockRedisClient
 """
 
-import json
-import os
-import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from selfhealing.audit.integrity import (
     HashChainManager,
+    HashChainManagerProtocol,
     HashChainVerifier,
     RedisHashChainManager,
-    HashChainManagerProtocol,
-    compute_hash,
     create_hash_chain_manager,
 )
 
 # Factory Pattern imports
 from tests.factories import MockRedisClient
-
 
 # =============================================================================
 # Test Fixtures

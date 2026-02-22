@@ -10,8 +10,7 @@ Throttle Prometheus 메트릭 테스트.
 6. throttle_cb_adjustments_total (Counter)
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestThrottleCurrentLimitMetric:
@@ -19,7 +18,6 @@ class TestThrottleCurrentLimitMetric:
 
     def test_register_throttle_current_limit(self):
         """throttle_current_limit 메트릭 등록 테스트."""
-        from selfhealing.services.metrics import definitions
         from selfhealing.services.metrics.registry import get_or_create_gauge
 
         # definitions 모듈 리로드하면 메트릭이 등록됨

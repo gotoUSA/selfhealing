@@ -23,12 +23,7 @@ Reference:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
-from requests.exceptions import (
-    Timeout,
-    ConnectionError as RequestsConnectionError,
-    HTTPError,
-)
+from unittest.mock import MagicMock
 
 
 # =============================================================================
@@ -70,7 +65,6 @@ class TestPaymentTimeoutRecovery:
 
         # Use in-memory repository for testing
         from unittest.mock import Mock
-        from selfhealing.services.dlq_models import DLQEntryResult
 
         mock_repo = Mock()
         mock_repo.create.return_value = Mock(id=1)
@@ -495,7 +489,6 @@ class TestCircuitBreakerExternalAPI:
         from selfhealing.services import (
             CircuitBreakerService,
             CircuitBreakerConfig,
-            CircuitState,
         )
         from shopping.tests.factories import UserFactory
 
@@ -547,7 +540,6 @@ class TestPartialFailureScenarios:
         - DLQ entry created for webhook domain, not payment
         - Entry includes payment confirmation details
         """
-        from unittest.mock import MagicMock
         from selfhealing.services import DLQService
 
         mock_repo = MagicMock()
@@ -595,7 +587,6 @@ class TestPartialFailureScenarios:
         - Lower priority than payment failures
         - Can be retried independently
         """
-        from unittest.mock import MagicMock
         from selfhealing.services import DLQService
 
         mock_repo = MagicMock()
@@ -657,7 +648,6 @@ class TestServiceUnavailableRecovery:
         - DLQ entry created with retryable flag
         - Entry includes suggested retry delay
         """
-        from shopping.models.failed_operation import FailedOperation
         from selfhealing.services import DLQService
         from selfhealing.services.dlq_models import DLQConfig
         from unittest.mock import Mock

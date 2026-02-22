@@ -207,7 +207,7 @@ class ProductStockLockHolder:
             logger.info(f"🔒 [Iteration {iteration}] LOCK ACQUIRED at {window.started_at.isoformat()}")
             logger.info(f"   Product: id={row[0]}, name={row[1]}, stock={row[2]}")
             logger.info(f"   Hold duration: {hold_seconds} seconds")
-            logger.info(f"   ⚠️  Any order attempting to purchase this product will be BLOCKED")
+            logger.info("   ⚠️  Any order attempting to purchase this product will be BLOCKED")
             logger.info("=" * 70)
             
             # 락 유지
@@ -321,7 +321,7 @@ class ProductStockLockHolder:
         logger.info("=" * 70)
         
         # 환경변수로 타겟 상품 ID 출력 (Locust와 동기화용)
-        logger.info(f"\n📌 To force Locust to target this product:")
+        logger.info("\n📌 To force Locust to target this product:")
         logger.info(f"   export LOCK_TARGET_PRODUCT_ID={self.target_product_id}")
 
 

@@ -8,11 +8,7 @@ GrafanaAlertWebhookView 및 관련 함수 단위 테스트
 3. annotations에서 metadata 추출
 4. Webhook 페이로드 처리
 """
-import json
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 
 class TestGrafanaSeverityMapping:

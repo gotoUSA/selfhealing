@@ -2,16 +2,16 @@
 Leader Elector Graceful Shutdown 통합 테스트.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from selfhealing.coordination.shutdown_integration import (
+    _registered_electors,
+    _shutdown_all_electors,
+    integrate_with_shutdown_coordinator,
     register_for_graceful_shutdown,
     unregister_from_graceful_shutdown,
-    _shutdown_all_electors,
-    _registered_electors,
-    integrate_with_shutdown_coordinator,
 )
 
 

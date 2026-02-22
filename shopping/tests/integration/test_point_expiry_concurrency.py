@@ -23,7 +23,6 @@ Concurrency Control:
 import threading
 import time
 from datetime import timedelta
-from typing import Any
 
 from django.db import connection
 from django.utils import timezone

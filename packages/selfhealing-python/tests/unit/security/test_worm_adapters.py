@@ -9,22 +9,21 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 from selfhealing.adapters.audit.worm_adapters import (
-    WORMAdapter,
+    HTTPWebhookAdapter,
+    LokiAdapter,
+    LokiConfig,
     S3Config,
     S3ObjectLockAdapter,
-    LokiConfig,
-    LokiAdapter,
-    HTTPWebhookAdapter,
     SidecarConfig,
     SidecarFileWatcher,
     create_worm_adapter,
 )
-from selfhealing.interfaces.audit_adapter import AuditEntry, AuditAction
-
+from selfhealing.interfaces.audit_adapter import AuditAction, AuditEntry
 
 # ─────────────────────────────────────────────────────────────
 # Fixtures
@@ -62,7 +61,7 @@ class TestS3Config:
     def test_default_values(self):
         """기본값 확인."""
         config = S3Config(bucket="test-bucket")
-        
+
         assert config.bucket == "test-bucket"
         assert config.region == "ap-northeast-2"
         assert config.prefix == "audit/"
@@ -78,7 +77,7 @@ class TestS3Config:
             object_lock_mode="GOVERNANCE",
             retention_days=365,
         )
-        
+
         assert config.bucket == "my-bucket"
         assert config.region == "us-west-2"
         assert config.object_lock_mode == "GOVERNANCE"
@@ -98,29 +97,29 @@ class TestS3ObjectLockAdapter:
             config=S3Config(bucket="test"),
             fallback_path=temp_dir / "fallback.jsonl",
         )
-        
+
         # log()는 fallback을 사용해야 함
         adapter.log(sample_entry)
-        
+
         # fallback 파일에 기록되었는지 확인
         assert (temp_dir / "fallback.jsonl").exists()
 
     def test_with_mock_s3_client(self, sample_entry, temp_dir):
         """Mock S3 클라이언트 테스트."""
         mock_s3 = MagicMock()
-        
+
         adapter = S3ObjectLockAdapter(
             config=S3Config(bucket="test-bucket"),
             s3_client=mock_s3,
             fallback_path=temp_dir / "fallback.jsonl",
         )
-        
+
         adapter.log(sample_entry)
-        
+
         # S3 put_object 호출 확인
         mock_s3.put_object.assert_called_once()
         call_args = mock_s3.put_object.call_args
-        
+
         assert call_args.kwargs["Bucket"] == "test-bucket"
         assert call_args.kwargs["ObjectLockMode"] == "COMPLIANCE"
 
@@ -128,19 +127,19 @@ class TestS3ObjectLockAdapter:
         """S3 오류 시 fallback 사용."""
         mock_s3 = MagicMock()
         mock_s3.put_object.side_effect = Exception("S3 Error")
-        
+
         adapter = S3ObjectLockAdapter(
             config=S3Config(bucket="test-bucket"),
             s3_client=mock_s3,
             fallback_path=temp_dir / "fallback.jsonl",
         )
-        
+
         adapter.log(sample_entry)
-        
+
         # fallback 파일에 기록
         fallback_file = temp_dir / "fallback.jsonl"
         assert fallback_file.exists()
-        
+
         with open(fallback_file) as f:
             line = f.readline()
             data = json.loads(line)
@@ -150,18 +149,18 @@ class TestS3ObjectLockAdapter:
         """에러 콜백 호출 확인."""
         mock_s3 = MagicMock()
         mock_s3.put_object.side_effect = Exception("S3 Error")
-        
+
         error_callback = MagicMock()
-        
+
         adapter = S3ObjectLockAdapter(
             config=S3Config(bucket="test-bucket"),
             s3_client=mock_s3,
             fallback_path=temp_dir / "fallback.jsonl",
             on_error=error_callback,
         )
-        
+
         adapter.log(sample_entry)
-        
+
         error_callback.assert_called_once()
 
 
@@ -176,7 +175,7 @@ class TestLokiConfig:
     def test_default_values(self):
         """기본값 확인."""
         config = LokiConfig()
-        
+
         assert config.endpoint == "http://loki:3100/loki/api/v1/push"
         assert config.tenant_id is None
         assert config.labels == {"job": "selfhealing-audit", "env": "production"}
@@ -188,7 +187,7 @@ class TestLokiConfig:
             endpoint="http://custom-loki:3100/loki/api/v1/push",
             labels={"app": "myapp", "env": "staging"},
         )
-        
+
         assert config.labels["app"] == "myapp"
 
 
@@ -208,27 +207,27 @@ class TestLokiAdapter:
             mock_response.__enter__ = MagicMock(return_value=mock_response)
             mock_response.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_response
-            
+
             adapter = LokiAdapter(
                 config=LokiConfig(endpoint="http://test-loki:3100/loki/api/v1/push"),
                 fallback_path=temp_dir / "fallback.jsonl",
             )
-            
+
             adapter.log(sample_entry)
-            
+
             mock_urlopen.assert_called_once()
 
     def test_fallback_on_loki_error(self, sample_entry, temp_dir):
         """Loki 오류 시 fallback."""
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_urlopen.side_effect = Exception("Connection refused")
-            
+
             adapter = LokiAdapter(
                 fallback_path=temp_dir / "fallback.jsonl",
             )
-            
+
             adapter.log(sample_entry)
-            
+
             # fallback 파일 확인
             assert (temp_dir / "fallback.jsonl").exists()
 
@@ -240,14 +239,14 @@ class TestLokiAdapter:
             mock_response.__enter__ = MagicMock(return_value=mock_response)
             mock_response.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_response
-            
+
             adapter = LokiAdapter(
                 config=LokiConfig(tenant_id="my-tenant"),
                 fallback_path=temp_dir / "fallback.jsonl",
             )
-            
+
             adapter.log(sample_entry)
-            
+
             # Request 객체 확인
             call_args = mock_urlopen.call_args
             request = call_args[0][0]
@@ -270,17 +269,17 @@ class TestHTTPWebhookAdapter:
             mock_response.__enter__ = MagicMock(return_value=mock_response)
             mock_response.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_response
-            
+
             adapter = HTTPWebhookAdapter(
                 endpoint="https://logs.example.com/ingest",
                 headers={"Authorization": "Bearer test-token"},
                 fallback_path=temp_dir / "fallback.jsonl",
             )
-            
+
             adapter.log(sample_entry)
-            
+
             mock_urlopen.assert_called_once()
-            
+
             # 헤더 확인
             request = mock_urlopen.call_args[0][0]
             assert request.get_header("Authorization") == "Bearer test-token"
@@ -290,14 +289,14 @@ class TestHTTPWebhookAdapter:
         """HTTP 오류 시 fallback."""
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_urlopen.side_effect = Exception("Connection timeout")
-            
+
             adapter = HTTPWebhookAdapter(
                 endpoint="https://logs.example.com/ingest",
                 fallback_path=temp_dir / "fallback.jsonl",
             )
-            
+
             adapter.log(sample_entry)
-            
+
             assert (temp_dir / "fallback.jsonl").exists()
 
 
@@ -315,10 +314,10 @@ class TestSidecarFileWatcher:
         input_file = temp_dir / "test.jsonl"
         with open(input_file, "w") as f:
             f.write(sample_entry.to_json() + "\n")
-        
+
         # Mock target adapter
         mock_adapter = MagicMock()
-        
+
         watcher = SidecarFileWatcher(
             config=SidecarConfig(
                 watch_dir=str(temp_dir),
@@ -326,13 +325,13 @@ class TestSidecarFileWatcher:
             ),
             target_adapter=mock_adapter,
         )
-        
+
         # 파일 처리
         watcher._process_files(temp_dir)
-        
+
         # target adapter에 log 호출 확인
         mock_adapter.log.assert_called_once()
-        
+
         # 파일 삭제 확인
         assert not input_file.exists()
 
@@ -341,9 +340,9 @@ class TestSidecarFileWatcher:
         input_file = temp_dir / "test.jsonl"
         with open(input_file, "w") as f:
             f.write(sample_entry.to_json() + "\n")
-        
+
         mock_adapter = MagicMock()
-        
+
         watcher = SidecarFileWatcher(
             config=SidecarConfig(
                 watch_dir=str(temp_dir),
@@ -351,9 +350,9 @@ class TestSidecarFileWatcher:
             ),
             target_adapter=mock_adapter,
         )
-        
+
         watcher._process_files(temp_dir)
-        
+
         # archived 폴더에 파일 존재 확인
         archive_dir = temp_dir / "archived"
         assert archive_dir.exists()
@@ -365,24 +364,24 @@ class TestSidecarFileWatcher:
         input_file = temp_dir / "bad.jsonl"
         with open(input_file, "w") as f:
             f.write("not valid json\n")
-        
+
         mock_adapter = MagicMock()
         error_callback = MagicMock()
-        
+
         watcher = SidecarFileWatcher(
             config=SidecarConfig(watch_dir=str(temp_dir)),
             target_adapter=mock_adapter,
             on_error=error_callback,
         )
-        
+
         watcher._process_files(temp_dir)
-        
+
         error_callback.assert_called_once()
 
     def test_start_stop(self, temp_dir):
         """시작/정지 테스트."""
         mock_adapter = MagicMock()
-        
+
         watcher = SidecarFileWatcher(
             config=SidecarConfig(
                 watch_dir=str(temp_dir),
@@ -390,16 +389,16 @@ class TestSidecarFileWatcher:
             ),
             target_adapter=mock_adapter,
         )
-        
+
         # 백그라운드에서 시작
         thread = threading.Thread(target=watcher.start, daemon=True)
         thread.start()
-        
+
         time.sleep(0.2)
-        
+
         watcher.stop()
         thread.join(timeout=1.0)
-        
+
         assert not thread.is_alive()
 
 
@@ -418,7 +417,7 @@ class TestCreateWormAdapter:
             {"endpoint": "http://loki:3100/loki/api/v1/push"},
             fallback_path=temp_dir / "fallback.jsonl",
         )
-        
+
         assert isinstance(adapter, LokiAdapter)
 
     def test_create_http_adapter(self, temp_dir):
@@ -428,7 +427,7 @@ class TestCreateWormAdapter:
             {"endpoint": "https://logs.example.com/ingest"},
             fallback_path=temp_dir / "fallback.jsonl",
         )
-        
+
         assert isinstance(adapter, HTTPWebhookAdapter)
 
     def test_create_s3_adapter(self, temp_dir):
@@ -438,7 +437,7 @@ class TestCreateWormAdapter:
             {"bucket": "test-bucket"},
             fallback_path=temp_dir / "fallback.jsonl",
         )
-        
+
         assert isinstance(adapter, S3ObjectLockAdapter)
 
     def test_unknown_type_raises_error(self):

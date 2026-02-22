@@ -7,8 +7,6 @@ Error Budget Bypass Hooks 단위 테스트.
 3. register_error_budget_bypass_hooks() - 바이패스 훅 등록
 """
 
-import pytest
-from unittest.mock import MagicMock
 
 from selfhealing.core.hooks import (
     BypassRegistry,

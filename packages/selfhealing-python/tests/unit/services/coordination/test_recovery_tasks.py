@@ -11,19 +11,17 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#10.2.4
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
 
+from selfhealing.services.coordination.enums import RecoveryStatus
 from selfhealing.services.coordination.recovery_tasks import (
     check_recovery_trigger_task,
-    execute_recovery_step_task,
-    monitor_recovery_health_task,
     check_stale_pending_recoveries_task,
     cleanup_old_recovery_sessions_task,
+    execute_recovery_step_task,
     get_recovery_beat_schedule,
+    monitor_recovery_health_task,
 )
-from selfhealing.services.coordination.enums import RecoveryStatus
 
 
 class TestCheckRecoveryTriggerTask:
@@ -35,9 +33,9 @@ class TestCheckRecoveryTriggerTask:
         mock_coordinator = MagicMock()
         mock_coordinator.get_current_status.return_value = RecoveryStatus.NORMAL
         mock_get_coordinator.return_value = mock_coordinator
-        
+
         result = check_recovery_trigger_task(namespace="global")
-        
+
         assert result["triggered"] is False
         assert "Not in EMERGENCY" in result["reason"]
 
@@ -61,7 +59,7 @@ class TestCheckRecoveryTriggerTask:
         mock_session.session_id = "recovery-123"
         mock_coordinator.start_recovery.return_value = mock_session
         mock_get_coordinator.return_value = mock_coordinator
-        
+
         mock_config = MagicMock()
         mock_config.require_manual_approval = False
         mock_config.recovery_error_threshold = 0.10
@@ -69,12 +67,12 @@ class TestCheckRecoveryTriggerTask:
         mock_policy = MagicMock()
         mock_policy.get_config.return_value = mock_config
         mock_get_policy.return_value = mock_policy
-        
+
         mock_fetch_rate.return_value = 0.05  # 5% error rate
         mock_check_stability.return_value = True
-        
+
         result = check_recovery_trigger_task(namespace="global")
-        
+
         assert result["triggered"] is True
         assert result["session_id"] == "recovery-123"
         # Verify execute_recovery_step_task.delay was called
@@ -93,17 +91,17 @@ class TestCheckRecoveryTriggerTask:
         mock_coordinator = MagicMock()
         mock_coordinator.get_current_status.return_value = RecoveryStatus.EMERGENCY
         mock_get_coordinator.return_value = mock_coordinator
-        
+
         mock_config = MagicMock()
         mock_config.recovery_error_threshold = 0.10
         mock_policy = MagicMock()
         mock_policy.get_config.return_value = mock_config
         mock_get_policy.return_value = mock_policy
-        
+
         mock_fetch_rate.return_value = 0.15  # 15% error rate
-        
+
         result = check_recovery_trigger_task(namespace="global")
-        
+
         assert result["triggered"] is False
         assert "15.0%" in result["reason"]
 
@@ -117,9 +115,9 @@ class TestExecuteRecoveryStepTask:
         mock_coordinator = MagicMock()
         mock_coordinator.get_session.return_value = None
         mock_get_coordinator.return_value = mock_coordinator
-        
+
         result = execute_recovery_step_task(session_id="nonexistent")
-        
+
         assert "not found" in result.get("error", "").lower()
 
     @patch("selfhealing.services.coordination.recovery_tasks.get_recovery_circuit_breaker")
@@ -131,9 +129,9 @@ class TestExecuteRecoveryStepTask:
         mock_coordinator = MagicMock()
         mock_coordinator.get_session.return_value = mock_session
         mock_get_coordinator.return_value = mock_coordinator
-        
+
         result = execute_recovery_step_task(session_id="completed-123")
-        
+
         assert result["completed"] is True
         assert result["status"] == "completed"
 
@@ -147,9 +145,9 @@ class TestMonitorRecoveryHealthTask:
         mock_coordinator = MagicMock()
         mock_coordinator.get_current_status.return_value = RecoveryStatus.NORMAL
         mock_get_coordinator.return_value = mock_coordinator
-        
+
         result = monitor_recovery_health_task(namespace="global")
-        
+
         assert result["healthy"] is True
         assert result["tripped"] is False
 
@@ -166,7 +164,7 @@ class TestMonitorRecoveryHealthTask:
         mock_coordinator = MagicMock()
         mock_coordinator.get_current_status.return_value = RecoveryStatus.RECOVERING
         mock_get_coordinator.return_value = mock_coordinator
-        
+
         mock_cb = MagicMock()
         mock_cb.check_and_trip.return_value = {
             "tripped": True,
@@ -175,11 +173,11 @@ class TestMonitorRecoveryHealthTask:
             "reason": "Error rate too high",
         }
         mock_get_cb.return_value = mock_cb
-        
+
         mock_fetch_rate.return_value = 0.25
-        
+
         result = monitor_recovery_health_task(namespace="global")
-        
+
         assert result["healthy"] is False
         assert result["tripped"] is True
         assert result["should_re_escalate"] is True
@@ -196,9 +194,9 @@ class TestCheckStalePendingRecoveriesTask:
         mock_manager.check_and_send_reminders.return_value = []
         mock_manager.list_stale_requests.return_value = []
         mock_get_manager.return_value = mock_manager
-        
+
         result = check_stale_pending_recoveries_task()
-        
+
         assert result["stale_count"] == 0
         assert result["reminded_count"] == 0
         assert result["expired_count"] == 0
@@ -210,15 +208,15 @@ class TestCheckStalePendingRecoveriesTask:
         mock_stale.request_id = "stale-123"
         mock_stale.namespace = "seoul"
         mock_stale.get_waiting_time_minutes.return_value = 45.0
-        
+
         mock_manager = MagicMock()
         mock_manager.expire_old_requests.return_value = []
         mock_manager.check_and_send_reminders.return_value = []
         mock_manager.list_stale_requests.return_value = [mock_stale]
         mock_get_manager.return_value = mock_manager
-        
+
         result = check_stale_pending_recoveries_task()
-        
+
         assert result["stale_count"] == 1
         assert result["stale_requests"][0]["request_id"] == "stale-123"
 
@@ -232,9 +230,9 @@ class TestCleanupOldRecoverySessionsTask:
         mock_manager = MagicMock()
         mock_manager.cleanup_old_requests.return_value = 5
         mock_get_manager.return_value = mock_manager
-        
+
         result = cleanup_old_recovery_sessions_task(max_age_hours=168)
-        
+
         assert result["cleaned_count"] == 5
 
 
@@ -244,7 +242,7 @@ class TestGetRecoveryBeatSchedule:
     def test_schedule_contains_tasks(self):
         """필요한 태스크가 스케줄에 포함됨."""
         schedule = get_recovery_beat_schedule()
-        
+
         assert "check-recovery-trigger-every-minute" in schedule
         assert "monitor-recovery-health-every-30s" in schedule
         assert "check-stale-pending-every-10min" in schedule
@@ -253,9 +251,9 @@ class TestGetRecoveryBeatSchedule:
     def test_schedule_structure(self):
         """스케줄 구조 확인."""
         schedule = get_recovery_beat_schedule()
-        
+
         trigger_task = schedule["check-recovery-trigger-every-minute"]
-        
+
         assert "task" in trigger_task
         assert "schedule" in trigger_task
         assert trigger_task["task"] == "selfhealing.check_recovery_trigger"

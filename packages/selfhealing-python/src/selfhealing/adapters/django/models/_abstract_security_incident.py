@@ -225,7 +225,7 @@ class AbstractSecurityIncident(models.Model if DJANGO_AVAILABLE else object):
         raw_request: dict | None = None,
         immediate_action: str = "",
         **extra_fields: Any,
-    ) -> "AbstractSecurityIncident":
+    ) -> AbstractSecurityIncident:
         """
         Factory method to create a security incident.
 

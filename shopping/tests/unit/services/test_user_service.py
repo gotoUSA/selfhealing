@@ -534,7 +534,6 @@ class TestUserServiceWithdrawUser:
         """정상 케이스: JWT 토큰 무효화 확인"""
         from rest_framework_simplejwt.token_blacklist.models import (
             BlacklistedToken,
-            OutstandingToken,
         )
 
         # Arrange
@@ -554,7 +553,6 @@ class TestUserServiceWithdrawUser:
         """경계 케이스: 이미 블랙리스트된 토큰은 스킵"""
         from rest_framework_simplejwt.token_blacklist.models import (
             BlacklistedToken,
-            OutstandingToken,
         )
 
         # Arrange - 로그아웃 등으로 이미 블랙리스트에 추가된 토큰이 있는 상황

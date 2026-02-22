@@ -30,7 +30,6 @@ from selfhealing.api.django.tiering.enums import TierMatchType
 from selfhealing.api.django.tiering.models import TierMapping
 from selfhealing.api.django.tiering.registry import TierRegistry
 
-
 # =============================================================================
 # TierMapping.methods 필드 및 __post_init__ 정규화
 # =============================================================================
@@ -777,8 +776,8 @@ class TestTieringMiddlewareMethodPropagationBehavior:
                 return_value=mock_controller,
             ),
         ):
-            from selfhealing.services.emergency_mode.enums import EmergencyLevel
             from selfhealing.scaling.config import BackpressureLevel
+            from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
             mock_manager.get_current_level.return_value = EmergencyLevel.NORMAL
             mock_state.level = BackpressureLevel.NONE
@@ -794,8 +793,8 @@ class TestTieringMiddlewareMethodPropagationBehavior:
     def test_method_propagation_during_emergency(self):
         """비상 모드에서 method가 resolve_tier_with_fallback에 전달된다."""
         from selfhealing.api.django.tiering.middleware import TieringMiddleware
-        from selfhealing.services.emergency_mode.enums import EmergencyLevel
         from selfhealing.scaling.config import BackpressureLevel
+        from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
         mock_response = MagicMock()
         get_response = MagicMock(return_value=mock_response)

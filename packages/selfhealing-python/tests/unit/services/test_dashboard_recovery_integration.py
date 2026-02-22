@@ -12,18 +12,17 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#10.2.4.13
 """
 
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timezone
 
 from selfhealing.services.dashboard_service import (
+    AlertInfo,
     DashboardService,
     DashboardSummary,
-    StatusCounts,
-    RecentActivity,
     Distribution,
-    AlertInfo,
-    get_dashboard_service,
+    RecentActivity,
+    StatusCounts,
 )
 
 

@@ -10,8 +10,7 @@
 3. 연속된 이벤트 간 해시 체인 연결 유지되는지 확인
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from selfhealing.api.django.exceptions.handler import selfhealing_exception_handler

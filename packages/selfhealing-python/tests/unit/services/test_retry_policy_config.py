@@ -9,16 +9,13 @@ RetryPolicyConfig 설정 클래스 및 RetryResult 변환 단위 테스트.
 
 from __future__ import annotations
 
-import pytest
-
-from selfhealing.interfaces.resilience_policy import PolicyOutcome, PolicyResult
+from selfhealing.interfaces.resilience_policy import PolicyOutcome
 from selfhealing.services.retry_handler.models import (
     RetryAction,
     RetryConfig,
     RetryPolicyConfig,
     RetryResult,
 )
-
 
 # =============================================================================
 # RetryPolicyConfig — 계약 검증

@@ -23,7 +23,7 @@ from __future__ import annotations
 import math
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import structlog

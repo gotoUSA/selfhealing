@@ -41,7 +41,7 @@ import time
 import random
 import traceback
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -974,7 +974,7 @@ class ExtremeSpikeUser(HttpUser):
                     # 상태가 비정상적이면 윈도우 손상으로 판단
                     if cb_status.get("status") == "error":
                         clock_stats["cb_window_corrupted"] = True
-                        _debug_log(f"⏰ CB Window potentially corrupted by clock skew!")
+                        _debug_log("⏰ CB Window potentially corrupted by clock skew!")
                     else:
                         clock_stats["recovery_found"] = True
                         _debug_log(f"⏰ CB recovered from clock skew (drift={drift:.2f}s)")
@@ -989,7 +989,7 @@ class ExtremeSpikeUser(HttpUser):
             if orders_before > 0 and orders_after > 0:
                 if orders_after < orders_before:
                     clock_stats["consistency_maintained"] = False
-                    _debug_log(f"⏰ CONSISTENCY VIOLATION after clock skew!")
+                    _debug_log("⏰ CONSISTENCY VIOLATION after clock skew!")
 
         except Exception as e:
             _debug_log(f"Clock skew attack failed: {e}")
@@ -1286,7 +1286,7 @@ class ExtremeSpikeUser(HttpUser):
                 
                 time.sleep(jitter_sec)
                 _extreme_stats["v2_modules"]["jitter_applied"] += 1
-            except Exception as e:
+            except Exception:
                 # stressed 파라미터 미지원 시 fallback
                 try:
                     load = 0.9 if phase in ["spike", "sustain"] else 0.3

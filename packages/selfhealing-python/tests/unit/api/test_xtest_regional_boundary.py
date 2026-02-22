@@ -15,10 +15,9 @@ X-Test API 호출이 현재 리전 범위를 벗어나지 않도록 강제하는
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 # Django 설정 구성 (테스트용)
 import django
+import pytest
 from django.conf import settings
 
 if not settings.configured:

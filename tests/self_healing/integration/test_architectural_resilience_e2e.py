@@ -22,13 +22,9 @@ Test Categories:
         - DLQ state transitions
 """
 
-import threading
-import time
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
 
 from django.core.cache import cache
-from django.db import connection
 
 import pytest
 
@@ -36,8 +32,6 @@ import pytest
 pytestmark = [pytest.mark.e2e, pytest.mark.requires_db]
 
 from shopping.models.failed_operation import FailedOperation
-from shopping.models.order import Order
-from shopping.models.payment import Payment
 from selfhealing.core import (
     BackoffCalculator,
     LegacyBackoffConfig,
@@ -47,14 +41,12 @@ from selfhealing.services.backoff_calculator import get_calculator_for_domain
 from selfhealing.services import (
     IdempotencyKey,
     IdempotencyService,
-    get_idempotency_service,
 )
 from selfhealing.services import (
     MaxRetriesExceededError,
     RetryAction,
     RetryConfig,
     RetryHandler,
-    RetryResult,
 )
 from selfhealing.services.retry_handler import with_retry
 from shopping.tests.factories import (

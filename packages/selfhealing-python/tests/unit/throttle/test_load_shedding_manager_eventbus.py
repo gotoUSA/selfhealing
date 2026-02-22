@@ -7,21 +7,21 @@ LoadSheddingManager EventBus 발행 단위 테스트.
 3. EventBus import 실패 시 Fail-Open 처리
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, call
 
 from selfhealing.services.circuit_breaker.load_shedding.manager import (
     LoadSheddingManager,
 )
 from selfhealing.services.circuit_breaker.models import (
+    LoadSheddingPolicy,
     ServiceConfig,
     SheddingLevel,
-    LoadSheddingPolicy,
 )
 from selfhealing.services.event_bus.bus import (
-    EventType,
     EventPriority,
-    SelfHealingEvent,
+    EventType,
 )
 
 

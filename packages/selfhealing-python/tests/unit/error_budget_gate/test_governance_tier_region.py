@@ -5,14 +5,12 @@ is_error_budget_blocking(), check_all_governance()에
 tier_id/region 파라미터가 올바르게 전파되는지 검증.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from selfhealing.services.error_budget_gate.config import (
     GateCheckResult,
     GateStatus,
 )
-
 
 # =============================================================================
 # 동작 검증: is_error_budget_blocking() tier/region 전파

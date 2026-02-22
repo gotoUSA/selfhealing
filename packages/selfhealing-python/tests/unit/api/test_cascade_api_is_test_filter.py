@@ -10,13 +10,11 @@ CascadeEvent API is_test 필터 및 응답 필드 단위 테스트.
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Django 설정 구성 (테스트용)
 import django
+import pytest
 from django.conf import settings
 
 if not settings.configured:
@@ -40,11 +38,10 @@ if not settings.configured:
 from datetime import datetime, timezone
 
 from selfhealing.audit.cascade_event import (
+    CascadeEffect,
     CascadeEvent,
     CascadeTrigger,
-    CascadeEffect,
 )
-
 
 # =============================================================================
 # Fixtures

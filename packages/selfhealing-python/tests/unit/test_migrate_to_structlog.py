@@ -14,10 +14,7 @@ stdlib logging → structlog 마이그레이션 스크립트 단위 테스트.
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-
-import pytest
 
 # scripts/ 디렉토리를 경로에 추가하여 migrate_to_structlog 임포트
 _SCRIPTS_DIR = Path(__file__).parents[4] / "scripts"
@@ -38,7 +35,6 @@ from migrate_to_structlog import (
     transform_file_content,
     transform_log_call,
 )
-
 
 # ===========================================================================
 # Contract Tests — 설계 사양 하드코딩 검증

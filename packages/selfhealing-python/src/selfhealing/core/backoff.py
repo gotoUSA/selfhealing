@@ -10,7 +10,7 @@ from __future__ import annotations
 import random
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.resilience_policy import PolicyContext
@@ -55,7 +55,7 @@ class ExponentialBackoff(BackoffStrategy):
     jitter_factor: float = 0.2
 
     @classmethod
-    def from_settings(cls, settings=None, **overrides) -> "ExponentialBackoff":
+    def from_settings(cls, settings=None, **overrides) -> ExponentialBackoff:
         """
         Settings 기반 인스턴스 생성.
 
@@ -109,7 +109,7 @@ class LinearBackoff(BackoffStrategy):
     jitter_factor: float = 0.1
 
     @classmethod
-    def from_settings(cls, settings=None, **overrides) -> "LinearBackoff":
+    def from_settings(cls, settings=None, **overrides) -> LinearBackoff:
         """
         Settings 기반 인스턴스 생성.
 
@@ -161,7 +161,7 @@ class ConstantBackoff(BackoffStrategy):
     jitter_factor: float = 0.1
 
     @classmethod
-    def from_settings(cls, settings=None, **overrides) -> "ConstantBackoff":
+    def from_settings(cls, settings=None, **overrides) -> ConstantBackoff:
         """
         Settings 기반 인스턴스 생성.
 
@@ -211,7 +211,7 @@ class DecorrelatedJitterBackoff(BackoffStrategy):
     _previous_delay: float | None = None
 
     @classmethod
-    def from_settings(cls, settings=None, **overrides) -> "DecorrelatedJitterBackoff":
+    def from_settings(cls, settings=None, **overrides) -> DecorrelatedJitterBackoff:
         """
         Settings 기반 인스턴스 생성.
 
@@ -294,7 +294,7 @@ class LegacyBackoffConfig:
     min_delay: int = 1  # Minimum delay in seconds
 
     @classmethod
-    def from_settings(cls, settings=None, **overrides) -> "LegacyBackoffConfig":
+    def from_settings(cls, settings=None, **overrides) -> LegacyBackoffConfig:
         """
         Settings 기반 인스턴스 생성.
 

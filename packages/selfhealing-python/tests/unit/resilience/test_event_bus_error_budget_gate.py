@@ -11,11 +11,8 @@ Tests for:
 
 from __future__ import annotations
 
-import pytest
 import threading
 from unittest.mock import MagicMock, patch
-from dataclasses import dataclass
-
 
 # =============================================================================
 # Event Bus Tests
@@ -38,7 +35,7 @@ class TestSelfHealingEventBus:
 
     def test_event_bus_singleton(self):
         """이벤트 버스가 싱글톤으로 동작하는지 확인."""
-        from selfhealing.services.event_bus import get_event_bus, SelfHealingEventBus
+        from selfhealing.services.event_bus import SelfHealingEventBus, get_event_bus
 
         bus1 = get_event_bus()
         bus2 = get_event_bus()
@@ -52,7 +49,6 @@ class TestSelfHealingEventBus:
         from selfhealing.services.event_bus import (
             EventType,
             SelfHealingEvent,
-            EventPriority,
         )
 
         received_events: list[SelfHealingEvent] = []
@@ -117,7 +113,7 @@ class TestSelfHealingEventBus:
 
     def test_multiple_handlers_priority(self):
         """다중 핸들러 우선순위 테스트."""
-        from selfhealing.services.event_bus import EventType, EventPriority
+        from selfhealing.services.event_bus import EventPriority, EventType
 
         call_order = []
 
@@ -257,8 +253,8 @@ class TestEmergencyManagerEventEmission:
 
     def setup_method(self):
         """테스트 전 설정."""
-        from selfhealing.services.event_bus import get_event_bus
         from selfhealing.services.emergency_mode import get_emergency_manager
+        from selfhealing.services.event_bus import get_event_bus
 
         self.bus = get_event_bus()
         self.bus.reset()
@@ -273,8 +269,8 @@ class TestEmergencyManagerEventEmission:
 
     def test_activate_manual_emits_event(self):
         """수동 활성화 시 이벤트 발행 확인."""
-        from selfhealing.services.event_bus import EventType
         from selfhealing.services.emergency_mode import EmergencyLevel
+        from selfhealing.services.event_bus import EventType
 
         received_events = []
 
@@ -299,8 +295,8 @@ class TestEmergencyManagerEventEmission:
 
     def test_deactivate_emits_event(self):
         """비활성화 시 이벤트 발행 확인."""
-        from selfhealing.services.event_bus import EventType
         from selfhealing.services.emergency_mode import EmergencyLevel
+        from selfhealing.services.event_bus import EventType
 
         received_events = []
 
@@ -327,8 +323,8 @@ class TestEmergencyManagerEventEmission:
 
     def test_activate_auto_emits_event(self):
         """자동 활성화 시 이벤트 발행 확인."""
-        from selfhealing.services.event_bus import EventType
         from selfhealing.services.emergency_mode import EmergencyLevel
+        from selfhealing.services.event_bus import EventType
 
         received_events = []
 
@@ -369,11 +365,11 @@ class TestErrorBudgetGateEventEmission:
 
     def test_critical_budget_emits_event(self):
         """에러 예산 임계치 도달 시 이벤트 발행 확인."""
-        from selfhealing.services.event_bus import EventType
         from selfhealing.services.error_budget_gate import (
             ErrorBudgetGate,
             ErrorBudgetGateConfig,
         )
+        from selfhealing.services.event_bus import EventType
 
         received_events = []
 
@@ -400,11 +396,11 @@ class TestErrorBudgetGateEventEmission:
 
     def test_warning_budget_emits_event(self):
         """에러 예산 경고 시 이벤트 발행 확인."""
-        from selfhealing.services.event_bus import EventType
         from selfhealing.services.error_budget_gate import (
             ErrorBudgetGate,
             ErrorBudgetGateConfig,
         )
+        from selfhealing.services.event_bus import EventType
 
         received_events = []
 
@@ -439,7 +435,7 @@ class TestRetryHandlerErrorBudgetGate:
     @patch("selfhealing.services.retry_handler._is_system_enabled", return_value=True)
     def test_retry_blocked_when_error_budget_low(self, mock_system_enabled):
         """에러 예산 부족 시 재시도 차단."""
-        from selfhealing.services.retry_handler import RetryHandler, RetryConfig
+        from selfhealing.services.retry_handler import RetryHandler
 
         # Mock ErrorBudgetGate
         mock_gate_result = MagicMock()
@@ -465,7 +461,11 @@ class TestRetryHandlerErrorBudgetGate:
     @patch("selfhealing.services.retry_handler._is_system_enabled", return_value=True)
     def test_retry_allowed_when_error_budget_healthy(self, mock_system_enabled):
         """에러 예산 충분 시 재시도 허용."""
-        from selfhealing.services.retry_handler import RetryHandler, RetryConfig, RetryAction
+        from selfhealing.services.retry_handler import (
+            RetryAction,
+            RetryConfig,
+            RetryHandler,
+        )
 
         # Mock ErrorBudgetGate
         mock_gate_result = MagicMock()
@@ -491,7 +491,10 @@ class TestRetryHandlerErrorBudgetGate:
     @patch("selfhealing.services.retry_handler._is_system_enabled", return_value=True)
     def test_retry_continues_when_gate_unavailable(self, mock_system_enabled):
         """Gate 사용 불가 시에도 재시도 진행."""
-        from selfhealing.services.retry_handler import RetryHandler, RetryConfig, RetryAction
+        from selfhealing.services.retry_handler import (
+            RetryConfig,
+            RetryHandler,
+        )
 
         # Gate가 None 반환 (unavailable)
         with patch(
@@ -521,7 +524,9 @@ class TestConditionalReplayErrorBudgetGate:
 
     def test_conditional_replay_blocked_when_budget_low(self):
         """에러 예산 부족 시 조건부 Replay 차단."""
-        from selfhealing.adapters.celery.tasks import conditional_replay_on_circuit_close
+        from selfhealing.adapters.celery.tasks import (
+            conditional_replay_on_circuit_close,
+        )
 
         # Mock ErrorBudgetGate
         mock_gate_result = MagicMock()
@@ -565,8 +570,8 @@ class TestEventBusConvenienceFunctions:
     def test_emit_emergency_level_changed(self):
         """emit_emergency_level_changed 간편 함수 테스트."""
         from selfhealing.services.event_bus import (
-            emit_emergency_level_changed,
             EventType,
+            emit_emergency_level_changed,
         )
 
         received_events = []
@@ -589,8 +594,8 @@ class TestEventBusConvenienceFunctions:
     def test_emit_error_budget_critical(self):
         """emit_error_budget_critical 간편 함수 테스트."""
         from selfhealing.services.event_bus import (
-            emit_error_budget_critical,
             EventType,
+            emit_error_budget_critical,
         )
 
         received_events = []
@@ -611,8 +616,8 @@ class TestEventBusConvenienceFunctions:
     def test_emit_circuit_breaker_state_changed(self):
         """emit_circuit_breaker_state_changed 간편 함수 테스트."""
         from selfhealing.services.event_bus import (
-            emit_circuit_breaker_state_changed,
             EventType,
+            emit_circuit_breaker_state_changed,
         )
 
         received_closed = []
@@ -669,7 +674,6 @@ class TestDefaultHandlersRegistration:
         """기본 핸들러 등록 테스트."""
         from selfhealing.services.event_bus import (
             register_default_handlers,
-            EventType,
         )
 
         register_default_handlers()
@@ -708,7 +712,6 @@ class TestEmergencyManagerTTLCache:
         """테스트 전 초기화."""
         from selfhealing.services.emergency_mode import (
             GracefulDegradationManager,
-            EmergencyLevel,
         )
 
         # 싱글톤 리셋
@@ -736,7 +739,7 @@ class TestEmergencyManagerTTLCache:
 
     def test_cache_invalid_after_ttl(self):
         """TTL 만료 후 캐시가 무효한지 확인."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
 
         # 31초 전 로드 시간 설정
         self.manager._last_load_time = datetime.now(timezone.utc) - timedelta(seconds=31)
@@ -765,7 +768,7 @@ class TestEmergencyManagerTTLCache:
 
     def test_get_current_level_refreshes_on_stale_cache(self):
         """get_current_level() 호출 시 만료된 캐시면 StateBackend 재조회."""
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
         from unittest.mock import patch
 
         # 캐시를 만료 상태로 설정
@@ -790,7 +793,8 @@ class TestEmergencyManagerTTLCache:
     def test_external_event_invalidates_cache(self):
         """외부 이벤트 수신 시 캐시 무효화 확인."""
         from datetime import datetime, timezone
-        from selfhealing.services.event_bus import SelfHealingEvent, EventType
+
+        from selfhealing.services.event_bus import EventType, SelfHealingEvent
 
         # 캐시 설정
         self.manager._last_load_time = datetime.now(timezone.utc)
@@ -811,7 +815,8 @@ class TestEmergencyManagerTTLCache:
     def test_own_event_does_not_invalidate_cache(self):
         """자신이 발행한 이벤트는 캐시 무효화 안 함."""
         from datetime import datetime, timezone
-        from selfhealing.services.event_bus import SelfHealingEvent, EventType
+
+        from selfhealing.services.event_bus import EventType, SelfHealingEvent
 
         # 캐시 설정
         original_time = datetime.now(timezone.utc)

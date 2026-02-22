@@ -31,7 +31,6 @@ Execution:
 """
 
 import os
-import sys
 import time
 import random
 import threading
@@ -840,10 +839,10 @@ def run_full_redis_test() -> Dict[str, Any]:
     print("=" * 70)
     print()
     print("검증 기준 (Redis 분산 락 환경):")
-    print(f"  • 키당 DB query: 1회")
-    print(f"  • Stampede occurrence: 0")
+    print("  • 키당 DB query: 1회")
+    print("  • Stampede occurrence: 0")
     print(f"  • 락 대기 p95: < {TARGET_RESPONSE_TIME_MS}ms")
-    print(f"  • Early refresh 성공률: ≥ 90%")
+    print("  • Early refresh 성공률: ≥ 90%")
     print()
     print("결과:")
     for scenario, verification in results["verification"].items():

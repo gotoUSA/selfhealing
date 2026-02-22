@@ -2,20 +2,19 @@
 Tests for Auto Rollback Guard - 자율 조정 실패 대비 안전장치
 """
 
-import pytest
 import threading
-import time
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch, call
+from datetime import datetime, timezone
+from unittest.mock import MagicMock
+
+import pytest
 
 from selfhealing.core.auto_rollback_guard import (
     AutoRollbackGuard,
     GuardState,
-    RollbackSeverity,
     RollbackHealthAssessment,
+    RollbackSeverity,
     SafeDefault,
 )
-
 
 # =============================================================================
 # Fixtures

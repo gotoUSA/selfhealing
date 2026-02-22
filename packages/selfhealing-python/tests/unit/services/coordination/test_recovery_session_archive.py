@@ -11,13 +11,15 @@ Phase 1.4: RecoverySessionArchive 테스트
 - 통계 집계
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
+import pytest
+
+from selfhealing.services.coordination.enums import RecoveryStatus
 from selfhealing.services.coordination.recovery_session_archive import (
-    RecoveryStepArchiveData,
     RecoverySessionArchiveData,
     RecoverySessionArchiveService,
+    RecoveryStepArchiveData,
     get_recovery_session_archive_service,
     reset_recovery_session_archive_service,
 )
@@ -26,8 +28,6 @@ from selfhealing.services.coordination.recovery_state import (
     RecoveryStep,
     RecoveryStepType,
 )
-from selfhealing.services.coordination.enums import RecoveryStatus
-
 
 # =============================================================================
 # Fixtures

@@ -428,7 +428,7 @@ class RollbackHealingUser(HttpUser):
                             }
                         )
                     verification_done = True
-        except Exception as e:
+        except Exception:
             # 예외 발생 시 verified로 처리
             pass
         finally:
@@ -575,7 +575,7 @@ def on_test_stop(environment, **kwargs):
     failed = _rollback_stats["rollback_failed"]
     variance = _rollback_stats["variance_concurrent"]
 
-    print(f"\n📊 ROLLBACK SUMMARY")
+    print("\n📊 ROLLBACK SUMMARY")
     print(f"   Failures Triggered:    {triggered}")
     print(f"   ✅ Rollback Verified:  {verified}")
     print(f"   ❌ Rollback Failed:    {failed} (System Bug)")
@@ -587,7 +587,7 @@ def on_test_stop(environment, **kwargs):
         print(f"\n   Effective Success Rate: {success_rate:.1f}%")
 
     # === Self-Healing 통계 ===
-    print(f"\n🏥 SELF-HEALING INTEGRATION")
+    print("\n🏥 SELF-HEALING INTEGRATION")
     print(f"   Circuit Breaker State Changes: {_rollback_stats['cb_state_changes']}")
     print(f"   CB Failures Recorded (v3):     {_rollback_stats.get('cb_failures_recorded', 0)}")
     print(f"   Healing Events Recorded:       {_rollback_stats['healing_events_recorded']}")
@@ -603,20 +603,20 @@ def on_test_stop(environment, **kwargs):
 
     # CB 상태 분포
     if _rollback_stats["cb_states"]:
-        print(f"\n   CB State Distribution:")
+        print("\n   CB State Distribution:")
         for state, count in sorted(_rollback_stats["cb_states"].items()):
             print(f"     - {state}: {count}")
 
     # Product별 Variance (Top 5)
     if _rollback_stats["product_variance"]:
-        print(f"\n📦 VARIANCE BY PRODUCT (Top 5)")
+        print("\n📦 VARIANCE BY PRODUCT (Top 5)")
         sorted_variance = sorted(_rollback_stats["product_variance"].items(), key=lambda x: x[1], reverse=True)[:5]
         for product_id, count in sorted_variance:
             print(f"   Product {product_id}: {count} variance occurrences")
 
     # Critical 실패 상세
     if _rollback_stats["details"]["failed"]:
-        print(f"\n🚨 CRITICAL FAILURES")
+        print("\n🚨 CRITICAL FAILURES")
         for detail in _rollback_stats["details"]["failed"][:5]:
             print(
                 f"   - Product {detail.get('product_id')}: "
@@ -652,7 +652,7 @@ def on_test_stop(environment, **kwargs):
             if failed > 0:
                 print(f"   ⚠️  Note: {failed} system bugs detected but within tolerance")
         else:
-            print(f"\u274c ROLLBACK TEST FAILED")
+            print("\u274c ROLLBACK TEST FAILED")
             print(f"   Success rate: {success_rate:.1f}% (threshold: {PASS_THRESHOLD}%)")
             if failed > 0:
                 print(f"   🚨 {failed} system bugs detected!")
@@ -663,16 +663,16 @@ def on_test_stop(environment, **kwargs):
 
     # Self-Healing 통합 상태
     if healing_integrated:
-        print(f"\n🏥 Self-Healing Integration: ACTIVE")
-        print(f"   Healing events recorded to timeline")
+        print("\n🏥 Self-Healing Integration: ACTIVE")
+        print("   Healing events recorded to timeline")
     else:
-        print(f"\n⚠️  Self-Healing Integration: LIMITED")
-        print(f"   (XTest API may not be available)")
+        print("\n⚠️  Self-Healing Integration: LIMITED")
+        print("   (XTest API may not be available)")
 
     # Metrics 수집
     collector = get_metrics_collector()
     summary = collector.get_summary()
-    print(f"\n📈 METRICS")
+    print("\n📈 METRICS")
     print(f"   Total Requests: {summary['total_requests']}")
     print(f"   Error Rate: {summary['overall_error_rate']}%")
     print(f"   Pass Threshold: {PASS_THRESHOLD}%")

@@ -12,7 +12,6 @@ WAL은 파일 기반이므로 Redis 테스트 대상 아님.
 import os
 import pytest
 import json
-import time
 from unittest.mock import patch
 
 pytestmark = pytest.mark.requires_redis

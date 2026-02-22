@@ -13,7 +13,6 @@ from rest_framework import serializers
 from selfhealing.core.constants import (  # noqa: E402
     ControlAPIActions,
     ControlAPIEnvironments,
-    RiskLevels,
 )
 
 # =============================================================================

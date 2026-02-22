@@ -16,8 +16,6 @@ import os
 import tempfile
 from unittest.mock import patch
 
-import pytest
-
 from selfhealing.services.throttle.notification_fallback_recorder import (
     DEFAULT_FALLBACK_PATH,
 )

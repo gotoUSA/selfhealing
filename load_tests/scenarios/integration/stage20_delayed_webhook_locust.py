@@ -60,11 +60,8 @@ import time
 import json
 import random
 import threading
-import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
-from collections import defaultdict
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -238,16 +235,16 @@ def update_phase():
         print(f"{'='*60}")
         
         if new_phase == "delayed":
-            print(f"⏰ Testing delayed webhook scenarios...")
+            print("⏰ Testing delayed webhook scenarios...")
             print(f"   Webhook will arrive {DELAYED_WEBHOOK_DELAY_S}s after payment")
         elif new_phase == "out_of_order":
-            print(f"🔀 Testing out-of-order webhook scenarios...")
-            print(f"   CANCEL will arrive before CONFIRM")
+            print("🔀 Testing out-of-order webhook scenarios...")
+            print("   CANCEL will arrive before CONFIRM")
         elif new_phase == "duplicate":
-            print(f"📋 Testing duplicate webhook scenarios...")
-            print(f"   Same webhook will be sent multiple times")
+            print("📋 Testing duplicate webhook scenarios...")
+            print("   Same webhook will be sent multiple times")
         elif new_phase == "verification":
-            print(f"✅ Verification phase...")
+            print("✅ Verification phase...")
             perform_final_verification()
 
 
@@ -279,7 +276,7 @@ def get_tracked_order(order_id: str) -> Optional[OrderState]:
 
 def perform_final_verification():
     """Perform final verification and update stats"""
-    print(f"\n📊 Final Verification Results:")
+    print("\n📊 Final Verification Results:")
     
     # Check no resurrection
     with _stats_lock:
@@ -524,7 +521,7 @@ class DelayedWebhookUser(HttpUser):
                 TARGET_PRODUCT_IDS = [p["id"] for p in products[:10] if "id" in p]
         
         if not TARGET_PRODUCT_IDS:
-            print(f"[DEBUG] No products available")
+            print("[DEBUG] No products available")
             return None, None, 0
         
         product_id = random.choice(TARGET_PRODUCT_IDS)
@@ -996,14 +993,14 @@ def on_test_start(environment, **kwargs):
     global _stats
     
     print(f"\n{'='*70}")
-    print(f"🚀 Stage 20: Delayed/Out-of-Order Webhook Handling Test")
+    print("🚀 Stage 20: Delayed/Out-of-Order Webhook Handling Test")
     print(f"{'='*70}")
-    print(f"\n📋 Test Configuration:")
+    print("\n📋 Test Configuration:")
     print(f"   - Webhook Sender URL: {WEBHOOK_SENDER_URL}")
     print(f"   - Web Service URL: {WEB_SERVICE_URL}")
     print(f"   - Delayed Webhook Delay: {DELAYED_WEBHOOK_DELAY_S}s")
     print(f"   - Webhook Delay Threshold: {WEBHOOK_DELAY_THRESHOLD_S}s")
-    print(f"\n📍 Test Phases:")
+    print("\n📍 Test Phases:")
     print(f"   Phase 1: Baseline ({PHASE_1_BASELINE}s)")
     print(f"   Phase 2: Delayed Webhooks ({PHASE_2_DELAYED}s)")
     print(f"   Phase 3: Out-of-Order Webhooks ({PHASE_3_OUT_OF_ORDER}s)")
@@ -1026,46 +1023,46 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Generate final report"""
     print(f"\n{'='*70}")
-    print(f"📊 Stage 20: Delayed Webhook Test Results")
+    print("📊 Stage 20: Delayed Webhook Test Results")
     print(f"{'='*70}")
     
     with _stats_lock:
-        print(f"\n📦 Order Statistics:")
+        print("\n📦 Order Statistics:")
         print(f"   - Created: {_stats['orders_created']}")
         print(f"   - Confirmed: {_stats['orders_confirmed']}")
         print(f"   - Failed: {_stats['orders_failed']}")
         print(f"   - Timeout: {_stats['orders_timeout']}")
         print(f"   - Cancelled: {_stats['orders_cancelled']}")
         
-        print(f"\n📡 Webhook Simulation Statistics:")
+        print("\n📡 Webhook Simulation Statistics:")
         print(f"   - Requests Sent: {_stats['webhook_requests_sent']}")
         print(f"   - Requests Success: {_stats['webhook_requests_success']}")
         print(f"   - Requests Failed: {_stats['webhook_requests_failed']}")
         
-        print(f"\n⏰ Normal Webhooks:")
+        print("\n⏰ Normal Webhooks:")
         print(f"   - Sent: {_stats['normal_webhooks_sent']}")
         print(f"   - Success: {_stats['normal_webhooks_success']}")
         
-        print(f"\n⏰ Delayed Webhooks:")
+        print("\n⏰ Delayed Webhooks:")
         print(f"   - Sent: {_stats['delayed_webhooks_sent']}")
         print(f"   - Success: {_stats['delayed_webhooks_success']}")
         
-        print(f"\n🔀 Out-of-Order Webhooks:")
+        print("\n🔀 Out-of-Order Webhooks:")
         print(f"   - Sent: {_stats['out_of_order_webhooks_sent']}")
         print(f"   - Success: {_stats['out_of_order_webhooks_success']}")
         
-        print(f"\n📋 Duplicate Webhooks:")
+        print("\n📋 Duplicate Webhooks:")
         print(f"   - Sent: {_stats['duplicate_webhooks_sent']}")
         print(f"   - Success: {_stats['duplicate_webhooks_success']}")
         
-        print(f"\n⚠️  Critical Failure Metrics:")
+        print("\n⚠️  Critical Failure Metrics:")
         print(f"   - Resurrection Attempts: {_stats['resurrection_attempts']}")
         print(f"   - Resurrection Prevented: {_stats['resurrection_prevented']}")
         print(f"   - Resurrection Occurred (BAD): {_stats['resurrection_occurred']}")
         print(f"   - State Corruptions Detected: {_stats['state_corruption_detected']}")
         print(f"   - Duplicate Payments (BAD): {_stats['duplicate_processed']}")
         
-        print(f"\n🚨 Alert & Recovery Metrics:")
+        print("\n🚨 Alert & Recovery Metrics:")
         print(f"   - Delay Alerts Triggered: {_stats['delay_alerts_triggered']}")
         print(f"   - Conflict Alerts Triggered: {_stats['conflict_alerts_triggered']}")
         print(f"   - Refunds Triggered: {_stats['refund_triggered']}")
@@ -1075,13 +1072,13 @@ def on_test_stop(environment, **kwargs):
         if recovery_latencies:
             avg_recovery = sum(recovery_latencies) / len(recovery_latencies)
             max_recovery = max(recovery_latencies)
-            print(f"\n🔄 Recovery Latency:")
+            print("\n🔄 Recovery Latency:")
             print(f"   - Samples: {len(recovery_latencies)}")
             print(f"   - Avg: {avg_recovery:.0f}ms")
             print(f"   - Max: {max_recovery:.0f}ms")
             print(f"   - SLA (<5s): {'✓' if max_recovery < 5000 else '✗'}")
         
-        print(f"\n✅ Final Verification:")
+        print("\n✅ Final Verification:")
         for check, result in _stats["verification"].items():
             status = "✓" if result else "✗" if result is False else "?"
             print(f"   - {check}: {status}")
@@ -1099,7 +1096,7 @@ def on_test_stop(environment, **kwargs):
         
         print(f"\n{'='*70}")
         if all_passed and critical_failures == 0:
-            print(f"🎉 STAGE 20 PASSED - Webhook handling is robust!")
+            print("🎉 STAGE 20 PASSED - Webhook handling is robust!")
         else:
             print(f"❌ STAGE 20 FAILED - Critical failures detected: {critical_failures}")
         print(f"{'='*70}\n")

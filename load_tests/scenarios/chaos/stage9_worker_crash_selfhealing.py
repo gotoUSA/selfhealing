@@ -57,11 +57,10 @@ import uuid
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import deque
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 경로 설정
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -455,7 +454,7 @@ class SelfHealingIntegration:
         self.snapshot_timestamp = datetime.now(timezone.utc)
         
         self._record_event("brain_failure_start", 
-            f"🧠 BRAIN FAILURE STARTED - Storage blackout simulated",
+            "🧠 BRAIN FAILURE STARTED - Storage blackout simulated",
             {"snapshot_at": self.snapshot_timestamp.isoformat()})
         
         logger.error(f"{STAGE_NAME} 🧠 BRAIN FAILURE: Storage blackout started!")
@@ -631,7 +630,7 @@ class SelfHealingIntegration:
         self.partition_start = datetime.now(timezone.utc)
         
         self._record_event("partition_start",
-            f"🌐 NETWORK PARTITION: Communication with HQ severed!",
+            "🌐 NETWORK PARTITION: Communication with HQ severed!",
             {"started_at": self.partition_start.isoformat()})
         
         logger.error(f"{STAGE_NAME} 🌐 SPLIT BRAIN: Network partition started!")
@@ -1034,7 +1033,7 @@ class ExtremeChaosSimulator:
         duration = duration_seconds or self.config.test_duration_seconds
         
         print(f"\n{'='*70}")
-        print(f"🔥 STAGE 9 EXTREME V2: Worker Crash + Self-Healing + Advanced Scenarios")
+        print("🔥 STAGE 9 EXTREME V2: Worker Crash + Self-Healing + Advanced Scenarios")
         print(f"{'='*70}")
         print(f"  Duration: {duration}s")
         print(f"  Workers: {self.config.num_workers}")
@@ -1315,7 +1314,7 @@ class ExtremeChaosSimulator:
         # Brain Failure 종료
         self.brain_failure_result = self.selfhealing.end_brain_failure()
         
-        print(f"\n🧠 BRAIN FAILURE SCENARIO COMPLETED:")
+        print("\n🧠 BRAIN FAILURE SCENARIO COMPLETED:")
         print(f"   Duration: {self.brain_failure_result.get('duration_seconds', 0):.1f}s")
         print(f"   Health Checks: {self.brain_failure_result.get('total_health_checks', 0)}")
         print(f"   Survived: {self.brain_failure_result.get('survived_checks', 0)}")
@@ -1397,7 +1396,7 @@ class ExtremeChaosSimulator:
             "remaining_zombies": len(self.selfhealing.zombie_workers),
         }
         
-        print(f"\n🧟 ZOMBIE SCENARIO COMPLETED:")
+        print("\n🧟 ZOMBIE SCENARIO COMPLETED:")
         print(f"   Created: {zombies_created}")
         print(f"   Evicted: {zombies_evicted}")
         print(f"   Eviction Rate: {self.zombie_result['eviction_rate']:.1f}%")
@@ -1459,7 +1458,7 @@ class ExtremeChaosSimulator:
         # 네트워크 파티션 종료
         self.split_brain_result = self.selfhealing.end_network_partition()
         
-        print(f"\n🌐 NETWORK PARTITION SCENARIO COMPLETED:")
+        print("\n🌐 NETWORK PARTITION SCENARIO COMPLETED:")
         print(f"   Duration: {self.split_brain_result.get('duration_seconds', 0):.1f}s")
         print(f"   Fallback Activations: {self.split_brain_result.get('fallback_activations', 0)}")
         print(f"   Local Decisions: {self.split_brain_result.get('local_decisions_made', 0)}")
@@ -1491,7 +1490,7 @@ class ExtremeChaosSimulator:
         print("📊 EXTREME CHAOS TEST RESULTS")
         print("=" * 70)
         
-        print(f"\n📈 Task Statistics:")
+        print("\n📈 Task Statistics:")
         print(f"  Total Tasks Created: {stats['total_tasks']}")
         print(f"  Completed: {stats['completed']}")
         print(f"  Failed: {stats['failed']}")
@@ -1500,12 +1499,12 @@ class ExtremeChaosSimulator:
         print(f"  Still Pending: {stats['pending']}")
         print(f"  In Progress: {stats['in_progress']}")
         
-        print(f"\n👷 Worker Statistics:")
+        print("\n👷 Worker Statistics:")
         print(f"  Healthy Workers: {stats['workers_healthy']}")
         print(f"  Total Crashes: {stats['worker_crash_count']}")
         print(f"  Simultaneous Crashes: {stats['simultaneous_crashes']}")
         
-        print(f"\n🔌 Circuit Breaker:")
+        print("\n🔌 Circuit Breaker:")
         print(f"  Final State: {stats['cb_state']}")
         print(f"  Failure Count: {stats['cb_failure_count']}")
         
@@ -1592,7 +1591,7 @@ class ExtremeChaosSimulator:
             print(f"    └─ Max Snapshot Age: {self.brain_failure_result.get('max_snapshot_age_observed', 0):.1f}s")
         else:
             invariants['health_bridge_survived_blackout'] = True  # 비활성화면 통과
-            print(f"  🧠 health_bridge_survived_blackout: ⏭️ SKIPPED (not enabled)")
+            print("  🧠 health_bridge_survived_blackout: ⏭️ SKIPPED (not enabled)")
         
         # 8. 🧟 zombie_workers_evicted
         if self.config.zombie_enabled and self.zombie_result:
@@ -1607,7 +1606,7 @@ class ExtremeChaosSimulator:
             print(f"    └─ Eviction Rate: {eviction_rate:.1f}%, Remaining: {remaining}")
         else:
             invariants['zombie_workers_evicted'] = True  # 비활성화면 통과
-            print(f"  🧟 zombie_workers_evicted: ⏭️ SKIPPED (not enabled)")
+            print("  🧟 zombie_workers_evicted: ⏭️ SKIPPED (not enabled)")
         
         # 9. 🌐 split_brain_fallback_worked
         if self.config.split_brain_enabled and self.split_brain_result:
@@ -1622,7 +1621,7 @@ class ExtremeChaosSimulator:
             print(f"    └─ Fallback Activations: {fallback_count}, Local Decisions: {local_decisions}")
         else:
             invariants['split_brain_fallback_worked'] = True  # 비활성화면 통과
-            print(f"  🌐 split_brain_fallback_worked: ⏭️ SKIPPED (not enabled)")
+            print("  🌐 split_brain_fallback_worked: ⏭️ SKIPPED (not enabled)")
         
         # 최종 결과
         all_passed = all(invariants.values())

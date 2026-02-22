@@ -8,9 +8,7 @@ PostgreSQLSinkConsumer의 핵심 기능을 테스트합니다.
 from __future__ import annotations
 
 import json
-import time
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

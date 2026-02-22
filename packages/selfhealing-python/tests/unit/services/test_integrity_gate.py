@@ -9,16 +9,15 @@ PostRecoveryIntegrityGate 단위 테스트.
     - Fail-Open / Fail-Secure 정책 분기
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from selfhealing.services.event_bus.integrity_gate import (
-    INTEGRITY_GATE_KEY,
     INTEGRITY_FAILED_KEY,
-    on_circuit_breaker_closed_integrity_gate,
-    _verify_recovery_window_integrity,
+    INTEGRITY_GATE_KEY,
     _get_unsynced_wal_entries,
     _update_health_score,
+    _verify_recovery_window_integrity,
+    on_circuit_breaker_closed_integrity_gate,
 )
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,6 @@ environment variable support and sensible defaults.
 import os
 import logging
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

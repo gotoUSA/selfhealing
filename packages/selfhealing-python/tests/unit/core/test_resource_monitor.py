@@ -4,11 +4,9 @@ core/resource_monitor.py의 cgroup 기반 리소스 모니터링에 대한 단�
 메모리 제한 감지, 사용량 조회, 안전 여유 계산 등을 검증합니다.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
 
-from selfhealing.core.resource_monitor import CgroupResourceMonitor, CgroupMemoryMonitor
-
+from selfhealing.core.resource_monitor import CgroupMemoryMonitor, CgroupResourceMonitor
 
 # =============================================================================
 # Helper: Mock Path 객체 생성
@@ -385,7 +383,7 @@ class TestGetMemoryCurrentBytesEdgeCases:
         """
         mock_path = MagicMock()
         mock_path.exists.return_value = True
-        mock_path.read_text.side_effect = IOError("Failed to read")
+        mock_path.read_text.side_effect = OSError("Failed to read")
         with patch.object(
             CgroupResourceMonitor,
             "CGROUP_V2_MEMORY_CURRENT",

@@ -8,29 +8,21 @@ Tests for:
 - Degraded Mode Manager
 """
 
-import json
 import sys
-import tempfile
 import threading
 import time
-from datetime import datetime, timezone
 from io import StringIO
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from selfhealing.audit.resilience import (
+    AuditCircuitBreakerConfig,
     AuditMetrics,
     CircuitBreaker,
-    AuditCircuitBreakerConfig,
     CircuitBreakerRegistry,
     CircuitState,
     DegradedModeManager,
     SyslogFallback,
     get_audit_metrics,
     get_circuit_breaker,
-    get_degraded_mode_manager,
     get_syslog_fallback,
     log_critical_to_syslog,
 )

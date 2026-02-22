@@ -41,10 +41,10 @@ def applier():
 @pytest.fixture
 def throttle():
     """테스트용 AdaptiveThrottle 인스턴스 (싱글톤 등록, 기본 config 사용)."""
+    import selfhealing.services.throttle.adaptive as adaptive_module
     from selfhealing.services.throttle.adaptive import (
         _throttle_lock,
     )
-    import selfhealing.services.throttle.adaptive as adaptive_module
 
     config = ThrottleConfig()  # 기본값 사용 (하드코딩 방지)
     t = AdaptiveThrottle(config)

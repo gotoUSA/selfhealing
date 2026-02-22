@@ -10,16 +10,13 @@ ViolationType 확장 및 Severity/ActionPolicy 매핑 테스트
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.services.security import (
-    ActionPolicy,
     ACTION_POLICY_BY_VIOLATION_TYPE,
+    SEVERITY_BY_VIOLATION_TYPE,
+    ActionPolicy,
     Severity,
     ViolationType,
-    SEVERITY_BY_VIOLATION_TYPE,
 )
-
 
 # =============================================================================
 # 순위 1: 신규 ViolationType 테스트

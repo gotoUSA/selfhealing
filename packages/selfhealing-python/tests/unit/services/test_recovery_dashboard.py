@@ -13,25 +13,25 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#10.2.4.12
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
-from datetime import datetime, timezone
+from unittest.mock import Mock
 
+import pytest
+
+from selfhealing.services.coordination.enums import RecoveryStatus
 from selfhealing.services.coordination.recovery_dashboard import (
-    RecoveryDashboardService,
-    RecoveryWidgetData,
-    RecoverySessionProgress,
     ActiveSessionInfo,
     PendingApprovalsInfo,
-    RecoveryStats,
-    RegionalStatusInfo,
     RecoveryActionWidget,
-    get_status_display,
-    get_status_color,
+    RecoveryDashboardService,
+    RecoverySessionProgress,
+    RecoveryStats,
+    RecoveryWidgetData,
+    RegionalStatusInfo,
     get_recovery_dashboard_service,
+    get_status_color,
+    get_status_display,
     reset_recovery_dashboard_service,
 )
-from selfhealing.services.coordination.enums import RecoveryStatus
 
 
 class TestRecoveryDashboardServiceDataClasses:

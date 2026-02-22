@@ -232,7 +232,7 @@ class TestTimezoneHandling:
         Scenario: Servers in different timezones should still work.
         All times should be normalized to UTC.
         """
-        from selfhealing.core.time_provider import MockTimeProvider, SystemTimeProvider
+        from selfhealing.core.time_provider import MockTimeProvider
 
         # Server in UTC
         utc_server = MockTimeProvider(datetime(2024, 1, 1, 12, 0, 0, tzinfo=tz.utc))

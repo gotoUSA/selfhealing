@@ -68,10 +68,10 @@ class ThrottleLimitHistoryCollector:
     Postmortem 생성 시 인시던트 기간 동안의 limit 변경 이력을 제공합니다.
     """
 
-    _instance: "ThrottleLimitHistoryCollector | None" = None
+    _instance: ThrottleLimitHistoryCollector | None = None
     MAX_HISTORY_SIZE = 1000
 
-    def __new__(cls) -> "ThrottleLimitHistoryCollector":
+    def __new__(cls) -> ThrottleLimitHistoryCollector:
         if cls._instance is None:
             instance = super().__new__(cls)
             instance._init()

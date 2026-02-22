@@ -6,15 +6,16 @@ for storage in Loki with automatic trace_id correlation.
 """
 
 import os
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 def _is_otel_logging_available() -> bool:
     """Check if OpenTelemetry logging SDK is installed."""
     try:
-        import opentelemetry.sdk._logs  # noqa: F401
         import opentelemetry.exporter.otlp.proto.grpc._log_exporter  # noqa: F401
+        import opentelemetry.sdk._logs  # noqa: F401
 
         return True
     except ImportError:
@@ -43,7 +44,10 @@ class TestLoggerProviderInitialization:
 
     def test_is_logging_instrumented_returns_false_initially(self):
         """Test is_logging_instrumented returns False when not instrumented."""
-        from selfhealing.observability import is_logging_instrumented, reset_opentelemetry
+        from selfhealing.observability import (
+            is_logging_instrumented,
+            reset_opentelemetry,
+        )
 
         reset_opentelemetry()
         assert is_logging_instrumented() is False
@@ -83,7 +87,7 @@ class TestLoggerProviderInitialization:
 
     def test_uninstrument_logging_is_safe_when_not_instrumented(self):
         """Test uninstrument_logging doesn't raise when not instrumented."""
-        from selfhealing.observability import uninstrument_logging, reset_opentelemetry
+        from selfhealing.observability import reset_opentelemetry, uninstrument_logging
 
         reset_opentelemetry()
         # Should not raise
@@ -91,7 +95,10 @@ class TestLoggerProviderInitialization:
 
     def test_shutdown_logger_provider_is_safe_when_not_initialized(self):
         """Test shutdown_logger_provider doesn't raise when not initialized."""
-        from selfhealing.observability import shutdown_logger_provider, reset_opentelemetry
+        from selfhealing.observability import (
+            reset_opentelemetry,
+            shutdown_logger_provider,
+        )
 
         reset_opentelemetry()
         # Should not raise
@@ -101,9 +108,9 @@ class TestLoggerProviderInitialization:
     def test_initialize_logger_provider_succeeds_when_otel_enabled(self):
         """Test LoggerProvider initialization when OTEL is enabled."""
         from selfhealing.observability import (
-            initialize_opentelemetry,
-            initialize_logger_provider,
             get_logger_provider,
+            initialize_logger_provider,
+            initialize_opentelemetry,
             reset_opentelemetry,
         )
 
@@ -132,9 +139,9 @@ class TestLoggerProviderInitialization:
     def test_initialize_logger_provider_is_idempotent(self):
         """Test LoggerProvider initialization is idempotent."""
         from selfhealing.observability import (
-            initialize_opentelemetry,
-            initialize_logger_provider,
             get_logger_provider,
+            initialize_logger_provider,
+            initialize_opentelemetry,
             reset_opentelemetry,
         )
 
@@ -169,7 +176,6 @@ class TestLoggerProviderInitialization:
             instrument_logging,
             is_logging_instrumented,
             reset_opentelemetry,
-            uninstrument_logging,
         )
 
         reset_opentelemetry()
@@ -213,9 +219,9 @@ class TestLoggerProviderInitialization:
         from selfhealing.observability import (
             initialize_opentelemetry,
             instrument_logging,
-            uninstrument_logging,
             is_logging_instrumented,
             reset_opentelemetry,
+            uninstrument_logging,
         )
 
         reset_opentelemetry()
@@ -255,12 +261,11 @@ class TestLoggerProviderInitialization:
     def test_reset_clears_logging_state(self):
         """Test reset_opentelemetry clears LoggerProvider and logging state."""
         from selfhealing.observability import (
-            initialize_opentelemetry,
-            initialize_logger_provider,
-            instrument_logging,
-            reset_opentelemetry,
             get_logger_provider,
+            initialize_logger_provider,
+            initialize_opentelemetry,
             is_logging_instrumented,
+            reset_opentelemetry,
         )
 
         env_vars = {
@@ -312,10 +317,9 @@ class TestLoggerProviderWithMissingDependencies:
     def test_initialize_logger_provider_handles_missing_sdk(self):
         """Test graceful handling when logging SDK is not installed."""
         from selfhealing.observability import (
-            initialize_opentelemetry,
             initialize_logger_provider,
+            initialize_opentelemetry,
             reset_opentelemetry,
-            _is_otel_logging_available,
         )
 
         reset_opentelemetry()

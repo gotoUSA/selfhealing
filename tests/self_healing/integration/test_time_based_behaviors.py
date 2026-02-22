@@ -28,7 +28,6 @@ Reference:
 
 import pytest
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
 from freezegun import freeze_time
 
 from selfhealing.core import timezone

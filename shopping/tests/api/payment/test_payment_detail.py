@@ -7,14 +7,11 @@ from django.utils import timezone
 import pytest
 from rest_framework import status
 
-from shopping.models.order import Order, OrderItem
-from shopping.models.payment import Payment
 from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
     CompletedPaymentFactory,
-    ProductFactory,
 )
 
 

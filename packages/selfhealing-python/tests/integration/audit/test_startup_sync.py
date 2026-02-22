@@ -17,22 +17,18 @@ Related code:
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from selfhealing.audit.integrity import (
     StartupHashChainSync,
-    PendingSequenceManager,
     compute_hash,
 )
-
 
 # =============================================================================
 # Mock Redis Client for Integration Tests
@@ -136,7 +132,7 @@ class IntegrationMockRedis:
             self._data[key] = new_value
             return new_value
 
-    def pipeline(self, transaction: bool = True) -> "MockPipeline":
+    def pipeline(self, transaction: bool = True) -> MockPipeline:
         return MockPipeline(self)
 
 
@@ -147,15 +143,15 @@ class MockPipeline:
         self._redis = redis
         self._commands: list[tuple] = []
 
-    def set(self, key: str, value: Any) -> "MockPipeline":
+    def set(self, key: str, value: Any) -> MockPipeline:
         self._commands.append(("set", key, value))
         return self
 
-    def hset(self, key: str, mapping: dict = None, **kwargs) -> "MockPipeline":
+    def hset(self, key: str, mapping: dict = None, **kwargs) -> MockPipeline:
         self._commands.append(("hset", key, mapping or kwargs))
         return self
 
-    def delete(self, *keys) -> "MockPipeline":
+    def delete(self, *keys) -> MockPipeline:
         self._commands.append(("delete", keys))
         return self
 

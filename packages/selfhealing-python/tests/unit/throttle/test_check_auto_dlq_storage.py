@@ -15,9 +15,7 @@ AdaptiveThrottle.check() 거부 시 DLQ 자동 저장 단위 테스트.
 7. 기존 호출 하위 호환성 (context/store_rejection 없이 호출)
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from selfhealing.services.throttle.config import ThrottleConfig
 

@@ -8,10 +8,11 @@ Leader Election 인터페이스.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Protocol
+from typing import Protocol
 
 import structlog
 

@@ -10,21 +10,20 @@ Tests:
 """
 
 import json
-import pytest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, mock_open, patch
+
+import pytest
 
 from selfhealing.tasks.cascade_cleanup_tasks import (
-    archive_cascade_events,
-    purge_old_cascade_events,
-    create_cascade_daily_checkpoint,
-    verify_cascade_chain_integrity,
-    recover_cascade_from_fallback,
     CASCADE_CLEANUP_SCHEDULE,
-    LOCAL_FALLBACK_PATH,
+    archive_cascade_events,
+    create_cascade_daily_checkpoint,
+    purge_old_cascade_events,
+    recover_cascade_from_fallback,
+    verify_cascade_chain_integrity,
 )
-
 
 # Patch 경로 상수 (함수 내부에서 import하므로 원본 모듈 경로 사용)
 PATCH_GET_AUDITOR = "selfhealing.audit.cascade_auditor.get_cascade_event_auditor"
@@ -79,7 +78,6 @@ def old_events_auditor(memory_backend):
     from selfhealing.audit.cascade_event import (
         CascadeEvent,
         CascadeTrigger,
-        CascadeEffect,
     )
 
     reset_cascade_auditor()

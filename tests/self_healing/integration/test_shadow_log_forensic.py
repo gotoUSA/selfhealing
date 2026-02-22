@@ -8,21 +8,14 @@ Reference: docs/self_healing/13_LAYERED_STORAGE_RESILIENCE.md §7
 
 import time
 import threading
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from selfhealing.adapters.memory.circuit_breaker import (
     LayeredCircuitBreakerStateRepository,
     InMemoryCircuitBreakerStateRepository,
-    ShadowLogger,
-    L2SyncFailureRecord,
     get_shadow_logger,
-)
-from selfhealing.interfaces.repositories import (
-    CircuitBreakerStateData,
-    CircuitBreakerStateEnum,
 )
 
 

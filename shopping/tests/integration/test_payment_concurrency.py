@@ -48,16 +48,11 @@ import pytest
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from shopping.models.order import Order
 from shopping.models.payment import Payment
-from shopping.models.product import Product
 from shopping.services.point_service import PointService
 from shopping.tests.factories import (
-    OrderFactory,
     PaymentFactory,
-    ProductFactory,
     TossResponseBuilder,
-    UserFactory,
 )
 
 

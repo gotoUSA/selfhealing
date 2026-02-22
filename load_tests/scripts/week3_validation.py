@@ -25,7 +25,7 @@ import json
 import random
 import importlib.util
 from datetime import datetime
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -619,7 +619,7 @@ class Week3Validator:
         errors = sum(1 for r in self.results if r.status == "ERROR")
         total = len(self.results)
         
-        print(f"\n  📊 Summary:")
+        print("\n  📊 Summary:")
         print(f"     Total Tests: {total}")
         print(f"     {Colors.GREEN}Passed: {passed}{Colors.END}")
         print(f"     {Colors.RED}Failed: {failed}{Colors.END}")
@@ -627,7 +627,7 @@ class Week3Validator:
         print(f"     Duration: {duration:.1f}s")
         
         # 개별 결과
-        print(f"\n  📋 Test Results:")
+        print("\n  📋 Test Results:")
         for result in self.results:
             if result.status == "PASSED":
                 icon = f"{Colors.GREEN}✅{Colors.END}"
@@ -640,7 +640,7 @@ class Week3Validator:
         
         # Coverage 계산
         coverage = passed / total * 100 if total > 0 else 0
-        print(f"\n  📈 Coverage:")
+        print("\n  📈 Coverage:")
         print(f"     GAP Resolution Rate: {coverage:.1f}%")
         
         if coverage >= 95:

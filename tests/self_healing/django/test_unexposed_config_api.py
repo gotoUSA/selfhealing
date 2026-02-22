@@ -12,7 +12,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 django.setup()
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from rest_framework.test import APIRequestFactory
 from rest_framework import status
 

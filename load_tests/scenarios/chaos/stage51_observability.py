@@ -29,7 +29,6 @@ import time
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List
 
 try:
     from locust import HttpUser, task, between, tag, events, constant

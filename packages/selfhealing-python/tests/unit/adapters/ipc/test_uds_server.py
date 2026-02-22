@@ -12,7 +12,7 @@ UDSServer 단위 테스트.
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

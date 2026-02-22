@@ -141,10 +141,6 @@ class TestSingletonBehavior:
 
     def test_reset_clears_singleton(self):
         """reset_user_session_registry()가 싱글톤을 초기화하는지 확인."""
-        from selfhealing.services.security.session_registry import (
-            _registry,
-            get_user_session_registry,
-        )
 
         reset_user_session_registry()
 

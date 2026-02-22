@@ -10,11 +10,9 @@ Reference: docs/self_healing/middleware_system/24_CHAOS_INTEGRATION_PLAN.md §8.
 Total: 10 tests
 """
 
-import pytest
 import time
-import threading
-from unittest.mock import patch, MagicMock
 
+import pytest
 
 # =============================================================================
 # SyntheticLoadGenerator Tests (5 tests)
@@ -27,10 +25,10 @@ class TestSyntheticLoadGenerator:
     def test_generate_baseline_traffic(self):
         """Test baseline traffic generation."""
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
+            GeneratorState,
             LoadConfig,
             LoadPattern,
-            GeneratorState,
+            SyntheticLoadGenerator,
         )
 
         generator = SyntheticLoadGenerator(
@@ -66,9 +64,9 @@ class TestSyntheticLoadGenerator:
     def test_ramp_up_pattern(self):
         """Test ramp-up load pattern."""
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
             LoadConfig,
             LoadPattern,
+            SyntheticLoadGenerator,
         )
 
         generator = SyntheticLoadGenerator(
@@ -104,10 +102,10 @@ class TestSyntheticLoadGenerator:
     def test_steady_state_pattern(self):
         """Test steady-state load pattern with warmup."""
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
+            GeneratorState,
             LoadConfig,
             LoadPattern,
-            GeneratorState,
+            SyntheticLoadGenerator,
         )
 
         generator = SyntheticLoadGenerator(
@@ -133,9 +131,9 @@ class TestSyntheticLoadGenerator:
     def test_spike_pattern(self):
         """Test spike load pattern."""
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
             LoadConfig,
             LoadPattern,
+            SyntheticLoadGenerator,
         )
 
         generator = SyntheticLoadGenerator(
@@ -162,10 +160,10 @@ class TestSyntheticLoadGenerator:
     def test_graceful_shutdown(self):
         """Test graceful shutdown of generator."""
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
+            GeneratorState,
             LoadConfig,
             LoadPattern,
-            GeneratorState,
+            SyntheticLoadGenerator,
         )
 
         generator = SyntheticLoadGenerator(
@@ -203,9 +201,9 @@ class TestTrafficShaper:
     def test_shape_request_rate(self):
         """Test request rate shaping."""
         from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
             ShapingConfig,
             ShapingMode,
+            TrafficShaper,
         )
 
         shaper = TrafficShaper(experiment_id="test-shaper-001")
@@ -236,9 +234,9 @@ class TestTrafficShaper:
     def test_shape_concurrent_users(self):
         """Test concurrent user shaping."""
         from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
             ShapingConfig,
             ShapingMode,
+            TrafficShaper,
         )
 
         shaper = TrafficShaper(experiment_id="test-shaper-002")
@@ -270,10 +268,10 @@ class TestTrafficShaper:
     def test_traffic_distribution_uniform(self):
         """Test uniform traffic distribution."""
         from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
+            DistributionStrategy,
             ShapingConfig,
             ShapingMode,
-            DistributionStrategy,
+            TrafficShaper,
         )
 
         shaper = TrafficShaper(experiment_id="test-shaper-003")
@@ -310,10 +308,10 @@ class TestTrafficShaper:
     def test_traffic_distribution_weighted(self):
         """Test weighted traffic distribution."""
         from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
+            DistributionStrategy,
             ShapingConfig,
             ShapingMode,
-            DistributionStrategy,
+            TrafficShaper,
         )
 
         shaper = TrafficShaper(experiment_id="test-shaper-004")
@@ -343,9 +341,9 @@ class TestTrafficShaper:
     def test_adaptive_shaping(self):
         """Test adaptive rate shaping based on latency."""
         from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
             ShapingConfig,
             ShapingMode,
+            TrafficShaper,
         )
 
         shaper = TrafficShaper(experiment_id="test-shaper-005")
@@ -383,15 +381,14 @@ class TestPhase3Integration:
     def test_experiment_with_synthetic_traffic(self):
         """Test chaos experiment with synthetic traffic injection."""
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
             LoadConfig,
             LoadPattern,
-            SyntheticTrafficGenerator,
+            SyntheticLoadGenerator,
         )
         from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
             ShapingConfig,
             ShapingMode,
+            TrafficShaper,
         )
 
         # 합성 트래픽 생성기
@@ -440,10 +437,8 @@ class TestPhase3Integration:
     def test_traffic_cleanup_on_error(self):
         """Test traffic cleanup when error occurs."""
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
-            LoadConfig,
-            LoadPattern,
             GeneratorState,
+            LoadConfig,
             cleanup_generator,
             get_synthetic_load_generator,
         )
@@ -480,9 +475,9 @@ class TestPhase3Integration:
     def test_synthetic_request_headers(self):
         """Test that synthetic requests have correct headers."""
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticTrafficGenerator,
             SYNTHETIC_HEADER,
             SYNTHETIC_VALUE,
+            SyntheticTrafficGenerator,
         )
 
         generator = SyntheticTrafficGenerator(experiment_id="test-headers-001")
@@ -507,9 +502,9 @@ class TestPhase3Integration:
     def test_shaper_reset(self):
         """Test shaper reset functionality."""
         from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
             ShapingConfig,
             ShapingMode,
+            TrafficShaper,
         )
 
         shaper = TrafficShaper(experiment_id="test-reset-001")

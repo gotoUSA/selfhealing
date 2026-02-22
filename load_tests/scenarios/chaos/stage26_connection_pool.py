@@ -33,9 +33,8 @@ import os
 import sys
 import time
 import random
-import threading
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -142,7 +141,7 @@ class NormalDBUser(HttpUser):
                 response.success()
             else:
                 response.failure(f"Auth failed: {response.status_code}")
-        except Exception as e:
+        except Exception:
             pass  # 인증 실패해도 테스트 계속
     
     def _headers(self) -> Dict[str, str]:
@@ -296,7 +295,7 @@ class HeavyDBUser(HttpUser):
         start = time.time()
         
         with self.client.get(
-            f"/api/orders/",
+            "/api/orders/",
             headers=self._headers(),
             params={
                 "include_items": "true",
@@ -424,7 +423,7 @@ def on_test_stop(environment, **kwargs):
     if detection_times:
         print(f"  - 감지 시간들: {detection_times[:5]}...")  # 처음 5개만
     
-    print(f"\n❌ 에러 통계:")
+    print("\n❌ 에러 통계:")
     for error_type, count in _pool_stats["errors"].items():
         print(f"  {error_type}: {count}")
     
@@ -446,7 +445,7 @@ def on_test_stop(environment, **kwargs):
     
     # TC-26-4: Stampede 통합 검증 결과
     stampede = _pool_stats["stampede_integration"]
-    print(f"\n🔗 TC-26-4: Stampede + Pool 통합 검증:")
+    print("\n🔗 TC-26-4: Stampede + Pool 통합 검증:")
     print(f"  - Pool 스트레스 중 캐시 미스: {stampede['cache_miss_during_pool_stress']}")
     print(f"  - Stampede 방지로 Pool 폭격 방지: {stampede['stampede_prevented_pool_explosion']}")
     print(f"  - Pool 부족 시 DB 쿼리 수: {stampede['db_queries_during_pool_low']}")

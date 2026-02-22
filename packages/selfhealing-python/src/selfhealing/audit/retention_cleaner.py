@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Thread
-from typing import Callable
 
 import structlog
 

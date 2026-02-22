@@ -12,9 +12,9 @@
 - WAL 기반 무손실 감사 기록
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # =============================================================================
 # Security Violation Audit Event Types Tests
@@ -408,7 +408,9 @@ class TestRegionalIsolationGateAuditIntegration:
     def test_isolate_region_calls_audit_on_success(self, mock_redis, mock_identity):
         """Should call log_region_isolation_audit on successful isolation."""
         with patch("selfhealing.services.isolation.regional_gate.log_region_isolation_audit") as mock_audit:
-            from selfhealing.services.isolation.regional_gate import RegionalIsolationGate
+            from selfhealing.services.isolation.regional_gate import (
+                RegionalIsolationGate,
+            )
 
             gate = RegionalIsolationGate(
                 global_redis=mock_redis,
@@ -434,7 +436,9 @@ class TestRegionalIsolationGateAuditIntegration:
         mock_redis.set.side_effect = Exception("Redis connection failed")
 
         with patch("selfhealing.services.isolation.regional_gate.log_region_isolation_audit") as mock_audit:
-            from selfhealing.services.isolation.regional_gate import RegionalIsolationGate
+            from selfhealing.services.isolation.regional_gate import (
+                RegionalIsolationGate,
+            )
 
             gate = RegionalIsolationGate(
                 global_redis=mock_redis,
@@ -455,7 +459,9 @@ class TestRegionalIsolationGateAuditIntegration:
     def test_restore_region_calls_audit_on_success(self, mock_redis, mock_identity):
         """Should call log_region_isolation_audit on successful restore."""
         with patch("selfhealing.services.isolation.regional_gate.log_region_isolation_audit") as mock_audit:
-            from selfhealing.services.isolation.regional_gate import RegionalIsolationGate
+            from selfhealing.services.isolation.regional_gate import (
+                RegionalIsolationGate,
+            )
 
             gate = RegionalIsolationGate(
                 global_redis=mock_redis,
@@ -493,8 +499,8 @@ class TestBlastRadiusServiceAuditIntegration:
     def test_set_policy_calls_audit(self):
         """Should call log_blast_radius_audit on set_policy."""
         with patch("selfhealing.services.blast_radius.service.log_blast_radius_audit") as mock_audit:
-            from selfhealing.services.blast_radius.service import BlastRadiusService
             from selfhealing.services.blast_radius.models import BlastRadiusLevel
+            from selfhealing.services.blast_radius.service import BlastRadiusService
 
             service = BlastRadiusService()
             service.clear()

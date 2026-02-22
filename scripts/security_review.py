@@ -17,7 +17,6 @@ Reference: docs/L3_SELF_HEALING_OPERATIONS.md §5, §6
 """
 
 import json
-import os
 import sys
 from datetime import datetime
 from pathlib import Path

@@ -6,7 +6,6 @@ HealthProbeManager 기본 프로브 목록 테스트.
 - AuditSystemProbe 인스턴스 타입 확인
 """
 
-import pytest
 
 
 class TestHealthProbeManagerDefaultProbes:
@@ -14,8 +13,8 @@ class TestHealthProbeManagerDefaultProbes:
 
     def test_default_probes_contains_audit_system_probe(self):
         """AuditSystemProbe가 기본 프로브 목록에 포함되어 있는지 확인."""
-        from selfhealing.meta.health_probe import HealthProbeManager
         from selfhealing.meta.audit_probe import AuditSystemProbe
+        from selfhealing.meta.health_probe import HealthProbeManager
 
         manager = HealthProbeManager()
 
@@ -49,8 +48,8 @@ class TestHealthProbeManagerProbeTypes:
 
     def test_audit_system_probe_component_name(self):
         """AuditSystemProbe의 component_name 확인."""
-        from selfhealing.meta.health_probe import HealthProbeManager
         from selfhealing.meta.audit_probe import AuditSystemProbe
+        from selfhealing.meta.health_probe import HealthProbeManager
 
         manager = HealthProbeManager()
 

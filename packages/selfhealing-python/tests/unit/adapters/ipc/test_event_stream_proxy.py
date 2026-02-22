@@ -12,10 +12,7 @@ from __future__ import annotations
 
 import queue
 import threading
-import time
 from unittest.mock import MagicMock
-
-import pytest
 
 from selfhealing.adapters.ipc.event_stream_proxy import (
     EventStreamProxy,

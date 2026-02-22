@@ -30,9 +30,8 @@ import time
 import json
 import logging
 import subprocess
-import threading
 from datetime import datetime
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, Tuple
 
 # 프로젝트 루트를 PATH에 추가
 _current_dir = os.path.dirname(os.path.abspath(__file__))

@@ -8,13 +8,10 @@ sla_event, limit_change_direction, limit_change_trigger 파라미터와 함께
 
 from __future__ import annotations
 
-from unittest.mock import patch, call
+from unittest.mock import patch
 
-import pytest
-
-from selfhealing.services.throttle.config import ThrottleConfig
 from selfhealing.services.throttle.adaptive import AdaptiveThrottle
-
+from selfhealing.services.throttle.config import ThrottleConfig
 
 # =============================================================================
 # SLA Critical 경로 메트릭 테스트

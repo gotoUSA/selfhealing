@@ -242,7 +242,6 @@ class TestMultiServiceCircuitBreakerHandling:
         from selfhealing.services.throttle.registry import (
             get_throttle_registry,
             ServiceThrottleConfig,
-            CircuitBreakerState,
         )
 
         registry = get_throttle_registry()
@@ -412,7 +411,6 @@ class TestRecoveryDampeningStages:
         from selfhealing.services.throttle.recovery_dampening import (
             RecoveryDampeningManager,
             RecoveryDampeningConfig,
-            RecoveryPhase,
         )
 
         config = RecoveryDampeningConfig(

@@ -133,7 +133,7 @@ def _handle_limit_recovered(event) -> None:
         )
     except ImportError:
         _send_limit_recovered_sync(event.data)
-    except Exception as e:
+    except Exception:
         _send_limit_recovered_sync(event.data)
 
 

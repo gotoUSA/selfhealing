@@ -6,15 +6,13 @@ LMDB 기반 영속 버퍼의 핵심 기능을 테스트합니다.
 
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
 import threading
 import time
-from typing import Any, Generator
+from collections.abc import Generator
 
 import pytest
-
 
 # LMDB 설치 여부 확인
 try:
@@ -331,7 +329,6 @@ class TestDiskPersistentBufferCleanup:
 
     def test_cleanup_old_entries(self, disk_buffer):
         """오래된 엔트리 정리 테스트."""
-        import time
 
         # 엔트리 추가
         for i in range(5):

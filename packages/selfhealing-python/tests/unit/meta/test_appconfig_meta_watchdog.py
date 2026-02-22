@@ -6,7 +6,6 @@ SelfHealingConfig에 Meta-Watchdog 시작 기능이 있는지 테스트.
 """
 
 import os
-import pytest
 
 
 class TestSelfHealingConfigMetaWatchdog:

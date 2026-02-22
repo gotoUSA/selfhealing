@@ -6,12 +6,9 @@ CI/CD 파이프라인에서 배포 전 설정 검증에 사용.
 """
 
 import json
-import pytest
 from io import StringIO
-from unittest.mock import patch, MagicMock
-from dataclasses import dataclass, field
+from unittest.mock import MagicMock
 
-from django.core.management import call_command
 
 
 class TestCheckSelfhealingConfigCommand:

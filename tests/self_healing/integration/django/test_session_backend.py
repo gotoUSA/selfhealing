@@ -7,7 +7,6 @@ django.contrib.sessions, SessionMiddleware 유지를 확인한다.
 
 from __future__ import annotations
 
-import pytest
 
 from django.conf import settings
 

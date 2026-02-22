@@ -11,7 +11,6 @@ Usage:
 """
 
 import argparse
-import os
 import re
 from pathlib import Path
 from typing import Dict, List, Tuple

@@ -39,7 +39,6 @@ import threading
 import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
-from collections import defaultdict
 from dataclasses import dataclass, field
 
 # Ensure project root is in sys.path
@@ -875,7 +874,7 @@ def run_gradual_increase_test(base_url: str, target_percent: float = 90) -> Dict
             
             # Critical이면 중단
             if status.get("state") == "critical":
-                print(f"  🔴 Critical - stopping allocation")
+                print("  🔴 Critical - stopping allocation")
                 break
             
             # 메모리 할당 (10MB씩)
@@ -1074,17 +1073,17 @@ def run_full_stage36_real_test(base_url: str = "http://localhost:8000") -> Dict[
     print(f"{'='*60}")
     
     grad = results["tests"]["gradual_increase"]
-    print(f"\n1. Gradual Increase:")
+    print("\n1. Gradual Increase:")
     print(f"   Warning at: {grad.get('warning_at', 'N/A')}%")
     print(f"   Throttle at: {grad.get('throttle_at', 'N/A')}%")
     
     payload = results["tests"]["large_payload"]
-    print(f"\n2. Large Payload:")
+    print("\n2. Large Payload:")
     print(f"   Streaming success: {payload['streaming']['success']}")
     print(f"   Non-streaming fail: {payload['nonstreaming']['fail']}")
     
     gc = results["tests"]["gc_recovery"]
-    print(f"\n3. GC Recovery:")
+    print("\n3. GC Recovery:")
     print(f"   Reclaimed: {gc.get('gc_reclaimed', 0):.1f}MB")
     print(f"   Time: {gc.get('gc_time_ms', 0):.2f}ms")
     

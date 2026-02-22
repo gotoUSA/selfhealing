@@ -18,9 +18,6 @@ NOTE: Tests use Redis-based adapters for CircuitBreaker and DLQ.
       Use @pytest.mark.requires_redis to auto-skip when Redis unavailable.
 """
 
-from datetime import timedelta
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
 
 import pytest
 from django.utils import timezone
@@ -30,8 +27,6 @@ from selfhealing.services import (
     CircuitBreakerService,
     CircuitState,
 )
-from selfhealing.services import DLQConfig, DLQService
-from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 # =============================================================================
 # CHAOS-R: Recovery During Chaos Tests
@@ -408,10 +403,10 @@ class TestRecoveryCoordination:
         assert processed == 5, f"Expected 5 processed, got {processed}"
 
         final_state = cb_service.get_state(service_name)
-        assert final_state == CircuitState.CLOSED, f"CB should be CLOSED after coordinated recovery"
+        assert final_state == CircuitState.CLOSED, "CB should be CLOSED after coordinated recovery"
 
         resolved = [e for e in dlq_queue if e["status"] == "resolved"]
-        assert len(resolved) == 5, f"All DLQ entries should be resolved"
+        assert len(resolved) == 5, "All DLQ entries should be resolved"
 
     def test_recovery_prevents_new_dlq_entries(
         self, failure_injector, redis_dlq_repository

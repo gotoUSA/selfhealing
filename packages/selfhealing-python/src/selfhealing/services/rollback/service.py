@@ -33,7 +33,7 @@ class RollbackService:
     _instance: RollbackService | None = None
     _lock = Lock()
 
-    def __new__(cls) -> "RollbackService":
+    def __new__(cls) -> RollbackService:
         """싱글톤 패턴"""
         with cls._lock:
             if cls._instance is None:

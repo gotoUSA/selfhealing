@@ -19,9 +19,6 @@ NOTE: Tests use Redis-based adapters for DLQ and CircuitBreaker.
       Use @pytest.mark.requires_redis to auto-skip when Redis unavailable.
 """
 
-import random
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
 
 import pytest
 from django.utils import timezone
@@ -32,7 +29,6 @@ from selfhealing.services.circuit_breaker_service import (
     CircuitState,
 )
 from selfhealing.services.dlq_service import DLQConfig
-from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 
 # =============================================================================
@@ -462,4 +458,4 @@ class TestPartialFailureRecovery:
 
         # With small samples, we just verify operations completed
         for result in phase_results:
-            assert result["total"] == 20, f"Each phase should have 20 operations"
+            assert result["total"] == 20, "Each phase should have 20 operations"

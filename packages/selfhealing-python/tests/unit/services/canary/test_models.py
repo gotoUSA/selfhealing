@@ -11,17 +11,17 @@ Canary Rollout Data Models 단위 테스트.
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
-import pytest
 from datetime import datetime
 
+import pytest
+
 from selfhealing.services.canary.models import (
-    CanaryState,
-    CanaryStage,
-    CanaryRollout,
     CanaryMetrics,
+    CanaryRollout,
+    CanaryStage,
+    CanaryState,
     PassCriteria,
 )
-
 
 # =============================================================================
 # Test: CanaryState enum

@@ -1,7 +1,6 @@
 """
 Unit tests for load_tests.core.constants module
 """
-import pytest
 
 from load_tests.core.constants import (
     Endpoints, Headers, SLA, LoadConfig, 

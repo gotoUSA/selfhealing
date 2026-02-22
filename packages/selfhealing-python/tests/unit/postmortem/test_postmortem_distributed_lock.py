@@ -10,16 +10,17 @@ Postmortem 분산 락 연동 테스트 (문서 146 섹션 12.2, 13.2).
 6. IncidentGroupManager.close_group 락 연동
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture(autouse=True)
 def disable_db_persistence():
     """모든 테스트에서 DB persistence 비활성화."""
     from selfhealing.services.postmortem_store import (
-        set_db_persistence_enabled,
         get_db_persistence_enabled,
+        set_db_persistence_enabled,
     )
 
     original = get_db_persistence_enabled()

@@ -9,13 +9,11 @@ Tests:
 5. API endpoints
 """
 
-import json
 import os
 import tempfile
 import threading
 from pathlib import Path
-from unittest import TestCase
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
 
@@ -250,7 +248,6 @@ class TestSystemControlManager:
         """Should toggle enabled state."""
         from selfhealing.api.django.views.system_control import (
             SystemControlManager,
-            is_selfhealing_enabled,
         )
         
         # Reset singleton
@@ -269,7 +266,6 @@ class TestSystemControlManager:
         """Should toggle dry run mode."""
         from selfhealing.api.django.views.system_control import (
             SystemControlManager,
-            should_execute_action,
         )
         
         # Reset singleton

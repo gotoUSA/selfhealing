@@ -14,9 +14,9 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from typing import AsyncGenerator
 
 import structlog
 

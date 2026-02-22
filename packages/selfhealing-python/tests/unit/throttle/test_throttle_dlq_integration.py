@@ -6,8 +6,7 @@ Phase 4: DLQ 연계 기능 테스트
 - CB CLOSE 시 자동 replay
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from selfhealing.services.throttle.dlq_integration import (
     ThrottleDeniedRequest,

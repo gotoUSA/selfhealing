@@ -2,9 +2,7 @@
 Tests for trace.py OTEL compatibility layer.
 """
 
-import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestGetTraceIdOtelCompatibility:
@@ -51,7 +49,7 @@ class TestGetTraceIdOtelCompatibility:
 
     def test_get_trace_id_generates_new_when_no_trace(self):
         """Test generation of new trace_id when none exists."""
-        from selfhealing.audit.trace import get_trace_id, clear_trace_id
+        from selfhealing.audit.trace import clear_trace_id, get_trace_id
 
         clear_trace_id()
 

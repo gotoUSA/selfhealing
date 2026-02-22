@@ -16,7 +16,8 @@ Fallback 지원:
 
 from __future__ import annotations
 
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from selfhealing.resilience.policies.composer import PolicyComposer, compose
 from selfhealing.resilience.policies.fallback import FallbackPolicy

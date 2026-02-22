@@ -13,17 +13,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-import structlog
-
 from selfhealing.interfaces.notification import (
     LoggingNotificationAdapter,
     Notification,
-    NotificationChannel,
     NotificationSeverity,
-    register_notification_adapter,
 )
-
 
 # ===========================================================================
 # LoggingNotificationAdapter Contract Tests
@@ -161,9 +155,9 @@ class TestConnectionHealthMonitorStructlogBehavior:
     def test_simulation_override_uses_structlog_logger(self):
         """set_simulation_override 호출 시 structlog logger가 사용되어야 한다."""
         from selfhealing.core.connection_health import (
-            DefaultConnectionHealthMonitor,
             ConnectionStatus,
             ConnectionType,
+            DefaultConnectionHealthMonitor,
         )
 
         monitor = DefaultConnectionHealthMonitor()
@@ -201,7 +195,10 @@ class TestPoolMonitorStructlogBehavior:
 
     def test_set_simulation_override_logs_set_event(self):
         """set_simulation_override 호출 시 set 이벤트가 기록되어야 한다."""
-        from selfhealing.core.pool_monitor import PoolHealthStatus, ConnectionPoolMonitor
+        from selfhealing.core.pool_monitor import (
+            ConnectionPoolMonitor,
+            PoolHealthStatus,
+        )
 
         monitor = ConnectionPoolMonitor()
 
@@ -214,7 +211,10 @@ class TestPoolMonitorStructlogBehavior:
 
     def test_clear_simulation_override_logs_cleared_event(self):
         """clear_simulation_override 호출 시 cleared 이벤트가 기록되어야 한다."""
-        from selfhealing.core.pool_monitor import PoolHealthStatus, ConnectionPoolMonitor
+        from selfhealing.core.pool_monitor import (
+            ConnectionPoolMonitor,
+            PoolHealthStatus,
+        )
 
         monitor = ConnectionPoolMonitor()
         monitor.set_simulation_override(PoolHealthStatus.HEALTHY, None, None)

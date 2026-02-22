@@ -12,7 +12,6 @@ Requirements:
 
 import os
 import pytest
-import time
 from datetime import datetime, timezone as dt_timezone
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
@@ -221,7 +220,6 @@ class TestXTestBaseIntegration:
         """add_healing_event가 Redis를 사용하는지 확인."""
         from selfhealing.api.django.views.xtest.base import (
             add_healing_event,
-            get_healing_events,
             _healing_events,
             _healing_events_lock,
         )

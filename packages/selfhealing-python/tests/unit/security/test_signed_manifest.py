@@ -6,20 +6,17 @@ MerkleTree, RFC3161Client, SignedManifest 테스트.
 
 import json
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from selfhealing.audit.signed_manifest import (
     MerkleTree,
-    RFC3161Timestamp,
     RFC3161Client,
     SignedManifest,
-    ManifestEntry,
     main,
 )
-
 
 # ─────────────────────────────────────────────────────────────
 # Fixtures
@@ -37,7 +34,7 @@ def temp_dir():
 def sample_log_file(temp_dir):
     """샘플 로그 파일 생성."""
     log_file = temp_dir / "audit_2025-01-15.jsonl"
-    
+
     entries = [
         {
             "audit_id": "audit-001",
@@ -55,11 +52,11 @@ def sample_log_file(temp_dir):
             "action": "cb_force_open",
         },
     ]
-    
+
     with open(log_file, "w") as f:
         for entry in entries:
             f.write(json.dumps(entry) + "\n")
-    
+
     return log_file
 
 
@@ -73,7 +70,7 @@ def sample_log_dir(temp_dir):
                 "audit_id": f"audit-{day}",
                 "timestamp": f"2025-01-{day:02d}T10:00:00Z",
             }) + "\n")
-    
+
     return temp_dir
 
 
@@ -89,7 +86,7 @@ class TestMerkleTree:
         """빈 트리."""
         tree = MerkleTree()
         root = tree.compute_root()
-        
+
         # 빈 해시
         assert len(root) == 32  # SHA-256 = 32 bytes
 
@@ -97,9 +94,9 @@ class TestMerkleTree:
         """단일 리프."""
         tree = MerkleTree()
         tree.add_leaf(b"hello")
-        
+
         root = tree.compute_root()
-        
+
         assert len(root) == 32
         assert tree.leaf_count == 1
 
@@ -108,9 +105,9 @@ class TestMerkleTree:
         tree = MerkleTree()
         tree.add_leaf(b"hello")
         tree.add_leaf(b"world")
-        
+
         root = tree.compute_root()
-        
+
         assert len(root) == 32
         assert tree.leaf_count == 2
 
@@ -120,9 +117,9 @@ class TestMerkleTree:
         tree.add_leaf(b"a")
         tree.add_leaf(b"b")
         tree.add_leaf(b"c")
-        
+
         root = tree.compute_root()
-        
+
         assert len(root) == 32
         assert tree.leaf_count == 3
 
@@ -131,11 +128,11 @@ class TestMerkleTree:
         tree1 = MerkleTree()
         tree1.add_leaf(b"data1")
         tree1.add_leaf(b"data2")
-        
+
         tree2 = MerkleTree()
         tree2.add_leaf(b"data1")
         tree2.add_leaf(b"data2")
-        
+
         assert tree1.compute_root() == tree2.compute_root()
 
     def test_different_input_different_root(self):
@@ -143,11 +140,11 @@ class TestMerkleTree:
         tree1 = MerkleTree()
         tree1.add_leaf(b"data1")
         tree1.add_leaf(b"data2")
-        
+
         tree2 = MerkleTree()
         tree2.add_leaf(b"data1")
         tree2.add_leaf(b"data3")  # 다름
-        
+
         assert tree1.compute_root() != tree2.compute_root()
 
     def test_order_matters(self):
@@ -155,20 +152,20 @@ class TestMerkleTree:
         tree1 = MerkleTree()
         tree1.add_leaf(b"a")
         tree1.add_leaf(b"b")
-        
+
         tree2 = MerkleTree()
         tree2.add_leaf(b"b")
         tree2.add_leaf(b"a")
-        
+
         assert tree1.compute_root() != tree2.compute_root()
 
     def test_compute_root_hex(self):
         """16진수 루트."""
         tree = MerkleTree()
         tree.add_leaf(b"test")
-        
+
         root_hex = tree.compute_root_hex()
-        
+
         assert len(root_hex) == 64  # 32 bytes * 2
         assert all(c in "0123456789abcdef" for c in root_hex)
 
@@ -177,10 +174,10 @@ class TestMerkleTree:
         tree = MerkleTree()
         for i in range(4):
             tree.add_leaf(f"leaf{i}".encode())
-        
+
         root = tree.compute_root()
         proof = tree.get_proof(0)  # 첫 번째 리프의 proof
-        
+
         assert len(proof) == 2  # 4개 리프 = 2레벨
 
     def test_verify_proof(self):
@@ -189,14 +186,14 @@ class TestMerkleTree:
         data = b"test_data"
         tree.add_leaf(data)
         tree.add_leaf(b"other")
-        
+
         root = tree.compute_root()
         proof = tree.get_proof(0)
-        
+
         # 원본 데이터의 해시로 검증
         import hashlib
         leaf_hash = hashlib.sha256(data).digest()
-        
+
         assert tree.verify_proof(leaf_hash, proof, root)
 
     def test_verify_proof_fails_for_tampered_data(self):
@@ -204,14 +201,14 @@ class TestMerkleTree:
         tree = MerkleTree()
         tree.add_leaf(b"original")
         tree.add_leaf(b"other")
-        
+
         root = tree.compute_root()
         proof = tree.get_proof(0)
-        
+
         # 변조된 데이터
         import hashlib
         tampered_hash = hashlib.sha256(b"tampered").digest()
-        
+
         assert not tree.verify_proof(tampered_hash, proof, root)
 
     def test_large_tree(self):
@@ -219,9 +216,9 @@ class TestMerkleTree:
         tree = MerkleTree()
         for i in range(1000):
             tree.add_leaf(f"entry_{i}".encode())
-        
+
         root = tree.compute_root()
-        
+
         assert len(root) == 32
         assert tree.leaf_count == 1000
 
@@ -237,13 +234,13 @@ class TestRFC3161Client:
     def test_default_tsa_url(self):
         """기본 TSA URL."""
         client = RFC3161Client()
-        
+
         assert client._tsa_url == "https://freetsa.org/tsr"
 
     def test_custom_tsa_url(self):
         """커스텀 TSA URL."""
         client = RFC3161Client(tsa_url="http://custom-tsa.example.com")
-        
+
         assert client._tsa_url == "http://custom-tsa.example.com"
 
     def test_get_timestamp_success(self):
@@ -255,12 +252,12 @@ class TestRFC3161Client:
             mock_response.__enter__ = MagicMock(return_value=mock_response)
             mock_response.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_response
-            
+
             client = RFC3161Client()
             data_hash = bytes.fromhex("abcd1234" * 8)
-            
+
             timestamp = client.get_timestamp(data_hash)
-            
+
             assert timestamp is not None
             assert timestamp.message_imprint == data_hash.hex()
 
@@ -268,12 +265,12 @@ class TestRFC3161Client:
         """타임스탬프 발급 실패."""
         with patch("urllib.request.urlopen") as mock_urlopen:
             mock_urlopen.side_effect = Exception("Connection refused")
-            
+
             client = RFC3161Client()
             data_hash = bytes.fromhex("abcd1234" * 8)
-            
+
             timestamp = client.get_timestamp(data_hash)
-            
+
             assert timestamp is None
 
 
@@ -289,7 +286,7 @@ class TestSignedManifest:
         """로그 파일 추가."""
         manifest = SignedManifest(enable_timestamp=False)
         entry = manifest.add_log_file(sample_log_file)
-        
+
         assert entry.entry_count == 3
         assert entry.first_timestamp == "2025-01-15T10:00:00Z"
         assert entry.last_timestamp == "2025-01-15T12:00:00Z"
@@ -298,7 +295,7 @@ class TestSignedManifest:
     def test_add_log_file_not_found(self, temp_dir):
         """없는 파일 추가."""
         manifest = SignedManifest(enable_timestamp=False)
-        
+
         with pytest.raises(FileNotFoundError):
             manifest.add_log_file(temp_dir / "nonexistent.jsonl")
 
@@ -306,7 +303,7 @@ class TestSignedManifest:
         """디렉토리의 모든 파일 추가."""
         manifest = SignedManifest(enable_timestamp=False)
         entries = manifest.add_log_directory(sample_log_dir)
-        
+
         assert len(entries) == 3
         assert all(e.entry_count == 1 for e in entries)
 
@@ -314,9 +311,9 @@ class TestSignedManifest:
         """머클 루트 계산."""
         manifest = SignedManifest(enable_timestamp=False)
         manifest.add_log_file(sample_log_file)
-        
+
         root = manifest.compute_merkle_root()
-        
+
         assert len(root) == 64  # SHA-256 hex
 
     def test_merkle_root_deterministic(self, sample_log_file):
@@ -324,33 +321,33 @@ class TestSignedManifest:
         manifest1 = SignedManifest(enable_timestamp=False)
         manifest1.add_log_file(sample_log_file)
         root1 = manifest1.compute_merkle_root()
-        
+
         manifest2 = SignedManifest(enable_timestamp=False)
         manifest2.add_log_file(sample_log_file)
         root2 = manifest2.compute_merkle_root()
-        
+
         assert root1 == root2
 
     def test_merkle_root_changes_on_modification(self, temp_dir):
         """파일 수정 시 루트 변경."""
         log_file = temp_dir / "test.jsonl"
-        
+
         # 원본 파일
         with open(log_file, "w") as f:
             f.write('{"id": 1}\n')
-        
+
         manifest1 = SignedManifest(enable_timestamp=False)
         manifest1.add_log_file(log_file)
         root1 = manifest1.compute_merkle_root()
-        
+
         # 파일 수정
         with open(log_file, "w") as f:
             f.write('{"id": 2}\n')  # 다른 내용
-        
+
         manifest2 = SignedManifest(enable_timestamp=False)
         manifest2.add_log_file(log_file)
         root2 = manifest2.compute_merkle_root()
-        
+
         assert root1 != root2
 
     def test_compute_and_timestamp(self, sample_log_file):
@@ -362,12 +359,12 @@ class TestSignedManifest:
             mock_response.__enter__ = MagicMock(return_value=mock_response)
             mock_response.__exit__ = MagicMock(return_value=False)
             mock_urlopen.return_value = mock_response
-            
+
             manifest = SignedManifest(enable_timestamp=True)
             manifest.add_log_file(sample_log_file)
-            
+
             root, timestamp = manifest.compute_and_timestamp()
-            
+
             assert len(root) == 64
             assert timestamp is not None
 
@@ -376,9 +373,9 @@ class TestSignedManifest:
         manifest = SignedManifest(enable_timestamp=False)
         manifest.add_log_file(sample_log_file)
         manifest.compute_merkle_root()
-        
+
         data = manifest.to_dict()
-        
+
         assert "version" in data
         assert "created_at" in data
         assert "merkle_root" in data
@@ -389,66 +386,66 @@ class TestSignedManifest:
     def test_save_and_load(self, sample_log_file, temp_dir):
         """저장 및 로드."""
         manifest_file = temp_dir / "manifest.json"
-        
+
         # 생성 및 저장
         manifest1 = SignedManifest(enable_timestamp=False)
         manifest1.add_log_file(sample_log_file)
         manifest1.compute_merkle_root()
         manifest1.save(manifest_file)
-        
+
         # 로드
         manifest2 = SignedManifest.load(manifest_file)
-        
+
         assert manifest2._merkle_root == manifest1._merkle_root
         assert len(manifest2._entries) == 1
 
     def test_verify_success(self, sample_log_file, temp_dir):
         """검증 성공."""
         manifest_file = temp_dir / "manifest.json"
-        
+
         manifest = SignedManifest(enable_timestamp=False)
         manifest.add_log_file(sample_log_file)
         manifest.compute_merkle_root()
         manifest.save(manifest_file)
-        
+
         # 로드 후 검증
         loaded = SignedManifest.load(manifest_file)
-        
+
         assert loaded.verify()
 
     def test_verify_fails_on_modification(self, sample_log_file, temp_dir):
         """파일 수정 시 검증 실패."""
         manifest_file = temp_dir / "manifest.json"
-        
+
         manifest = SignedManifest(enable_timestamp=False)
         manifest.add_log_file(sample_log_file)
         manifest.compute_merkle_root()
         manifest.save(manifest_file)
-        
+
         # 로그 파일 수정
         with open(sample_log_file, "a") as f:
             f.write('{"id": "tampered"}\n')
-        
+
         # 로드 후 검증
         loaded = SignedManifest.load(manifest_file)
-        
+
         assert not loaded.verify()
 
     def test_verify_fails_on_missing_file(self, sample_log_file, temp_dir):
         """파일 삭제 시 검증 실패."""
         manifest_file = temp_dir / "manifest.json"
-        
+
         manifest = SignedManifest(enable_timestamp=False)
         manifest.add_log_file(sample_log_file)
         manifest.compute_merkle_root()
         manifest.save(manifest_file)
-        
+
         # 로그 파일 삭제
         sample_log_file.unlink()
-        
+
         # 로드 후 검증
         loaded = SignedManifest.load(manifest_file)
-        
+
         assert not loaded.verify()
 
 
@@ -463,7 +460,7 @@ class TestCLI:
     def test_create_manifest(self, sample_log_file, temp_dir, capsys):
         """매니페스트 생성."""
         manifest_file = temp_dir / "manifest.json"
-        
+
         with patch("sys.argv", [
             "signed_manifest",
             "create",
@@ -472,22 +469,22 @@ class TestCLI:
             "--no-timestamp",
         ]):
             main()
-        
+
         assert manifest_file.exists()
-        
+
         captured = capsys.readouterr()
         assert "Manifest created" in captured.out
 
     def test_verify_manifest_success(self, sample_log_file, temp_dir, capsys):
         """매니페스트 검증 성공."""
         manifest_file = temp_dir / "manifest.json"
-        
+
         # 먼저 생성
         manifest = SignedManifest(enable_timestamp=False)
         manifest.add_log_file(sample_log_file)
         manifest.compute_merkle_root()
         manifest.save(manifest_file)
-        
+
         # 검증
         with patch("sys.argv", [
             "signed_manifest",
@@ -499,7 +496,7 @@ class TestCLI:
                 main()
             except SystemExit as e:
                 assert e.code == 0
-        
+
         captured = capsys.readouterr()
         assert "Verification passed" in captured.out
 
@@ -516,10 +513,10 @@ class TestEdgeCases:
         """빈 로그 파일."""
         empty_file = temp_dir / "empty.jsonl"
         empty_file.touch()
-        
+
         manifest = SignedManifest(enable_timestamp=False)
         entry = manifest.add_log_file(empty_file)
-        
+
         assert entry.entry_count == 0
         assert entry.first_timestamp is None
 
@@ -532,10 +529,10 @@ class TestEdgeCases:
             f.write('{"id": 2}\n')
             f.write('   \n')  # 공백만 있는 줄
             f.write('{"id": 3}\n')
-        
+
         manifest = SignedManifest(enable_timestamp=False)
         entry = manifest.add_log_file(log_file)
-        
+
         assert entry.entry_count == 3
 
     def test_unicode_content(self, temp_dir):
@@ -544,23 +541,23 @@ class TestEdgeCases:
         with open(log_file, "w", encoding="utf-8") as f:
             f.write('{"message": "한글 테스트"}\n')
             f.write('{"message": "日本語テスト"}\n')
-        
+
         manifest = SignedManifest(enable_timestamp=False)
         entry = manifest.add_log_file(log_file)
-        
+
         assert entry.entry_count == 2
 
     def test_large_manifest(self, temp_dir):
         """대용량 매니페스트."""
         log_file = temp_dir / "large.jsonl"
-        
+
         with open(log_file, "w") as f:
             for i in range(10000):
                 f.write(json.dumps({"id": i}) + "\n")
-        
+
         manifest = SignedManifest(enable_timestamp=False)
         entry = manifest.add_log_file(log_file)
         root = manifest.compute_merkle_root()
-        
+
         assert entry.entry_count == 10000
         assert len(root) == 64

@@ -9,16 +9,11 @@ SidecarIPCProbe 단위 테스트.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
-import pytest
-
 from selfhealing.adapters.ipc.sidecar_ipc_probe import (
-    SidecarProbeResult,
     HealthStatus,
     IPCHealthMetrics,
     SidecarIPCProbe,
+    SidecarProbeResult,
     get_sidecar_ipc_probe,
     reset_sidecar_ipc_probe,
 )

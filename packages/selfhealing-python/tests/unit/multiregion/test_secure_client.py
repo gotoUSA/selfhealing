@@ -5,7 +5,6 @@ Secure Redis Client 테스트.
 - SecureRedisClient: mTLS Redis 클라이언트
 """
 
-import pytest
 
 from selfhealing.multiregion.config import (
     MultiRegionSettings,

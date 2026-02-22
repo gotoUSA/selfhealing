@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import time
 
-import pytest
-
 from selfhealing.services.backoff_calculator import AdaptiveRetryBudget
 
 

@@ -7,9 +7,7 @@ Phase 7: Safe-Open 폴백 기능 테스트
 - Cold Start 시 안전 limit 복구
 """
 
-import pytest
-import time
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 from selfhealing.services.throttle.safe_open_fallback import (
     RedisConnectionState,

@@ -11,21 +11,20 @@ Note: 실제 audit 구현은 내부적으로 로거를 사용하며,
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
 
+import pytest
+
+from selfhealing.services.canary.audit import (
+    CANARY_ACTIONS,
+    log_canary_action,
+)
 from selfhealing.services.canary.models import (
-    CanaryState,
-    CanaryStage,
-    CanaryRollout,
     CanaryMetrics,
+    CanaryRollout,
+    CanaryStage,
+    CanaryState,
     PassCriteria,
 )
-from selfhealing.services.canary.audit import (
-    log_canary_action,
-    CANARY_ACTIONS,
-)
-
 
 # =============================================================================
 # Fixtures

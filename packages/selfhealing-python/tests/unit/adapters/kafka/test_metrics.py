@@ -7,9 +7,7 @@ Time Lag 추적 및 Prometheus 메트릭 기록을 테스트합니다.
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from selfhealing.adapters.kafka.metrics import (
     TimeLagTracker,

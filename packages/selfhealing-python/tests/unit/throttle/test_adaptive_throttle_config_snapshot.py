@@ -7,7 +7,6 @@ AdaptiveThrottle.get_config_snapshot() 메서드 테스트.
 - 현재 상태 반영 확인
 """
 
-import pytest
 
 
 class TestGetConfigSnapshotReturnsDict:

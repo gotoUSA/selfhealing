@@ -12,16 +12,12 @@ Tests:
 from __future__ import annotations
 
 import json
-import os
 import struct
 import tempfile
 import zlib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from selfhealing.audit.integrity import (
     HashChainManager,
@@ -31,7 +27,6 @@ from selfhealing.audit.integrity import (
 )
 from selfhealing.audit.verify_audit_integrity import (
     AuditIntegrityVerifier,
-    OutputFormat,
     VerificationResult,
     VerificationSummary,
     format_json_output,
@@ -271,7 +266,7 @@ class TestAuditIntegrityVerifier:
             file_path = self._create_valid_audit_file(tmpdir, count=5)
 
             # 파일 읽고 변조
-            with open(file_path, "r") as f:
+            with open(file_path) as f:
                 lines = f.readlines()
 
             entry = json.loads(lines[2])

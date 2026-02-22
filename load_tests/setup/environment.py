@@ -15,9 +15,7 @@ Usage:
 import argparse
 import subprocess
 import sys
-import os
 from pathlib import Path
-from typing import Optional
 
 # Project paths
 SETUP_DIR = Path(__file__).parent
@@ -81,7 +79,7 @@ def check_db_connection() -> bool:
             if result.returncode == 0:
                 print("  ✅ Database connection OK (via Docker)")
                 return True
-        print(f"  ❌ Database connection failed")
+        print("  ❌ Database connection failed")
         return False
 
 

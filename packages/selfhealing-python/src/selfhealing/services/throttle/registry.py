@@ -18,8 +18,7 @@ Usage:
 from __future__ import annotations
 
 import threading
-from dataclasses import dataclass, field
-from enum import Enum
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import structlog
@@ -80,10 +79,10 @@ class ThrottleRegistry:
     Thread-safe 싱글톤 패턴으로 구현됩니다.
     """
 
-    _instance: "ThrottleRegistry | None" = None
+    _instance: ThrottleRegistry | None = None
     _lock = threading.Lock()
 
-    def __new__(cls) -> "ThrottleRegistry":
+    def __new__(cls) -> ThrottleRegistry:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -241,7 +240,7 @@ class ThrottleRegistry:
 
     def register_circuit_breaker_callbacks(
         self,
-        cb_service: "CircuitBreakerService",
+        cb_service: CircuitBreakerService,
     ) -> None:
         """
         CircuitBreakerService에 동기 콜백 등록.

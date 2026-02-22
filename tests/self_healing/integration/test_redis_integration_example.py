@@ -9,11 +9,9 @@ Docker Compose로 실행: docker-compose -f docker-compose.test.yml up -d
 
 import pytest
 from dataclasses import dataclass
-from typing import Optional
 
 from selfhealing.services import CircuitBreakerService
 from selfhealing.services.circuit_breaker_service import CircuitBreakerConfig
-from selfhealing.core.timezone import now
 
 
 @dataclass

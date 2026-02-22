@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from selfhealing.context.cell_context import _current_cell_id, get_current_cell_id
 from selfhealing.context.celery_cell_propagation import (
     CELERY_ROUTING_KEYS,
     _extract_routing_key,
@@ -21,6 +20,7 @@ from selfhealing.context.celery_cell_propagation import (
     clear_cell_id_on_postrun,
     extract_cell_id_on_prerun,
 )
+from selfhealing.context.cell_context import _current_cell_id, get_current_cell_id
 
 
 class TestExtractRoutingKeyContract:

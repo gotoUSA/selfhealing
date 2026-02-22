@@ -20,10 +20,10 @@ class TestCalculateShadowBudgetWithWeighting:
                 "high": 20,      # 20 * 0.005 = 0.1분
             },
         )
-        
+
         # estimated_errors는 severity 합계
         assert result.estimated_errors == 30
-        
+
         # adjustment_minutes는 가중치 적용된 값
         # (0.1 + 0.1) * source_reliability(none_available=0.5) = 0.1분
         # 기본 log_source가 "none_available"이므로 0.5 적용
@@ -33,12 +33,14 @@ class TestCalculateShadowBudgetWithWeighting:
         self, sample_failsafe_period
     ):
         """errors_by_severity 미제공 시 모든 에러를 medium으로 처리."""
-        from selfhealing.services.error_budget.reconciliation import ShadowBudgetCalculator
-        
+        from selfhealing.services.error_budget.reconciliation import (
+            ShadowBudgetCalculator,
+        )
+
         # Prometheus 함수를 제공하여 에러 수 반환
         def mock_prometheus(start, end):
             return 100
-        
+
         calculator = ShadowBudgetCalculator(get_prometheus_errors=mock_prometheus)
         result = calculator.calculate_shadow_budget(
             failsafe_period=sample_failsafe_period,
@@ -46,7 +48,7 @@ class TestCalculateShadowBudgetWithWeighting:
             primary_consumed_minutes=10.8,
             budget_total_minutes=43.2,
         )
-        
+
         # 100 에러 * 0.001 (medium) * 1.0 (prometheus) = 0.1분
         assert result.estimated_errors == 100
         assert result.adjustment_minutes == pytest.approx(0.1, rel=1e-3)
@@ -56,12 +58,14 @@ class TestCalculateShadowBudgetWithWeighting:
         self, sample_failsafe_period
     ):
         """calculate_shadow_budget이 source_reliability를 적용."""
-        from selfhealing.services.error_budget.reconciliation import ShadowBudgetCalculator
-        
+        from selfhealing.services.error_budget.reconciliation import (
+            ShadowBudgetCalculator,
+        )
+
         # DLQ 함수를 제공
         def mock_dlq(start, end):
             return 100
-        
+
         calculator = ShadowBudgetCalculator(get_dlq_entries=mock_dlq)
         result = calculator.calculate_shadow_budget(
             failsafe_period=sample_failsafe_period,
@@ -69,7 +73,7 @@ class TestCalculateShadowBudgetWithWeighting:
             primary_consumed_minutes=10.8,
             budget_total_minutes=43.2,
         )
-        
+
         # 100 에러 * 0.001 (medium) * 0.9 (dlq) = 0.09분
         assert result.estimated_errors == 100
         assert result.adjustment_minutes == pytest.approx(0.09, rel=1e-3)

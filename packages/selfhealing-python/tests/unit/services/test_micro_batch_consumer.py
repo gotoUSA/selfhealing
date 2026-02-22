@@ -15,14 +15,7 @@ from __future__ import annotations
 
 import time
 from typing import Any
-from unittest.mock import MagicMock
 
-import pytest
-
-from selfhealing.interfaces.ml_strategy import (
-    AnomalyDetectionStrategy,
-    BatchCapable,
-)
 from selfhealing.services.correlation_engine.micro_batch import (
     DEFAULT_FLUSH_INTERVAL_MS,
     DEFAULT_MAX_BATCH_SIZE,
@@ -30,7 +23,6 @@ from selfhealing.services.correlation_engine.micro_batch import (
     QUEUE_POLL_TIMEOUT,
     MicroBatchConsumer,
 )
-
 
 # =============================================================================
 # Stub 전략 (테스트 전용)

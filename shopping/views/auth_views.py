@@ -13,12 +13,11 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from shopping.models.user import User
-from shopping.serializers.user_serializers import LoginSerializer, PasswordChangeSerializer, RegisterSerializer, UserSerializer
+from shopping.serializers.user_serializers import LoginSerializer, RegisterSerializer, UserSerializer
 from shopping.services.token_service import TokenService, TokenServiceError
 from shopping.services.user_service import UserService
 from shopping.throttles import LoginRateThrottle, RegisterRateThrottle, TokenRefreshRateThrottle

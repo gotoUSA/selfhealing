@@ -13,7 +13,6 @@ Redis 분산 락이 제대로 작동하는지 검증
 import os
 import sys
 import time
-import threading
 import json
 import uuid
 from datetime import datetime
@@ -258,7 +257,7 @@ def run_distributed_test():
             socket_connect_timeout=5
         )
         client.ping()
-        print(f"✅ Redis 연결 성공")
+        print("✅ Redis 연결 성공")
     except Exception as e:
         print(f"❌ Redis 연결 실패: {e}")
         return
@@ -272,7 +271,7 @@ def run_distributed_test():
     
     result1 = tester.run_multi_thread_test(num_threads=8, requests_per_thread=50)
     
-    print(f"\n결과:")
+    print("\n결과:")
     print(f"  Total Requests: {result1['total_requests']}")
     print(f"  Cache Hits: {result1['cache_hits']}")
     print(f"  DB Queries: {result1['db_queries']} (expected: 1)")
@@ -290,7 +289,7 @@ def run_distributed_test():
     
     result2 = tester.run_multi_thread_test(num_threads=16, requests_per_thread=100)
     
-    print(f"\n결과:")
+    print("\n결과:")
     print(f"  Total Requests: {result2['total_requests']}")
     print(f"  Cache Hits: {result2['cache_hits']}")
     print(f"  DB Queries: {result2['db_queries']} (expected: 1)")

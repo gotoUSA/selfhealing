@@ -7,8 +7,7 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 """
 
 import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestTieredRedisProviderInit:
@@ -165,7 +164,7 @@ class TestTieredRedisProviderGetRedis:
 
     def test_get_redis_local_scope(self):
         """LOCAL scope로 클라이언트 가져오기."""
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import RedisScope, TieredRedisProvider
 
         provider = TieredRedisProvider(
             local_url="redis://local:6379/0",
@@ -183,7 +182,7 @@ class TestTieredRedisProviderGetRedis:
 
     def test_get_redis_global_scope(self):
         """GLOBAL scope로 클라이언트 가져오기."""
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import RedisScope, TieredRedisProvider
 
         provider = TieredRedisProvider(
             local_url="redis://local:6379/0",
@@ -201,7 +200,7 @@ class TestTieredRedisProviderGetRedis:
 
     def test_global_reuses_local_when_same_url(self):
         """동일 URL일 때 GLOBAL이 LOCAL 클라이언트 재사용."""
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import RedisScope, TieredRedisProvider
 
         provider = TieredRedisProvider(
             local_url="redis://same:6379/0",
@@ -221,7 +220,7 @@ class TestTieredRedisProviderGetRedis:
 
     def test_lazy_initialization(self):
         """지연 초기화 확인."""
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import RedisScope, TieredRedisProvider
 
         with patch("redis.from_url") as mock_from_url:
             provider = TieredRedisProvider(
@@ -242,7 +241,7 @@ class TestTieredRedisProviderHealthCheck:
 
     def test_health_check_both_healthy(self):
         """양쪽 모두 정상일 때."""
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import TieredRedisProvider
 
         provider = TieredRedisProvider(
             local_url="redis://local:6379/0",
@@ -261,7 +260,7 @@ class TestTieredRedisProviderHealthCheck:
 
     def test_health_check_local_only(self):
         """LOCAL만 체크."""
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import RedisScope, TieredRedisProvider
 
         provider = TieredRedisProvider()
 
@@ -297,7 +296,7 @@ class TestTieredRedisProviderClose:
 
     def test_close_both_clients(self):
         """양쪽 클라이언트 모두 닫기."""
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import RedisScope, TieredRedisProvider
 
         provider = TieredRedisProvider(
             local_url="redis://local:6379/0",
@@ -321,7 +320,7 @@ class TestTieredRedisProviderClose:
 
     def test_close_handles_errors(self):
         """close 중 에러 발생해도 예외 발생 안 함."""
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import RedisScope, TieredRedisProvider
 
         provider = TieredRedisProvider()
 

@@ -2,16 +2,14 @@
 Tests for Safety Bounds - 자율 조정 안전 한계
 """
 
-import pytest
 import threading
-import time
-from unittest.mock import patch
+
+import pytest
 
 from selfhealing.core.safety_bounds import (
-    SafetyBounds,
     ParameterBound,
+    SafetyBounds,
 )
-
 
 # =============================================================================
 # Fixtures

@@ -299,6 +299,7 @@ class TestRequestAuditBufferWALIntegration:
     def test_wal_enabled_with_parameter(self):
         """enable_wal=True 시 WAL 활성화 시도."""
         import tempfile
+
         from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -321,6 +322,7 @@ class TestRequestAuditBufferWALIntegration:
     def test_wal_records_events(self):
         """WAL 활성화 시 이벤트가 디스크에 기록."""
         import tempfile
+
         from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
@@ -359,6 +361,7 @@ class TestRequestAuditBufferWALIntegration:
     def test_wal_stats_in_buffer_stats(self):
         """WAL 활성화 시 stats에 WAL 정보 포함."""
         import tempfile
+
         from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:

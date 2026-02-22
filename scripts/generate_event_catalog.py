@@ -80,7 +80,7 @@ def build_markdown(component_events: dict[str, dict[str, Counter]]) -> str:
     lines.append("|------|------|")
     lines.append(f"| 고유 이벤트 수 | **{total_unique}** |")
     lines.append(f"| 컴포넌트 수 | **{total_comps}** |")
-    lines.append(f"| 스캔 경로 | `packages/selfhealing-python/src/selfhealing/` |")
+    lines.append("| 스캔 경로 | `packages/selfhealing-python/src/selfhealing/` |")
     lines.append("")
     lines.append("## 이벤트 목록 (컴포넌트별 알파벳 정렬)")
     lines.append("")

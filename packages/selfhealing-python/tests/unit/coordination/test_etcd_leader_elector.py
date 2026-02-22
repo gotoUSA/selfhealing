@@ -10,10 +10,8 @@ from __future__ import annotations
 
 import json
 import time
-import threading
 from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -22,10 +20,8 @@ with patch.dict("sys.modules", {"etcd3": MagicMock()}):
     from selfhealing.coordination.etcd_elector import (
         EtcdLeaderElector,
         is_etcd_available,
-        ETCD_AVAILABLE,
     )
 from selfhealing.coordination.base import LeadershipState
-
 
 # =============================================================================
 # Fixtures

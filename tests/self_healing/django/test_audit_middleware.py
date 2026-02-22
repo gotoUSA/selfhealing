@@ -11,7 +11,6 @@ Test AuditMiddleware - Django 환경 필요 테스트
 Author: SelfHealing Team
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -170,7 +169,7 @@ class TestGatewayPipelineIntegration:
     def test_full_request_lifecycle(self):
         """전체 요청 생명주기 테스트."""
         from selfhealing.api.django.audit_middleware import AuditMiddleware
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import RequestAuditBuffer
         from selfhealing.services.audit_helpers import (
             log_dlq_store_audit,
             log_cb_state_change_audit,

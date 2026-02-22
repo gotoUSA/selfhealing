@@ -13,4 +13,3 @@ mock_external_services를 사용하지 않습니다 - 실제 외부 의존성 �
 NOTE: 이 폴더의 테스트는 docker-compose 환경에서만 실행됩니다.
       DB/Redis가 항상 가용하므로 requires_db 마커를 사용하지 않습니다.
 """
-import pytest

@@ -11,10 +11,9 @@ RedisAuditBuffer 배치 처리 단위 테스트.
 
 from __future__ import annotations
 
-import json
 import time
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -26,15 +25,15 @@ class FakeRedisPipeline:
         self.commands: list[tuple[str, tuple]] = []
         self._executed = False
 
-    def lpush(self, key: str, *values) -> "FakeRedisPipeline":
+    def lpush(self, key: str, *values) -> FakeRedisPipeline:
         self.commands.append(("lpush", (key, values)))
         return self
 
-    def expire(self, key: str, ttl: int) -> "FakeRedisPipeline":
+    def expire(self, key: str, ttl: int) -> FakeRedisPipeline:
         self.commands.append(("expire", (key, ttl)))
         return self
 
-    def sadd(self, key: str, *values) -> "FakeRedisPipeline":
+    def sadd(self, key: str, *values) -> FakeRedisPipeline:
         self.commands.append(("sadd", (key, values)))
         return self
 

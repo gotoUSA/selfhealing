@@ -9,7 +9,6 @@ OTel Baggage 통합 전파 — ContextVar ↔ Baggage E2E 테스트.
 인프라 의존: 없음 (OTel API in-process, Mock 기반)
 """
 
-import pytest
 
 from selfhealing.context.cell_context import _current_cell_id, get_current_cell_id
 from selfhealing.decorators.domain_tag import _current_domain, get_current_domain
@@ -36,7 +35,7 @@ class TestBaggageRoundTripBehavior:
 
     def test_cell_id_round_trip(self):
         """cell_id: ContextVar → Baggage 동기화 → ContextVar 복원."""
-        from opentelemetry import baggage, context
+        from opentelemetry import baggage
 
         # 1. ContextVar에 cell_id 설정
         _current_cell_id.set("cell-42")

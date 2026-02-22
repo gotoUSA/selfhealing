@@ -10,8 +10,7 @@ AdaptiveThrottle 감사 로깅 통합 테스트.
 - complete_recovery_dampening() 감사 호출
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestAdaptiveThrottleSlaCriticalAudit:

@@ -26,9 +26,6 @@ from selfhealing.services.correlation_engine.co_occurrence_tracker import (
 from selfhealing.services.predictive_forecaster.anomaly_detector import (
     ZScoreDetector,
 )
-from selfhealing.services.predictive_forecaster.time_series import (
-    HoltLinearForecaster,
-)
 from selfhealing.settings.correlation import CorrelationSettings
 
 STATE_BACKEND_PATCH_PATH = "selfhealing.core.state_backend.get_state_backend"

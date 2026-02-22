@@ -11,22 +11,15 @@ CBStateSnapshot 단위 테스트.
 from __future__ import annotations
 
 import os
-import struct
 import tempfile
 import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from selfhealing.adapters.ipc.cb_state_snapshot import (
-    CB_ENTRY_SIZE,
     CBState,
     CBStateEntry,
     CBStateSnapshot,
-    HEADER_SIZE,
-    MAGIC_NUMBER,
-    VERSION,
     get_cb_state_snapshot,
     reset_cb_state_snapshot,
 )

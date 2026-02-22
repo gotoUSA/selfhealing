@@ -8,7 +8,6 @@ Tests the one-way emergency escalation for Self-Healing API:
 """
 
 import os
-import sys
 
 # Django setup before any Django imports
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
@@ -17,7 +16,6 @@ import django
 
 django.setup()
 
-import pytest
 from unittest.mock import Mock, patch
 
 from selfhealing.api.django.permissions import EmergencyEscalationPermission

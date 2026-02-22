@@ -13,10 +13,7 @@ Test Categories:
 Reference: docs/self_healing/CHAOS_ENGINEERING.md
 """
 
-import pytest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch, PropertyMock
-from typing import Dict, Any
+from unittest.mock import MagicMock, patch
 
 
 # =============================================================================
@@ -124,7 +121,7 @@ class TestSafetyGuard:
     def test_safety_check_blocks_on_kill_switch(self):
         """Test that safety check blocks when kill switch is active."""
         from selfhealing.services.chaos.safety_guard import (
-            SafetyGuard, SafetyConfig, SafetyStatus, BlockReason
+            SafetyGuard, SafetyConfig, BlockReason
         )
         
         guard = SafetyGuard(config=SafetyConfig())
@@ -482,7 +479,7 @@ class TestChaosExperiments:
     def test_error_5xx_experiment(self):
         """Test Error5xxExperiment."""
         from selfhealing.services.chaos.experiments import (
-            Error5xxExperiment, ExperimentStatus, ExperimentConfig
+            Error5xxExperiment, ExperimentConfig
         )
         
         config = ExperimentConfig(
@@ -594,7 +591,7 @@ class TestResilienceReports:
     def test_generate_daily_report(self):
         """Test daily report generation."""
         from selfhealing.services.chaos.reports import (
-            ResilienceReportGenerator, ReportConfig, ResilienceGrade
+            ResilienceReportGenerator, ReportConfig
         )
         
         generator = ResilienceReportGenerator(config=ReportConfig())

@@ -10,15 +10,10 @@ CheckpointManager 단위 테스트.
 6. 원자적 쓰기 (임시 파일 사용)
 """
 
-import tempfile
 import time
-from pathlib import Path
-
-import pytest
 
 from selfhealing.audit.checkpoint_manager import (
     CheckpointData,
-    CheckpointError,
     CheckpointManager,
     get_checkpoint_manager,
     reset_checkpoint_manager,

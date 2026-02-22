@@ -8,9 +8,8 @@
 """
 
 import time
-import pytest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 
 # =============================================================================
 # MonotonicTTLHelper Tests
@@ -248,11 +247,12 @@ class TestCertificateExpiryExperiment:
     @patch("selfhealing.services.chaos.experiments.infrastructure._apply_chaos_config")
     def test_inject_chaos_basic(self, mock_apply):
         """Test inject_chaos applies correct config."""
+        from datetime import datetime, timedelta, timezone
+
         from selfhealing.services.chaos.experiments import (
             CertificateExpiryExperiment,
             ExperimentConfig,
         )
-        from datetime import datetime, timedelta, timezone
 
         experiment = CertificateExpiryExperiment(
             config=ExperimentConfig(
@@ -315,9 +315,9 @@ class TestCertificateExpiryExperiment:
     def test_create_experiment_factory(self):
         """Test create_experiment factory for certificate_expiry."""
         from selfhealing.services.chaos.experiments import (
-            create_experiment,
             CertificateExpiryExperiment,
             ExperimentConfig,
+            create_experiment,
         )
 
         experiment = create_experiment(
@@ -416,11 +416,11 @@ class TestClockSkewExperiment:
 
     def test_is_expired_monotonic_uses_helper(self):
         """Test _is_expired_monotonic uses MonotonicTTLHelper."""
+        from selfhealing.services.chaos.base import MonotonicTTLHelper
         from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
-        from selfhealing.services.chaos.base import MonotonicTTLHelper
 
         experiment = ClockSkewExperiment(config=ExperimentConfig(target_service="test"))
 
@@ -452,11 +452,11 @@ class TestClockSkewExperiment:
 
     def test_get_remaining_monotonic(self):
         """Test get_remaining_monotonic returns correct value."""
+        from selfhealing.services.chaos.base import MonotonicTTLHelper
         from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
-        from selfhealing.services.chaos.base import MonotonicTTLHelper
 
         experiment = ClockSkewExperiment(config=ExperimentConfig(target_service="test"))
         experiment._monotonic_ttl_helper = MonotonicTTLHelper(ttl_seconds=60.0)
@@ -470,11 +470,11 @@ class TestClockSkewExperiment:
     @patch("selfhealing.services.chaos.experiments.infrastructure._apply_chaos_config")
     def test_rollback_clears_config(self, mock_apply):
         """Test rollback clears the chaos config."""
+        from selfhealing.services.chaos.base import MonotonicTTLHelper
         from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
-        from selfhealing.services.chaos.base import MonotonicTTLHelper
 
         experiment = ClockSkewExperiment(config=ExperimentConfig(target_service="test"))
         experiment.experiment_id = "test-123"
@@ -507,9 +507,9 @@ class TestClockSkewExperiment:
     def test_create_experiment_factory(self):
         """Test create_experiment factory for clock_skew."""
         from selfhealing.services.chaos.experiments import (
-            create_experiment,
             ClockSkewExperiment,
             ExperimentConfig,
+            create_experiment,
         )
 
         experiment = create_experiment(
@@ -561,11 +561,11 @@ class TestMonotonicTTLIntegration:
     @patch("selfhealing.services.chaos.experiments.infrastructure._apply_chaos_config")
     def test_full_lifecycle_with_monotonic_ttl(self, mock_apply):
         """Test full experiment lifecycle with monotonic TTL protection."""
+        from selfhealing.services.chaos.base import MonotonicTTLHelper
         from selfhealing.services.chaos.experiments import (
             ClockSkewExperiment,
             ExperimentConfig,
         )
-        from selfhealing.services.chaos.base import MonotonicTTLHelper
 
         experiment = ClockSkewExperiment(
             config=ExperimentConfig(
@@ -666,11 +666,12 @@ class TestDNSFailureExperiment:
     @patch("selfhealing.services.chaos.experiments.infrastructure._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
+        from datetime import datetime, timezone
+
         from selfhealing.services.chaos.experiments import (
             DNSFailureExperiment,
             ExperimentConfig,
         )
-        from datetime import datetime, timezone
 
         experiment = DNSFailureExperiment(
             config=ExperimentConfig(
@@ -708,9 +709,9 @@ class TestDNSFailureExperiment:
     def test_create_experiment_factory(self):
         """Test create_experiment factory for dns_failure."""
         from selfhealing.services.chaos.experiments import (
-            create_experiment,
             DNSFailureExperiment,
             ExperimentConfig,
+            create_experiment,
         )
 
         experiment = create_experiment(
@@ -751,8 +752,8 @@ class TestNetworkBlackholeExperiment:
     def test_duration_seconds_capped(self):
         """Test duration_seconds is capped at MAX_DURATION_SECONDS."""
         from selfhealing.services.chaos.experiments import (
-            NetworkBlackholeExperiment,
             ExperimentConfig,
+            NetworkBlackholeExperiment,
         )
 
         experiment = NetworkBlackholeExperiment(
@@ -767,11 +768,12 @@ class TestNetworkBlackholeExperiment:
     @patch("selfhealing.services.chaos.experiments.network._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiments import (
-            NetworkBlackholeExperiment,
-            ExperimentConfig,
-        )
         from datetime import datetime, timezone
+
+        from selfhealing.services.chaos.experiments import (
+            ExperimentConfig,
+            NetworkBlackholeExperiment,
+        )
 
         experiment = NetworkBlackholeExperiment(
             config=ExperimentConfig(
@@ -793,9 +795,9 @@ class TestNetworkBlackholeExperiment:
     def test_create_experiment_factory(self):
         """Test create_experiment factory for network_blackhole."""
         from selfhealing.services.chaos.experiments import (
-            create_experiment,
-            NetworkBlackholeExperiment,
             ExperimentConfig,
+            NetworkBlackholeExperiment,
+            create_experiment,
         )
 
         experiment = create_experiment(
@@ -824,8 +826,8 @@ class TestSimulatedDiskIOExperiment:
     def test_default_latency_ms(self):
         """Test default latency_ms is 100."""
         from selfhealing.services.chaos.experiments import (
-            SimulatedDiskIOExperiment,
             ExperimentConfig,
+            SimulatedDiskIOExperiment,
         )
 
         experiment = SimulatedDiskIOExperiment(config=ExperimentConfig(target_service="test"))
@@ -835,8 +837,8 @@ class TestSimulatedDiskIOExperiment:
     def test_default_error_rate(self):
         """Test default error_rate is 0.0."""
         from selfhealing.services.chaos.experiments import (
-            SimulatedDiskIOExperiment,
             ExperimentConfig,
+            SimulatedDiskIOExperiment,
         )
 
         experiment = SimulatedDiskIOExperiment(config=ExperimentConfig(target_service="test"))
@@ -846,8 +848,8 @@ class TestSimulatedDiskIOExperiment:
     def test_custom_latency_ms(self):
         """Test custom latency_ms from config."""
         from selfhealing.services.chaos.experiments import (
-            SimulatedDiskIOExperiment,
             ExperimentConfig,
+            SimulatedDiskIOExperiment,
         )
 
         experiment = SimulatedDiskIOExperiment(
@@ -862,8 +864,8 @@ class TestSimulatedDiskIOExperiment:
     def test_custom_error_rate(self):
         """Test custom error_rate from config."""
         from selfhealing.services.chaos.experiments import (
-            SimulatedDiskIOExperiment,
             ExperimentConfig,
+            SimulatedDiskIOExperiment,
         )
 
         experiment = SimulatedDiskIOExperiment(
@@ -878,11 +880,12 @@ class TestSimulatedDiskIOExperiment:
     @patch("selfhealing.services.chaos.experiments.infrastructure._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiments import (
-            SimulatedDiskIOExperiment,
-            ExperimentConfig,
-        )
         from datetime import datetime, timezone
+
+        from selfhealing.services.chaos.experiments import (
+            ExperimentConfig,
+            SimulatedDiskIOExperiment,
+        )
 
         experiment = SimulatedDiskIOExperiment(config=ExperimentConfig(target_service="test"))
         experiment._effective_ttl = 60
@@ -899,9 +902,9 @@ class TestSimulatedDiskIOExperiment:
     def test_create_experiment_factory(self):
         """Test create_experiment factory for simulated_disk_io."""
         from selfhealing.services.chaos.experiments import (
-            create_experiment,
-            SimulatedDiskIOExperiment,
             ExperimentConfig,
+            SimulatedDiskIOExperiment,
+            create_experiment,
         )
 
         experiment = create_experiment(
@@ -936,8 +939,8 @@ class TestSimulatedTLSFailureExperiment:
     def test_default_failure_rate(self):
         """Test default failure_rate is 1.0 (100%)."""
         from selfhealing.services.chaos.experiments import (
-            SimulatedTLSFailureExperiment,
             ExperimentConfig,
+            SimulatedTLSFailureExperiment,
         )
 
         experiment = SimulatedTLSFailureExperiment(config=ExperimentConfig(target_service="test"))
@@ -947,8 +950,8 @@ class TestSimulatedTLSFailureExperiment:
     def test_default_failure_type(self):
         """Test default failure_type is handshake_timeout."""
         from selfhealing.services.chaos.experiments import (
-            SimulatedTLSFailureExperiment,
             ExperimentConfig,
+            SimulatedTLSFailureExperiment,
         )
 
         experiment = SimulatedTLSFailureExperiment(config=ExperimentConfig(target_service="test"))
@@ -958,8 +961,8 @@ class TestSimulatedTLSFailureExperiment:
     def test_custom_failure_rate(self):
         """Test custom failure_rate from config."""
         from selfhealing.services.chaos.experiments import (
-            SimulatedTLSFailureExperiment,
             ExperimentConfig,
+            SimulatedTLSFailureExperiment,
         )
 
         experiment = SimulatedTLSFailureExperiment(
@@ -974,11 +977,12 @@ class TestSimulatedTLSFailureExperiment:
     @patch("selfhealing.services.chaos.experiments.infrastructure._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiments import (
-            SimulatedTLSFailureExperiment,
-            ExperimentConfig,
-        )
         from datetime import datetime, timezone
+
+        from selfhealing.services.chaos.experiments import (
+            ExperimentConfig,
+            SimulatedTLSFailureExperiment,
+        )
 
         experiment = SimulatedTLSFailureExperiment(config=ExperimentConfig(target_service="test"))
         experiment._effective_ttl = 60
@@ -995,9 +999,9 @@ class TestSimulatedTLSFailureExperiment:
     def test_create_experiment_factory(self):
         """Test create_experiment factory for simulated_tls_failure."""
         from selfhealing.services.chaos.experiments import (
-            create_experiment,
-            SimulatedTLSFailureExperiment,
             ExperimentConfig,
+            SimulatedTLSFailureExperiment,
+            create_experiment,
         )
 
         experiment = create_experiment(
@@ -1064,11 +1068,12 @@ class TestAuditStorageFailureExperiment:
     @patch("selfhealing.services.chaos.experiments.audit._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
+        from datetime import datetime, timezone
+
         from selfhealing.services.chaos.experiments import (
             AuditStorageFailureExperiment,
             ExperimentConfig,
         )
-        from datetime import datetime, timezone
 
         experiment = AuditStorageFailureExperiment(
             config=ExperimentConfig(
@@ -1090,9 +1095,9 @@ class TestAuditStorageFailureExperiment:
     def test_create_experiment_factory(self):
         """Test create_experiment factory for audit_storage_failure."""
         from selfhealing.services.chaos.experiments import (
-            create_experiment,
             AuditStorageFailureExperiment,
             ExperimentConfig,
+            create_experiment,
         )
 
         experiment = create_experiment(
@@ -1127,8 +1132,8 @@ class TestReplayFloodExperiment:
     def test_default_flood_rate(self):
         """Test default flood_rate is 100."""
         from selfhealing.services.chaos.experiments import (
-            ReplayFloodExperiment,
             ExperimentConfig,
+            ReplayFloodExperiment,
         )
 
         experiment = ReplayFloodExperiment(config=ExperimentConfig(target_service="test"))
@@ -1138,8 +1143,8 @@ class TestReplayFloodExperiment:
     def test_default_duration_seconds(self):
         """Test default duration_seconds is 30."""
         from selfhealing.services.chaos.experiments import (
-            ReplayFloodExperiment,
             ExperimentConfig,
+            ReplayFloodExperiment,
         )
 
         experiment = ReplayFloodExperiment(config=ExperimentConfig(target_service="test"))
@@ -1149,8 +1154,8 @@ class TestReplayFloodExperiment:
     def test_default_payload_size_bytes(self):
         """Test default payload_size_bytes is 1024."""
         from selfhealing.services.chaos.experiments import (
-            ReplayFloodExperiment,
             ExperimentConfig,
+            ReplayFloodExperiment,
         )
 
         experiment = ReplayFloodExperiment(config=ExperimentConfig(target_service="test"))
@@ -1160,8 +1165,8 @@ class TestReplayFloodExperiment:
     def test_custom_flood_rate(self):
         """Test custom flood_rate from config."""
         from selfhealing.services.chaos.experiments import (
-            ReplayFloodExperiment,
             ExperimentConfig,
+            ReplayFloodExperiment,
         )
 
         experiment = ReplayFloodExperiment(
@@ -1176,8 +1181,8 @@ class TestReplayFloodExperiment:
     def test_custom_target_queue(self):
         """Test custom target_queue from config."""
         from selfhealing.services.chaos.experiments import (
-            ReplayFloodExperiment,
             ExperimentConfig,
+            ReplayFloodExperiment,
         )
 
         experiment = ReplayFloodExperiment(
@@ -1192,11 +1197,12 @@ class TestReplayFloodExperiment:
     @patch("selfhealing.services.chaos.experiments.audit._apply_chaos_config")
     def test_inject_chaos(self, mock_apply):
         """Test inject_chaos applies config."""
-        from selfhealing.services.chaos.experiments import (
-            ReplayFloodExperiment,
-            ExperimentConfig,
-        )
         from datetime import datetime, timezone
+
+        from selfhealing.services.chaos.experiments import (
+            ExperimentConfig,
+            ReplayFloodExperiment,
+        )
 
         experiment = ReplayFloodExperiment(config=ExperimentConfig(target_service="test"))
         experiment._effective_ttl = 60
@@ -1213,9 +1219,9 @@ class TestReplayFloodExperiment:
     def test_create_experiment_factory(self):
         """Test create_experiment factory for replay_flood."""
         from selfhealing.services.chaos.experiments import (
-            create_experiment,
-            ReplayFloodExperiment,
             ExperimentConfig,
+            ReplayFloodExperiment,
+            create_experiment,
         )
 
         experiment = create_experiment(

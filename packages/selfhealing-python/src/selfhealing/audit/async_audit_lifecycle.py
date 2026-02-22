@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
-    from selfhealing.audit.sync_worker import AuditSyncWorker
+    pass
 
 logger = structlog.get_logger()
 

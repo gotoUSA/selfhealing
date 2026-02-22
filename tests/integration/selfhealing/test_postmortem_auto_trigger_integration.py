@@ -12,7 +12,6 @@ Requirements:
 """
 
 import os
-import pytest
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 
@@ -77,7 +76,6 @@ class TestPostmortemAutoTriggerIntegration:
         """
         from unittest.mock import patch
         from selfhealing.services.event_bus import (
-            get_event_bus,
             register_default_handlers,
             EventType,
             SelfHealingEvent,
@@ -108,7 +106,6 @@ class TestPostmortemAutoTriggerIntegration:
         """
         from unittest.mock import patch
         from selfhealing.services.event_bus import (
-            get_event_bus,
             register_default_handlers,
             EventType,
             SelfHealingEvent,
@@ -161,7 +158,6 @@ class TestPostmortemAutoTriggerIntegration:
         """
         from unittest.mock import patch
         from selfhealing.services.event_bus import (
-            get_event_bus,
             register_default_handlers,
             EventType,
             SelfHealingEvent,
@@ -352,7 +348,7 @@ class TestPostmortemNotificationIntegration:
         Celery task 위임 시 Postmortem 알림은 task 내부에서 처리됨.
         핸들러는 task 위임만 확인.
         """
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
         from selfhealing.services.event_bus import (
             register_default_handlers,
             EventType,
@@ -387,7 +383,7 @@ class TestPostmortemNotificationIntegration:
         """
         Post-mortem 비활성화 시 Celery task 위임이 발생하지 않는지 확인.
         """
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
         from selfhealing.services.event_bus import (
             register_default_handlers,
             EventType,
@@ -419,7 +415,6 @@ class TestPostmortemNotificationIntegration:
         from unittest.mock import patch, MagicMock
         from selfhealing.services.event_bus import _send_postmortem_notification
         from selfhealing.services.unified_notification import NotificationPriority
-        from selfhealing.settings.api_view import ApiViewSettings
 
         # Settings 모킹
         mock_settings = MagicMock()

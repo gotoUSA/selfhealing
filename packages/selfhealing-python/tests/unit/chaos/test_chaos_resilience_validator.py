@@ -12,11 +12,11 @@ Tests for:
 Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §Phase 6-7
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import Mock, patch, MagicMock
-from typing import Dict, Any, List
+from datetime import timedelta
+from typing import Any
+from unittest.mock import Mock
 
+import pytest
 
 # =============================================================================
 # Phase 6: ResilienceExpectation Tests
@@ -28,7 +28,7 @@ class TestExpectationType:
     def test_all_expectation_types_exist(self):
         """Test all expected types are defined."""
         from selfhealing.services.chaos.resilience_expectation import ExpectationType
-        
+
         expected_types = [
             "CIRCUIT_BREAKER_OPEN",
             "CIRCUIT_BREAKER_HALF_OPEN",
@@ -42,14 +42,14 @@ class TestExpectationType:
             "GRACEFUL_DEGRADATION",
             "CUSTOM",
         ]
-        
+
         for type_name in expected_types:
             assert hasattr(ExpectationType, type_name), f"{type_name} not found"
 
     def test_expectation_type_values(self):
         """Test enum values are snake_case strings."""
         from selfhealing.services.chaos.resilience_expectation import ExpectationType
-        
+
         assert ExpectationType.CIRCUIT_BREAKER_OPEN.value == "circuit_breaker_open"
         assert ExpectationType.FALLBACK_ACTIVATED.value == "fallback_activated"
 
@@ -60,16 +60,16 @@ class TestResilienceAssertion:
     def test_assertion_creation(self):
         """Test basic assertion creation."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceAssertion,
             ExpectationType,
+            ResilienceAssertion,
         )
-        
+
         assertion = ResilienceAssertion(
             expectation_type=ExpectationType.CIRCUIT_BREAKER_OPEN,
             target_service="payment",
             expected_within_seconds=10.0,
         )
-        
+
         assert assertion.expectation_type == ExpectationType.CIRCUIT_BREAKER_OPEN
         assert assertion.target_service == "payment"
         assert assertion.expected_within_seconds == 10.0
@@ -77,16 +77,16 @@ class TestResilienceAssertion:
     def test_assertion_auto_description(self):
         """Test automatic description generation."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceAssertion,
             ExpectationType,
+            ResilienceAssertion,
         )
-        
+
         assertion = ResilienceAssertion(
             expectation_type=ExpectationType.CIRCUIT_BREAKER_OPEN,
             target_service="payment",
             expected_within_seconds=10.0,
         )
-        
+
         assert "CB" in assertion.description or "circuit" in assertion.description.lower()
         assert "payment" in assertion.description
         assert "10" in assertion.description
@@ -94,32 +94,32 @@ class TestResilienceAssertion:
     def test_assertion_custom_description(self):
         """Test custom description overrides auto-generation."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceAssertion,
             ExpectationType,
+            ResilienceAssertion,
         )
-        
+
         assertion = ResilienceAssertion(
             expectation_type=ExpectationType.CUSTOM,
             description="My custom assertion",
         )
-        
+
         assert assertion.description == "My custom assertion"
 
     def test_assertion_to_dict(self):
         """Test to_dict serialization."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceAssertion,
             ExpectationType,
+            ResilienceAssertion,
         )
-        
+
         assertion = ResilienceAssertion(
             expectation_type=ExpectationType.FALLBACK_ACTIVATED,
             target_service="order",
             expected_within_seconds=15.0,
         )
-        
+
         result = assertion.to_dict()
-        
+
         assert result["expectation_type"] == "fallback_activated"
         assert result["target_service"] == "order"
         assert result["expected_within_seconds"] == 15.0
@@ -131,11 +131,11 @@ class TestResilienceExpectation:
     def test_expectation_creation(self):
         """Test basic expectation creation."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
-            ResilienceAssertion,
             ExpectationType,
+            ResilienceAssertion,
+            ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation(
             assertions=[
                 ResilienceAssertion(
@@ -145,22 +145,22 @@ class TestResilienceExpectation:
             ],
             require_all=True,
         )
-        
+
         assert len(expectation.assertions) == 1
         assert expectation.require_all is True
 
     def test_expect_cb_open_factory(self):
         """Test expect_cb_open factory method."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
             ExpectationType,
+            ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation.expect_cb_open(
             target_service="payment",
             within_seconds=10.0,
         )
-        
+
         assert len(expectation.assertions) == 1
         assert expectation.assertions[0].expectation_type == ExpectationType.CIRCUIT_BREAKER_OPEN
         assert expectation.assertions[0].target_service == "payment"
@@ -169,33 +169,33 @@ class TestResilienceExpectation:
     def test_expect_fallback_factory(self):
         """Test expect_fallback factory method."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
             ExpectationType,
+            ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation.expect_fallback(
             target_service="order",
             within_seconds=15.0,
         )
-        
+
         assert len(expectation.assertions) == 1
         assert expectation.assertions[0].expectation_type == ExpectationType.FALLBACK_ACTIVATED
 
     def test_expect_graceful_degradation_factory(self):
         """Test expect_graceful_degradation factory method."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
             ExpectationType,
+            ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation.expect_graceful_degradation(
             target_service="payment",
             within_seconds=30.0,
         )
-        
+
         assert len(expectation.assertions) == 2
         assert expectation.require_all is True
-        
+
         types = [a.expectation_type for a in expectation.assertions]
         assert ExpectationType.CIRCUIT_BREAKER_OPEN in types
         assert ExpectationType.FALLBACK_ACTIVATED in types
@@ -203,18 +203,18 @@ class TestResilienceExpectation:
     def test_expect_retry_then_cb_open_factory(self):
         """Test expect_retry_then_cb_open factory method."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
             ExpectationType,
+            ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation.expect_retry_then_cb_open(
             target_service="payment",
             retry_count=3,
             cb_open_within_seconds=10.0,
         )
-        
+
         assert len(expectation.assertions) == 2
-        
+
         retry_assertion = next(
             a for a in expectation.assertions
             if a.expectation_type == ExpectationType.RETRY_TRIGGERED
@@ -224,15 +224,15 @@ class TestResilienceExpectation:
     def test_expect_emergency_mode_factory(self):
         """Test expect_emergency_mode factory method."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
             ExpectationType,
+            ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation.expect_emergency_mode(
             level=2,
             within_seconds=60.0,
         )
-        
+
         assert len(expectation.assertions) == 1
         assert expectation.assertions[0].expectation_type == ExpectationType.EMERGENCY_MODE_ACTIVATED
         assert expectation.assertions[0].expected_state == "level_2"
@@ -240,11 +240,11 @@ class TestResilienceExpectation:
     def test_add_assertion_builder(self):
         """Test add_assertion builder pattern."""
         from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
-            ResilienceAssertion,
             ExpectationType,
+            ResilienceAssertion,
+            ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation()
         expectation.add_assertion(
             ResilienceAssertion(
@@ -256,7 +256,7 @@ class TestResilienceExpectation:
                 expectation_type=ExpectationType.ALERT_FIRED,
             )
         )
-        
+
         assert len(expectation.assertions) == 2
 
     def test_expectation_to_dict(self):
@@ -264,10 +264,10 @@ class TestResilienceExpectation:
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation.expect_cb_open("payment", 10.0)
         result = expectation.to_dict()
-        
+
         assert "assertions" in result
         assert "require_all" in result
         assert "description" in result
@@ -281,14 +281,14 @@ class TestResilienceValidationResult:
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceValidationResult,
         )
-        
+
         result = ResilienceValidationResult(
             passed=True,
             total_assertions=3,
             passed_assertions=2,
             failed_assertions=1,
         )
-        
+
         assert result.passed is True
         assert result.resilience_score == pytest.approx(2/3)
 
@@ -297,9 +297,9 @@ class TestResilienceValidationResult:
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceValidationResult,
         )
-        
+
         result = ResilienceValidationResult.skip("No expectation defined")
-        
+
         assert result.passed is True
         assert "Skipped" in result.summary
 
@@ -308,16 +308,16 @@ class TestResilienceValidationResult:
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceValidationResult,
         )
-        
+
         result = ResilienceValidationResult(
             passed=True,
             total_assertions=2,
             passed_assertions=2,
             failed_assertions=0,
         )
-        
+
         data = result.to_dict()
-        
+
         assert data["passed"] is True
         assert data["resilience_score"] == 1.0
 
@@ -334,7 +334,7 @@ class TestResilienceValidator:
         from selfhealing.services.chaos.resilience_validator import (
             ResilienceValidator,
         )
-        
+
         validator = ResilienceValidator()
         assert validator is not None
 
@@ -343,85 +343,85 @@ class TestResilienceValidator:
         from selfhealing.services.chaos.resilience_validator import (
             ResilienceValidator,
         )
-        
+
         validator = ResilienceValidator()
         result = validator.validate(expectation=None)
-        
+
         assert result.passed is True
         assert "Skipped" in result.summary
 
     def test_validate_empty_assertions_returns_skip(self):
         """Test validating empty assertions returns skip result."""
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-        )
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            ResilienceValidator,
+        )
+
         validator = ResilienceValidator()
         result = validator.validate(
             expectation=ResilienceExpectation(assertions=[]),
         )
-        
+
         assert result.passed is True
 
     def test_validate_cb_open_with_mocked_provider(self):
         """Test CB OPEN validation with mocked provider."""
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-        )
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            ResilienceValidator,
+        )
+
         # Mock CB provider that returns OPEN
         mock_cb_provider = Mock()
         mock_cb_provider.get_status.return_value = {"state": "open"}
-        
+
         validator = ResilienceValidator(cb_provider=mock_cb_provider)
-        
+
         result = validator.validate(
             expectation=ResilienceExpectation.expect_cb_open("payment", 10.0),
         )
-        
+
         assert result.passed is True
         assert result.resilience_score == 1.0
         mock_cb_provider.get_status.assert_called_with("payment")
 
     def test_validate_cb_open_failure(self):
         """Test CB OPEN validation failure when CB is closed."""
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-        )
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            ResilienceValidator,
+        )
+
         # Mock CB provider that returns CLOSED
         mock_cb_provider = Mock()
         mock_cb_provider.get_status.return_value = {"state": "closed"}
-        
+
         validator = ResilienceValidator(cb_provider=mock_cb_provider)
-        
+
         result = validator.validate(
             expectation=ResilienceExpectation.expect_cb_open("payment", 10.0),
         )
-        
+
         assert result.passed is False
         assert result.resilience_score == 0.0
 
     def test_validate_fallback_with_events(self):
         """Test fallback validation with collected events."""
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-            DefaultEventCollector,
-        )
+        from selfhealing.core.timezone import now
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        from selfhealing.core.timezone import now
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            DefaultEventCollector,
+            ResilienceValidator,
+        )
+
         # Create event collector with fallback event
         event_collector = DefaultEventCollector()
         event_collector.record_event(
@@ -429,42 +429,42 @@ class TestResilienceValidator:
             service_name="payment",
             data={"reason": "CB open"},
         )
-        
+
         validator = ResilienceValidator(event_collector=event_collector)
-        
+
         result = validator.validate(
             expectation=ResilienceExpectation.expect_fallback("payment", 15.0),
             experiment_start_time=now() - timedelta(seconds=5),
         )
-        
+
         assert result.passed is True
 
     def test_validate_graceful_degradation_partial_pass(self):
         """Test graceful degradation with partial pass (CB open but no fallback)."""
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-            DefaultEventCollector,
-        )
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            DefaultEventCollector,
+            ResilienceValidator,
+        )
+
         # Mock CB provider that returns OPEN
         mock_cb_provider = Mock()
         mock_cb_provider.get_status.return_value = {"state": "open"}
-        
+
         # Empty event collector (no fallback events)
         event_collector = DefaultEventCollector()
-        
+
         validator = ResilienceValidator(
             cb_provider=mock_cb_provider,
             event_collector=event_collector,
         )
-        
+
         result = validator.validate(
             expectation=ResilienceExpectation.expect_graceful_degradation("payment"),
         )
-        
+
         # require_all=True, so should fail (CB passed, fallback failed)
         assert result.passed is False
         assert result.passed_assertions == 1
@@ -473,21 +473,21 @@ class TestResilienceValidator:
 
     def test_validate_require_any_mode(self):
         """Test require_all=False mode (any assertion pass = success)."""
+        from selfhealing.services.chaos.resilience_expectation import (
+            ExpectationType,
+            ResilienceAssertion,
+            ResilienceExpectation,
+        )
         from selfhealing.services.chaos.resilience_validator import (
             ResilienceValidator,
         )
-        from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
-            ResilienceAssertion,
-            ExpectationType,
-        )
-        
+
         # Mock CB provider that returns OPEN
         mock_cb_provider = Mock()
         mock_cb_provider.get_status.return_value = {"state": "open"}
-        
+
         validator = ResilienceValidator(cb_provider=mock_cb_provider)
-        
+
         expectation = ResilienceExpectation(
             assertions=[
                 ResilienceAssertion(
@@ -501,53 +501,53 @@ class TestResilienceValidator:
             ],
             require_all=False,  # Any pass is success
         )
-        
+
         result = validator.validate(expectation=expectation)
-        
+
         # CB passed, fallback failed, but require_all=False so overall pass
         assert result.passed is True
 
     def test_validate_emergency_mode(self):
         """Test emergency mode validation."""
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-        )
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            ResilienceValidator,
+        )
+
         # Mock emergency provider at level 2
         mock_emergency_provider = Mock()
         mock_emergency_provider.get_current_level.return_value = 2
         mock_emergency_provider.is_active.return_value = True
-        
+
         validator = ResilienceValidator(
             emergency_provider=mock_emergency_provider,
         )
-        
+
         result = validator.validate(
             expectation=ResilienceExpectation.expect_emergency_mode(level=2),
         )
-        
+
         assert result.passed is True
 
     def test_validate_custom_assertion(self):
         """Test custom assertion with custom validator function."""
+        from selfhealing.services.chaos.resilience_expectation import (
+            ExpectationType,
+            ResilienceAssertion,
+            ResilienceExpectation,
+        )
         from selfhealing.services.chaos.resilience_validator import (
             ResilienceValidator,
         )
-        from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
-            ResilienceAssertion,
-            ExpectationType,
-        )
-        
+
         # Custom validator that always returns True
-        def my_validator(context: Dict[str, Any]) -> bool:
+        def my_validator(context: dict[str, Any]) -> bool:
             return context.get("target_service") == "payment"
-        
+
         validator = ResilienceValidator()
-        
+
         expectation = ResilienceExpectation(
             assertions=[
                 ResilienceAssertion(
@@ -557,18 +557,18 @@ class TestResilienceValidator:
                 ),
             ],
         )
-        
+
         result = validator.validate(expectation=expectation)
-        
+
         assert result.passed is True
 
     def test_get_resilience_validator_factory(self):
         """Test get_resilience_validator factory function."""
         from selfhealing.services.chaos.resilience_validator import (
-            get_resilience_validator,
             ResilienceValidator,
+            get_resilience_validator,
         )
-        
+
         validator = get_resilience_validator(use_real_providers=False)
         assert isinstance(validator, ResilienceValidator)
 
@@ -583,11 +583,11 @@ class TestExperimentConfigResilienceIntegration:
     def test_experiment_config_has_resilience_expectation_field(self):
         """Test ExperimentConfig has resilience_expectation field."""
         from selfhealing.services.chaos.base import ExperimentConfig
-        
+
         config = ExperimentConfig(
             target_service="payment",
         )
-        
+
         assert hasattr(config, "resilience_expectation")
         assert config.resilience_expectation is None
 
@@ -597,14 +597,14 @@ class TestExperimentConfigResilienceIntegration:
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+
         expectation = ResilienceExpectation.expect_cb_open("payment", 10.0)
-        
+
         config = ExperimentConfig(
             target_service="payment",
             resilience_expectation=expectation,
         )
-        
+
         assert config.resilience_expectation is expectation
 
 
@@ -614,13 +614,13 @@ class TestExperimentResultResilienceIntegration:
     def test_experiment_result_has_resilience_fields(self):
         """Test ExperimentResult has resilience fields."""
         from selfhealing.services.chaos.base import ExperimentResult
-        
+
         result = ExperimentResult(
             experiment_id="test-123",
             experiment_type="latency_injection",
             status="completed",
         )
-        
+
         assert hasattr(result, "resilience_validation")
         assert hasattr(result, "resilience_passed")
         assert result.resilience_passed is True  # Default
@@ -628,7 +628,7 @@ class TestExperimentResultResilienceIntegration:
     def test_experiment_result_to_dict_includes_resilience(self):
         """Test to_dict includes resilience fields."""
         from selfhealing.services.chaos.base import ExperimentResult
-        
+
         result = ExperimentResult(
             experiment_id="test-123",
             experiment_type="latency_injection",
@@ -636,9 +636,9 @@ class TestExperimentResultResilienceIntegration:
             resilience_validation={"passed": True, "score": 1.0},
             resilience_passed=True,
         )
-        
+
         data = result.to_dict()
-        
+
         assert "resilience_validation" in data
         assert "resilience_passed" in data
 
@@ -657,27 +657,27 @@ class TestIntegrationScenarioRateLimitStorm:
         Flow: RateLimitExperiment → CB OPEN → Fast Fail 503
         Expected: CB should OPEN within 10 seconds
         """
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-        )
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            ResilienceValidator,
+        )
+
         # Mock CB provider simulating OPEN state after rate limit
         mock_cb_provider = Mock()
         mock_cb_provider.get_status.return_value = {"state": "open"}
-        
+
         validator = ResilienceValidator(cb_provider=mock_cb_provider)
-        
+
         # Define expectation: CB should OPEN
         expectation = ResilienceExpectation.expect_cb_open(
             target_service="payment-api",
             within_seconds=10.0,
         )
-        
+
         result = validator.validate(expectation=expectation)
-        
+
         assert result.passed is True
         assert result.resilience_score == 1.0
 
@@ -692,30 +692,30 @@ class TestIntegrationScenarioEmergencyEscalation:
         Flow: PartialFailureExperiment → Emergency Level 2
         Expected: Emergency Mode Level 2 should activate
         """
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-        )
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            ResilienceValidator,
+        )
+
         # Mock emergency provider at level 2
         mock_emergency_provider = Mock()
         mock_emergency_provider.get_current_level.return_value = 2
         mock_emergency_provider.is_active.return_value = True
-        
+
         validator = ResilienceValidator(
             emergency_provider=mock_emergency_provider,
         )
-        
+
         # Define expectation: Emergency Level 2
         expectation = ResilienceExpectation.expect_emergency_mode(
             level=2,
             within_seconds=60.0,
         )
-        
+
         result = validator.validate(expectation=expectation)
-        
+
         assert result.passed is True
 
 
@@ -729,24 +729,24 @@ class TestIntegrationScenarioPanicRecovery:
         Flow: CascadingFailureExperiment → Panic → Emergency Level 3 → Manual Recovery
         Expected: Emergency Mode Level 3 should activate
         """
+        from selfhealing.services.chaos.resilience_expectation import (
+            ExpectationType,
+            ResilienceAssertion,
+            ResilienceExpectation,
+        )
         from selfhealing.services.chaos.resilience_validator import (
             ResilienceValidator,
         )
-        from selfhealing.services.chaos.resilience_expectation import (
-            ResilienceExpectation,
-            ResilienceAssertion,
-            ExpectationType,
-        )
-        
+
         # Mock emergency provider at level 3 (Panic)
         mock_emergency_provider = Mock()
         mock_emergency_provider.get_current_level.return_value = 3
         mock_emergency_provider.is_active.return_value = True
-        
+
         validator = ResilienceValidator(
             emergency_provider=mock_emergency_provider,
         )
-        
+
         # Define complex expectation: Emergency Level 3
         expectation = ResilienceExpectation(
             assertions=[
@@ -759,9 +759,9 @@ class TestIntegrationScenarioPanicRecovery:
             ],
             description="Full panic recovery scenario",
         )
-        
+
         result = validator.validate(expectation=expectation)
-        
+
         assert result.passed is True
         assert result.resilience_score == 1.0
 
@@ -776,20 +776,21 @@ class TestIntegrationScenarioGracefulDegradation:
         Flow: LatencyInjection → CB OPEN → Fallback Activated
         Expected: Both CB and Fallback should activate
         """
-        from selfhealing.services.chaos.resilience_validator import (
-            ResilienceValidator,
-            DefaultEventCollector,
-        )
+        from datetime import timedelta
+
+        from selfhealing.core.timezone import now
         from selfhealing.services.chaos.resilience_expectation import (
             ResilienceExpectation,
         )
-        from selfhealing.core.timezone import now
-        from datetime import timedelta
-        
+        from selfhealing.services.chaos.resilience_validator import (
+            DefaultEventCollector,
+            ResilienceValidator,
+        )
+
         # Mock CB provider that returns OPEN
         mock_cb_provider = Mock()
         mock_cb_provider.get_status.return_value = {"state": "open"}
-        
+
         # Event collector with fallback event
         event_collector = DefaultEventCollector()
         event_collector.record_event(
@@ -797,23 +798,23 @@ class TestIntegrationScenarioGracefulDegradation:
             service_name="payment",
             data={"reason": "CB open, using cached response"},
         )
-        
+
         validator = ResilienceValidator(
             cb_provider=mock_cb_provider,
             event_collector=event_collector,
         )
-        
+
         # Define expectation: Graceful Degradation
         expectation = ResilienceExpectation.expect_graceful_degradation(
             target_service="payment",
             within_seconds=30.0,
         )
-        
+
         result = validator.validate(
             expectation=expectation,
             experiment_start_time=now() - timedelta(seconds=5),
         )
-        
+
         assert result.passed is True
         assert result.passed_assertions == 2
         assert result.resilience_score == 1.0
@@ -836,7 +837,7 @@ class TestModuleImports:
             ResilienceValidator,
             get_resilience_validator,
         )
-        
+
         assert ExpectationType is not None
         assert ResilienceAssertion is not None
         assert ResilienceExpectation is not None

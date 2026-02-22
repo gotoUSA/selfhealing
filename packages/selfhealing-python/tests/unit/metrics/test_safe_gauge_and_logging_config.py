@@ -9,10 +9,9 @@ These tests verify:
 
 import logging
 import threading
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
-
 
 # =============================================================================
 # SafeGauge Tests

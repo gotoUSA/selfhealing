@@ -100,7 +100,7 @@ class TestFullApiFuzz:
                 errors.append(f"{op.path}: {response.status_code}")
 
         # Assert
-        assert not errors, f"5xx 에러 발생 엔드포인트:\n" + "\n".join(errors)
+        assert not errors, "5xx 에러 발생 엔드포인트:\n" + "\n".join(errors)
 
     @given(
         search=st.text(min_size=0, max_size=100),

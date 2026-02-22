@@ -7,42 +7,41 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 """
 
 import os
-import pytest
 from unittest.mock import patch
 
 
 class TestNamespaceSettings:
     """NamespaceSettings 테스트."""
-    
+
     def setup_method(self):
         """각 테스트 전에 싱글톤 리셋."""
         from selfhealing.settings.namespace import reset_namespace_settings
         reset_namespace_settings()
-    
+
     def teardown_method(self):
         """각 테스트 후에 싱글톤 리셋."""
         from selfhealing.settings.namespace import reset_namespace_settings
         reset_namespace_settings()
-    
+
     def test_namespace_disabled_returns_empty(self):
         """비활성화 시 빈 문자열 반환."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(namespace_enabled=False)
         assert settings.get_effective_namespace() == ""
-    
+
     def test_namespace_disabled_default(self):
         """기본값은 비활성화 상태."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings()
         assert settings.namespace_enabled is False
         assert settings.get_effective_namespace() == ""
-    
+
     def test_namespace_priority_namespace_first(self):
         """우선순위 최상위: namespace."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             namespace="ns1",
@@ -51,11 +50,11 @@ class TestNamespaceSettings:
             env="production",
         )
         assert settings.get_effective_namespace() == "ns1"
-    
+
     def test_namespace_priority_region_second(self):
         """우선순위 2순위: region."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             namespace=None,
@@ -64,11 +63,11 @@ class TestNamespaceSettings:
             env="production",
         )
         assert settings.get_effective_namespace() == "seoul"
-    
+
     def test_namespace_priority_tenant_third(self):
         """우선순위 3순위: tenant."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             namespace=None,
@@ -77,11 +76,11 @@ class TestNamespaceSettings:
             env="production",
         )
         assert settings.get_effective_namespace() == "tenant123"
-    
+
     def test_namespace_priority_env_fourth(self):
         """우선순위 4순위: env."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             namespace=None,
@@ -90,11 +89,11 @@ class TestNamespaceSettings:
             env="staging",
         )
         assert settings.get_effective_namespace() == "staging"
-    
+
     def test_namespace_fallback_to_default(self):
         """모두 없으면 default_namespace 사용."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             namespace=None,
@@ -104,58 +103,58 @@ class TestNamespaceSettings:
             default_namespace="fallback",
         )
         assert settings.get_effective_namespace() == "fallback"
-    
+
     def test_key_prefix_with_namespace(self):
         """네임스페이스 포함 키 프리픽스."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             region="seoul",
         )
         assert settings.get_key_prefix() == "selfhealing:seoul:"
-    
+
     def test_key_prefix_without_namespace(self):
         """네임스페이스 없을 때 기존 형식."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(namespace_enabled=False)
         assert settings.get_key_prefix() == "selfhealing:"
-    
+
     def test_key_prefix_custom_base(self):
         """커스텀 base_prefix 사용."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             region="tokyo",
         )
         assert settings.get_key_prefix("myapp") == "myapp:tokyo:"
-    
+
     def test_singleton_returns_same_instance(self):
         """싱글톤이 같은 인스턴스 반환."""
         from selfhealing.settings.namespace import (
             get_namespace_settings,
             reset_namespace_settings,
         )
-        
+
         reset_namespace_settings()
         s1 = get_namespace_settings()
         s2 = get_namespace_settings()
         assert s1 is s2
-    
+
     def test_reset_clears_singleton(self):
         """reset 후 새 인스턴스 생성."""
         from selfhealing.settings.namespace import (
             get_namespace_settings,
             reset_namespace_settings,
         )
-        
+
         s1 = get_namespace_settings()
         reset_namespace_settings()
         s2 = get_namespace_settings()
         assert s1 is not s2
-    
+
     @patch.dict(os.environ, {
         "SELFHEALING_NAMESPACE_NAMESPACE_ENABLED": "true",
         "SELFHEALING_NAMESPACE_REGION": "osaka",
@@ -166,23 +165,23 @@ class TestNamespaceSettings:
             get_namespace_settings,
             reset_namespace_settings,
         )
-        
+
         reset_namespace_settings()
         settings = get_namespace_settings()
-        
+
         assert settings.namespace_enabled is True
         assert settings.region == "osaka"
         assert settings.get_effective_namespace() == "osaka"
-    
+
     def test_get_key_prefix_function(self):
         """편의 함수 get_key_prefix 테스트."""
         from selfhealing.settings.namespace import (
             get_key_prefix,
             reset_namespace_settings,
         )
-        
+
         reset_namespace_settings()
-        
+
         # 기본값 (비활성화)
         assert get_key_prefix() == "selfhealing:"
         assert get_key_prefix("cb") == "cb:"
@@ -190,19 +189,19 @@ class TestNamespaceSettings:
 
 class TestNamespaceSettingsEdgeCases:
     """NamespaceSettings 엣지 케이스 테스트."""
-    
+
     def setup_method(self):
         from selfhealing.settings.namespace import reset_namespace_settings
         reset_namespace_settings()
-    
+
     def teardown_method(self):
         from selfhealing.settings.namespace import reset_namespace_settings
         reset_namespace_settings()
-    
+
     def test_empty_string_namespace_treated_as_none(self):
         """빈 문자열은 None과 동일하게 처리 (falsy)."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             namespace="",  # 빈 문자열
@@ -210,21 +209,21 @@ class TestNamespaceSettingsEdgeCases:
         )
         # 빈 문자열은 falsy이므로 region으로 폴백
         assert settings.get_effective_namespace() == "seoul"
-    
+
     def test_special_characters_in_namespace(self):
         """네임스페이스에 특수문자 포함."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             namespace="prod-kr-1",
         )
         assert settings.get_key_prefix() == "selfhealing:prod-kr-1:"
-    
+
     def test_unicode_namespace(self):
         """유니코드 네임스페이스 (권장하지 않지만 가능)."""
         from selfhealing.settings.namespace import NamespaceSettings
-        
+
         settings = NamespaceSettings(
             namespace_enabled=True,
             namespace="서울",

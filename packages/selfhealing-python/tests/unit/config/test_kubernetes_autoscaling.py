@@ -8,13 +8,11 @@ Kubernetes Autoscaling 설정 검증 단위 테스트
 - 스케일링 정책 일관성 확인
 """
 
-import os
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
-
 
 # =============================================================================
 # Fixtures
@@ -39,7 +37,7 @@ def django_hpa_config(k8s_dir: Path) -> dict[str, Any]:
     hpa_file = k8s_dir / "django-api-hpa.yaml"
     if not hpa_file.exists():
         pytest.skip("django-api-hpa.yaml not found")
-    with open(hpa_file, "r", encoding="utf-8") as f:
+    with open(hpa_file, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -49,7 +47,7 @@ def keda_default_config(k8s_dir: Path) -> dict[str, Any]:
     keda_file = k8s_dir / "keda-scaledobject-celery-default.yaml"
     if not keda_file.exists():
         pytest.skip("keda-scaledobject-celery-default.yaml not found")
-    with open(keda_file, "r", encoding="utf-8") as f:
+    with open(keda_file, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -59,7 +57,7 @@ def keda_critical_config(k8s_dir: Path) -> dict[str, Any]:
     keda_file = k8s_dir / "keda-scaledobject-celery-critical.yaml"
     if not keda_file.exists():
         pytest.skip("keda-scaledobject-celery-critical.yaml not found")
-    with open(keda_file, "r", encoding="utf-8") as f:
+    with open(keda_file, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -69,7 +67,7 @@ def keda_audit_config(k8s_dir: Path) -> dict[str, Any]:
     keda_file = k8s_dir / "keda-scaledobject-celery-audit.yaml"
     if not keda_file.exists():
         pytest.skip("keda-scaledobject-celery-audit.yaml not found")
-    with open(keda_file, "r", encoding="utf-8") as f:
+    with open(keda_file, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -79,7 +77,7 @@ def prometheus_adapter_config(k8s_dir: Path) -> dict[str, Any]:
     config_file = k8s_dir / "prometheus-adapter-config.yaml"
     if not config_file.exists():
         pytest.skip("prometheus-adapter-config.yaml not found")
-    with open(config_file, "r", encoding="utf-8") as f:
+    with open(config_file, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -89,7 +87,7 @@ def keda_triggerauth_config(k8s_dir: Path) -> dict[str, Any]:
     auth_file = k8s_dir / "keda-triggerauth-redis.yaml"
     if not auth_file.exists():
         pytest.skip("keda-triggerauth-redis.yaml not found")
-    with open(auth_file, "r", encoding="utf-8") as f:
+    with open(auth_file, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

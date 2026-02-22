@@ -27,7 +27,7 @@ import random
 from locust import HttpUser, task, between, tag, events
 
 from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
-from load_tests.metrics import setup_event_hooks, get_metrics_collector
+from load_tests.metrics import setup_event_hooks
 
 
 STAGE_NAME = "[Stage9]"

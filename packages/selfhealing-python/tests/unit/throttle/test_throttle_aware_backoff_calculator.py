@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.services.backoff_calculator import (
     SYSTEM_TIMEOUT_SECONDS,
     BackoffConfig,

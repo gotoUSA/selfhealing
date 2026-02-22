@@ -58,11 +58,7 @@ except ImportError:
 import os
 import sys
 import time
-import random
-import uuid
-import json
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 
 # Ensure project root is in sys.path
@@ -525,7 +521,7 @@ class OutboxHTTPTestRunner:
                     for k, v in result.details.items():
                         print(f"      {k}: {v}")
             elif result.status == "skipped":
-                print(f"   ⏭️ SKIPPED")
+                print("   ⏭️ SKIPPED")
                 if result.details.get("reason"):
                     print(f"      Reason: {result.details['reason']}")
             else:
@@ -540,7 +536,7 @@ class OutboxHTTPTestRunner:
         total = len(self.results)
         
         print(f"\n{'='*60}")
-        print(f"📋 Test Summary")
+        print("📋 Test Summary")
         print(f"{'='*60}")
         print(f"   Total: {total}")
         print(f"   Passed: {passed}")
@@ -552,7 +548,7 @@ class OutboxHTTPTestRunner:
         
         # Invariants
         print(f"\n{'='*60}")
-        print(f"📋 INVARIANTS CHECK")
+        print("📋 INVARIANTS CHECK")
         print(f"{'='*60}")
         
         health_ok = any(r.name == "health_check" and r.status == "passed" for r in self.results)
@@ -575,9 +571,9 @@ class OutboxHTTPTestRunner:
         
         print(f"\n{'='*60}")
         if all_passed:
-            print(f"🎉 HTTP Integration Test PASSED")
+            print("🎉 HTTP Integration Test PASSED")
         else:
-            print(f"⚠️ HTTP Integration Test needs review")
+            print("⚠️ HTTP Integration Test needs review")
         print(f"{'='*60}\n")
         
         return {

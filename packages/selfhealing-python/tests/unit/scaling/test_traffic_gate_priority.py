@@ -8,12 +8,11 @@ Unit tests for TrafficGate Priority Mapping (236 작업 3).
 - 거부 시 metadata에 priority tier 포함
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
 from selfhealing.scaling.config import (
-    BackpressureLevel,
     BackpressureSettings,
     BackpressureStrategy,
     reset_backpressure_settings,
@@ -23,9 +22,9 @@ from selfhealing.scaling.rate_controller import (
     reset_rate_controller,
 )
 from selfhealing.scaling.traffic_gate import (
-    TrafficGate,
     _PRIORITY_TIER_DEFAULT,
     _PRIORITY_TIER_THRESHOLDS,
+    TrafficGate,
     _map_priority_int_to_tier,
     reset_traffic_gate,
 )

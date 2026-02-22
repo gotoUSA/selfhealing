@@ -58,7 +58,6 @@ if TYPE_CHECKING:
 
     from selfhealing.audit.event_buffer import (
         AuditEvent,
-        AuditEventType,
         RequestAuditBuffer,
     )
 

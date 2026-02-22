@@ -4,8 +4,7 @@ Tests for xtest_audit module.
 X-Test-Mode 작업의 WAL 기반 Audit 로깅 기능을 테스트합니다.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestLogXtestOperationAudit:
@@ -217,7 +216,9 @@ class TestLogXtestSessionAudit:
             "selfhealing.services.audit.xtest_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit.xtest_audit import log_xtest_session_start_audit
+            from selfhealing.services.audit.xtest_audit import (
+                log_xtest_session_start_audit,
+            )
 
             result = log_xtest_session_start_audit(
                 session_id="session-abc",
@@ -240,7 +241,9 @@ class TestLogXtestSessionAudit:
             "selfhealing.services.audit.xtest_audit._write_to_wal",
             return_value=2,
         ) as mock_wal:
-            from selfhealing.services.audit.xtest_audit import log_xtest_session_end_audit
+            from selfhealing.services.audit.xtest_audit import (
+                log_xtest_session_end_audit,
+            )
 
             result = log_xtest_session_end_audit(
                 session_id="session-abc",
@@ -345,12 +348,12 @@ class TestXtestAuditImports:
     def test_can_import_from_audit_package(self):
         """selfhealing.services.audit에서 import 가능해야 함."""
         from selfhealing.services.audit import (
+            log_xtest_cleanup_audit,
+            log_xtest_injection_audit,
             log_xtest_operation_audit,
             log_xtest_scenario_audit,
-            log_xtest_session_start_audit,
             log_xtest_session_end_audit,
-            log_xtest_injection_audit,
-            log_xtest_cleanup_audit,
+            log_xtest_session_start_audit,
         )
 
         assert callable(log_xtest_operation_audit)
@@ -363,12 +366,12 @@ class TestXtestAuditImports:
     def test_can_import_from_audit_helpers(self):
         """selfhealing.services.audit_helpers에서 import 가능해야 함 (하위 호환성)."""
         from selfhealing.services.audit_helpers import (
+            log_xtest_cleanup_audit,
+            log_xtest_injection_audit,
             log_xtest_operation_audit,
             log_xtest_scenario_audit,
-            log_xtest_session_start_audit,
             log_xtest_session_end_audit,
-            log_xtest_injection_audit,
-            log_xtest_cleanup_audit,
+            log_xtest_session_start_audit,
         )
 
         assert callable(log_xtest_operation_audit)

@@ -9,21 +9,16 @@ TTL(Time-To-Live) 기능 테스트.
 - Experiment 자동 만료: Chaos 엔진 사망 시 runaway 방지
 """
 
-import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
+from selfhealing.services.chaos.experiments import (
+    ExperimentConfig,
+    LatencyInjectionExperiment,
+)
 from selfhealing.services.chaos.stop_conditions import (
     TTLConfig,
 )
-from selfhealing.services.chaos.experiments import (
-    ExperimentConfig,
-    ExperimentStatus,
-    LatencyInjectionExperiment,
-)
-
 
 # =============================================================================
 # TTLConfig Tests

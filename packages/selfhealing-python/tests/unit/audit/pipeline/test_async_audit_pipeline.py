@@ -14,12 +14,8 @@ Version: 1.0.0
 
 from __future__ import annotations
 
-import queue
-import threading
 import time
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 
 class TestAsyncHealingLoggerNonBlocking:
@@ -422,7 +418,6 @@ class TestConvertEventToDict:
     def test_convert_event_with_all_fields(self):
         """모든 필드가 있는 이벤트 변환."""
         from datetime import datetime, timezone
-        from unittest.mock import MagicMock
 
         from selfhealing.audit.event_buffer import AuditEventType
         from selfhealing.interfaces.audit_adapter import AuditAction

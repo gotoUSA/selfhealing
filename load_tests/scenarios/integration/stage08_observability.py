@@ -28,9 +28,7 @@ import os
 import sys
 import time
 import random
-import json
 import requests
-from datetime import datetime
 from typing import Dict, Any, Optional
 
 # Ensure project root is in sys.path
@@ -378,7 +376,7 @@ def run_http_test():
         filename="stage08_observability_http",
         output_dir="load_tests/reports"
     )
-    print(f"\nReports saved:")
+    print("\nReports saved:")
     for format_name, path in paths.items():
         print(f"  {format_name}: {path}")
     
@@ -454,7 +452,7 @@ def run_simulation_test():
         filename="stage08_observability_simulation",
         output_dir="load_tests/reports"
     )
-    print(f"\nReports saved:")
+    print("\nReports saved:")
     for format_name, path in paths.items():
         print(f"  {format_name}: {path}")
     

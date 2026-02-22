@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.utils import timezone
 
 from rest_framework import serializers
 

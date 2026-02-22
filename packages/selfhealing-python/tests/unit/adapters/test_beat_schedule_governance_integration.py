@@ -10,9 +10,7 @@ Reference:
 """
 from __future__ import annotations
 
-from unittest.mock import patch, MagicMock
-
-import pytest
+from unittest.mock import patch
 
 
 class TestGovernanceBeatScheduleIntegration:
@@ -20,7 +18,9 @@ class TestGovernanceBeatScheduleIntegration:
 
     def test_governance_schedule_included_by_default(self):
         """기본 설정에서 거버넌스 스케줄이 포함된다."""
-        from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
+        from selfhealing.adapters.celery.beat_schedule import (
+            get_selfhealing_beat_schedule,
+        )
 
         schedule = get_selfhealing_beat_schedule()
 
@@ -33,7 +33,9 @@ class TestGovernanceBeatScheduleIntegration:
 
     def test_check_emergency_mode_expiry_task_registered(self):
         """check_emergency_mode_expiry 태스크가 등록되어 있다."""
-        from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
+        from selfhealing.adapters.celery.beat_schedule import (
+            get_selfhealing_beat_schedule,
+        )
 
         schedule = get_selfhealing_beat_schedule()
 
@@ -52,7 +54,9 @@ class TestGovernanceBeatScheduleIntegration:
 
     def test_governance_schedule_can_be_excluded(self):
         """include_governance=False로 거버넌스 스케줄을 제외할 수 있다."""
-        from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
+        from selfhealing.adapters.celery.beat_schedule import (
+            get_selfhealing_beat_schedule,
+        )
 
         schedule = get_selfhealing_beat_schedule(include_governance=False)
 
@@ -148,7 +152,9 @@ class TestGovernanceScheduleErrorHandling:
     @patch("selfhealing.adapters.celery.beat_schedule.logger")
     def test_logs_debug_on_successful_load(self, mock_logger):
         """거버넌스 스케줄 로드 성공 시 디버그 로그가 기록된다."""
-        from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
+        from selfhealing.adapters.celery.beat_schedule import (
+            get_selfhealing_beat_schedule,
+        )
 
         get_selfhealing_beat_schedule()
 

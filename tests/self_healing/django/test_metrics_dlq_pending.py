@@ -9,12 +9,8 @@ Reference:
 - docs/L3_SELF_HEALING_OPERATIONS.md §7 (Observability & Metrics)
 """
 
-from datetime import timedelta
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
 
 import pytest
-from django.utils import timezone
 
 # 이 파일의 모든 테스트는 DB 필요
 pytestmark = pytest.mark.requires_db
@@ -23,8 +19,6 @@ from shopping.models.failed_operation import FailedOperation
 from selfhealing.services.metrics import (
     record_dlq_item_created,
     update_dlq_pending_gauges,
-    dlq_pending_gauge,
-    dlq_created_total,
 )
 from shopping.tests.factories import OrderFactory, UserFactory
 

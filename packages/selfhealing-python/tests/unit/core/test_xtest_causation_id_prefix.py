@@ -12,14 +12,13 @@ X-Test-Mode에서 causation ID에 XTC- 프리픽스가 정상 적용되는지 �
 - start_system_cascade()에서 프리픽스 적용
 """
 
-import pytest
 
 from selfhealing.context.causation_context import (
-    CausationContext,
     XTEST_CAUSATION_PREFIX,
+    CausationContext,
+    _get_xtest_id_prefix,
     is_xtest_id,
     normalize_causation_id,
-    _get_xtest_id_prefix,
 )
 from selfhealing.core.test_mode_context import TestModeContext
 

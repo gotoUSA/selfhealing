@@ -6,7 +6,6 @@ Run with: docker-compose exec web pytest tests/self_healing/django/test_chaos_co
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 
 @pytest.mark.django_db

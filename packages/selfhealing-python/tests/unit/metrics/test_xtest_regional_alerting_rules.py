@@ -12,7 +12,6 @@ Section 7.2 구현 검증:
 - test_xtest_cross_region_denied_from_same_source_expr: PromQL 표현식 확인
 """
 
-import pytest
 
 
 class TestXTestRegionalAlertingRules:

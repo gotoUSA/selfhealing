@@ -77,7 +77,6 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from locust import HttpUser, task, between, tag, events
-from locust.runners import MasterRunner, WorkerRunner
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -1010,7 +1009,7 @@ def on_test_start(environment, **kwargs):
     print("\n" + "=" * 70)
     print(f"🚀 {STAGE_NAME} Multi-Region Failover Chaos Test Started")
     print("=" * 70)
-    print(f"📊 Test Configuration:")
+    print("📊 Test Configuration:")
     print(f"   - Region A: {REGION_A}")
     print(f"   - Region B: {REGION_B}")
     print(f"   - Admin User: {ADMIN_USERNAME}")

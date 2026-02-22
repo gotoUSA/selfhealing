@@ -6,8 +6,6 @@ RecoveryInfrastructureAdapter 테스트.
 
 from unittest import mock
 
-import pytest
-
 from selfhealing.meta.recovery_adapter import (
     DockerComposeRecoveryAdapter,
     KubernetesRecoveryAdapter,

@@ -9,7 +9,6 @@ MerkleSpotChecker 단위 테스트.
     - MerkleSpotChecker._store_merkle_root: TTL 설정 참조 저장
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from selfhealing.audit.integrity.merkle_spot_checker import (
@@ -17,7 +16,6 @@ from selfhealing.audit.integrity.merkle_spot_checker import (
     MerkleSpotChecker,
 )
 from selfhealing.audit.integrity.models import canonical_json_bytes, compute_hash
-
 
 # =============================================================================
 # Helpers

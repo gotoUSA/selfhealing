@@ -9,7 +9,6 @@ Tests the dynamic permission levels based on discrepancy rate:
 """
 
 import os
-import sys
 
 # Django setup before any Django imports
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
@@ -18,7 +17,6 @@ import django
 
 django.setup()
 
-import pytest
 from unittest.mock import Mock, patch, MagicMock
 
 from selfhealing.api.django.permissions import ThresholdBasedPermission

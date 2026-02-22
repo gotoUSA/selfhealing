@@ -9,7 +9,6 @@ ThrottleConfig DLQ 필드 단위 테스트.
 3. ThrottleConfig 인스턴스 정합성
 """
 
-import pytest
 
 from selfhealing.services.throttle.config import ThrottleConfig
 

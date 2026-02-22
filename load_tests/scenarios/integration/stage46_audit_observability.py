@@ -30,10 +30,7 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
-from datetime import datetime
-from typing import Dict, List, Any, Optional
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _scenarios_dir = os.path.dirname(_current_dir)
@@ -547,7 +544,7 @@ def on_test_stop(environment, **kwargs):
             print(f"   {status} {scenario}: {success}/{attempts} ({rate:.1f}%)")
     
     # Statistics
-    print(f"\n📈 Statistics:")
+    print("\n📈 Statistics:")
     print(f"   Audit entries found: {stats['audit_entries_found']}")
     print(f"   Config versions found: {stats['config_versions_found']}")
     print(f"   Shadow log entries: {stats['shadow_log_entries']}")

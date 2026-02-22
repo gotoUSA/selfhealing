@@ -2,7 +2,7 @@
 Tests for Governance Tasks.
 """
 
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -139,6 +139,7 @@ class TestThinTaskArchitecture:
     def test_check_emergency_mode_expiry_is_thin(self):
         """Should have minimal logic in task function."""
         import inspect
+
         from selfhealing.tasks.governance import check_emergency_mode_expiry
 
         source = inspect.getsource(check_emergency_mode_expiry)

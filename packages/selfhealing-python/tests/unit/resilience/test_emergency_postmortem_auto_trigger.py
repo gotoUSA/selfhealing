@@ -12,9 +12,9 @@ RecoveryCoordinator 복구 완료 시 자동 Postmortem 생성 테스트.
 6. approve_recovery() 시 이벤트 발행 확인
 """
 
-import pytest
-from datetime import datetime, timezone as tz
-from unittest.mock import MagicMock, patch, PropertyMock
+from datetime import datetime
+from datetime import timezone as tz
+from unittest.mock import MagicMock, patch
 
 
 class TestEmergencyRecoveryEventPublish:
@@ -22,6 +22,7 @@ class TestEmergencyRecoveryEventPublish:
 
     def test_complete_session_publishes_event(self):
         """_complete_session() 호출 시 EMERGENCY_RECOVERY_COMPLETED 이벤트 발행 확인."""
+        from selfhealing.services.coordination.enums import RecoveryStatus
         from selfhealing.services.coordination.recovery_coordinator import (
             RecoveryCoordinator,
             reset_recovery_coordinator,
@@ -31,8 +32,7 @@ class TestEmergencyRecoveryEventPublish:
             RecoveryStep,
             RecoveryStepType,
         )
-        from selfhealing.services.coordination.enums import RecoveryStatus
-        from selfhealing.services.event_bus import get_event_bus, EventType
+        from selfhealing.services.event_bus import EventType, get_event_bus
 
         reset_recovery_coordinator()
 
@@ -105,13 +105,7 @@ class TestEmergencyRecoveryEventPublish:
             RecoveryCoordinator,
             reset_recovery_coordinator,
         )
-        from selfhealing.services.coordination.recovery_state import (
-            RecoverySession,
-            RecoveryStep,
-            RecoveryStepType,
-        )
-        from selfhealing.services.coordination.enums import RecoveryStatus
-        from selfhealing.services.event_bus import get_event_bus, EventType
+        from selfhealing.services.event_bus import EventType, get_event_bus
 
         reset_recovery_coordinator()
 
@@ -199,9 +193,9 @@ class TestEmergencyPostmortemHandler:
     def test_handler_skips_when_disabled(self, monkeypatch):
         """auto_enabled=False일 때 핸들러 스킵 확인."""
         from selfhealing.services.event_bus import (
-            _on_emergency_recovery_completed_postmortem,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_emergency_recovery_completed_postmortem,
         )
         from selfhealing.settings.postmortem import reset_postmortem_settings
 
@@ -227,9 +221,9 @@ class TestEmergencyPostmortemHandler:
     def test_handler_skips_when_duration_below_min(self, monkeypatch):
         """duration이 최소 duration 미만일 때 스킵 확인."""
         from selfhealing.services.event_bus import (
-            _on_emergency_recovery_completed_postmortem,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_emergency_recovery_completed_postmortem,
         )
         from selfhealing.settings.postmortem import reset_postmortem_settings
 
@@ -256,9 +250,9 @@ class TestEmergencyPostmortemHandler:
     def test_handler_generates_postmortem_when_enabled(self, monkeypatch):
         """auto_enabled=True일 때 Celery task으로 Postmortem 생성 위임 확인."""
         from selfhealing.services.event_bus import (
-            _on_emergency_recovery_completed_postmortem,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_emergency_recovery_completed_postmortem,
         )
         from selfhealing.settings.postmortem import reset_postmortem_settings
 
@@ -449,9 +443,9 @@ class TestEmergencyPostmortemHandlerRegistration:
     def test_handler_registered_in_default_handlers(self):
         """register_default_handlers()에서 핸들러 등록 확인."""
         from selfhealing.services.event_bus import (
+            EventType,
             get_event_bus,
             register_default_handlers,
-            EventType,
         )
 
         bus = get_event_bus()

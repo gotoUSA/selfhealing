@@ -4,23 +4,22 @@ DLQ 재생 서비스(replay_service.py)의 단위 테스트.
 거버넌스 체크, 단건/배치 재생, 핸들러 레지스트리 등을 검증합니다.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 from dataclasses import dataclass
-from typing import Any
+from unittest.mock import MagicMock, patch
 
-from selfhealing.services.replay_service import (
-    ReplayResult,
-    BatchReplayResult,
-    ReplayHandler,
-    DefaultReplayHandler,
-    ReplayService,
-    register_replay_handler,
-    get_replay_handler,
-    _replay_handlers,
-)
+import pytest
+
 from selfhealing.services.governance_checks import GovernanceCheckResult
-
+from selfhealing.services.replay_service import (
+    BatchReplayResult,
+    DefaultReplayHandler,
+    ReplayHandler,
+    ReplayResult,
+    ReplayService,
+    _replay_handlers,
+    get_replay_handler,
+    register_replay_handler,
+)
 
 # =============================================================================
 # Fixtures

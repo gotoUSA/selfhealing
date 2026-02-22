@@ -8,26 +8,25 @@ Tests for:
 - ErrorBudgetService (integrated)
 """
 
-import pytest
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from datetime import timedelta
+from unittest.mock import Mock
 
 from selfhealing.services.error_budget_service import (
-    ErrorBudgetCalculator,
+    BURN_RATE_THRESHOLDS,
+    ERROR_BUDGET_THRESHOLDS,
     DeploymentPolicyAdvisor,
-    FreezeDecisionRecorder,
+    DeploymentVerdict,
+    ErrorBudgetCalculator,
     ErrorBudgetService,
     ErrorBudgetStatus,
-    DeploymentVerdict,
     FreezeDecisionRecord,
+    FreezeDecisionRecorder,
     FreezeStatus,
     OverrideType,
-    ERROR_BUDGET_THRESHOLDS,
-    BURN_RATE_THRESHOLDS,
-    get_error_budget_service,
     configure_error_budget_service,
+    get_error_budget_service,
 )
-from selfhealing.slo import SLO, SLOConfig, SLI
+from selfhealing.slo import SLI, SLO, SLOConfig
 
 
 class TestErrorBudgetCalculator:

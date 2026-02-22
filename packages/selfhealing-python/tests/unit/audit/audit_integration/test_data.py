@@ -7,8 +7,6 @@ Uses lazy imports to avoid Prometheus registry conflicts.
 
 from datetime import datetime
 
-import pytest
-
 
 class TestAuditEventData:
     """AuditEventData dataclass 테스트."""
@@ -19,7 +17,7 @@ class TestAuditEventData:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         event = AuditEventData(event_type=AuditObserverEventType.CIRCUIT_OPENED)
 
         assert event.timestamp is not None
@@ -31,7 +29,7 @@ class TestAuditEventData:
             AuditEventData,
             AuditObserverEventType,
         )
-        
+
         event = AuditEventData(
             event_type=AuditObserverEventType.FALLBACK_ACTIVATED,
             details={"fallback_type": "file", "reason": "primary_failed"},

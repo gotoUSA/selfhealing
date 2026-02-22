@@ -19,7 +19,6 @@ import pytest
 
 from selfhealing.multiregion.config import (
     MultiRegionSettings,
-    RegionEndpoint,
     reset_multiregion_settings,
 )
 from selfhealing.multiregion.failover import (

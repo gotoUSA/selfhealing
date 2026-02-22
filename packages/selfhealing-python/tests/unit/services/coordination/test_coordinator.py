@@ -9,21 +9,19 @@ Tests:
 - Namespace isolation
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
 from unittest.mock import patch
 
-from selfhealing.services.emergency_mode.enums import EmergencyLevel
-from selfhealing.services.coordination.enums import ActionType, EmergencyScope
+from selfhealing.services.coordination.anti_flapping import AntiFlappingGuard
+from selfhealing.services.coordination.coordinator import (
+    DryRunAuditLogger,
+    EmergencyCoordinator,
+)
+from selfhealing.services.coordination.enums import ActionType
 from selfhealing.services.coordination.models import (
     CoordinationAction,
     OverrideTTLConfig,
 )
-from selfhealing.services.coordination.anti_flapping import AntiFlappingGuard
-from selfhealing.services.coordination.coordinator import (
-    EmergencyCoordinator,
-    DryRunAuditLogger,
-)
+from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
 
 class TestDryRunAuditLogger:

@@ -500,7 +500,7 @@ def on_test_stop(environment, **kwargs):
                 print(f"❌ GOVERNANCE FALSE POSITIVE: {governance_blocked}건 차단 발생!")
                 l3_passed = False
             else:
-                print(f"✅ Governance Blocked: 0건 (False Positive 없음)")
+                print("✅ Governance Blocked: 0건 (False Positive 없음)")
     except Exception as e:
         print(f"⚠️ Audit Log 조회 실패: {e}")
 
@@ -586,7 +586,7 @@ def on_test_stop(environment, **kwargs):
         l1_hits = cache_hits.get("L1", 0)
         l2_hits = cache_hits.get("L2", 0)
         misses = cache_hits.get("MISS", 0)
-        print(f"\n🗄️ V3 Cache Statistics:")
+        print("\n🗄️ V3 Cache Statistics:")
         print(f"   L1 Hits: {l1_hits} ({l1_hits/total_cache_ops*100:.1f}%)")
         print(f"   L2 Hits: {l2_hits} ({l2_hits/total_cache_ops*100:.1f}%)")
         print(f"   Misses: {misses} ({misses/total_cache_ops*100:.1f}%)")
@@ -597,7 +597,7 @@ def on_test_stop(environment, **kwargs):
         print(f"\n⚡ Rate Limit 발생: {rate_limited}회 (L3 자체 보호 동작)")
     
     if _l3_stats.get("dynamic_sla_targets"):
-        print(f"\n📋 Dynamic SLA (from RuntimeConfig):")
+        print("\n📋 Dynamic SLA (from RuntimeConfig):")
         for key, value in _l3_stats["dynamic_sla_targets"].items():
             print(f"   - {key}: {value}")
 

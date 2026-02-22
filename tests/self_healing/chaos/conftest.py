@@ -8,10 +8,9 @@ Migrated from: shopping/tests/integration/chaos/conftest.py
 """
 
 import random
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable, Generator
+from typing import Generator
 from datetime import datetime
 
 

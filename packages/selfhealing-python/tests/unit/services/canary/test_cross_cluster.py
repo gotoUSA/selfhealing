@@ -14,25 +14,22 @@ Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md (Step
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
 from selfhealing.services.canary.cross_cluster import (
     ClusterConfigChange,
-    PropagationRequest,
-    PropagationRequestStatus,
-    GovernancePolicy,
-    NotificationBackend,
-    LoggingNotificationBackend,
     CrossClusterNotifier,
     CrossClusterPropagationRequest,
+    GovernancePolicy,
     GovernancePolicySync,
+    LoggingNotificationBackend,
+    NotificationBackend,
+    PropagationRequest,
+    PropagationRequestStatus,
     reset_cross_cluster_services,
 )
-from selfhealing.utils.time import utc_now
-
 
 # =============================================================================
 # Fixtures

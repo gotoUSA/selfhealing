@@ -46,7 +46,7 @@ import time
 import threading
 import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from enum import Enum
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -488,7 +488,7 @@ class ExtremeSelfHealingUser(HttpUser):
                     token_data = data.get("token", {})
                     self.access_token = token_data.get("access") or data.get("access")
                     response.success()
-                    debug_log(f"Login successful, token obtained")
+                    debug_log("Login successful, token obtained")
                     return True
                 else:
                     response.failure(f"Login failed: {response.status_code}")
@@ -1572,28 +1572,28 @@ def on_test_stop(environment, **kwargs):
     # V2 최적화 모듈 통계
     if v2_opt_stats:
         print("\n🚀 V2 최적화 모듈 통계:")
-        print(f"   📦 CBStateCache:")
+        print("   📦 CBStateCache:")
         cache_stats = v2_opt_stats.get("cache_stats", {})
         print(f"      - 캐시 히트율: {cache_stats.get('hit_rate', 0)*100:.1f}%")
         print(f"      - 총 요청: {cache_stats.get('total_requests', 0)}")
         print(f"      - 캐시 히트: {cache_stats.get('cache_hits', 0)}")
         print(f"      - 캐시 미스: {cache_stats.get('cache_misses', 0)}")
         
-        print(f"   📝 AsyncHealingLogger:")
+        print("   📝 AsyncHealingLogger:")
         logger_stats = v2_opt_stats.get("async_logger_stats", {})
         print(f"      - 총 이벤트: {logger_stats.get('events_logged', 0)}")
         print(f"      - 플러시된 이벤트: {logger_stats.get('events_flushed', 0)}")
         print(f"      - 즉시 플러시: {logger_stats.get('immediate_flushes', 0)}")
         print(f"      - 배치 플러시: {logger_stats.get('batch_flushes', 0)}")
         
-        print(f"   🎲 AdaptiveJitter:")
+        print("   🎲 AdaptiveJitter:")
         jitter_stats = v2_opt_stats.get("jitter_stats", {})
         print(f"      - Relaxed 모드: {jitter_stats.get('relaxed_count', 0)}회")
         print(f"      - Normal 모드: {jitter_stats.get('normal_count', 0)}회")
         print(f"      - Stressed 모드: {jitter_stats.get('stressed_count', 0)}회")
         print(f"      - 평균 지터: {jitter_stats.get('avg_jitter_ms', 0):.1f}ms")
         
-        print(f"   ⚠️ SafeDefaults:")
+        print("   ⚠️ SafeDefaults:")
         print(f"      - Degraded Mode 진입: {v2_opt_stats.get('degraded_mode_triggered', 0)}회")
         print(f"      - 현재 상태: {'Degraded' if SafeDefaults.is_degraded() else 'Normal'}")
     
@@ -1607,18 +1607,18 @@ def on_test_stop(environment, **kwargs):
     print(f"   - SLA 위반: {sla_result['violations']}회")
     
     if sla_result['passed']:
-        print(f"   ✅ SLA P99 기준 통과!")
+        print("   ✅ SLA P99 기준 통과!")
     else:
         print(f"   ❌ SLA P99 기준 실패 (P99 {sla_result['p99']:.2f}ms > {sla_result['p99_target']}ms)")
     
     # V2 NEW: Zero Variance 검증 결과
     if zv_result:
-        print(f"\n🔒 Zero Variance 검증:")
+        print("\n🔒 Zero Variance 검증:")
         print(f"   - 재고 오차: {zv_result['inventory_variance']}")
         print(f"   - 포인트 오차: {zv_result['points_variance']}")
         print(f"   - 결제 오차: {zv_result['payments_variance']}")
         if zv_result['passed']:
-            print(f"   ✅ Zero Variance 통과! (총 오차: 0)")
+            print("   ✅ Zero Variance 통과! (총 오차: 0)")
         else:
             print(f"   ❌ Zero Variance 실패! (총 오차: {zv_result['variance']})")
     
@@ -1661,13 +1661,13 @@ def on_test_stop(environment, **kwargs):
         overall_passed = overall_passed and zv_result['passed']
     
     if overall_passed:
-        print(f"🏆 최종 결과: ✅ PASSED")
+        print("🏆 최종 결과: ✅ PASSED")
     else:
-        print(f"🏆 최종 결과: ❌ FAILED")
+        print("🏆 최종 결과: ❌ FAILED")
         if not sla_result['passed']:
-            print(f"   - 원인: SLA P99 기준 미달")
+            print("   - 원인: SLA P99 기준 미달")
         if zv_result and not zv_result['passed']:
-            print(f"   - 원인: Zero Variance 실패")
+            print("   - 원인: Zero Variance 실패")
     print("=" * 80)
     
     # 결과 파일 저장 (V2 추가 데이터 포함)

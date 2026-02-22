@@ -191,8 +191,9 @@ class TestApiRateLimitSettings:
 
     def test_emergency_limit_warning_for_high_value(self):
         """emergency_limit이 50 초과 시 경고 로그 출력 검증."""
-        from selfhealing.settings.api_rate_limit import ApiRateLimitSettings
         from unittest.mock import patch
+
+        from selfhealing.settings.api_rate_limit import ApiRateLimitSettings
 
         # logger.warning이 호출되는지 mock으로 검증 (병렬 테스트 안정적)
         with patch("selfhealing.settings.api_rate_limit.logger") as mock_logger:

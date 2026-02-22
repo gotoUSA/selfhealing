@@ -68,7 +68,7 @@ class PendingConfigChange:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "PendingConfigChange":
+    def from_dict(cls, data: dict[str, Any]) -> PendingConfigChange:
         """Create from dictionary."""
         return cls(**data)
 

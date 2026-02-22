@@ -30,7 +30,6 @@ if _project_root not in sys.path:
 if _load_tests_dir not in sys.path:
     sys.path.insert(0, _load_tests_dir)
 
-import time
 import random
 import threading
 from locust import HttpUser, task, between, tag, events
@@ -784,7 +783,7 @@ def on_test_stop(environment, **kwargs):
         print("   No duplicate payments on same order")
         print("   Distributed lock working correctly")
     else:
-        print(f"\n❌ RACE CONDITION TEST FAILED")
+        print("\n❌ RACE CONDITION TEST FAILED")
         print(f"   🚨 CRITICAL: {_race_stats['double_success']} double payments detected!")
         print(f"   📊 Affected Orders: {orders_with_multiple_success}")
         print(f"   💰 Total Duplicate Payments: {total_duplicate_payments}")

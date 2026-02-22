@@ -14,7 +14,6 @@ import pytest
 pytestmark = pytest.mark.requires_db
 
 from celery.exceptions import Retry, SoftTimeLimitExceeded
-from unittest.mock import MagicMock, patch
 
 from shopping.constants import TOSS_NON_RETRYABLE_ERRORS, TOSS_RETRYABLE_ERRORS
 from shopping.tasks.payment_tasks import call_toss_confirm_api, finalize_payment_confirm
@@ -364,7 +363,6 @@ class TestSoftTimeLimitExceeded:
             ProductFactory,
             OrderItemFactory,
         )
-        from shopping.models.payment import Payment
 
         # Arrange
         user = UserFactory()

@@ -11,14 +11,12 @@ Test Scenarios:
 """
 
 import json
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
+from selfhealing.services.dlq.store_operations import (
+    StoreOperationsMixin,
+)
 from selfhealing.services.dlq_models import DLQConfig, DLQEntryResult
-from selfhealing.services.dlq.store_operations import StoreOperationsMixin, DLQ_FALLBACK_PATH
 
 
 class MockDLQService(StoreOperationsMixin):
@@ -71,7 +69,7 @@ class TestDLQLocalFallback:
 
         # And: 파일에 저장되었는지 확인
         assert fallback_path.exists()
-        with open(fallback_path, "r") as f:
+        with open(fallback_path) as f:
             line = f.readline()
             entry = json.loads(line)
 
@@ -126,7 +124,7 @@ class TestDLQLocalFallback:
             )
 
         # Then: 모든 필드가 올바르게 저장되었는지 확인
-        with open(fallback_path, "r") as f:
+        with open(fallback_path) as f:
             entry = json.loads(f.readline())
 
         data = entry["entry_data"]
@@ -160,7 +158,7 @@ class TestDLQLocalFallback:
                 )
 
         # Then: 3줄 저장되었는지 확인
-        with open(fallback_path, "r") as f:
+        with open(fallback_path) as f:
             lines = f.readlines()
 
         assert len(lines) == 3

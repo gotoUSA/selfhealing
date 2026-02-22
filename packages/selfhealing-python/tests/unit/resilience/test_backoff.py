@@ -129,13 +129,13 @@ class TestGetBackoffCalculator:
     """Tests for the factory function."""
 
     def test_get_exponential(self):
-        from selfhealing.core.backoff import get_backoff_calculator, ExponentialBackoff
+        from selfhealing.core.backoff import ExponentialBackoff, get_backoff_calculator
 
         calc = get_backoff_calculator("exponential")
         assert isinstance(calc, ExponentialBackoff)
 
     def test_get_linear(self):
-        from selfhealing.core.backoff import get_backoff_calculator, LinearBackoff
+        from selfhealing.core.backoff import LinearBackoff, get_backoff_calculator
 
         calc = get_backoff_calculator("linear")
         assert isinstance(calc, LinearBackoff)

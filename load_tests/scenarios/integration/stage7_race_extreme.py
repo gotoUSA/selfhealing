@@ -41,7 +41,7 @@ if _project_root not in sys.path:
 if _load_tests_dir not in sys.path:
     sys.path.insert(0, _load_tests_dir)
 
-from locust import HttpUser, task, between, constant, constant_pacing, tag, events
+from locust import HttpUser, task, constant, constant_pacing, tag, events
 
 from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
 from load_tests.metrics import setup_event_hooks, get_metrics_collector

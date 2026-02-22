@@ -10,8 +10,7 @@ Throttle 감사 로그 테스트.
 6. _record_audit_safe() 헬퍼 함수
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestRecordThrottleAuditMain:
@@ -20,8 +19,8 @@ class TestRecordThrottleAuditMain:
     def test_record_throttle_audit_basic(self):
         """기본 감사 로그 기록 테스트."""
         from selfhealing.services.throttle.audit import (
-            record_throttle_audit,
             AUDIT_THROTTLE_LIMIT_ADJUSTED,
+            record_throttle_audit,
         )
 
         # 예외 없이 완료되면 성공
@@ -32,8 +31,8 @@ class TestRecordThrottleAuditMain:
     def test_record_throttle_audit_with_details(self):
         """상세 정보 포함 감사 로그 테스트."""
         from selfhealing.services.throttle.audit import (
-            record_throttle_audit,
             AUDIT_THROTTLE_LIMIT_ADJUSTED,
+            record_throttle_audit,
         )
 
         record_throttle_audit(
@@ -46,8 +45,8 @@ class TestRecordThrottleAuditMain:
     def test_record_throttle_audit_fail_open(self):
         """감사 로그 실패 시 Fail-Open 테스트."""
         from selfhealing.services.throttle.audit import (
-            record_throttle_audit,
             AUDIT_THROTTLE_LIMIT_ADJUSTED,
+            record_throttle_audit,
         )
 
         with patch(
@@ -190,8 +189,8 @@ class TestCascadeEventIntegration:
     def test_cascade_event_called_for_emergency(self):
         """Emergency 이벤트 시 CascadeEvent 호출 테스트."""
         from selfhealing.services.throttle.audit import (
-            record_throttle_emergency_sync,
             _process_audit_event,
+            record_throttle_emergency_sync,
         )
 
         with patch("selfhealing.audit.cascade_auditor.get_cascade_event_auditor") as mock_get_auditor:
@@ -216,8 +215,8 @@ class TestCascadeEventIntegration:
     def test_cascade_event_called_for_cb(self):
         """CB 이벤트 시 CascadeEvent 호출 테스트."""
         from selfhealing.services.throttle.audit import (
-            record_throttle_cb_sync,
             _process_audit_event,
+            record_throttle_cb_sync,
         )
 
         with patch("selfhealing.audit.cascade_auditor.get_cascade_event_auditor") as mock_get_auditor:
@@ -297,9 +296,9 @@ class TestAuditEventTypeConstants:
     def test_audit_event_type_constants_exist(self):
         """감사 이벤트 타입 상수 존재 확인."""
         from selfhealing.services.throttle.audit import (
-            AUDIT_THROTTLE_LIMIT_ADJUSTED,
-            AUDIT_THROTTLE_EMERGENCY_SYNC,
             AUDIT_THROTTLE_CB_SYNC,
+            AUDIT_THROTTLE_EMERGENCY_SYNC,
+            AUDIT_THROTTLE_LIMIT_ADJUSTED,
             AUDIT_THROTTLE_SLA_BREACH,
         )
 

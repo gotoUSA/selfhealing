@@ -3,7 +3,7 @@ Tests for Safe Gauge Wrapper.
 """
 
 import time
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
@@ -251,19 +251,19 @@ class TestSafeGaugeLRUCache:
         from selfhealing.metrics.safe_gauge import SafeGauge
 
         safe = SafeGauge(mock_gauge, max_label_combinations=3)
-        
+
         # 3개 생성
         safe.labels(domain="a")
         safe.labels(domain="b")
         safe.labels(domain="c")
         assert safe.current_size == 3
         assert safe.eviction_count == 0
-        
+
         # 4번째 생성 - eviction 발생
         safe.labels(domain="d")
         assert safe.current_size == 3
         assert safe.eviction_count == 1
-        
+
         # "a"는 제거되어야 함
         assert safe.get_child(domain="a") is None
         assert safe.get_child(domain="b") is not None
@@ -273,17 +273,17 @@ class TestSafeGaugeLRUCache:
         from selfhealing.metrics.safe_gauge import SafeGauge
 
         safe = SafeGauge(mock_gauge, max_label_combinations=3)
-        
+
         safe.labels(domain="a")
         safe.labels(domain="b")
         safe.labels(domain="c")
-        
+
         # "a" 재접근 - 가장 최근으로 이동
         safe.labels(domain="a")
-        
+
         # "d" 추가 - "b"가 제거되어야 함 (a는 방금 접근)
         safe.labels(domain="d")
-        
+
         assert safe.get_child(domain="a") is not None
         assert safe.get_child(domain="b") is None
         assert safe.get_child(domain="c") is not None
@@ -294,20 +294,20 @@ class TestSafeGaugeLRUCache:
         from selfhealing.metrics.safe_gauge import SafeGauge
 
         evicted_items = []
-        
+
         def on_eviction(key, child):
             evicted_items.append((key, child))
-        
+
         safe = SafeGauge(
-            mock_gauge, 
+            mock_gauge,
             max_label_combinations=2,
             on_eviction=on_eviction
         )
-        
+
         safe.labels(domain="a")
         safe.labels(domain="b")
         safe.labels(domain="c")  # eviction 발생
-        
+
         assert len(evicted_items) == 1
         assert ("domain", "a") in evicted_items[0][0]
 
@@ -316,12 +316,12 @@ class TestSafeGaugeLRUCache:
         from selfhealing.metrics.safe_gauge import SafeGauge
 
         safe = SafeGauge(mock_gauge, max_label_combinations=100)
-        
+
         safe.labels(domain="a")
         safe.labels(domain="b")
-        
+
         stats = safe.get_cache_stats()
-        
+
         assert stats["current_size"] == 2
         assert stats["max_size"] == 100
         assert stats["eviction_count"] == 0
@@ -329,11 +329,11 @@ class TestSafeGaugeLRUCache:
 
     def test_noop_when_gauge_is_none(self):
         """gauge가 None일 때 NoOp 반환."""
-        from selfhealing.metrics.safe_gauge import SafeGauge, NoOpGaugeChild
+        from selfhealing.metrics.safe_gauge import NoOpGaugeChild, SafeGauge
 
         safe = SafeGauge(None)
         child = safe.labels(domain="a")
-        
+
         assert isinstance(child, NoOpGaugeChild)
         assert safe.current_size == 0
 
@@ -357,25 +357,25 @@ class TestSafeGaugeLRUEvictionLogging:
         """로거를 직접 캡처하는 fixture (테스트 격리 문제 해결)."""
         import logging
         from io import StringIO
-        
+
         # 로거 설정
         test_logger = logging.getLogger("selfhealing.metrics.safe_gauge.core")
-        
+
         # 캡처용 핸들러
         log_capture = StringIO()
         handler = logging.StreamHandler(log_capture)
         handler.setLevel(logging.WARNING)
         handler.setFormatter(logging.Formatter("%(message)s"))
-        
+
         # 로거에 핸들러 추가 및 propagate 강제 설정
         original_level = test_logger.level
         original_propagate = test_logger.propagate
         test_logger.setLevel(logging.WARNING)
         test_logger.propagate = True
         test_logger.addHandler(handler)
-        
+
         yield log_capture
-        
+
         # 정리
         test_logger.removeHandler(handler)
         test_logger.setLevel(original_level)
@@ -386,11 +386,11 @@ class TestSafeGaugeLRUEvictionLogging:
         from selfhealing.metrics.safe_gauge import SafeGauge
 
         safe = SafeGauge(mock_gauge, max_label_combinations=2)
-        
+
         safe.labels(domain="a")
         safe.labels(domain="b")
         safe.labels(domain="c")  # eviction 발생
-            
+
         # 캡처된 로그 확인
         log_output = captured_logs.getvalue()
         assert "LRU eviction" in log_output
@@ -402,11 +402,11 @@ class TestSafeGaugeLRUEvictionLogging:
         from selfhealing.metrics.safe_gauge import SafeGauge
 
         safe = SafeGauge(mock_gauge, max_label_combinations=2)
-        
+
         safe.labels(domain="a")
         safe.labels(domain="b")
         safe.labels(domain="c")  # eviction 발생
-            
+
         # 캡처된 로그에서 shadow_value 확인
         log_output = captured_logs.getvalue()
         assert "shadow_value" in log_output
@@ -416,12 +416,12 @@ class TestSafeGaugeLRUEvictionLogging:
         from selfhealing.metrics.safe_gauge import SafeGauge
 
         safe = SafeGauge(mock_gauge, max_label_combinations=2)
-        
+
         safe.labels(domain="a")
         safe.labels(domain="b")
         safe.labels(domain="c")  # eviction #1
         safe.labels(domain="d")  # eviction #2
-            
+
         # 캡처된 로그에서 eviction 번호 확인
         log_output = captured_logs.getvalue()
         assert "LRU eviction #1" in log_output

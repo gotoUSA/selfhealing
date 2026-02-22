@@ -12,18 +12,18 @@ Tests:
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
+
+from selfhealing.tasks.base import reset_cooldowns
 from selfhealing.tasks.cleanup_tasks import (
     archive_old_dlq_entries,
     cleanup_expired_config,
     expire_approval_requests,
-    purge_archived_dlq_entries,
     get_cleanup_beat_schedule,
+    purge_archived_dlq_entries,
 )
-from selfhealing.tasks.base import reset_cooldowns
-
 
 # =============================================================================
 # Fixtures

@@ -3,9 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 from rest_framework.test import APIClient
 
-from shopping.models.product import Product
 from shopping.tests.factories import (
-    UserFactory,
     ProductFactory,
     OrderFactory,
     OrderItemFactory,

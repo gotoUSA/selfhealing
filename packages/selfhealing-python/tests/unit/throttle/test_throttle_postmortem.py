@@ -10,9 +10,8 @@ Throttle Postmortem 연동 테스트.
 6. _record_limit_history() 헬퍼 함수
 """
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestThrottleLimitChangeDataclass:
@@ -108,7 +107,9 @@ class TestThrottleLimitHistoryCollector:
 
     def test_get_throttle_history_collector_singleton(self):
         """싱글톤 인스턴스 테스트."""
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         instance1 = get_throttle_history_collector()
         instance2 = get_throttle_history_collector()
@@ -117,7 +118,9 @@ class TestThrottleLimitHistoryCollector:
 
     def test_record_limit_change(self):
         """한도 변경 기록 테스트."""
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         collector = get_throttle_history_collector()
         collector.reset()  # 이전 테스트 데이터 정리
@@ -134,7 +137,9 @@ class TestThrottleLimitHistoryCollector:
 
     def test_get_history_for_period(self):
         """기간 지정 히스토리 조회 테스트."""
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         collector = get_throttle_history_collector()
         collector.reset()
@@ -153,7 +158,9 @@ class TestThrottleLimitHistoryCollector:
 
     def test_reset_history(self):
         """히스토리 초기화 테스트."""
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         collector = get_throttle_history_collector()
 
@@ -170,7 +177,9 @@ class TestThrottleLimitHistoryCollector:
 
     def test_emergency_adjustment_counter(self):
         """Emergency 조정 카운터 테스트."""
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         collector = get_throttle_history_collector()
         collector.reset()
@@ -199,7 +208,9 @@ class TestGetPostmortemData:
 
     def test_get_postmortem_data_empty(self):
         """빈 히스토리 데이터 수집 테스트."""
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         collector = get_throttle_history_collector()
         collector.reset()
@@ -211,7 +222,9 @@ class TestGetPostmortemData:
 
     def test_get_postmortem_data_with_history(self):
         """히스토리 데이터 수집 테스트."""
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         collector = get_throttle_history_collector()
         collector.reset()
@@ -271,7 +284,9 @@ class TestRecordLimitHistoryHelper:
     def test_record_limit_history_success(self):
         """정상적인 히스토리 기록 테스트."""
         from selfhealing.services.throttle.adaptive import _record_limit_history
-        from selfhealing.services.throttle.postmortem import get_throttle_history_collector
+        from selfhealing.services.throttle.postmortem import (
+            get_throttle_history_collector,
+        )
 
         collector = get_throttle_history_collector()
         collector.reset()

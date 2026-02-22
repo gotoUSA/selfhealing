@@ -1,5 +1,4 @@
 from decimal import Decimal
-from unittest.mock import patch
 
 from django.conf import settings
 
@@ -357,7 +356,6 @@ class TestPaymentRequestException:
     def test_zero_amount_order(self, authenticated_client, user, category):
         """주문 금액 0원 이하"""
         # Arrange - total_amount가 0원인 주문 생성
-        from shopping.models.order import Order, OrderItem
 
         # 0원 상품 생성
         zero_product = ProductFactory(

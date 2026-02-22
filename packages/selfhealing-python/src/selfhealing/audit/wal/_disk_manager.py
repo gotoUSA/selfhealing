@@ -6,8 +6,6 @@ WAL 디스크 관리 모듈.
 
 from __future__ import annotations
 
-from typing import Any
-
 import structlog
 
 logger = structlog.get_logger()

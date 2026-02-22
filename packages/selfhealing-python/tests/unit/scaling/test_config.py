@@ -13,10 +13,10 @@ Unit tests for BackpressureSettings and related config.
 import pytest
 
 from selfhealing.scaling.config import (
+    LEVEL_RATE_MULTIPLIERS,
     BackpressureLevel,
     BackpressureSettings,
     BackpressureStrategy,
-    LEVEL_RATE_MULTIPLIERS,
     get_backpressure_settings,
     reset_backpressure_settings,
 )

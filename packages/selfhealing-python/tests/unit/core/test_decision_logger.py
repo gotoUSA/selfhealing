@@ -9,15 +9,16 @@ Verifies that:
 """
 
 import logging
+
 import pytest
 
 from selfhealing.core.decision_logger import (
-    ReasonCode,
     DecisionBoundaryEventType,
     DecisionLogger,
+    ReasonCode,
     log_enter_pre_decision_zone,
-    log_intervention_evaluated,
     log_exit_pre_decision_zone,
+    log_intervention_evaluated,
 )
 
 
@@ -150,8 +151,8 @@ class TestLogOutput:
 
     def test_logs_produced_with_correct_fields(self):
         """Verify logs are produced with required fields."""
-        import json
         import io
+        import json
 
         # Create a string buffer handler to capture logs
         log_buffer = io.StringIO()
@@ -208,8 +209,8 @@ class TestLogOutput:
 
     def test_policy_version_included_when_provided(self):
         """Verify policy_version is included when provided."""
-        import json
         import io
+        import json
 
         log_buffer = io.StringIO()
         handler = logging.StreamHandler(log_buffer)
@@ -236,8 +237,8 @@ class TestLogOutput:
 
     def test_only_allowed_fields_present(self):
         """Verify no extra fields beyond specification."""
-        import json
         import io
+        import json
 
         allowed_fields_enter = {"event", "service_name", "policy_version", "timestamp"}
         allowed_fields_eval = {"event", "allowed", "reason", "service_name", "policy_version", "timestamp"}
@@ -281,12 +282,12 @@ class TestImportFromCore:
     def test_import_from_core(self):
         """Verify all symbols are exported from core.__init__."""
         from selfhealing.core import (
-            ReasonCode,
             DecisionBoundaryEventType,
             DecisionLogger,
+            ReasonCode,
             log_enter_pre_decision_zone,
-            log_intervention_evaluated,
             log_exit_pre_decision_zone,
+            log_intervention_evaluated,
         )
 
         assert ReasonCode is not None

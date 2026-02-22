@@ -4,8 +4,9 @@ CleanupService, PendingConfigService, ConfigHistoryService audit 호출 검증.
 각 서비스 메서드가 올바른 audit 함수를 호출하는지 mock으로 검증.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 class TestCleanupServiceAudit:
@@ -96,8 +97,8 @@ class TestPendingConfigServiceAudit:
             backend.get.return_value = None
             mock_backend.return_value = backend
 
-            from selfhealing.services.pending_config import PendingConfigService
             from selfhealing.core.apply_strategy import ApplyOptions, ApplyStrategy
+            from selfhealing.services.pending_config import PendingConfigService
 
             service = PendingConfigService()
 

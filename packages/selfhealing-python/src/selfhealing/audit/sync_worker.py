@@ -609,7 +609,6 @@ class AuditSyncWorker:
             return
 
         try:
-            from datetime import datetime, timezone
 
             from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 

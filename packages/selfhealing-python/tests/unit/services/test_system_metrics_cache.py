@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -37,7 +37,6 @@ from selfhealing.settings.system_metrics_cache import (
     get_system_metrics_cache_settings,
     reset_system_metrics_cache_settings,
 )
-
 
 # =============================================================================
 # Fixtures

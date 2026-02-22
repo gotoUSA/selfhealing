@@ -9,9 +9,7 @@ AuditHook, MetricsHook 및 PolicyHook.on_retry Protocol 단위 테스트.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from selfhealing.interfaces.resilience_policy import (
     PolicyHook,
@@ -19,7 +17,6 @@ from selfhealing.interfaces.resilience_policy import (
     PolicyResult,
 )
 from selfhealing.services.retry_handler.hooks import AuditHook, MetricsHook
-
 
 # =============================================================================
 # AuditHook — 계약 검증

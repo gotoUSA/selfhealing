@@ -41,7 +41,7 @@ class TestCleanupOperations:
     def test_archive_old_resolved(self, repo_with_data):
         """Test archiving old resolved entries."""
         from selfhealing.interfaces.repositories import FailedOperationStatus
-        
+
         repo = repo_with_data
 
         stats = repo.get_cleanup_stats()
@@ -55,7 +55,7 @@ class TestCleanupOperations:
         """Test purging archived entries by ID."""
         from selfhealing.adapters.memory import InMemoryFailedOperationRepository
         from selfhealing.interfaces.repositories import FailedOperationStatus
-        
+
         repo = InMemoryFailedOperationRepository()
 
         entry = repo.create(domain="payment", failure_type="test", error_message="Test")
@@ -71,7 +71,7 @@ class TestCleanupOperations:
     def test_purge_archived_rejects_non_archived(self):
         """Test that purge rejects non-archived entries."""
         from selfhealing.adapters.memory import InMemoryFailedOperationRepository
-        
+
         repo = InMemoryFailedOperationRepository()
 
         entry = repo.create(domain="payment", failure_type="test", error_message="Test")
@@ -85,7 +85,7 @@ class TestCleanupOperations:
         """Test purging all archived entries."""
         from selfhealing.adapters.memory import InMemoryFailedOperationRepository
         from selfhealing.interfaces.repositories import FailedOperationStatus
-        
+
         repo = InMemoryFailedOperationRepository()
 
         for i in range(5):
@@ -105,7 +105,7 @@ class TestCleanupOperations:
         """Test getting cleanup statistics."""
         from selfhealing.adapters.memory import InMemoryFailedOperationRepository
         from selfhealing.interfaces.repositories import FailedOperationStatus
-        
+
         repo = InMemoryFailedOperationRepository()
 
         repo.create(domain="payment", failure_type="pending1", error_message="Test")

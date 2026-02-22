@@ -11,9 +11,10 @@ config_tracker.py의 설정 변경 추적, 감사 로그 남기기, 수동 오�
 - 싱글톤 함수 (get_config_tracker, set_config_tracker)
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from selfhealing.config_tracker import (
     ConfigChange,
@@ -21,8 +22,11 @@ from selfhealing.config_tracker import (
     get_config_tracker,
     set_config_tracker,
 )
-from selfhealing.interfaces.audit_adapter import AuditAction, AuditEntry, AuditLogAdapter
-
+from selfhealing.interfaces.audit_adapter import (
+    AuditAction,
+    AuditEntry,
+    AuditLogAdapter,
+)
 
 # =============================================================================
 # ConfigChange Dataclass Tests

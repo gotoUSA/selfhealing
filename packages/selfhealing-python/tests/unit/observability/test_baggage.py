@@ -5,9 +5,7 @@ OTel Baggage 통합 전파 단위 테스트.
 - selfhealing.observability.baggage (setup_baggage_propagation, sync/restore/detach)
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 
 class TestBaggageModuleContract:

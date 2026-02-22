@@ -8,7 +8,6 @@ from shopping.tests.factories import (
     OrderItemFactory,
     PaymentFactory,
     CompletedPaymentFactory,
-    ProductFactory,
 )
 
 

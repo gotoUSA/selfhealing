@@ -5,7 +5,6 @@ from decimal import Decimal
 
 import pytest
 from django.urls import reverse
-from rest_framework import status
 
 from shopping.models.cart import Cart, CartItem
 from shopping.tests.factories import ProductFactory, UserFactory, CategoryFactory

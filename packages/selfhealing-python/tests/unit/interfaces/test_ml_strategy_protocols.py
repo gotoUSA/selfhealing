@@ -14,8 +14,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 from selfhealing.interfaces.ml_strategy import (
     AnomalyDetectionStrategy,
     BatchCapable,
@@ -23,7 +21,6 @@ from selfhealing.interfaces.ml_strategy import (
     ForecastStrategy,
     StrategyLifecycle,
 )
-
 
 # =============================================================================
 # Protocol 구현 Stub (테스트 전용)

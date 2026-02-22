@@ -26,7 +26,6 @@ stdlib logging → structlog 일괄 마이그레이션 스크립트 (Phase 2).
 from __future__ import annotations
 
 import argparse
-import ast
 import json
 import re
 import sys

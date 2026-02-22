@@ -7,16 +7,14 @@ Reference: docs/self_healing/17_CONFIG_HISTORY_INTEGRATION.md (Phase 1)
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 from selfhealing.services.runtime_config import (
     RuntimeConfigManager,
-    get_runtime_config_manager,
     reset_runtime_config_manager,
 )
 from selfhealing.services.config_history import (
     ConfigHistoryService,
-    get_config_history_service,
     reset_config_history_service,
 )
 

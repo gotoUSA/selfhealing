@@ -16,8 +16,9 @@ Source:
     settings/namespace_emergency.py
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 
 class TestTrackerSettingsIntegration:
@@ -26,8 +27,12 @@ class TestTrackerSettingsIntegration:
     @pytest.fixture(autouse=True)
     def reset_singletons(self):
         """테스트 전후 싱글톤 초기화."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.tracker import reset_namespaced_emergency_tracker
+        from selfhealing.services.namespace_emergency.tracker import (
+            reset_namespaced_emergency_tracker,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         reset_namespace_emergency_settings()
         reset_namespaced_emergency_tracker()
@@ -37,7 +42,9 @@ class TestTrackerSettingsIntegration:
 
     def test_get_emergency_expiry_hours_loads_from_settings(self):
         """_get_emergency_expiry_hours()가 settings.expiry_hours를 로드."""
-        from selfhealing.services.namespace_emergency.tracker import _get_emergency_expiry_hours
+        from selfhealing.services.namespace_emergency.tracker import (
+            _get_emergency_expiry_hours,
+        )
 
         result = _get_emergency_expiry_hours()
 
@@ -46,7 +53,9 @@ class TestTrackerSettingsIntegration:
 
     def test_get_cache_ttl_seconds_loads_from_settings(self):
         """_get_cache_ttl_seconds()가 settings.cache_ttl_seconds를 로드."""
-        from selfhealing.services.namespace_emergency.tracker import _get_cache_ttl_seconds
+        from selfhealing.services.namespace_emergency.tracker import (
+            _get_cache_ttl_seconds,
+        )
 
         result = _get_cache_ttl_seconds()
 
@@ -55,8 +64,12 @@ class TestTrackerSettingsIntegration:
 
     def test_expiry_hours_env_override_reflected(self, monkeypatch):
         """환경변수 SELFHEALING_NAMESPACE_EMERGENCY_EXPIRY_HOURS 오버라이드 반영."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.tracker import _get_emergency_expiry_hours
+        from selfhealing.services.namespace_emergency.tracker import (
+            _get_emergency_expiry_hours,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_EXPIRY_HOURS", "24")
         reset_namespace_emergency_settings()
@@ -67,8 +80,12 @@ class TestTrackerSettingsIntegration:
 
     def test_cache_ttl_env_override_reflected(self, monkeypatch):
         """환경변수 SELFHEALING_NAMESPACE_EMERGENCY_CACHE_TTL_SECONDS 오버라이드 반영."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.tracker import _get_cache_ttl_seconds
+        from selfhealing.services.namespace_emergency.tracker import (
+            _get_cache_ttl_seconds,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_CACHE_TTL_SECONDS", "60.0")
         reset_namespace_emergency_settings()
@@ -79,10 +96,15 @@ class TestTrackerSettingsIntegration:
 
     def test_activate_emergency_uses_settings_expiry(self, monkeypatch):
         """activate_emergency()가 settings.expiry_hours를 기본값으로 사용."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.tracker import NamespacedEmergencyTracker
+        from datetime import datetime, timedelta, timezone
+
         from selfhealing.services.emergency_mode.enums import EmergencyLevel
-        from datetime import datetime, timezone, timedelta
+        from selfhealing.services.namespace_emergency.tracker import (
+            NamespacedEmergencyTracker,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         # 환경변수로 만료 시간 설정
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_EXPIRY_HOURS", "16")
@@ -106,9 +128,14 @@ class TestTrackerSettingsIntegration:
 
     def test_cache_uses_settings_ttl(self, monkeypatch):
         """_load_state()가 settings.cache_ttl_seconds를 사용."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.tracker import NamespacedEmergencyTracker
         import time
+
+        from selfhealing.services.namespace_emergency.tracker import (
+            NamespacedEmergencyTracker,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         # 캐시 TTL을 1초로 설정
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_CACHE_TTL_SECONDS", "1.0")
@@ -143,8 +170,12 @@ class TestCascadeDetectorSettingsIntegration:
     @pytest.fixture(autouse=True)
     def reset_singletons(self):
         """테스트 전후 싱글톤 초기화."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.cascade_detector import reset_cascade_detector
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            reset_cascade_detector,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         reset_namespace_emergency_settings()
         reset_cascade_detector()
@@ -154,7 +185,9 @@ class TestCascadeDetectorSettingsIntegration:
 
     def test_get_escalation_threshold_loads_from_settings(self):
         """_get_escalation_threshold()가 settings.escalation_threshold를 로드."""
-        from selfhealing.services.namespace_emergency.cascade_detector import _get_escalation_threshold
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            _get_escalation_threshold,
+        )
 
         result = _get_escalation_threshold()
 
@@ -163,7 +196,9 @@ class TestCascadeDetectorSettingsIntegration:
 
     def test_get_cascade_window_minutes_loads_from_settings(self):
         """_get_cascade_window_minutes()가 settings.cascade_window_minutes를 로드."""
-        from selfhealing.services.namespace_emergency.cascade_detector import _get_cascade_window_minutes
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            _get_cascade_window_minutes,
+        )
 
         result = _get_cascade_window_minutes()
 
@@ -172,8 +207,12 @@ class TestCascadeDetectorSettingsIntegration:
 
     def test_escalation_threshold_env_override_reflected(self, monkeypatch):
         """환경변수 SELFHEALING_NAMESPACE_EMERGENCY_ESCALATION_THRESHOLD 오버라이드 반영."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.cascade_detector import _get_escalation_threshold
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            _get_escalation_threshold,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_ESCALATION_THRESHOLD", "5")
         reset_namespace_emergency_settings()
@@ -184,8 +223,12 @@ class TestCascadeDetectorSettingsIntegration:
 
     def test_cascade_window_env_override_reflected(self, monkeypatch):
         """환경변수 SELFHEALING_NAMESPACE_EMERGENCY_CASCADE_WINDOW_MINUTES 오버라이드 반영."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.cascade_detector import _get_cascade_window_minutes
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            _get_cascade_window_minutes,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_CASCADE_WINDOW_MINUTES", "60")
         reset_namespace_emergency_settings()
@@ -196,8 +239,12 @@ class TestCascadeDetectorSettingsIntegration:
 
     def test_detector_init_uses_settings_threshold(self, monkeypatch):
         """RegionalCascadeDetector 초기화 시 settings.escalation_threshold 사용."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.cascade_detector import RegionalCascadeDetector
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            RegionalCascadeDetector,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_ESCALATION_THRESHOLD", "4")
         reset_namespace_emergency_settings()
@@ -210,8 +257,12 @@ class TestCascadeDetectorSettingsIntegration:
 
     def test_detector_init_uses_settings_window_minutes(self, monkeypatch):
         """RegionalCascadeDetector 초기화 시 settings.cascade_window_minutes 사용."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.cascade_detector import RegionalCascadeDetector
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            RegionalCascadeDetector,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_CASCADE_WINDOW_MINUTES", "45")
         reset_namespace_emergency_settings()
@@ -224,8 +275,12 @@ class TestCascadeDetectorSettingsIntegration:
 
     def test_detector_explicit_values_override_settings(self, monkeypatch):
         """생성자에 명시적 값 전달 시 settings보다 우선."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.cascade_detector import RegionalCascadeDetector
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            RegionalCascadeDetector,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_ESCALATION_THRESHOLD", "4")
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_CASCADE_WINDOW_MINUTES", "45")
@@ -245,10 +300,14 @@ class TestCascadeDetectorSettingsIntegration:
 
     def test_check_cascade_uses_settings_threshold(self, monkeypatch):
         """check_cascade_condition()이 settings.escalation_threshold 사용."""
-        from selfhealing.settings.namespace_emergency import reset_namespace_emergency_settings
-        from selfhealing.services.namespace_emergency.cascade_detector import RegionalCascadeDetector
         from selfhealing.services.coordination.models import ScopedEmergencyState
         from selfhealing.services.emergency_mode.enums import EmergencyLevel
+        from selfhealing.services.namespace_emergency.cascade_detector import (
+            RegionalCascadeDetector,
+        )
+        from selfhealing.settings.namespace_emergency import (
+            reset_namespace_emergency_settings,
+        )
 
         # 임계값을 3으로 설정
         monkeypatch.setenv("SELFHEALING_NAMESPACE_EMERGENCY_ESCALATION_THRESHOLD", "3")
@@ -277,8 +336,8 @@ class TestLegacyConstantsCompatibility:
     def test_tracker_legacy_constants_exist(self):
         """tracker.py의 레거시 상수 존재 확인."""
         from selfhealing.services.namespace_emergency.tracker import (
-            DEFAULT_EMERGENCY_EXPIRY_HOURS,
             CACHE_TTL_SECONDS,
+            DEFAULT_EMERGENCY_EXPIRY_HOURS,
         )
 
         # 기본값과 일치
@@ -288,8 +347,8 @@ class TestLegacyConstantsCompatibility:
     def test_cascade_detector_legacy_constants_exist(self):
         """cascade_detector.py의 레거시 상수 존재 확인."""
         from selfhealing.services.namespace_emergency.cascade_detector import (
-            DEFAULT_ESCALATION_THRESHOLD,
             DEFAULT_CASCADE_WINDOW_MINUTES,
+            DEFAULT_ESCALATION_THRESHOLD,
         )
 
         # 기본값과 일치

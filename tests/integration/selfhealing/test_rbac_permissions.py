@@ -10,7 +10,7 @@ Reference: docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
 # Mark all tests to use Django database
 pytestmark = pytest.mark.django_db

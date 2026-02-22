@@ -21,7 +21,8 @@ Policy 내부에 유지한다. 부하 레벨의 갱신 방법만 HedgingConfigUp
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import Any, TypeVar
 
 import structlog
 

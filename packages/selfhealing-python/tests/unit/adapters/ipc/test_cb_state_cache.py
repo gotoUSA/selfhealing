@@ -12,14 +12,14 @@ from __future__ import annotations
 
 import threading
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from selfhealing.adapters.ipc.cb_state_cache import (
-    IPCCacheEntry,
     CacheStats,
     CBStateCache,
+    IPCCacheEntry,
     get_cb_state_cache,
     reset_cb_state_cache,
 )

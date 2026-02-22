@@ -1,9 +1,7 @@
 """
 Unit tests for load_tests.core.stats module
 """
-import pytest
 import threading
-from datetime import datetime
 
 from load_tests.core.stats import BaseTestStats, ExtremeTestStats
 

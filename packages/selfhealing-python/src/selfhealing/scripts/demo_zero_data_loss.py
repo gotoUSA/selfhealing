@@ -27,9 +27,8 @@ import sys
 import tempfile
 import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import structlog
 
@@ -70,7 +69,6 @@ def create_audit_entry(index: int) -> dict[str, Any]:
 def run_demo_with_mock():
     """Mock 모드 데모 (Kafka 없이 실행)."""
     from selfhealing.audit.wal import WALConfig, WriteAheadLog
-    from selfhealing.interfaces.audit_adapter import AuditEntry
 
     stats = DemoStats()
     stats.total_events = 1000

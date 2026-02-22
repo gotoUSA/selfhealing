@@ -15,12 +15,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.resilience.policies.guards.backpressure import (
     BackpressureGuard,
 )
-
 
 # =============================================================================
 # name 계약 검증

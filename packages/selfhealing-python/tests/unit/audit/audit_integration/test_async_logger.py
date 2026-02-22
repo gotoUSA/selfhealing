@@ -8,8 +8,6 @@ Uses lazy imports to avoid Prometheus registry conflicts.
 import threading
 import time
 
-import pytest
-
 
 class TestAsyncLoggerAdapter:
     """AsyncLoggerAdapter 테스트."""
@@ -17,7 +15,7 @@ class TestAsyncLoggerAdapter:
     def test_init_default_config(self):
         """기본 설정으로 초기화."""
         from selfhealing.audit.audit_integration import AsyncLoggerAdapter
-        
+
         adapter = AsyncLoggerAdapter()
 
         assert adapter._config.batch_size == 5
@@ -31,7 +29,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerAdapter,
             AsyncLoggerConfig,
         )
-        
+
         config = AsyncLoggerConfig(
             batch_size=10,
             flush_interval_seconds=1.0,
@@ -46,7 +44,7 @@ class TestAsyncLoggerAdapter:
     def test_start_stop(self):
         """워커 시작/중지."""
         from selfhealing.audit.audit_integration import AsyncLoggerAdapter
-        
+
         adapter = AsyncLoggerAdapter()
 
         # 시작
@@ -69,7 +67,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerAdapter,
             EventSeverity,
         )
-        
+
         adapter = AsyncLoggerAdapter()
 
         result = adapter.log({"action": "test"}, EventSeverity.INFO)
@@ -84,7 +82,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerAdapter,
             EventSeverity,
         )
-        
+
         flushed_events = []
 
         def callback(events):
@@ -107,7 +105,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerAdapter,
             EventSeverity,
         )
-        
+
         flushed_events = []
 
         def callback(events):
@@ -125,7 +123,7 @@ class TestAsyncLoggerAdapter:
     def test_log_cb_event(self):
         """Circuit Breaker 이벤트 헬퍼."""
         from selfhealing.audit.audit_integration import AsyncLoggerAdapter
-        
+
         flushed_events = []
 
         def callback(events):
@@ -146,7 +144,7 @@ class TestAsyncLoggerAdapter:
     def test_log_recovery_event(self):
         """복구 이벤트 헬퍼."""
         from selfhealing.audit.audit_integration import AsyncLoggerAdapter
-        
+
         adapter = AsyncLoggerAdapter()
 
         adapter.log_recovery_event(
@@ -163,7 +161,7 @@ class TestAsyncLoggerAdapter:
     def test_log_emergency_event(self):
         """Emergency 이벤트 헬퍼."""
         from selfhealing.audit.audit_integration import AsyncLoggerAdapter
-        
+
         flushed_events = []
 
         def callback(events):
@@ -185,7 +183,7 @@ class TestAsyncLoggerAdapter:
     def test_log_fallback_activated(self):
         """Fallback 활성화 이벤트 헬퍼."""
         from selfhealing.audit.audit_integration import AsyncLoggerAdapter
-        
+
         flushed_events = []
 
         def callback(events):
@@ -207,7 +205,7 @@ class TestAsyncLoggerAdapter:
     def test_log_audit_event(self):
         """감사 이벤트 헬퍼."""
         from selfhealing.audit.audit_integration import AsyncLoggerAdapter
-        
+
         adapter = AsyncLoggerAdapter()
 
         adapter.log_audit_event(
@@ -228,7 +226,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerConfig,
             EventSeverity,
         )
-        
+
         config = AsyncLoggerConfig(max_queue_size=2)
         adapter = AsyncLoggerAdapter(config=config)
 
@@ -249,7 +247,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerConfig,
             EventSeverity,
         )
-        
+
         flushed_events = []
 
         def callback(events):
@@ -278,7 +276,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerAdapter,
             EventSeverity,
         )
-        
+
         flushed_events = []
 
         def callback(events):
@@ -302,7 +300,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerAdapter,
             EventSeverity,
         )
-        
+
         adapter = AsyncLoggerAdapter()
         adapter.start()
 
@@ -322,7 +320,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerAdapter,
             EventSeverity,
         )
-        
+
         adapter = AsyncLoggerAdapter()
         adapter.log({"test": 1}, EventSeverity.INFO)
 
@@ -332,9 +330,10 @@ class TestAsyncLoggerAdapter:
 
     def test_configure_runtime(self):
         """런타임 설정 변경."""
-        from selfhealing.audit.audit_integration import AsyncLoggerAdapter
         from unittest.mock import Mock
-        
+
+        from selfhealing.audit.audit_integration import AsyncLoggerAdapter
+
         adapter = AsyncLoggerAdapter()
 
         new_callback = Mock()
@@ -354,7 +353,7 @@ class TestAsyncLoggerAdapter:
             AsyncLoggerAdapter,
             EventSeverity,
         )
-        
+
         flushed_events = []
         lock = threading.Lock()
 

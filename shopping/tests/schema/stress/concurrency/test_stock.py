@@ -167,7 +167,7 @@ class TestConcurrentStockDeduction:
         error_5xx_count = sum(1 for r in results if r.get("status_code", 0) >= 500)
 
         # Assert: 5xx 에러 없음
-        assert error_5xx_count == 0, f"서버 에러 발생!"
+        assert error_5xx_count == 0, "서버 에러 발생!"
 
         # Assert: 재고 음수 확인
         product.refresh_from_db()

@@ -21,7 +21,6 @@ import re
 import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, Optional, Any, Tuple
-from pathlib import Path
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -904,7 +903,7 @@ class DNAAnalyzer:
                 result.recommendations.append(Recommendation(
                     type=RecommendationType.REMOVE,
                     module_name=module,
-                    reason=f"선언되었지만 코드에서 사용되지 않음 - 제거 권장",
+                    reason="선언되었지만 코드에서 사용되지 않음 - 제거 권장",
                     priority="low",
                     evidence=["선언만 있고 import/사용 패턴 없음"],
                 ))
@@ -915,7 +914,7 @@ class DNAAnalyzer:
                 result.recommendations.append(Recommendation(
                     type=RecommendationType.ADD,
                     module_name=module,
-                    reason=f"코드에서 사용 중이지만 STAGE_DNA에 선언되지 않음",
+                    reason="코드에서 사용 중이지만 STAGE_DNA에 선언되지 않음",
                     priority="medium",
                     evidence=usage.evidence if usage else [],
                 ))

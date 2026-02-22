@@ -3,13 +3,11 @@
 import pytest
 from rest_framework import status
 
-from shopping.models.payment import Payment, PaymentLog
+from shopping.models.payment import PaymentLog
 from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
-    ProductFactory,
-    TossResponseBuilder,
 )
 
 

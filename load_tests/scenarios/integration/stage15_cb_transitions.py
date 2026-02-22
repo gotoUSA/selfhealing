@@ -40,7 +40,7 @@ import sys
 import time
 import json
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Optional
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -161,13 +161,13 @@ def _update_phase():
         _cb_stats["phase"] = phase
 
         if phase == "failure_injection":
-            print(f"\n[!] Phase 2: Injecting failures to trigger OPEN state")
+            print("\n[!] Phase 2: Injecting failures to trigger OPEN state")
         elif phase == "wait_recovery":
             print(f"\n[WAIT] Phase 3: Waiting for NATURAL recovery_timeout ({CB_RECOVERY_TIMEOUT}s)")
-            print(f"   - NO allow API call - waiting for CB to auto-transition")
-            print(f"   - CB should NATURALLY transition from OPEN -> HALF_OPEN")
+            print("   - NO allow API call - waiting for CB to auto-transition")
+            print("   - CB should NATURALLY transition from OPEN -> HALF_OPEN")
         elif phase == "recovery":
-            print(f"\n[OK] Phase 4: Recovery - sending successful requests in HALF_OPEN")
+            print("\n[OK] Phase 4: Recovery - sending successful requests in HALF_OPEN")
             print(f"   - CB should transition from HALF_OPEN -> CLOSED after {CB_SUCCESS_THRESHOLD} successes")
 
 
@@ -198,12 +198,12 @@ def _record_state_change(new_state: str, phase: str):
         # Track specific transition times
         if old_state == "closed" and new_state == "open":
             _cb_stats["open_time"] = now
-            print(f"\n[CLOSED->OPEN] TRANSITION: CLOSED -> OPEN")
+            print("\n[CLOSED->OPEN] TRANSITION: CLOSED -> OPEN")
             _cb_stats["verification"]["closed_to_open"] = True
 
         elif old_state == "open" and new_state == "half_open":
             _cb_stats["half_open_time"] = now
-            print(f"\n[OPEN->HALFOPEN] TRANSITION: OPEN -> HALF_OPEN")
+            print("\n[OPEN->HALFOPEN] TRANSITION: OPEN -> HALF_OPEN")
             _cb_stats["verification"]["open_to_half_open"] = True
 
             # Verify timing
@@ -220,7 +220,7 @@ def _record_state_change(new_state: str, phase: str):
 
         elif old_state == "half_open" and new_state == "closed":
             _cb_stats["closed_time"] = now
-            print(f"\n[HALFOPEN->CLOSED] TRANSITION: HALF_OPEN -> CLOSED")
+            print("\n[HALFOPEN->CLOSED] TRANSITION: HALF_OPEN -> CLOSED")
             _cb_stats["verification"]["half_open_to_closed"] = True
 
     _cb_stats["current_state"] = new_state
@@ -379,7 +379,7 @@ class CBTransitionUser(HttpUser):
                 catch_response=True,
             ) as response:
                 if response.status_code == 200:
-                    print(f"\n[INIT] CB RESET to CLOSED state for full cycle testing")
+                    print("\n[INIT] CB RESET to CLOSED state for full cycle testing")
                     response.success()
                 else:
                     print(f"[INIT] CB reset response: {response.status_code}")
@@ -444,7 +444,7 @@ class CBTransitionUser(HttpUser):
             ) as response:
                 if response.status_code == 200:
                     self._failure_injection_active = False
-                    print(f"\n[CB-RESET] CB RESET via Control API")
+                    print("\n[CB-RESET] CB RESET via Control API")
                     response.success()
         except Exception as e:
             print(f"Reset error: {e}")
@@ -655,7 +655,7 @@ class CBTransitionUser(HttpUser):
             if response.status_code == 200:
                 # CB allowed the request - might have transitioned to HALF_OPEN!
                 if state == "open":
-                    print(f"\n[PROBE] Probe succeeded! CB may have transitioned to HALF_OPEN")
+                    print("\n[PROBE] Probe succeeded! CB may have transitioned to HALF_OPEN")
                 response.success()
             elif response.status_code == 503:
                 # CB still OPEN, blocking requests
@@ -738,7 +738,7 @@ def on_test_stop(environment, **kwargs):
 
     # Recovery Latency Report
     recovery = _cb_stats["recovery"]
-    print(f"\n[LATENCY] Recovery Latency Metrics:")
+    print("\n[LATENCY] Recovery Latency Metrics:")
     if _cb_stats["open_time"] and _cb_stats["closed_time"]:
         full_cycle = _cb_stats["closed_time"] - _cb_stats["open_time"]
         recovery["cb_full_cycle_latency_seconds"] = full_cycle
@@ -760,7 +760,7 @@ def on_test_stop(environment, **kwargs):
         else:
             print(f"   - SLA Status: [FAIL] Exceeded {sla_threshold}s threshold")
     else:
-        print(f"   - CB full cycle not completed")
+        print("   - CB full cycle not completed")
 
     # Save report
     report_path = os.path.join(_load_tests_dir, "reports", "stage15_cb_transitions_report.json")

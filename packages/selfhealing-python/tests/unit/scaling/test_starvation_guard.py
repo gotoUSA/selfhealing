@@ -33,8 +33,6 @@ from selfhealing.scaling.rate_controller import (
     reset_rate_controller,
 )
 from selfhealing.services.circuit_breaker.models import ServiceConfig
-from selfhealing.settings.backpressure import BackpressureLevel
-
 
 # =============================================================================
 # 작업 B: ServiceConfig.min_traffic_percentage 기본값 계약 검증

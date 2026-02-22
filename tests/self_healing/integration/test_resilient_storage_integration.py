@@ -17,7 +17,6 @@ import os
 import pytest
 import tempfile
 import time
-from datetime import datetime, timezone
 
 # Import test constants for Redis configuration
 from tests.factories.constants import REDIS_CONFIG
@@ -535,9 +534,7 @@ class TestFactoryIntegration:
     def test_factory_get_storage_backend(self, temp_wal_dir):
         """Factory returns working storage backend."""
         from selfhealing.adapters.resilient.backend import (
-            ResilientStorageConfig,
             reset_storage_backend,
-            _storage_backend,
         )
         import selfhealing.adapters.resilient.backend as backend_module
         

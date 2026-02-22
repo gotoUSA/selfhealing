@@ -1,8 +1,6 @@
 from decimal import Decimal
-from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
-from django.urls import reverse
 
 import pytest
 from rest_framework import status
@@ -10,7 +8,6 @@ from rest_framework import status
 from shopping.models.order import Order
 from shopping.models.payment import Payment
 from shopping.models.point import PointHistory
-from shopping.models.user import User
 
 
 @pytest.mark.django_db

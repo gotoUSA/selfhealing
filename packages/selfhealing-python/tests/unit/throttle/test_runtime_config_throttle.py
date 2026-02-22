@@ -4,8 +4,7 @@ RuntimeConfigManager Throttle Config Unit Tests.
 get_throttle_config, update_throttle_config 메서드 테스트.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 class TestRuntimeConfigManagerThrottleConfig:

@@ -7,12 +7,11 @@ Phase 6: Redis 원자적 업데이트 테스트
 - CAS (Compare-And-Swap) 동작
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from selfhealing.services.throttle.redis_lua import (
-    ThrottleLuaScripts,
     RedisThrottleLimitManager,
+    ThrottleLuaScripts,
 )
 
 

@@ -8,7 +8,6 @@ TestPointNegativeInputs: 잔액 초과, 음수 포인트, 주문 금액 초과 �
 import json
 
 import pytest
-from rest_framework import status
 
 
 @pytest.mark.negative

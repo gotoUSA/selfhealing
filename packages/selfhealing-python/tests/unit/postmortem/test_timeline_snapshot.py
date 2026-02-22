@@ -15,8 +15,6 @@ import logging
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-import pytest
-
 
 class TestPrometheusMetricsCollector:
     """PrometheusMetricsCollector 단위 테스트."""
@@ -232,8 +230,8 @@ class TestIncidentLogBuffer:
     def test_add_and_get_logs(self):
         """로그 추가 및 조회."""
         from selfhealing.services.postmortem.log_buffer import (
-            reset_incident_log_buffer,
             get_incident_log_buffer,
+            reset_incident_log_buffer,
         )
 
         reset_incident_log_buffer()
@@ -261,8 +259,8 @@ class TestIncidentLogBuffer:
     def test_message_truncation(self):
         """긴 메시지 잘림 처리."""
         from selfhealing.services.postmortem.log_buffer import (
-            reset_incident_log_buffer,
             get_incident_log_buffer,
+            reset_incident_log_buffer,
         )
 
         reset_incident_log_buffer()
@@ -283,8 +281,8 @@ class TestIncidentLogBuffer:
     def test_get_logs_for_period(self):
         """기간 기반 로그 조회."""
         from selfhealing.services.postmortem.log_buffer import (
-            reset_incident_log_buffer,
             get_incident_log_buffer,
+            reset_incident_log_buffer,
         )
 
         reset_incident_log_buffer()
@@ -326,8 +324,8 @@ class TestIncidentLogBuffer:
     def test_clear_old_logs(self):
         """오래된 로그 정리."""
         from selfhealing.services.postmortem.log_buffer import (
-            reset_incident_log_buffer,
             get_incident_log_buffer,
+            reset_incident_log_buffer,
         )
 
         reset_incident_log_buffer()
@@ -360,8 +358,8 @@ class TestIncidentLogBuffer:
     def test_buffer_size_limit(self):
         """버퍼 크기 제한."""
         from selfhealing.services.postmortem.log_buffer import (
-            reset_incident_log_buffer,
             get_incident_log_buffer,
+            reset_incident_log_buffer,
         )
 
         reset_incident_log_buffer()
@@ -385,8 +383,8 @@ class TestIncidentLogHandler:
         """logging.Handler로 ERROR 로그 캡처."""
         from selfhealing.services.postmortem.log_buffer import (
             IncidentLogHandler,
-            reset_incident_log_buffer,
             get_incident_log_buffer,
+            reset_incident_log_buffer,
         )
 
         reset_incident_log_buffer()
@@ -619,8 +617,8 @@ class TestSnapshotRedisOperations:
     def test_save_open_snapshot_to_redis(self):
         """CB OPEN 스냅샷 Redis 저장."""
         from selfhealing.services.postmortem.snapshot_builder import (
-            save_open_snapshot_to_redis,
             SnapshotBuilder,
+            save_open_snapshot_to_redis,
         )
 
         mock_redis = mock.Mock()
@@ -702,6 +700,7 @@ class TestPostmortemSettingsSnapshot:
     def test_snapshot_settings_from_env(self):
         """환경 변수에서 스냅샷 설정 로드."""
         import os
+
         from selfhealing.settings.postmortem import PostmortemSettings
 
         env_vars = {

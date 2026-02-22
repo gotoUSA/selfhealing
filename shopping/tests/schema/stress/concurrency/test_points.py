@@ -4,11 +4,8 @@ import time
 from decimal import Decimal
 
 import pytest
-from django.db import transaction
-from django.db.models import F
 from django.urls import reverse
 
-from shopping.models.user import User
 from shopping.tests.factories import ProductFactory, UserFactory, CategoryFactory, OrderFactory
 
 from .helpers import close_db_connection, login_and_get_token, run_concurrent_requests
@@ -168,7 +165,6 @@ class TestConcurrentPointOperations:
         - 각 사용자 포인트 정확히 적립
         - 5xx 에러 없음
         """
-        from shopping.tests.factories import OrderFactory
 
         num_users = 10
         users = [UserFactory(username=f"earn_user_{i}_{time.time()}", points=0) for i in range(num_users)]

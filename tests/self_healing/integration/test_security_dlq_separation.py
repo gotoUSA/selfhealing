@@ -10,8 +10,7 @@ Risk Covered:
     - R-020: Security audit trail compromised
 """
 
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from django.test import RequestFactory
@@ -19,12 +18,9 @@ from django.test import RequestFactory
 from shopping.models.failed_operation import FailedOperation
 from shopping.models.security_incident import SecurityIncident
 from selfhealing.services import (
-    SecurityConfig,
-    SecurityViolationResult,
     SecurityViolationService,
     Severity,
     ViolationType,
-    get_security_violation_service,
 )
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 

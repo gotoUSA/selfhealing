@@ -2,7 +2,6 @@
 Tests for IP and PII masking utilities.
 """
 
-import pytest
 
 from selfhealing.audit.masking import (
     extract_ip_from_request,

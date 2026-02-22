@@ -32,7 +32,6 @@ from selfhealing.services.event_bus.bus import (
 )
 from selfhealing.settings.correlation import CorrelationSettings
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

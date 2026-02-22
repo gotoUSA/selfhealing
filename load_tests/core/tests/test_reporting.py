@@ -6,8 +6,6 @@ import json
 import os
 import tempfile
 import shutil
-from pathlib import Path
-from datetime import datetime
 
 from load_tests.core.reporting import ReportGenerator
 

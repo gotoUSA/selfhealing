@@ -8,10 +8,9 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from typing import Any, Generator
+from collections.abc import Generator
 
 import pytest
-
 
 # LMDB 설치 여부 확인
 try:

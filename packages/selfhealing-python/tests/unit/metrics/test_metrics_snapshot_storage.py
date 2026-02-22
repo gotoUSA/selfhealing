@@ -7,7 +7,6 @@ import os
 import tempfile
 import time
 from pathlib import Path
-from unittest.mock import Mock, patch
 
 import pytest
 
@@ -204,10 +203,10 @@ class TestMetricSnapshotStorage:
         # If there's a flush method, call it
         if hasattr(storage, "flush"):
             storage.flush()
-        
+
         # Check if file exists or internal state is updated
         snapshot_path = Path(temp_storage_dir) / storage._filename
-        
+
         # Verify save worked (either file exists or snapshot is updated)
         if snapshot_path.exists():
             # Content should be valid JSON
@@ -222,6 +221,7 @@ class TestMetricSnapshotStorage:
     def test_thread_safety(self, temp_storage_dir):
         """Should be thread-safe for concurrent access."""
         import threading
+
         from selfhealing.metrics.snapshot_storage import MetricSnapshotStorage
 
         storage = MetricSnapshotStorage(storage_dir=temp_storage_dir)

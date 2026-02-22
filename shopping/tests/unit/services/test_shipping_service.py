@@ -2,7 +2,6 @@
 
 from decimal import Decimal
 
-import pytest
 
 from shopping.services.shipping_service import ShippingService
 

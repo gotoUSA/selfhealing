@@ -1,20 +1,16 @@
 """결제 보안 테스트"""
 
-from decimal import Decimal
 
 import pytest
 from django.db.models import F
 from rest_framework import status
 
-from shopping.models.order import Order, OrderItem
-from shopping.models.payment import Payment
 from shopping.models.product import Product
 from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
     CompletedPaymentFactory,
-    ProductFactory,
 )
 
 

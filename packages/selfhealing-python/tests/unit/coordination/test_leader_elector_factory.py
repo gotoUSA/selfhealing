@@ -15,7 +15,6 @@ from selfhealing.coordination.config import (
 from selfhealing.coordination.factory import (
     get_leader_elector,
     reset_leader_electors,
-    _electors,
 )
 
 

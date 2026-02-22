@@ -13,22 +13,20 @@ Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md (Step
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from unittest.mock import Mock, MagicMock
+from datetime import timedelta
+from unittest.mock import Mock
 
 import pytest
 
 from selfhealing.services.canary.feature_flag import (
-    CanarySelectionStrategy,
-    CanaryFlagConfig,
-    CanaryDecision,
     CanaryFeatureFlag,
+    CanaryFlagConfig,
+    CanarySelectionStrategy,
     RequestContextExtractor,
     compute_stable_hash,
     reset_canary_feature_flag,
 )
 from selfhealing.utils.time import utc_now
-
 
 # =============================================================================
 # Fixtures

@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import json
-import tempfile
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -147,7 +145,6 @@ class TestFileCheckpointStorage:
 
     def test_load_legacy_format(self, storage, tmp_path):
         """레거시 형식 로드 테스트."""
-        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
         # 레거시 형식으로 직접 파일 생성
         file_path = tmp_path / "checkpoint.legacy.json"
@@ -214,7 +211,6 @@ class TestRedisCheckpointStorage:
 
     def test_load_returns_data(self, storage, mock_redis):
         """load()가 데이터를 올바르게 반환하는지 확인."""
-        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
         mock_redis.get.return_value = json.dumps(
             {
@@ -625,7 +621,9 @@ class TestSingleton:
 
     def teardown_method(self):
         """각 테스트 후 싱글톤 초기화."""
-        from selfhealing.audit.checkpoint_strategy import reset_default_checkpoint_strategy
+        from selfhealing.audit.checkpoint_strategy import (
+            reset_default_checkpoint_strategy,
+        )
 
         reset_default_checkpoint_strategy()
 

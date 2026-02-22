@@ -18,10 +18,8 @@ Reference: docs/self_healing/middleware_system/07_HYBRID_STORAGE_ARCHITECTURE.md
 """
 
 import os
-import sys
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # Setup Django before importing selfhealing
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
@@ -33,8 +31,6 @@ from selfhealing.factory import ProviderRegistry
 from selfhealing.interfaces.statistics import (
     StatisticsRepositoryInterface,
     StatusCounts,
-    DomainDistribution,
-    PaginatedResult,
     EntityAuditTrail,
 )
 from selfhealing.adapters.statistics.null import NullStatisticsRepository

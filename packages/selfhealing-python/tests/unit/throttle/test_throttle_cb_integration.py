@@ -8,9 +8,7 @@ Throttle-CircuitBreaker 통합 테스트.
 4. Phase 3: ThrottleCircuitBreakerBridge (RTT 데이터 공유)
 """
 
-import pytest
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from selfhealing.services.event_bus import (
     EventType,
@@ -21,17 +19,16 @@ from selfhealing.services.throttle.adaptive import (
     get_adaptive_throttle,
     reset_adaptive_throttle,
 )
-from selfhealing.services.throttle.registry import (
-    ServiceThrottleConfig,
-    ThrottleRegistry,
-    get_throttle_registry,
-    reset_throttle_registry,
-)
 from selfhealing.services.throttle.cb_bridge import (
     RTTSeverity,
     ThrottleCircuitBreakerBridge,
     get_throttle_cb_bridge,
     reset_throttle_cb_bridge,
+)
+from selfhealing.services.throttle.registry import (
+    ServiceThrottleConfig,
+    get_throttle_registry,
+    reset_throttle_registry,
 )
 
 
@@ -82,8 +79,8 @@ class TestCircuitBreakerSyncCallback:
 
     def test_register_state_change_callback(self):
         """동기 콜백 등록 및 호출 테스트."""
-        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
 
         # Mock repository
         mock_repo = MagicMock()
@@ -122,8 +119,8 @@ class TestCircuitBreakerSyncCallback:
 
     def test_unregister_callback(self):
         """콜백 해제 테스트."""
-        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
 
         config = CircuitBreakerConfig(enabled=True)
         service = CircuitBreakerService(config=config, repository=MagicMock())
@@ -347,8 +344,8 @@ class TestThrottleRegistryCBCallback:
 
     def test_register_cb_callbacks(self):
         """CB 콜백 등록 테스트."""
-        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
 
         config = CircuitBreakerConfig(enabled=True)
         cb_service = CircuitBreakerService(config=config, repository=MagicMock())
@@ -364,8 +361,8 @@ class TestThrottleRegistryCBCallback:
 
     def test_cb_callback_adjusts_throttle(self):
         """CB 콜백으로 Throttle limit 조정."""
-        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        from selfhealing.services.circuit_breaker.service import CircuitBreakerService
 
         config = CircuitBreakerConfig(enabled=True)
         cb_service = CircuitBreakerService(config=config, repository=MagicMock())
@@ -399,9 +396,9 @@ class TestEventBusRegistration:
     def test_half_opened_handler_registered(self):
         """HALF_OPENED 핸들러가 register_default_handlers에 등록됨."""
         from selfhealing.services.event_bus import (
+            EventType,
             get_event_bus,
             register_default_handlers,
-            EventType,
         )
 
         bus = get_event_bus()

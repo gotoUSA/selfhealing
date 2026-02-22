@@ -12,19 +12,19 @@ Canary Safety Interlock 단위 테스트 (Phase 1: 핵심 기능).
 Reference: docs/self_healing/middleware_system/74_CANARY_SAFETY_INTERLOCK.md
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from selfhealing.services.canary.interlock import (
+    CanarySafetyInterlock,
     InterlockAction,
     InterlockCheckFailure,
     InterlockResult,
-    CanarySafetyInterlock,
     get_canary_safety_interlock,
     reset_canary_safety_interlock,
 )
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
-
 
 # =============================================================================
 # Fixtures
@@ -43,13 +43,13 @@ def reset_singleton():
 def mock_tracker():
     """Mock NamespacedEmergencyTracker."""
     tracker = MagicMock()
-    
+
     # 기본값: NORMAL 상태
     mock_state = MagicMock()
     mock_state.emergency_level = EmergencyLevel.NORMAL
     mock_state.namespace = "test-namespace"
     tracker.get_effective_state.return_value = mock_state
-    
+
     return tracker
 
 
@@ -113,7 +113,7 @@ class TestInterlockResultFactoryMethods:
             emergency_level_name="NORMAL",
             namespace="seoul",
         )
-        
+
         assert result.action == InterlockAction.ALLOW
         assert result.allowed is True
         assert result.emergency_level == 0
@@ -129,7 +129,7 @@ class TestInterlockResultFactoryMethods:
             emergency_level_name="LEVEL_1",
             namespace="tokyo",
         )
-        
+
         assert result.action == InterlockAction.ALLOW_WITH_WARNING
         assert result.allowed is True
         assert result.emergency_level == 1
@@ -142,7 +142,7 @@ class TestInterlockResultFactoryMethods:
             emergency_level_name="LEVEL_2",
             namespace="oregon",
         )
-        
+
         assert result.action == InterlockAction.PAUSE
         assert result.allowed is False
         assert result.emergency_level == 2
@@ -156,7 +156,7 @@ class TestInterlockResultFactoryMethods:
             namespace="oregon",
             reason="DB 장애로 인한 일시 중지",
         )
-        
+
         assert result.reason == "DB 장애로 인한 일시 중지"
 
     def test_rollback_factory(self):
@@ -166,7 +166,7 @@ class TestInterlockResultFactoryMethods:
             emergency_level_name="LEVEL_3",
             namespace="global",
         )
-        
+
         assert result.action == InterlockAction.ROLLBACK
         assert result.allowed is False
         assert result.emergency_level == 3
@@ -179,7 +179,7 @@ class TestInterlockResultFactoryMethods:
             namespace="unknown",
             error_message="Redis connection timeout",
         )
-        
+
         assert result.action == InterlockAction.ROLLBACK
         assert result.allowed is False
         assert result.emergency_level == 3  # LEVEL_3로 간주
@@ -194,7 +194,7 @@ class TestInterlockResultFactoryMethods:
             emergency_level_name="LEVEL_3",
             namespace="seoul",
         )
-        
+
         assert result.action == InterlockAction.BLOCK
         assert result.allowed is False
 
@@ -212,13 +212,13 @@ class TestCanarySafetyInterlockCheck:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.NORMAL
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         result = interlock.check(operation="promote", rollout_id="test-123")
-        
+
         assert result.action == InterlockAction.ALLOW
         assert result.allowed is True
         assert result.emergency_level == 0
@@ -228,13 +228,13 @@ class TestCanarySafetyInterlockCheck:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_1
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         result = interlock.check(operation="promote", rollout_id="test-123")
-        
+
         assert result.action == InterlockAction.ALLOW_WITH_WARNING
         assert result.allowed is True
         assert result.emergency_level == 1
@@ -244,13 +244,13 @@ class TestCanarySafetyInterlockCheck:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_2
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         result = interlock.check(operation="promote", rollout_id="test-123")
-        
+
         assert result.action == InterlockAction.PAUSE
         assert result.allowed is False
         assert result.emergency_level == 2
@@ -260,13 +260,13 @@ class TestCanarySafetyInterlockCheck:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_3
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         result = interlock.check(operation="start", rollout_id="test-123")
-        
+
         assert result.action == InterlockAction.ROLLBACK
         assert result.allowed is False
         assert result.emergency_level == 3
@@ -285,7 +285,7 @@ class TestCanarySafetyInterlockCustomPolicy:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_1
         )
-        
+
         # LEVEL_1에서도 PAUSE하는 커스텀 정책
         custom_policy = {
             0: InterlockAction.ALLOW,
@@ -293,14 +293,14 @@ class TestCanarySafetyInterlockCustomPolicy:
             2: InterlockAction.ROLLBACK,  # 기본은 PAUSE
             3: InterlockAction.ROLLBACK,
         }
-        
+
         interlock = CanarySafetyInterlock(
             policy=custom_policy,
             emergency_tracker_factory=lambda: mock_tracker,
         )
-        
+
         result = interlock.check(operation="promote")
-        
+
         assert result.action == InterlockAction.PAUSE
         assert result.allowed is False
 
@@ -317,14 +317,14 @@ class TestCanarySafetyInterlockFailClosed:
         """백엔드 오류 시 Fail-Closed로 ROLLBACK."""
         def failing_tracker_factory():
             raise ConnectionError("Redis connection failed")
-        
+
         interlock = CanarySafetyInterlock(
             fail_closed=True,
             emergency_tracker_factory=failing_tracker_factory,
         )
-        
+
         result = interlock.check(operation="promote", rollout_id="test-123")
-        
+
         assert result.action == InterlockAction.ROLLBACK
         assert result.allowed is False
         assert result.is_fail_closed is True
@@ -335,14 +335,14 @@ class TestCanarySafetyInterlockFailClosed:
         """Fail-Open 모드에서는 백엔드 오류 시 ALLOW."""
         def failing_tracker_factory():
             raise ConnectionError("Redis connection failed")
-        
+
         interlock = CanarySafetyInterlock(
             fail_closed=False,  # Fail-Open (위험!)
             emergency_tracker_factory=failing_tracker_factory,
         )
-        
+
         result = interlock.check(operation="promote", rollout_id="test-123")
-        
+
         assert result.action == InterlockAction.ALLOW
         assert result.allowed is True
         assert result.is_fail_closed is False
@@ -351,14 +351,14 @@ class TestCanarySafetyInterlockFailClosed:
         """Fail-Closed 결과에 에러 메시지 포함."""
         def failing_tracker_factory():
             raise TimeoutError("Backend timeout after 5s")
-        
+
         interlock = CanarySafetyInterlock(
             fail_closed=True,
             emergency_tracker_factory=failing_tracker_factory,
         )
-        
+
         result = interlock.check(operation="start")
-        
+
         assert "Backend timeout after 5s" in result.reason
 
 
@@ -375,20 +375,20 @@ class TestCanarySafetyInterlockCheckAndApply:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_2
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         mock_canary_service = MagicMock()
         mock_canary_service.pause.return_value = True
-        
+
         result = interlock.check_and_apply(
             canary_service=mock_canary_service,
             rollout_id="test-123",
             operation="promote",
         )
-        
+
         assert result.action == InterlockAction.PAUSE
         mock_canary_service.pause.assert_called_once_with("test-123")
         assert result.metadata.get("auto_applied") is True
@@ -399,20 +399,20 @@ class TestCanarySafetyInterlockCheckAndApply:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_3
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         mock_canary_service = MagicMock()
         mock_canary_service.rollback.return_value = True
-        
+
         result = interlock.check_and_apply(
             canary_service=mock_canary_service,
             rollout_id="test-456",
             operation="start",
         )
-        
+
         assert result.action == InterlockAction.ROLLBACK
         mock_canary_service.rollback.assert_called_once()
         assert result.metadata.get("auto_applied") is True
@@ -422,19 +422,19 @@ class TestCanarySafetyInterlockCheckAndApply:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.NORMAL
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         mock_canary_service = MagicMock()
-        
+
         result = interlock.check_and_apply(
             canary_service=mock_canary_service,
             rollout_id="test-789",
             operation="promote",
         )
-        
+
         assert result.action == InterlockAction.ALLOW
         mock_canary_service.pause.assert_not_called()
         mock_canary_service.rollback.assert_not_called()
@@ -444,20 +444,20 @@ class TestCanarySafetyInterlockCheckAndApply:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_3
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         mock_canary_service = MagicMock()
         mock_canary_service.rollback.side_effect = Exception("DB connection error")
-        
+
         result = interlock.check_and_apply(
             canary_service=mock_canary_service,
             rollout_id="test-error",
             operation="promote",
         )
-        
+
         assert result.action == InterlockAction.ROLLBACK
         assert result.metadata.get("auto_applied") is True
         assert result.metadata.get("apply_success") is False
@@ -475,14 +475,14 @@ class TestSingleton:
     def test_get_returns_same_instance(self):
         """get_canary_safety_interlock()이 동일 인스턴스 반환."""
         reset_canary_safety_interlock()
-        
+
         with patch(
             "selfhealing.services.canary.interlock."
             "CanarySafetyInterlock._get_emergency_tracker"
         ):
             instance1 = get_canary_safety_interlock()
             instance2 = get_canary_safety_interlock()
-        
+
         assert instance1 is instance2
 
     def test_reset_clears_singleton(self):
@@ -494,7 +494,7 @@ class TestSingleton:
             instance1 = get_canary_safety_interlock()
             reset_canary_safety_interlock()
             instance2 = get_canary_safety_interlock()
-        
+
         assert instance1 is not instance2
 
 
@@ -520,14 +520,14 @@ class TestDefaultPolicy:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.NORMAL
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         # 인스턴스 정책 변경
         interlock.policy[0] = InterlockAction.BLOCK
-        
+
         # DEFAULT_POLICY는 변경되지 않음
         assert CanarySafetyInterlock.DEFAULT_POLICY[0] == InterlockAction.ALLOW
 
@@ -545,17 +545,17 @@ class TestNamespaceSupport:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.NORMAL, namespace="seoul"
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         result = interlock.check(
             operation="promote",
             rollout_id="test-123",
             namespace="seoul",
         )
-        
+
         mock_tracker.get_effective_state.assert_called_once_with(namespace="seoul")
         assert result.namespace == "seoul"
 
@@ -564,11 +564,11 @@ class TestNamespaceSupport:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_2, namespace="tokyo"
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
-        
+
         result = interlock.check(operation="promote", namespace="tokyo")
-        
+
         assert result.namespace == "tokyo"

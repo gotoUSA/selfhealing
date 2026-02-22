@@ -4,8 +4,6 @@ SelfHealerWatchdog 테스트.
 메인 와치독 클래스 테스트.
 """
 
-import threading
-import time
 from datetime import datetime, timezone
 from unittest import mock
 from unittest.mock import patch
@@ -66,7 +64,8 @@ class TestSelfHealerWatchdog:
     def mock_probe_manager(self):
         """Mock probe manager."""
         from datetime import datetime, timezone
-        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
+
+        from selfhealing.meta.health_probe import HealthStatus, ProbeResult
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
@@ -134,7 +133,6 @@ class TestSelfHealerWatchdog:
 
     def test_check_health(self, watchdog, mock_probe_manager):
         """헬스 체크 테스트."""
-        from selfhealing.meta.health_probe import HealthStatus
 
         with _MOCK_STATE_STORE:
             result = watchdog.check_health()
@@ -167,7 +165,8 @@ class TestHealthCheck:
     def mock_probe_manager_unhealthy(self):
         """비정상 상태 Mock probe manager."""
         from datetime import datetime, timezone
-        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
+
+        from selfhealing.meta.health_probe import HealthStatus, ProbeResult
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
@@ -220,7 +219,8 @@ class TestDryRunMode:
     def mock_probe_manager(self):
         """Mock probe manager."""
         from datetime import datetime, timezone
-        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
+
+        from selfhealing.meta.health_probe import HealthStatus, ProbeResult
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
@@ -343,7 +343,8 @@ class TestSelfCircuitBreaker:
     def mock_probe_manager(self):
         """Mock probe manager."""
         from datetime import datetime, timezone
-        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
+
+        from selfhealing.meta.health_probe import HealthStatus, ProbeResult
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {
@@ -397,7 +398,8 @@ class TestConsecutiveFailures:
     def mock_probe_manager_failing(self):
         """실패하는 Mock probe manager."""
         from datetime import datetime, timezone
-        from selfhealing.meta.health_probe import ProbeResult, HealthStatus
+
+        from selfhealing.meta.health_probe import HealthStatus, ProbeResult
 
         manager = mock.MagicMock()
         manager.probe_all.return_value = {

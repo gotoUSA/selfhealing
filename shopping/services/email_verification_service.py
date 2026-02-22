@@ -26,11 +26,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.utils import timezone
 
 if TYPE_CHECKING:
     from ..models.user import User

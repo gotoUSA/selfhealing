@@ -18,9 +18,6 @@ import pytest
 
 # Django REST API integration tests - require database
 pytestmark = [pytest.mark.e2e, pytest.mark.requires_db]
-import uuid
-from unittest.mock import patch, MagicMock
-from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -28,7 +25,6 @@ from rest_framework import status
 from selfhealing.services import (
     ControlAPIService,
     ControlRequest,
-    ControlResponse,
 )
 from selfhealing.services.control_api_service import assess_risk_level, classify_reason
 from shopping.serializers.self_healing_serializers import (

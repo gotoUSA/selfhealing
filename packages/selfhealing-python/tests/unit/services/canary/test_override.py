@@ -6,13 +6,11 @@ Break Glass (비상 우회) 기능 테스트.
 Reference: docs/self_healing/middleware_system/74_CANARY_SAFETY_INTERLOCK.md
 """
 
-import pytest
 
 from selfhealing.services.canary.override import (
-    EmergencyOverrideRequest,
     EmergencyOverridePolicy,
+    EmergencyOverrideRequest,
 )
-
 
 # =============================================================================
 # Test: EmergencyOverrideRequest
@@ -29,7 +27,7 @@ class TestEmergencyOverrideRequest:
             requested_by="sre@example.com",
             ticket_id="INC-12345",
         )
-        
+
         assert override.is_valid() is True
 
     def test_invalid_request_short_reason(self):
@@ -38,7 +36,7 @@ class TestEmergencyOverrideRequest:
             reason="짧음",  # 10자 미만
             requested_by="sre@example.com",
         )
-        
+
         assert override.is_valid() is False
 
     def test_invalid_request_empty_requested_by(self):
@@ -47,7 +45,7 @@ class TestEmergencyOverrideRequest:
             reason="긴급 장애 복구를 위한 설정 변경입니다",
             requested_by="",
         )
-        
+
         assert override.is_valid() is False
 
     def test_requires_approval_token_for_level_3(self):
@@ -56,7 +54,7 @@ class TestEmergencyOverrideRequest:
             reason="긴급 장애 복구입니다",
             requested_by="sre@example.com",
         )
-        
+
         assert override.requires_approval_token(level_value=3) is True
         assert override.requires_approval_token(level_value=2) is False
         assert override.requires_approval_token(level_value=1) is False
@@ -67,7 +65,7 @@ class TestEmergencyOverrideRequest:
             reason="긴급 장애 복구입니다",
             requested_by="sre@example.com",
         )
-        
+
         assert override.acknowledged_risks == []
 
 
@@ -82,7 +80,7 @@ class TestEmergencyOverridePolicy:
     def test_default_policy_values(self):
         """기본 정책 값 확인."""
         policy = EmergencyOverridePolicy()
-        
+
         assert policy.enabled is True
         assert policy.min_reason_length == 10
         assert policy.require_ticket_id is True
@@ -100,9 +98,9 @@ class TestEmergencyOverridePolicy:
             requested_by="sre@example.com",
             ticket_id="INC-12345",
         )
-        
+
         is_valid, error = policy.validate_request(override, level_value=2)
-        
+
         assert is_valid is True
         assert error is None
 
@@ -114,9 +112,9 @@ class TestEmergencyOverridePolicy:
             requested_by="sre@example.com",
             ticket_id="INC-12345",
         )
-        
+
         is_valid, error = policy.validate_request(override, level_value=2)
-        
+
         assert is_valid is False
         assert "disabled" in error
 
@@ -128,9 +126,9 @@ class TestEmergencyOverridePolicy:
             requested_by="sre@example.com",
             ticket_id=None,  # 티켓 없음
         )
-        
+
         is_valid, error = policy.validate_request(override, level_value=2)
-        
+
         assert is_valid is False
         assert "Ticket ID" in error
 
@@ -143,9 +141,9 @@ class TestEmergencyOverridePolicy:
             ticket_id="INC-12345",
             approval_token=None,  # 승인 토큰 없음
         )
-        
+
         is_valid, error = policy.validate_request(override, level_value=3)
-        
+
         assert is_valid is False
         assert "Approval token" in error
 
@@ -158,8 +156,8 @@ class TestEmergencyOverridePolicy:
             ticket_id="INC-12345",
             approval_token="APPROVED-ABC123",
         )
-        
+
         is_valid, error = policy.validate_request(override, level_value=3)
-        
+
         assert is_valid is True
         assert error is None

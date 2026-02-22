@@ -30,7 +30,8 @@ FallbackPolicy 중복 실행 방지:
 from __future__ import annotations
 
 import time
-from typing import Any, Awaitable, Callable, Generic, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import Any, Generic, TypeVar
 
 import structlog
 

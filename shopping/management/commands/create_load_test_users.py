@@ -95,7 +95,7 @@ class Command(BaseCommand):
                     self.stdout.write(f"  진행 중... {i}/{count}명 생성 완료")
 
         # 결과 출력
-        self.stdout.write(self.style.SUCCESS(f"\n✓ 부하 테스트 사용자 생성 완료"))
+        self.stdout.write(self.style.SUCCESS("\n✓ 부하 테스트 사용자 생성 완료"))
         self.stdout.write(f"  - 새로 생성: {len(created_users)}명")
         if skipped_users:
             self.stdout.write(f"  - 이미 존재 (건너뜀): {len(skipped_users)}명")

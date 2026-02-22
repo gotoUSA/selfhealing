@@ -8,8 +8,6 @@ BudgetDepletionForecaster 단위 테스트.
 4. _determine_risk_level() - 위험 수준 판단 로직
 """
 
-import pytest
-from unittest.mock import MagicMock
 from dataclasses import dataclass
 
 from selfhealing.services.error_budget.forecaster import (

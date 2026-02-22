@@ -2,16 +2,15 @@
 Tests for trace ID management.
 """
 
-import pytest
 import threading
 from unittest.mock import MagicMock
 
 from selfhealing.audit.trace import (
     TraceContext,
+    clear_trace_id,
     generate_trace_id,
     get_trace_id,
     set_trace_id,
-    clear_trace_id,
     trace_id_middleware,
 )
 
@@ -22,7 +21,7 @@ class TestGenerateTraceId:
     def test_generate_trace_id_format(self):
         """Test that generated trace ID has correct format."""
         trace_id = generate_trace_id()
-        
+
         # Format: "req-{cluster_prefix}-{uuid4_short}" or "req-{uuid4_short}"
         # With cluster prefix: "req-unkp-12345678" (17 chars)
         # Without cluster prefix: "req-12345678" (12 chars)
@@ -42,10 +41,10 @@ class TestTraceIdStorage:
     def test_set_and_get_trace_id(self):
         """Test setting and getting trace ID."""
         clear_trace_id()
-        
+
         set_trace_id("test-trace-123")
         assert get_trace_id() == "test-trace-123"
-        
+
         clear_trace_id()
 
     def test_get_trace_id_generates_when_not_set(self):
@@ -61,21 +60,21 @@ class TestTraceIdStorage:
         """Test that trace IDs are isolated per thread."""
         clear_trace_id()
         results = {}
-        
+
         def set_and_get(thread_id):
             trace_id = f"trace-{thread_id}"
             set_trace_id(trace_id)
             results[thread_id] = get_trace_id()
-        
+
         threads = []
         for i in range(5):
             t = threading.Thread(target=set_and_get, args=(i,))
             threads.append(t)
             t.start()
-        
+
         for t in threads:
             t.join()
-        
+
         # Each thread should have its own trace ID
         for i in range(5):
             assert results[i] == f"trace-{i}"
@@ -87,7 +86,7 @@ class TestTraceContext:
     def test_trace_context_sets_id(self):
         """Test that TraceContext sets trace ID."""
         clear_trace_id()
-        
+
         with TraceContext() as trace_id:
             current = get_trace_id()
             assert current is not None
@@ -97,7 +96,7 @@ class TestTraceContext:
     def test_trace_context_with_specific_id(self):
         """Test TraceContext with specific trace ID."""
         clear_trace_id()
-        
+
         with TraceContext(trace_id="my-custom-id") as trace_id:
             assert get_trace_id() == "my-custom-id"
             assert trace_id == "my-custom-id"
@@ -106,10 +105,10 @@ class TestTraceContext:
         """Test that TraceContext restores previous trace ID."""
         clear_trace_id()
         set_trace_id("original-id")
-        
+
         with TraceContext(trace_id="temporary-id"):
             assert get_trace_id() == "temporary-id"
-        
+
         # Should restore original
         assert get_trace_id() == "original-id"
         clear_trace_id()
@@ -117,13 +116,13 @@ class TestTraceContext:
     def test_trace_context_nested(self):
         """Test nested TraceContext."""
         clear_trace_id()
-        
+
         with TraceContext(trace_id="outer"):
             assert get_trace_id() == "outer"
-            
+
             with TraceContext(trace_id="inner"):
                 assert get_trace_id() == "inner"
-            
+
             assert get_trace_id() == "outer"
 
 
@@ -133,62 +132,62 @@ class TestTraceIdMiddleware:
     def test_middleware_creates_trace_id(self):
         """Test that middleware creates trace ID if not present."""
         clear_trace_id()
-        
+
         request = MagicMock()
         request.META = {}
-        
+
         def get_response(req):
             # During request handling, trace ID should be set
             trace_id = get_trace_id()
             response = MagicMock()
             response.trace_id = trace_id
             return response
-        
+
         middleware = trace_id_middleware(get_response)
         response = middleware(request)
-        
+
         # Trace ID should have been set during request
         assert hasattr(response, 'trace_id')
 
     def test_middleware_uses_existing_header(self):
         """Test that middleware uses existing X-Trace-ID header."""
         clear_trace_id()
-        
+
         request = MagicMock()
         request.META = {"HTTP_X_TRACE_ID": "incoming-trace-id"}
-        
+
         captured_trace_id = None
-        
+
         def get_response(req):
             nonlocal captured_trace_id
             captured_trace_id = get_trace_id()
             return MagicMock()
-        
+
         middleware = trace_id_middleware(get_response)
         middleware(request)
-        
+
         assert captured_trace_id == "incoming-trace-id"
 
     def test_middleware_uses_traceparent_header(self):
         """Test that middleware uses W3C traceparent header."""
         clear_trace_id()
-        
+
         # W3C Trace Context format
         traceparent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
-        
+
         request = MagicMock()
         request.META = {"HTTP_TRACEPARENT": traceparent}
-        
+
         captured_trace_id = None
-        
+
         def get_response(req):
             nonlocal captured_trace_id
             captured_trace_id = get_trace_id()
             return MagicMock()
-        
+
         middleware = trace_id_middleware(get_response)
         middleware(request)
-        
+
         # Should extract trace ID from traceparent
         assert captured_trace_id is not None
         assert len(captured_trace_id) > 0
@@ -196,18 +195,18 @@ class TestTraceIdMiddleware:
     def test_middleware_adds_header_to_response(self):
         """Test that middleware adds trace ID to response headers."""
         clear_trace_id()
-        
+
         request = MagicMock()
         request.META = {}
-        
+
         response = MagicMock()
         response.__setitem__ = MagicMock()
-        
+
         def get_response(req):
             return response
-        
+
         middleware = trace_id_middleware(get_response)
         result = middleware(request)
-        
+
         # Response should be returned
         assert result is not None

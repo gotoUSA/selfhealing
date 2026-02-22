@@ -32,9 +32,6 @@ from typing import Any
 import structlog
 
 from selfhealing.adapters.ipc.protocol.json_rpc import (
-    JSONRPCErrorCode,
-    JSONRPCRequest,
-    JSONRPCResponse,
     SidecarMethods,
 )
 
@@ -217,7 +214,7 @@ class UDSClient:
             self._stats.successful_requests += 1
             return response.get("result", {})
 
-        except socket.timeout:
+        except TimeoutError:
             self._stats.failed_requests += 1
             self._connected = False
             raise UDSClientError("Request timeout")
@@ -312,7 +309,7 @@ class UDSClient:
                 SidecarMethods.CB_GET_STATE,
                 params={"service_name": service_name},
             )
-        except UDSClientError as e:
+        except UDSClientError:
             if self._fail_open:
                 return {"service_name": service_name, "state": "unknown"}
             raise
@@ -454,7 +451,7 @@ class UDSClient:
             "avg_latency_ms": round(self._stats.avg_latency_ms, 3),
         }
 
-    def __enter__(self) -> "UDSClient":
+    def __enter__(self) -> UDSClient:
         """컨텍스트 매니저 진입."""
         self.connect()
         return self

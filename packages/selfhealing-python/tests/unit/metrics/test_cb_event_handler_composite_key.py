@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.services.cell_topology.cb_namespace import (
     make_cell_scoped_cb_name,
 )

@@ -4,10 +4,7 @@ Unit tests for load_tests.core.mixins module
 Note: Mixin 클래스는 Locust HttpUser와 함께 사용되도록 설계되었으므로,
 일부 테스트는 Mock 객체를 사용하여 HTTP 클라이언트 동작을 시뮬레이션합니다.
 """
-import pytest
-import threading
-from unittest.mock import Mock, MagicMock, patch
-from datetime import datetime
+from unittest.mock import Mock
 
 from load_tests.core.mixins import (
     AdminAuthMixin, 

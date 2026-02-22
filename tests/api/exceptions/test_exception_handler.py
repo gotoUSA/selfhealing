@@ -4,8 +4,7 @@ Exception Handler 테스트 - DRF 핸들러 (handler.py).
 selfhealing_exception_handler 함수 및 Audit 버퍼 연동 검증.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 from selfhealing.api.django.exceptions.handler import (
     selfhealing_exception_handler,

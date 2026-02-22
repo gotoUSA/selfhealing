@@ -39,7 +39,6 @@ import sys
 import time
 import json
 from datetime import datetime
-from typing import Dict, List, Any
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -516,7 +515,7 @@ def on_test_stop(environment, **kwargs):
         if sla_breaches > 0:
             print(f"  ⚠️ SLA Breaches: {sla_breaches}/{len(recovery_times)} cycles exceeded 2min")
         else:
-            print(f"  ✅ SLA Status: All cycles under 2min threshold")
+            print("  ✅ SLA Status: All cycles under 2min threshold")
 
     # Circuit breaker transitions
     print(f"\n🔌 Total CB Transitions: {len(_repeated_stats['circuit_breaker_transitions'])}")

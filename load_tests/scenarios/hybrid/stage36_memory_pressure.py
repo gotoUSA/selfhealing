@@ -39,14 +39,11 @@ import sys
 import time
 import random
 import threading
-import gc
 import weakref
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple, Set, Callable
-from collections import defaultdict
+from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
-from contextlib import contextmanager
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))

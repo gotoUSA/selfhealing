@@ -12,14 +12,11 @@ Tests:
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import tempfile
 from pathlib import Path
 from unittest import mock
-
-import pytest
 
 
 class TestCollectEnvSnapshot:
@@ -27,7 +24,9 @@ class TestCollectEnvSnapshot:
 
     def test_collect_tracked_prefixes(self):
         """Tracked prefix가 있는 환경변수만 수집한다."""
-        from selfhealing.audit.env_snapshot import collect_env_snapshot, TRACKED_PREFIXES
+        from selfhealing.audit.env_snapshot import (
+            collect_env_snapshot,
+        )
 
         with mock.patch.dict(
             os.environ,
@@ -400,7 +399,9 @@ class TestPrometheusMetrics:
 
     def test_metrics_updated_on_success(self):
         """성공 시 메트릭이 업데이트된다."""
-        from selfhealing.audit.env_snapshot import log_env_snapshot_to_audit, _get_metrics
+        from selfhealing.audit.env_snapshot import (
+            log_env_snapshot_to_audit,
+        )
 
         # Mock Gauge 생성
         mock_recorded = mock.Mock()
@@ -468,7 +469,10 @@ class TestGetEnvSnapshotSummary:
 
     def test_returns_summary(self):
         """요약 정보를 올바르게 반환한다."""
-        from selfhealing.audit.env_snapshot import get_env_snapshot_summary, TRACKED_PREFIXES
+        from selfhealing.audit.env_snapshot import (
+            TRACKED_PREFIXES,
+            get_env_snapshot_summary,
+        )
 
         with mock.patch.dict(
             os.environ,

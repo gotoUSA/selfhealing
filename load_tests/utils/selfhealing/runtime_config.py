@@ -4,7 +4,7 @@ Runtime Configuration API Client.
 동적 설정 관리 (Circuit Breaker, DLQ, Retry, SLA, SLO, Rate Limit 등).
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import BaseClient
 

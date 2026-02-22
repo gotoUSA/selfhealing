@@ -9,8 +9,6 @@ LayeredRepositoryBase에 Bulkhead 패턴 통합 후 동작을 검증합니다:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 
 from selfhealing.adapters.memory.layered_repository.base import LayeredRepositoryBase

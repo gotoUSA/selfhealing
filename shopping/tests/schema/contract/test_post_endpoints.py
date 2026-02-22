@@ -127,7 +127,6 @@ class TestPostEndpointsContract:
 
     def test_auth_register_success(self, client):
         """📝 회원가입 성공"""
-        import uuid
 
         unique_username = f"newuser_{uuid.uuid4().hex[:8]}"
         data = {
@@ -253,7 +252,6 @@ class TestPostFailureContracts:
 
         password와 password2가 다를 때 에러가 반환되어야 합니다.
         """
-        import uuid
 
         # Arrange
         unique_username = f"newuser_{uuid.uuid4().hex[:8]}"

@@ -5,10 +5,8 @@ tier_thresholds, regional_thresholds 필드 및
 get_thresholds_for_tier(), get_thresholds_for_region(), get_effective_thresholds() 동작 검증.
 """
 
-import pytest
 
 from selfhealing.settings.error_budget_gate import ErrorBudgetGateSettings
-
 
 # =============================================================================
 # 계약 검증: 기본값

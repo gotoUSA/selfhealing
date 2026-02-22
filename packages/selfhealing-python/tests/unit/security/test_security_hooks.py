@@ -6,8 +6,6 @@ Security Hooks 단위 테스트.
 
 from __future__ import annotations
 
-import pytest
-
 from selfhealing.services.security.hooks import (
     clear_session_invalidation_hooks,
     get_session_invalidation_hooks,

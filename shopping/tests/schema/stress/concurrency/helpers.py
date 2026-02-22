@@ -129,23 +129,14 @@ OpenAPI 스키마 기반 API 계약 관점에서 동시성을 검증합니다.
 """
 
 import concurrent.futures
-import threading
-import time
-from decimal import Decimal
 from typing import Any
 
-import jwt as pyjwt
 from django.db import connection
 from django.urls import reverse
 
-import pytest
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from shopping.models.cart import Cart, CartItem
-from shopping.models.order import Order
-from shopping.models.product import Product
-from shopping.tests.factories import ProductFactory, UserFactory, CategoryFactory
 
 
 # =============================================================================

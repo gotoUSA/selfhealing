@@ -2,17 +2,16 @@
 Tests for Decision Engine - 메트릭 기반 조정 결정
 """
 
+from datetime import datetime
+
 import pytest
-from datetime import datetime, timezone
-from unittest.mock import MagicMock
 
 from selfhealing.core.decision_engine import (
-    DecisionEngine,
     AdjustmentDecision,
-    AdjustmentRule,
     AdjustmentPriority,
+    AdjustmentRule,
+    DecisionEngine,
 )
-
 
 # =============================================================================
 # Fixtures
@@ -358,6 +357,7 @@ class TestAnalysisHistory:
     def test_history_limit(self, decision_engine):
         """이력은 settings.max_history 개수만 유지."""
         from unittest.mock import patch
+
         from selfhealing.settings.decision_engine import DecisionEngineSettings
 
         small_settings = DecisionEngineSettings(max_history=100)

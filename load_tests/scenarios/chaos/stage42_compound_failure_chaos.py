@@ -42,20 +42,14 @@ Controlled Chaos Testing: 동시성과 타이밍 오버랩을 포함한 복합 �
 
 from __future__ import annotations
 
-import gc
-import json
-import logging
 import random
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, Future, as_completed, wait
-from contextlib import contextmanager
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone as tz
-from enum import Enum
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Set, TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone as tz
+from typing import Any, Dict, List, TYPE_CHECKING
 
 import pytest
 
@@ -65,13 +59,7 @@ import pytest
 # =============================================================================
 
 if TYPE_CHECKING:
-    from selfhealing.services import (
-        CircuitBreakerConfig,
-        CircuitBreakerService,
-        CircuitState,
-        DLQConfig,
-        DLQService,
-    )
+    pass
 
 
 # =============================================================================

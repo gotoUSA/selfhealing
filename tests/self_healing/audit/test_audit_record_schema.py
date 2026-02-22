@@ -6,9 +6,7 @@ Risk Covered: R-006 (Unaccountable autonomous decisions)
 Compliance: NIST AU-3, SOC 2 CC4.1, ISO 27001 A.12.4.1
 """
 
-from dataclasses import dataclass, fields
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 import pytest
 

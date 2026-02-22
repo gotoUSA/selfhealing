@@ -5,12 +5,8 @@ exclude_synthetic 파라미터와 exclude_chaos deprecated 처리를 검증합�
 """
 
 import warnings
-import pytest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
 
 from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
-from selfhealing.slo import SLOConfig
 
 
 class TestExcludeSyntheticParameter:

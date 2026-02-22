@@ -4,8 +4,7 @@
 TestModeContext 활성화 시 메트릭에 is_synthetic 레이블이 자동 추가되는지 검증합니다.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from selfhealing.core.test_mode_context import TestModeContext
 

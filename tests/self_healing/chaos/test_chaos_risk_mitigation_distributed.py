@@ -14,8 +14,7 @@ Reference: 31_CHAOS_EXPERIMENT_EXPANSION.md §Phase 4-5
 
 import os
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import Mock, patch
 
 
 # =============================================================================

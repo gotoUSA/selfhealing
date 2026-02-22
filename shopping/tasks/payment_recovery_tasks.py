@@ -43,7 +43,6 @@ def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int) -> 
         재시도 결과
     """
     from ..models.payment import Payment, PaymentLog
-    from ..models.order import Order
     from ..services.payment_recovery_service import get_payment_recovery_handler
     from ..utils.toss_payment import TossPaymentClient, TossPaymentError
 

@@ -4,7 +4,7 @@ Health & Metrics API Client.
 Health Check 및 Metrics 관련 API.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import BaseClient
 

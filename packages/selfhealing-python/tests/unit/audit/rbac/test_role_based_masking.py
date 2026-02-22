@@ -5,14 +5,13 @@ MaskingLevel별 출력 검증, hash_for_audit 동일성 확인,
 ActorContext 기반 레벨 결정 테스트.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from selfhealing.audit.masking import (
     MaskingLevel,
-    mask_with_level,
     get_masking_level_for_context,
     hash_for_audit,
+    mask_with_level,
 )
 
 

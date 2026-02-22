@@ -4,10 +4,9 @@ Netflix Gradient Adaptive Throttle Unit Tests.
 Tests for the selfhealing.services.throttle module.
 """
 
-import time
-import pytest
 import threading
-from unittest.mock import patch, MagicMock
+import time
+from unittest.mock import patch
 
 
 class TestThrottleConfig:

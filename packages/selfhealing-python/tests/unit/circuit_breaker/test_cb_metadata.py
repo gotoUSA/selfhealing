@@ -12,8 +12,6 @@ from __future__ import annotations
 from dataclasses import fields
 from unittest.mock import MagicMock
 
-import pytest
-
 from selfhealing.adapters.memory.circuit_breaker import (
     InMemoryCircuitBreakerStateRepository,
 )
@@ -23,7 +21,6 @@ from selfhealing.interfaces.repositories import (
 )
 from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
 from selfhealing.services.circuit_breaker.service import CircuitBreakerService
-
 
 # =============================================================================
 # 계약 검증 (Contract)

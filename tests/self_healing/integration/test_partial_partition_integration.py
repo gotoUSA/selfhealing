@@ -15,22 +15,16 @@ Reference: docs/STAGE_24_PARTIAL_PARTITION.md
 
 from __future__ import annotations
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timezone as tz
 
 from selfhealing.core.connection_health import (
     ConnectionType,
     ConnectionStatus,
-    ConnectionHealth,
     PartitionState,
     DefaultConnectionHealthMonitor,
 )
 from selfhealing.core.fallback_strategy import (
     FallbackMode,
-    FallbackResult,
     PartitionAwareFallback,
-    SimpleFallback,
     CacheFirstFallback,
 )
 

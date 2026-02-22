@@ -14,7 +14,6 @@ import threading
 import time
 from pathlib import Path
 
-import pytest
 from .conftest import MockRedisClient
 
 
@@ -24,8 +23,8 @@ class TestPerformanceIntegration:
     def test_full_write_flow_with_performance_components(self):
         """Test complete write flow using performance components."""
         from selfhealing.audit.performance import (
-            HashChainPerformanceManager,
             BatchFlushConfig,
+            HashChainPerformanceManager,
         )
 
         redis = MockRedisClient()
@@ -88,8 +87,8 @@ class TestPerformanceIntegration:
     def test_sampling_verification_performance(self):
         """Test that sampling is faster than full verification."""
         from selfhealing.audit.performance import (
-            SamplingVerifier,
             SamplingConfig,
+            SamplingVerifier,
         )
 
         # Create large chain
@@ -142,8 +141,8 @@ class TestPerformanceIntegration:
     def test_concurrent_batch_writes(self):
         """Test concurrent writes to batch writer."""
         from selfhealing.audit.performance import (
-            BatchFlushWriter,
             BatchFlushConfig,
+            BatchFlushWriter,
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:

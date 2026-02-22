@@ -48,13 +48,12 @@ Reference:
 """
 
 import os
-import sys
 import uuid
 import time
 import threading
 import json
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import defaultdict
@@ -901,7 +900,7 @@ def run_standalone_test():
         filename="gap08_observability_test",
         output_dir="load_tests/reports"
     )
-    print(f"\nReports saved:")
+    print("\nReports saved:")
     for format_name, path in paths.items():
         print(f"  {format_name}: {path}")
     

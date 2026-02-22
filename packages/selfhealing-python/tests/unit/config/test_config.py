@@ -2,7 +2,6 @@
 Unit tests for configuration management.
 """
 
-import pytest
 from datetime import timedelta
 
 
@@ -138,8 +137,8 @@ class TestGlobalConfig:
         from selfhealing.core.config import (
             SelfHealingConfig,
             get_config,
-            set_config,
             reload_config,
+            set_config,
         )
 
         # Set custom config
@@ -258,9 +257,8 @@ class TestConvenienceGetters:
 
     def test_get_circuit_breaker_settings(self):
         from selfhealing.core.config import (
-            set_config,
-            SelfHealingConfig,
             get_circuit_breaker_settings,
+            set_config,
         )
 
         set_config(None)  # Reset
@@ -270,8 +268,8 @@ class TestConvenienceGetters:
 
     def test_get_dlq_settings(self):
         from selfhealing.core.config import (
-            set_config,
             get_dlq_settings,
+            set_config,
         )
 
         set_config(None)  # Reset
@@ -281,8 +279,8 @@ class TestConvenienceGetters:
 
     def test_get_retry_settings(self):
         from selfhealing.core.config import (
-            set_config,
             get_retry_settings,
+            set_config,
         )
 
         set_config(None)  # Reset
@@ -292,8 +290,8 @@ class TestConvenienceGetters:
 
     def test_get_sla_thresholds(self):
         from selfhealing.core.config import (
-            set_config,
             get_sla_thresholds,
+            set_config,
         )
 
         set_config(None)  # Reset
@@ -305,8 +303,8 @@ class TestConvenienceGetters:
 
     def test_get_forensic_settings(self):
         from selfhealing.core.config import (
-            set_config,
             get_forensic_settings,
+            set_config,
         )
 
         set_config(None)  # Reset

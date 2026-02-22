@@ -12,10 +12,8 @@ Test Coverage:
 Total: 4 tests
 """
 
-import pytest
 import time
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import MagicMock, patch
 
 # =============================================================================
 # E2E Integration Tests (4 tests)
@@ -27,20 +25,20 @@ class TestChaosE2EIntegration:
 
     def test_complete_experiment_lifecycle(self):
         """Test complete experiment lifecycle from creation to cleanup."""
-        from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
-            LoadConfig,
-            LoadPattern,
-            GeneratorState,
-        )
-        from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
-            ShapingConfig,
-            ShapingMode,
-        )
-        from selfhealing.services.chaos.impact_predictor import get_impact_predictor
         from selfhealing.services.chaos.blast_radius_analyzer import (
             get_blast_radius_analyzer,
+        )
+        from selfhealing.services.chaos.impact_predictor import get_impact_predictor
+        from selfhealing.services.chaos.synthetic_load import (
+            GeneratorState,
+            LoadConfig,
+            LoadPattern,
+            SyntheticLoadGenerator,
+        )
+        from selfhealing.services.chaos.traffic_shaper import (
+            ShapingConfig,
+            ShapingMode,
+            TrafficShaper,
         )
 
         experiment_id = "e2e-test-001"
@@ -144,13 +142,13 @@ class TestChaosE2EIntegration:
 
     def test_experiment_error_handling_and_recovery(self):
         """Test experiment error handling and cleanup on failure."""
+        from selfhealing.services.chaos.notification import send_chaos_experiment_alert
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticLoadGenerator,
-            LoadConfig,
             GeneratorState,
+            LoadConfig,
+            SyntheticLoadGenerator,
             cleanup_generator,
         )
-        from selfhealing.services.chaos.notification import send_chaos_experiment_alert
 
         experiment_id = "e2e-test-003"
         target_service = "error-prone-service"
@@ -207,22 +205,22 @@ class TestChaosE2EIntegration:
 
     def test_full_phase_integration(self):
         """Test integration across all phases (Phase 0-3 + Phase 4)."""
-        from selfhealing.services.unified_notification import NotificationCategory
         from selfhealing.services.chaos.actionable_alert_urls import (
             ChaosActionableAlertUrlBuilder,
         )
-        from selfhealing.services.chaos.impact_predictor import ImpactPredictor
         from selfhealing.services.chaos.blast_radius_analyzer import BlastRadiusAnalyzer
+        from selfhealing.services.chaos.impact_predictor import ImpactPredictor
         from selfhealing.services.chaos.synthetic_load import (
-            SyntheticTrafficGenerator,
             SYNTHETIC_HEADER,
             SYNTHETIC_VALUE,
+            SyntheticTrafficGenerator,
         )
         from selfhealing.services.chaos.traffic_shaper import (
-            TrafficShaper,
             ShapingConfig,
             ShapingMode,
+            TrafficShaper,
         )
+        from selfhealing.services.unified_notification import NotificationCategory
 
         experiment_id = "e2e-full-test"
         target_service = "payment-api"

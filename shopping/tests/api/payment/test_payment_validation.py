@@ -5,14 +5,12 @@ from decimal import Decimal
 import pytest
 from rest_framework import status
 
-from shopping.models.order import Order, OrderItem
+from shopping.models.order import Order
 from shopping.models.payment import Payment
-from shopping.models.product import Product
 from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
-    CompletedPaymentFactory,
     ProductFactory,
     TossResponseBuilder,
 )

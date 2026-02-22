@@ -19,7 +19,7 @@ class TestInMemoryFailedOperationRepository:
     def test_create_failed_operation(self, repo):
         """Test creating a new failed operation."""
         from selfhealing.interfaces.repositories import FailedOperationStatus
-        
+
         entry = repo.create(
             domain="payment",
             failure_type="gateway_timeout",
@@ -79,7 +79,7 @@ class TestInMemoryFailedOperationRepository:
     def test_update_status(self, repo):
         """Test updating the status of a failed operation."""
         from selfhealing.interfaces.repositories import FailedOperationStatus
-        
+
         entry = repo.create(
             domain="payment",
             failure_type="timeout",

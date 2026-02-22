@@ -6,10 +6,6 @@ DiskBufferSettings 설정 단위 테스트.
 
 from __future__ import annotations
 
-import os
-
-import pytest
-
 
 class TestDiskBufferSettings:
     """DiskBufferSettings 테스트."""

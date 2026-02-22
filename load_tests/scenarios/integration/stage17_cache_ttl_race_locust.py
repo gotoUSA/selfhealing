@@ -42,7 +42,6 @@ import sys
 import time
 import random
 import threading
-from datetime import datetime
 from typing import Dict, List, Optional, Any
 from collections import defaultdict
 
@@ -188,17 +187,17 @@ class TTLRaceStats:
                 # Log phase transition
                 if phase == "price_update":
                     print(f"\n💰 {STAGE_NAME} Phase 2: Price Update Starting")
-                    print(f"   - Updating prices to create stale cache entries")
+                    print("   - Updating prices to create stale cache entries")
                 elif phase == "ttl_race":
                     print(f"\n🏎️ {STAGE_NAME} Phase 3: TTL Race Condition Window")
-                    print(f"   - High concurrency reads during stale window")
+                    print("   - High concurrency reads during stale window")
                     print(f"   - Stale reads so far: {self.stale_reads}")
                 elif phase == "ttl_expiry_wait":
                     print(f"\n⏳ {STAGE_NAME} Phase 4: TTL Expiry Wait")
-                    print(f"   - Approaching cache TTL boundary")
+                    print("   - Approaching cache TTL boundary")
                 elif phase == "consistency_check":
                     print(f"\n✅ {STAGE_NAME} Phase 5: Consistency Verification")
-                    print(f"   - Verifying data consistency after TTL expiry")
+                    print("   - Verifying data consistency after TTL expiry")
 
         return phase
 
@@ -457,7 +456,7 @@ class FastReaderUser(HttpUser):
                 if login_helper.login(user_index):
                     self.access_token = login_helper.access_token
                     self.headers = {"Authorization": f"Bearer {self.access_token}"}
-            except Exception as e:
+            except Exception:
                 pass  # Continue without auth
 
         # Populate target products on first user
@@ -821,8 +820,8 @@ def on_test_start(environment, **kwargs):
     print(f"\n{'='*70}")
     print(f"🗄️ {STAGE_NAME} Cache TTL Race Condition Load Test")
     print(f"{'='*70}")
-    print(f"\nPurpose: Test cache consistency during TTL expiry windows")
-    print(f"\nTest Phases:")
+    print("\nPurpose: Test cache consistency during TTL expiry windows")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_WARM_CACHE}s): Warm Cache - Populate cache")
     print(f"  Phase 2 ({PHASE_PRICE_UPDATE}s): Price Update - Create stale entries")
     print(f"  Phase 3 ({PHASE_TTL_RACE}s): TTL Race - High load during race window")
@@ -851,30 +850,30 @@ def on_test_stop(environment, **kwargs):
     print(f"📊 {STAGE_NAME} Final Report")
     print(f"{'='*70}")
 
-    print(f"\n📈 Cache Metrics:")
+    print("\n📈 Cache Metrics:")
     print(f"   - Cache hits: {summary['cache_hits']}")
     print(f"   - Cache misses: {summary['cache_misses']}")
     print(f"   - Hit rate: {summary['hit_rate']:.1%}")
 
-    print(f"\n💰 Stale Read Analysis:")
+    print("\n💰 Stale Read Analysis:")
     print(f"   - Products updated: {summary['products_updated']}")
     print(f"   - Total reads: {summary['total_reads']}")
     print(f"   - Stale reads: {summary['stale_reads']}")
     print(f"   - Fresh reads: {summary['fresh_reads']}")
     print(f"   - Stale rate: {summary['stale_rate']:.1%}")
 
-    print(f"\n🔄 Duplicate Processing:")
+    print("\n🔄 Duplicate Processing:")
     print(f"   - Duplicates detected: {summary['duplicate_processing']}")
 
-    print(f"\n🐂 Stampede Detection:")
+    print("\n🐂 Stampede Detection:")
     print(f"   - Stampede occurred: {'Yes ⚠️' if stampede_detected else 'No ✓'}")
 
-    print(f"\n✅ Consistency Verification:")
+    print("\n✅ Consistency Verification:")
     print(f"   - Checks performed: {summary['consistency_checks']}")
     print(f"   - Passed: {summary['consistency_passed']}")
     print(f"   - Failed: {summary['consistency_failed']}")
 
-    print(f"\n⏱️ Latency by Phase:")
+    print("\n⏱️ Latency by Phase:")
     for phase, lat in summary.get("latency_by_phase", {}).items():
         print(f"   [{phase}]")
         print(f"     - Count: {lat['count']}")
@@ -884,7 +883,7 @@ def on_test_stop(environment, **kwargs):
 
     # Validation Results
     print(f"\n{'='*70}")
-    print(f"🔍 VALIDATION RESULTS")
+    print("🔍 VALIDATION RESULTS")
     print(f"{'='*70}")
 
     # 1. No duplicate processing
@@ -910,7 +909,7 @@ def on_test_stop(environment, **kwargs):
         latency_ok = max_lat < 5000  # 5s threshold
         print(f"   ✓ Latency during TTL rollover: {'PASS' if latency_ok else 'WARN'} (max: {max_lat:.0f}ms)")
     else:
-        print(f"   ✓ Latency during TTL rollover: N/A")
+        print("   ✓ Latency during TTL rollover: N/A")
 
     print(f"\n{'='*70}\n")
 

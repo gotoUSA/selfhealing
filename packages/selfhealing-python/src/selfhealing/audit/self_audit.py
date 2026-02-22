@@ -161,7 +161,7 @@ class SelfAuditLogger:
             return 0.1  # 기본값
 
     @classmethod
-    def get_instance(cls) -> "SelfAuditLogger":
+    def get_instance(cls) -> SelfAuditLogger:
         """Get singleton instance."""
         if cls._instance is None:
             with cls._lock:

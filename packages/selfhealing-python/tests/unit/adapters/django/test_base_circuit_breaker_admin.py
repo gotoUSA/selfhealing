@@ -6,8 +6,9 @@ Django Admin 기본 클래스의 설정 및 메서드를 테스트합니다.
 """
 
 import os
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 # Django 설정 (테스트 환경에서 필요)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
@@ -19,7 +20,6 @@ django.setup()
 from django.db import models
 
 from selfhealing.adapters.django.admin import BaseCircuitBreakerStateAdmin
-
 
 # =============================================================================
 # 테스트용 Mock 모델 (모듈 레벨에서 한 번만 정의)

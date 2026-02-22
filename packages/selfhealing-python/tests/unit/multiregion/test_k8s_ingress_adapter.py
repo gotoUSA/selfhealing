@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.adapters.traffic_routing.k8s_ingress_adapter import (
     K8sIngressTrafficRoutingAdapter,
 )
@@ -22,7 +20,6 @@ from selfhealing.interfaces.traffic_routing import (
     RoutingChange,
     TrafficRoutingAdapter,
 )
-
 
 # =============================================================================
 # K8sIngressTrafficRoutingAdapter 계약 검증

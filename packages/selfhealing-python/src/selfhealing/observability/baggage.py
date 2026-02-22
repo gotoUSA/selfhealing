@@ -11,7 +11,7 @@ traceparent + baggage 헤더가 함께 outgoing HTTP 요청에 전파된다.
 from __future__ import annotations
 
 import importlib
-from functools import lru_cache
+from functools import cache
 from typing import Any
 
 import structlog
@@ -71,7 +71,7 @@ def setup_baggage_propagation() -> None:
         )
 
 
-@lru_cache(maxsize=None)
+@cache
 def _resolve_import(path: str) -> Any:
     """
     'module.path:attribute_name' 문자열에서 attribute를 동적 import하고 캐싱.

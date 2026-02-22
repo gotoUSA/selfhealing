@@ -56,7 +56,9 @@ class TestBackpressureMiddleware:
 
     def test_normal_request_passes_through(self, mock_settings, mock_controller, mock_degradation):
         """정상 요청이 통과하는지 확인."""
-        from selfhealing.api.django.middleware.backpressure import BackpressureMiddleware
+        from selfhealing.api.django.middleware.backpressure import (
+            BackpressureMiddleware,
+        )
 
         mock_response = MagicMock()
         mock_response.__setitem__ = MagicMock()
@@ -85,7 +87,9 @@ class TestBackpressureMiddleware:
 
     def test_overload_returns_503(self, mock_settings, mock_controller, mock_degradation):
         """과부하 시 503 응답 확인."""
-        from selfhealing.api.django.middleware.backpressure import BackpressureMiddleware
+        from selfhealing.api.django.middleware.backpressure import (
+            BackpressureMiddleware,
+        )
 
         # 과부하 상태
         mock_controller.should_process.return_value = False
@@ -120,7 +124,9 @@ class TestBackpressureMiddleware:
 
     def test_503_includes_retry_after_header(self, mock_settings, mock_controller, mock_degradation):
         """503 응답에 Retry-After 헤더 포함 확인."""
-        from selfhealing.api.django.middleware.backpressure import BackpressureMiddleware
+        from selfhealing.api.django.middleware.backpressure import (
+            BackpressureMiddleware,
+        )
 
         mock_controller.should_process.return_value = False
         mock_controller.get_state.return_value = MagicMock(level=BackpressureLevel.CRITICAL)
@@ -147,7 +153,9 @@ class TestBackpressureMiddleware:
 
     def test_disabled_backpressure_passes_all_requests(self, mock_controller, mock_degradation):
         """Backpressure 비활성화 시 모든 요청 통과 확인."""
-        from selfhealing.api.django.middleware.backpressure import BackpressureMiddleware
+        from selfhealing.api.django.middleware.backpressure import (
+            BackpressureMiddleware,
+        )
 
         disabled_settings = BackpressureSettings(backpressure_enabled=False)
 
@@ -178,7 +186,9 @@ class TestBackpressureMiddleware:
 
     def test_degraded_features_header_added(self, mock_settings, mock_controller, mock_degradation):
         """비활성화된 기능 헤더 추가 확인."""
-        from selfhealing.api.django.middleware.backpressure import BackpressureMiddleware
+        from selfhealing.api.django.middleware.backpressure import (
+            BackpressureMiddleware,
+        )
 
         mock_degradation.get_disabled_features.return_value = [
             "feature1",
@@ -215,7 +225,9 @@ class TestBackpressureMiddleware:
 
     def test_backpressure_level_header_added_on_success(self, mock_settings, mock_controller, mock_degradation):
         """정상 응답에도 Backpressure 레벨 헤더 추가 확인."""
-        from selfhealing.api.django.middleware.backpressure import BackpressureMiddleware
+        from selfhealing.api.django.middleware.backpressure import (
+            BackpressureMiddleware,
+        )
 
         mock_controller.get_state.return_value = MagicMock(level=BackpressureLevel.LOW)
 

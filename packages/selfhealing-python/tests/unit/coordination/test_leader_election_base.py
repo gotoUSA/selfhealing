@@ -6,8 +6,6 @@ LeadershipState, LeaderInfo 등 기본 데이터 클래스 테스트.
 
 from datetime import datetime, timezone
 
-import pytest
-
 from selfhealing.coordination.base import (
     LeaderInfo,
     LeadershipState,

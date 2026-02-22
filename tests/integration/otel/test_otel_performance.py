@@ -9,7 +9,6 @@ import re
 import statistics
 import time
 import uuid
-from typing import List, Tuple
 
 import pytest
 import requests

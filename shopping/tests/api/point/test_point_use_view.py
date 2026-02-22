@@ -18,7 +18,6 @@ PointUseView, PointCancelView API 테스트
 """
 
 from datetime import timedelta
-from decimal import Decimal
 
 from django.urls import reverse
 from django.utils import timezone

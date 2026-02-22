@@ -48,13 +48,9 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
-import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Any
-from collections import defaultdict
+from typing import Dict
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -195,20 +191,20 @@ def _update_phase():
         _chain_stats["phase"] = phase
 
         if phase == "point_a":
-            print(f"\n🔴 Phase 2: Point A Failure (Auth success → Order FAILS)")
-            print(f"   - Injecting order creation failures")
+            print("\n🔴 Phase 2: Point A Failure (Auth success → Order FAILS)")
+            print("   - Injecting order creation failures")
         elif phase == "point_b":
-            print(f"\n🟠 Phase 3: Point B Failure (Order success → Payment FAILS)")
-            print(f"   - Injecting payment failures after order creation")
+            print("\n🟠 Phase 3: Point B Failure (Order success → Payment FAILS)")
+            print("   - Injecting payment failures after order creation")
             print(f"   - Point A failures: {_chain_stats['point_a_failures']}")
             print(f"   - Point A rollbacks: {_chain_stats['point_a_rollback_success']}")
         elif phase == "point_c":
-            print(f"\n🟡 Phase 4: Point C Failure (Payment success → Webhook FAILS)")
-            print(f"   - Simulating webhook delivery failures")
+            print("\n🟡 Phase 4: Point C Failure (Payment success → Webhook FAILS)")
+            print("   - Simulating webhook delivery failures")
             print(f"   - Point B failures: {_chain_stats['point_b_failures']}")
             print(f"   - Point B rollbacks: {_chain_stats['point_b_rollback_success']}")
         elif phase == "verification":
-            print(f"\n✅ Phase 5: Verification")
+            print("\n✅ Phase 5: Verification")
             print(f"   - Point C failures: {_chain_stats['point_c_failures']}")
             _perform_final_verification()
 
@@ -310,7 +306,7 @@ def _record_notification(success: bool):
 
 def _perform_final_verification():
     """Perform final verification of chain failure handling"""
-    print(f"\n📊 Final Verification:")
+    print("\n📊 Final Verification:")
 
     # Point A rollback verification
     if _chain_stats["point_a_failures"] > 0:
@@ -320,7 +316,7 @@ def _perform_final_verification():
         print(f"     (Rate: {rollback_rate:.1%})")
     else:
         _chain_stats["verification"]["point_a_rollback_defined"] = True
-        print(f"   - Point A rollback: ✓ (No failures to test)")
+        print("   - Point A rollback: ✓ (No failures to test)")
 
     # Point B rollback verification
     if _chain_stats["point_b_failures"] > 0:
@@ -330,7 +326,7 @@ def _perform_final_verification():
         print(f"     (Rate: {rollback_rate:.1%})")
     else:
         _chain_stats["verification"]["point_b_rollback_defined"] = True
-        print(f"   - Point B rollback: ✓ (No failures to test)")
+        print("   - Point B rollback: ✓ (No failures to test)")
 
     # Point C recovery verification
     if _chain_stats["point_c_failures"] > 0:
@@ -340,7 +336,7 @@ def _perform_final_verification():
         print(f"     (Rate: {recovery_rate:.1%})")
     else:
         _chain_stats["verification"]["point_c_recovery_defined"] = True
-        print(f"   - Point C recovery: ✓ (No failures to test)")
+        print("   - Point C recovery: ✓ (No failures to test)")
 
     # Orphaned orders check
     orphan_order_count = len(_chain_stats["orders_without_payment"])
@@ -790,14 +786,14 @@ def on_test_start(environment, **kwargs):
     global _chain_stats
 
     print(f"\n{'='*70}")
-    print(f"🔗 Stage 18: Chain Failure Propagation Test")
+    print("🔗 Stage 18: Chain Failure Propagation Test")
     print(f"{'='*70}")
-    print(f"Purpose: Verify failure handling across service chain")
-    print(f"\nFailure Points:")
-    print(f"  Point A: Auth success → Order FAILS")
-    print(f"  Point B: Auth success → Order success → Payment FAILS")
-    print(f"  Point C: Auth success → Order success → Payment success → Webhook FAILS")
-    print(f"\nTest Phases:")
+    print("Purpose: Verify failure handling across service chain")
+    print("\nFailure Points:")
+    print("  Point A: Auth success → Order FAILS")
+    print("  Point B: Auth success → Order success → Payment FAILS")
+    print("  Point C: Auth success → Order success → Payment success → Webhook FAILS")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_1_BASELINE_DURATION}s): Baseline - Normal flow")
     print(f"  Phase 2 ({PHASE_2_POINT_A_FAILURE}s): Point A - Order failure injection")
     print(f"  Phase 3 ({PHASE_3_POINT_B_FAILURE}s): Point B - Payment failure injection")
@@ -817,47 +813,47 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Generate final report"""
     print(f"\n{'='*70}")
-    print(f"📊 Stage 18: Chain Failure Propagation Test Results")
+    print("📊 Stage 18: Chain Failure Propagation Test Results")
     print(f"{'='*70}")
 
-    print(f"\n📈 Flow Metrics:")
+    print("\n📈 Flow Metrics:")
     print(f"   - Total flows started: {_chain_stats['total_flows_started']}")
     print(f"   - Baseline success: {_chain_stats['baseline_success_count']}")
     print(f"   - Baseline failure: {_chain_stats['baseline_failure_count']}")
 
-    print(f"\n🔴 Point A (Order Failure) Metrics:")
+    print("\n🔴 Point A (Order Failure) Metrics:")
     print(f"   - Failures injected: {_chain_stats['point_a_failures']}")
     print(f"   - Rollbacks successful: {_chain_stats['point_a_rollback_success']}")
     print(f"   - Rollbacks failed: {_chain_stats['point_a_rollback_failed']}")
     print(f"   - Stock restored: {_chain_stats['point_a_stock_restored']}")
 
-    print(f"\n🟠 Point B (Payment Failure) Metrics:")
+    print("\n🟠 Point B (Payment Failure) Metrics:")
     print(f"   - Failures injected: {_chain_stats['point_b_failures']}")
     print(f"   - Rollbacks successful: {_chain_stats['point_b_rollback_success']}")
     print(f"   - Rollbacks failed: {_chain_stats['point_b_rollback_failed']}")
     print(f"   - Stock restored: {_chain_stats['point_b_stock_restored']}")
     print(f"   - Orphaned orders: {_chain_stats['point_b_orphaned_orders']}")
 
-    print(f"\n🟡 Point C (Webhook Failure) Metrics:")
+    print("\n🟡 Point C (Webhook Failure) Metrics:")
     print(f"   - Failures injected: {_chain_stats['point_c_failures']}")
     print(f"   - Recovery successful: {_chain_stats['point_c_recovery_success']}")
     print(f"   - Recovery failed: {_chain_stats['point_c_recovery_failed']}")
     print(f"   - Orphaned payments: {_chain_stats['point_c_orphaned_payments']}")
 
-    print(f"\n📦 Order/Payment Consistency:")
+    print("\n📦 Order/Payment Consistency:")
     print(f"   - Orders created: {len(_chain_stats['orders_created'])}")
     print(f"   - Orders with payment: {len(_chain_stats['orders_with_payment'])}")
     print(f"   - Orphaned orders: {len(_chain_stats['orders_without_payment'])}")
     print(f"   - Orphaned payments: {len(_chain_stats['payments_without_order'])}")
 
-    print(f"\n✅ Verification Results:")
+    print("\n✅ Verification Results:")
     for check, result in _chain_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
         print(f"   - {check}: {status}")
 
     # Recovery Latency Report
     recovery = _chain_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
+    print("\n🔄 Recovery Latency Metrics:")
 
     all_latencies = (
         recovery["point_a_rollback_times"] + recovery["point_b_rollback_times"] + recovery["point_c_recovery_times"]
@@ -888,11 +884,11 @@ def on_test_stop(environment, **kwargs):
         # SLA check (all rollbacks should be under 2s)
         recovery["sla_compliant"] = max_latency < 2000
         if recovery["sla_compliant"]:
-            print(f"   - SLA Status: ✓ All rollbacks under 2s threshold")
+            print("   - SLA Status: ✓ All rollbacks under 2s threshold")
         else:
-            print(f"   - SLA Status: ✗ Some rollbacks exceeded 2s")
+            print("   - SLA Status: ✗ Some rollbacks exceeded 2s")
     else:
-        print(f"   - No rollback operations recorded")
+        print("   - No rollback operations recorded")
 
     print(f"\n{'='*70}\n")
 

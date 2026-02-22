@@ -23,8 +23,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.context.cell_context import _current_cell_id
 
 # _reset_cell_context fixture는 conftest.py에서 autouse로 제공 (§5.1: 2+ 파일 공유)
@@ -159,11 +157,10 @@ class TestIsTrustedSourceBehavior:
 
     def test_trusted_cidrs_refreshed_after_ttl_expires(self):
         """TTL 만료 후 trusted_source_cidrs가 Settings에서 재로딩된다."""
-        import time as time_mod
 
         from selfhealing.api.django.cell.middleware import (
-            CellTaggingMiddleware,
             _TRUSTED_CIDRS_CACHE_TTL_SECONDS,
+            CellTaggingMiddleware,
         )
 
         mw = CellTaggingMiddleware(MagicMock())
@@ -462,7 +459,6 @@ class TestRecordTopologyMismatchBehavior:
     def test_counter_singleton_no_duplicate_registration(self):
         """동일 카운터를 연속 호출해도 중복 등록 예외가 발생하지 않는다."""
         import selfhealing.api.django.cell.middleware as mw_module
-
         from selfhealing.api.django.cell.middleware import CellTaggingMiddleware
 
         # 싱글톤 초기화
@@ -487,7 +483,6 @@ class TestRecordTopologyMismatchBehavior:
     def test_counter_labels_match_reason_strings(self):
         """메트릭 라벨이 reason 문자열과 cell_id를 정확히 전달한다."""
         import selfhealing.api.django.cell.middleware as mw_module
-
         from selfhealing.api.django.cell.middleware import CellTaggingMiddleware
 
         original = mw_module._topology_mismatch_counter

@@ -14,13 +14,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from selfhealing.interfaces.resilience_policy import PolicyContext
 from selfhealing.resilience.policies.guards.governance import (
     ThrottleGovernanceGuard,
 )
-
 
 # =============================================================================
 # name 계약 검증

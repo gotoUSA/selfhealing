@@ -12,17 +12,14 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from selfhealing.services.chaos.base import ExperimentType, ExperimentConfig
+from selfhealing.services.chaos.base import ExperimentConfig, ExperimentType
 from selfhealing.services.chaos.experiments import (
-    create_experiment,
+    CascadingFailureExperiment,
+    ConnectionResetExperiment,
     Error4xxExperiment,
     PartialFailureExperiment,
-    ConnectionResetExperiment,
-    CascadingFailureExperiment,
+    create_experiment,
 )
-
 
 # =============================================================================
 # Phase 2-1: Error4xxExperiment 테스트
@@ -538,13 +535,13 @@ class TestPhase3CascadingFailureExperiment:
             ),
         )
         experiment._calculate_expires_at()
-        
+
         # 첫 번째 서비스 후 kill 요청
         def side_effect(*args, **kwargs):
             if mock_cb_service.force_open.call_count == 1:
                 experiment._kill_requested = True
             return MagicMock(success=True)
-        
+
         mock_cb_service.force_open.side_effect = side_effect
 
         result = experiment.inject_chaos()

@@ -11,8 +11,6 @@ Usage:
     python -m fixtures.seeder --users 200 --products 100
 """
 
-import os
-import sys
 import random
 import string
 import argparse

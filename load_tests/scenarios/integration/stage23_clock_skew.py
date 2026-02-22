@@ -32,7 +32,7 @@ import time
 import random
 import hashlib
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -153,23 +153,23 @@ def on_test_stop(environment, **kwargs):
 
     report = get_report()
 
-    print(f"\n[Timestamp Validation]")
+    print("\n[Timestamp Validation]")
     print(f"  - Passed: {report['timestamp_validations']['passed']}")
     print(f"  - Failed: {report['timestamp_validations']['failed']}")
     print(f"  - Skew Detected: {report['timestamp_validations']['skew_detected']}")
     print(f"  - Success Rate: {report['timestamp_success_rate']}%")
 
-    print(f"\n[Idempotency]")
+    print("\n[Idempotency]")
     print(f"  - Duplicate Prevented: {report['idempotency']['duplicate_prevented']}")
     print(f"  - Duplicate Missed: {report['idempotency']['duplicate_missed']}")
     print(f"  - New Requests: {report['idempotency']['new_requests']}")
 
-    print(f"\n[JWT Validation]")
+    print("\n[JWT Validation]")
     print(f"  - Valid: {report['jwt_validation']['valid']}")
     print(f"  - Expired: {report['jwt_validation']['expired']}")
     print(f"  - Clock Skew Adjusted: {report['jwt_validation']['clock_skew_adjusted']}")
 
-    print(f"\n[Clock Skew Scenarios]")
+    print("\n[Clock Skew Scenarios]")
     print(f"  - Within Tolerance (<=30s): {report['clock_skew_scenarios']['within_tolerance']}")
     print(f"  - Exceeds Tolerance (>30s): {report['clock_skew_scenarios']['exceeds_tolerance']}")
     print(f"  - Extreme Drift (>5m): {report['clock_skew_scenarios']['extreme_drift']}")

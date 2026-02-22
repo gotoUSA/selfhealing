@@ -5,10 +5,8 @@ PassCriteria.for_tier() 팩토리 메서드와
 apply_tier_floor() 하한 강제 동작 검증.
 """
 
-import pytest
 
 from selfhealing.services.canary.models import PassCriteria, apply_tier_floor
-
 
 # =============================================================================
 # 계약 검증: PassCriteria.for_tier() 기본값

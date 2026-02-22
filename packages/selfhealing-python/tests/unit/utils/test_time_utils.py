@@ -2,18 +2,17 @@
 Tests for Time Utilities.
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 from selfhealing.utils.time import (
-    utc_now,
-    ensure_aware,
-    to_iso_string,
-    from_iso_string,
-    elapsed_seconds,
-    is_expired,
     add_seconds,
+    elapsed_seconds,
+    ensure_aware,
     format_duration,
+    from_iso_string,
+    is_expired,
+    to_iso_string,
+    utc_now,
 )
 
 

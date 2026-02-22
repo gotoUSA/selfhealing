@@ -30,13 +30,13 @@ import socket
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import structlog
 
 from selfhealing.adapters.ipc.auth import (
-    AuthResult,
     SidecarAuthenticator,
     get_sidecar_authenticator,
 )
@@ -44,7 +44,6 @@ from selfhealing.adapters.ipc.cb_state_cache import IPCStateCache, get_cb_state_
 from selfhealing.adapters.ipc.protocol.json_rpc import (
     JSONRPCErrorCode,
     JSONRPCParseError,
-    JSONRPCRequest,
     JSONRPCResponse,
     SidecarMethods,
     create_error_response,
@@ -318,7 +317,7 @@ class UDSServer:
                 # 응답 전송
                 self._send_message(conn, response)
 
-        except socket.timeout:
+        except TimeoutError:
             pass
         except Exception as e:
             logger.debug(
@@ -346,7 +345,7 @@ class UDSServer:
                     return data.split(b"\n")[0]
                 if len(data) > self.MAX_MESSAGE_SIZE:
                     raise ValueError("Message too large")
-            except socket.timeout:
+            except TimeoutError:
                 if data:
                     return data
                 raise

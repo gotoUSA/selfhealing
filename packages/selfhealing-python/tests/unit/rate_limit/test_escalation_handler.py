@@ -18,10 +18,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from tests.unit.rate_limit.conftest import (
-    DEFAULT_ESCALATION_THRESHOLD,
     make_429_event,
 )
-
 
 # =============================================================================
 # Fixtures

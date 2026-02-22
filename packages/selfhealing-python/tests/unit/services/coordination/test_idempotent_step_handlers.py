@@ -11,30 +11,29 @@ Phase 2.7: Step 재시도 안전성 테스트
 - IdempotentStepHandlerRegistry
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
+import pytest
+
+from selfhealing.services.coordination.enums import RecoveryStatus
 from selfhealing.services.coordination.idempotent_step_handlers import (
-    IdempotencyStatus,
+    EXECUTION_TIMEOUT_MINUTES,
     IdempotencyRecord,
-    IdempotentStepHandler,
+    IdempotencyStatus,
     IdempotentBudgetResetHandler,
-    IdempotentHealthCheckHandler,
     IdempotentCanaryResumeHandler,
     IdempotentGovernanceNormalHandler,
-    IdempotentStepHandlerRegistry,
+    IdempotentHealthCheckHandler,
+    IdempotentStepHandler,
     generate_idempotency_key,
     get_idempotent_step_handler_registry,
     reset_idempotent_step_handler_registry,
-    EXECUTION_TIMEOUT_MINUTES,
 )
 from selfhealing.services.coordination.recovery_state import (
     RecoverySession,
     RecoveryStep,
     RecoveryStepType,
 )
-from selfhealing.services.coordination.enums import RecoveryStatus
-
 
 # =============================================================================
 # Fixtures

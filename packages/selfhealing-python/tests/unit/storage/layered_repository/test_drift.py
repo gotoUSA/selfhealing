@@ -2,11 +2,7 @@
 드리프트 복구 테스트.
 """
 
-import threading
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
-
-import pytest
 
 
 class TestDriftReconciliation:
@@ -219,7 +215,6 @@ class TestDriftReconciliation:
         """복구 통계."""
         from selfhealing.adapters.memory.circuit_breaker import (
             DriftReconciler,
-            DriftReconciliationResult,
         )
 
         reconciler = DriftReconciler()

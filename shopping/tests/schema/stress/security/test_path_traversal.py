@@ -9,7 +9,6 @@ Path Traversal 공격 시도에 대해 API가 적절히 방어하는지 검증�
 """
 
 import io
-import json
 
 import pytest
 from rest_framework import status

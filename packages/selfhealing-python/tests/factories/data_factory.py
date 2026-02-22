@@ -12,15 +12,14 @@ Test Data Factory.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from unittest.mock import Mock
 
 from selfhealing.interfaces.repositories import (
-    CircuitBreakerStateEnum as CircuitState,
-    FailedOperationData,
     CircuitBreakerStateData,
+    FailedOperationData,
 )
 
 # 상수는 constants.py에서 관리

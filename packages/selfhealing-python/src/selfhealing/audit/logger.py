@@ -117,7 +117,7 @@ class AuditLogger:
         self._enable_console = enable_console_log
 
     @classmethod
-    def get_instance(cls) -> "AuditLogger":
+    def get_instance(cls) -> AuditLogger:
         """Get singleton instance."""
         if cls._instance is None:
             cls._instance = cls()
@@ -128,7 +128,7 @@ class AuditLogger:
         cls,
         backend: AuditBackend | None = None,
         **kwargs,
-    ) -> "AuditLogger":
+    ) -> AuditLogger:
         """Configure the singleton instance."""
         cls._instance = cls(backend=backend, **kwargs)
         return cls._instance

@@ -13,10 +13,7 @@ Tests for Root Cause Ranker — DAG 기반 근본 원인 순위 산정.
 
 from __future__ import annotations
 
-import math
-import time
 import uuid
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -47,7 +44,6 @@ from selfhealing.services.correlation_engine.root_cause_ranker import (
     RootCauseCandidate,
     RootCauseRanker,
 )
-
 
 # =============================================================================
 # Fixtures (이 파일 전용 — conftest 분리 불필요)

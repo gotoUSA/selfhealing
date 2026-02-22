@@ -11,7 +11,7 @@ CellTagger 동작 검증 테스트.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

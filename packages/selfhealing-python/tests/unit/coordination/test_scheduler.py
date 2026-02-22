@@ -6,20 +6,16 @@ packages/selfhealing-python/tests/unit/coordination/test_scheduler.py
 
 from __future__ import annotations
 
-import threading
 import time
-from datetime import datetime, timezone
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from selfhealing.coordination.base import LeadershipState
 from selfhealing.coordination.scheduler import (
     LeaderScheduler,
     ScheduledJob,
 )
-from selfhealing.coordination.base import LeadershipState
-
 
 # =============================================================================
 # Fixtures

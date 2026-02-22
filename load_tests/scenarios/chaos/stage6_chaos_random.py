@@ -185,7 +185,7 @@ class ChaosUser(HttpUser):
             # Readiness
             readiness = self.healing_client.health.readiness()
             
-        except Exception as e:
+        except Exception:
             _selfhealing_stats["health_checks"]["failure"] += 1
 
     @task(2)

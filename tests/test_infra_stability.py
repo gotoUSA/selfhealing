@@ -26,7 +26,6 @@ Note:
 """
 
 import pytest
-import time
 import uuid
 from datetime import datetime, timezone
 
@@ -79,7 +78,6 @@ class TestRedisKeyGuardIntegration:
         """캐시 키는 보호되지 않음."""
         from selfhealing.services.coordination.redis_key_guard import (
             get_redis_key_guard,
-            RedisKeyPriority,
         )
         
         guard = get_redis_key_guard()
@@ -174,7 +172,6 @@ class TestRecoveryShutdownHookIntegration:
     def test_shutdown_hook_exists(self):
         """Shutdown Hook 존재 여부 확인."""
         from selfhealing.services.coordination.recovery_shutdown import (
-            RecoveryAwareShutdownHook,
             create_recovery_aware_shutdown_hook,
         )
         

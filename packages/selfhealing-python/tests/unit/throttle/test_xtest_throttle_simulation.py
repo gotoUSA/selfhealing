@@ -5,7 +5,6 @@ Throttle X-Test 시뮬레이션 API 기능 테스트.
 """
 
 import os
-import sys
 
 # Django settings setup must happen before any Django imports
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
@@ -14,7 +13,6 @@ import django
 
 django.setup()
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 

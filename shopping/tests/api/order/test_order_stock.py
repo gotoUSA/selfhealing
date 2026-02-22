@@ -3,7 +3,7 @@ from django.urls import reverse
 import pytest
 from rest_framework import status
 
-from shopping.models.order import Order, OrderItem
+from shopping.models.order import OrderItem
 from shopping.models.product import Product
 
 

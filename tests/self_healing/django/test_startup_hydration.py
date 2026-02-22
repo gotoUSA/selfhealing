@@ -13,8 +13,7 @@ django.setup()
 
 import pytest
 import threading
-import time
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 
 from selfhealing.adapters.django.apps import SelfHealingConfig
 
@@ -69,7 +68,6 @@ class TestStartupHydration:
         """Hydration skipped when SELFHEALING_SYNC_ON_STARTUP is False."""
         mock_settings.SELFHEALING_SYNC_ON_STARTUP = False
         
-        from selfhealing.adapters.django import apps
         
         # getattr should return False
         result = getattr(mock_settings, "SELFHEALING_SYNC_ON_STARTUP", True)
@@ -164,7 +162,6 @@ class TestHydrateGauges:
                 mock_get.return_value = mock_reconciler
                 
                 # 직접 함수 호출 (인스턴스 없이)
-                from selfhealing.adapters.django import apps
                 
                 # _hydrate_gauges 로직 시뮬레이션
                 mock_conn.ensure_connection()

@@ -16,7 +16,6 @@ from selfhealing.services.security.hooks import register_session_invalidation_ho
 from selfhealing.services.security.models import SecurityConfig
 from selfhealing.services.security.service import SecurityViolationService
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================

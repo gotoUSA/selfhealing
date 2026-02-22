@@ -13,9 +13,9 @@ services/metric_sync_service.py의 메트릭 동기화, Drift 감지, 상태 분
 - 싱글톤 함수 (get_metric_sync_service, reset_metric_sync_service)
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-from datetime import datetime, timezone
 
 from selfhealing.services.metric_sync_service import (
     DriftThresholds,
@@ -23,7 +23,6 @@ from selfhealing.services.metric_sync_service import (
     get_metric_sync_service,
     reset_metric_sync_service,
 )
-
 
 # =============================================================================
 # Fixtures

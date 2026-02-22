@@ -14,12 +14,10 @@ Test Cases:
 Migrated from: shopping/tests/integration/chaos/test_resource_exhaustion.py
 """
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 
 import pytest
-
 
 # =============================================================================
 # Resource Exhaustion Test Utilities

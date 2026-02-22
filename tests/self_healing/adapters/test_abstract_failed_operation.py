@@ -6,8 +6,7 @@ Uses mocking to avoid actual Django database dependencies.
 """
 
 import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 
 class TestAbstractFailedOperationImport:
@@ -82,7 +81,6 @@ class TestAbstractFailedOperationFields:
     
     def test_required_fields_exist_in_source(self):
         """Verify required fields are defined in the model source."""
-        import inspect
         from pathlib import Path
         
         model_path = Path(__file__).parent.parent.parent.parent / (

@@ -16,8 +16,7 @@ from __future__ import annotations
 import hashlib
 import time
 from types import SimpleNamespace
-from typing import Any
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -33,7 +32,6 @@ from selfhealing.services.correlation_engine.event_graph import (
 from selfhealing.services.correlation_engine.root_cause_ranker import (
     RootCauseAnalysis,
     RootCauseCandidate,
-    StrategyMetadata,
 )
 from selfhealing.services.correlation_engine.service import (
     CorrelationEngineService,
@@ -43,7 +41,6 @@ from selfhealing.settings.correlation_engine import (
     CorrelationEngineSettings,
     reset_correlation_engine_settings,
 )
-
 
 # =============================================================================
 # Stub 전략 (테스트 전용)

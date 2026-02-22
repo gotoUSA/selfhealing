@@ -16,10 +16,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.services.throttle.limit_adjuster import ThrottleLimitAdjuster
-
 
 # =============================================================================
 # 초기화 및 수명주기 동작 검증

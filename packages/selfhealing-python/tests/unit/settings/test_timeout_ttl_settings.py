@@ -23,7 +23,6 @@ HTTP 타임아웃, Redis/Cache TTL, Cleanup 보관 기간 등
 
 import pytest
 
-
 # =============================================================================
 # Test: HttpClientSettings
 # =============================================================================
@@ -353,8 +352,8 @@ class TestHttpClientUsesSettings:
 
     def test_http_client_uses_default_timeout_from_settings(self):
         """SelfHealingHttpClient가 Settings에서 기본 타임아웃을 가져오는지 확인."""
-        from selfhealing.settings.http_client import reset_http_client_settings
         from selfhealing.services.http_client import SelfHealingHttpClient
+        from selfhealing.settings.http_client import reset_http_client_settings
 
         reset_http_client_settings()
 
@@ -364,8 +363,8 @@ class TestHttpClientUsesSettings:
 
     def test_http_client_uses_custom_timeout_from_settings(self, monkeypatch):
         """SelfHealingHttpClient가 환경변수로 설정된 타임아웃을 사용하는지 확인."""
-        from selfhealing.settings.http_client import reset_http_client_settings
         from selfhealing.services.http_client import SelfHealingHttpClient
+        from selfhealing.settings.http_client import reset_http_client_settings
 
         monkeypatch.setenv("SELFHEALING_HTTP_CLIENT_DEFAULT_TIMEOUT", "45.0")
         reset_http_client_settings()
@@ -376,8 +375,8 @@ class TestHttpClientUsesSettings:
 
     def test_http_client_explicit_timeout_overrides_settings(self):
         """명시적 timeout 인자가 Settings보다 우선하는지 확인."""
-        from selfhealing.settings.http_client import reset_http_client_settings
         from selfhealing.services.http_client import SelfHealingHttpClient
+        from selfhealing.settings.http_client import reset_http_client_settings
 
         reset_http_client_settings()
 

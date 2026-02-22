@@ -66,15 +66,12 @@ import sys
 import time
 import random
 import threading
-import json
 import uuid
-import hashlib
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Tuple, Callable
+from typing import Dict, List, Optional, Any, Tuple
 from collections import defaultdict, OrderedDict
 from dataclasses import dataclass, field
 from enum import Enum
-from contextlib import contextmanager
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -690,15 +687,15 @@ def _update_phase():
         simulator = get_simulator()
         
         if phase == "failure_inject":
-            print(f"\n🔴 Phase 2: Failure Injection Started")
+            print("\n🔴 Phase 2: Failure Injection Started")
             simulator.set_broker_available(False)  # 브로커 비가용
             
         elif phase == "recovery":
-            print(f"\n🟢 Phase 3: Recovery Started")
+            print("\n🟢 Phase 3: Recovery Started")
             simulator.set_broker_available(True)   # 브로커 복구
             
         elif phase == "verify":
-            print(f"\n📊 Phase 4: Verification Started")
+            print("\n📊 Phase 4: Verification Started")
             _run_verification()
 
 
@@ -906,7 +903,7 @@ def run_standalone_test():
     # ==========================================================================
     # Test Case 1: DB Commit + Event 생성 (정상)
     # ==========================================================================
-    print(f"\n📌 TC-1: DB Commit + Outbox Event Creation")
+    print("\n📌 TC-1: DB Commit + Outbox Event Creation")
     
     for i in range(20):
         order_id = f"order_{i+1:03d}"
@@ -922,12 +919,12 @@ def run_standalone_test():
     summary = simulator.get_summary()
     assert summary["metrics"]["transactions_committed"] == 20
     assert summary["metrics"]["events_created"] == 20
-    print(f"   ✅ 20 transactions committed, 20 events created")
+    print("   ✅ 20 transactions committed, 20 events created")
     
     # ==========================================================================
     # Test Case 2: Outbox Poller (정상 발행)
     # ==========================================================================
-    print(f"\n📌 TC-2: Outbox Poller - Normal Publishing")
+    print("\n📌 TC-2: Outbox Poller - Normal Publishing")
     
     # 여러 번 폴링 (일부는 실패할 수 있음)
     for _ in range(5):
@@ -937,12 +934,12 @@ def run_standalone_test():
     published = summary["metrics"]["events_published"]
     in_dlq = summary["metrics"]["events_in_dlq"]
     print(f"   📊 Published: {published}, In DLQ: {in_dlq}")
-    print(f"   ✅ Poller executed, events processed")
+    print("   ✅ Poller executed, events processed")
     
     # ==========================================================================
     # Test Case 3: Event Delivery + Idempotency
     # ==========================================================================
-    print(f"\n📌 TC-3: Event Delivery with Idempotency")
+    print("\n📌 TC-3: Event Delivery with Idempotency")
     
     # 발행된 이벤트 전달
     delivered_count = 0
@@ -962,12 +959,12 @@ def run_standalone_test():
     
     summary = simulator.get_summary()
     print(f"   📊 Delivered: {delivered_count}, Duplicate blocked: {dup_attempts}")
-    print(f"   ✅ Idempotency working correctly")
+    print("   ✅ Idempotency working correctly")
     
     # ==========================================================================
     # Test Case 4: Broker Failure + DLQ
     # ==========================================================================
-    print(f"\n📌 TC-4: Broker Failure → DLQ Capture")
+    print("\n📌 TC-4: Broker Failure → DLQ Capture")
     
     # 브로커 비가용 설정
     simulator.set_broker_available(False)
@@ -989,12 +986,12 @@ def run_standalone_test():
     
     summary = simulator.get_summary()
     print(f"   📊 Events in DLQ: {summary['metrics']['events_in_dlq']}")
-    print(f"   ✅ Failed events moved to DLQ")
+    print("   ✅ Failed events moved to DLQ")
     
     # ==========================================================================
     # Test Case 5: DLQ Recovery
     # ==========================================================================
-    print(f"\n📌 TC-5: DLQ Poller Recovery")
+    print("\n📌 TC-5: DLQ Poller Recovery")
     
     # 브로커 복구
     simulator.set_broker_available(True)
@@ -1015,12 +1012,12 @@ def run_standalone_test():
                 replayed_delivered += 1
     
     print(f"   📊 Replayed events delivered: {replayed_delivered}")
-    print(f"   ✅ DLQ events replayed and delivered")
+    print("   ✅ DLQ events replayed and delivered")
     
     # ==========================================================================
     # Test Case 6: Order Preservation
     # ==========================================================================
-    print(f"\n📌 TC-6: Event Order Verification")
+    print("\n📌 TC-6: Event Order Verification")
     
     order_ok, order_details = simulator.verify_order_preservation()
     print(f"   📊 Order violations: {order_details['order_violations']}")
@@ -1030,18 +1027,18 @@ def run_standalone_test():
     # Final Verification
     # ==========================================================================
     print(f"\n{'='*60}")
-    print(f"📋 Final Verification")
+    print("📋 Final Verification")
     print(f"{'='*60}")
     
     # Event Loss
     no_loss, loss_details = simulator.verify_no_event_loss()
-    print(f"\n🔍 Event Loss Check:")
+    print("\n🔍 Event Loss Check:")
     print(f"   Event Loss: {loss_details['event_loss']}")
     print(f"   Status: {'✅ PASSED' if no_loss else '❌ FAILED'}")
     
     # Idempotency
     idemp_ok, idemp_details = simulator.verify_idempotency()
-    print(f"\n🔍 Idempotency Check:")
+    print("\n🔍 Idempotency Check:")
     print(f"   Total Deliveries: {idemp_details['total_deliveries']}")
     print(f"   Unique Processed: {idemp_details['unique_processed']}")
     print(f"   Duplicates Blocked: {idemp_details['duplicate_deliveries']}")
@@ -1049,13 +1046,13 @@ def run_standalone_test():
     
     # Order
     order_ok, order_details = simulator.verify_order_preservation()
-    print(f"\n🔍 Order Preservation Check:")
+    print("\n🔍 Order Preservation Check:")
     print(f"   Violations: {order_details['order_violations']}")
     print(f"   Status: {'✅ PASSED' if order_ok else '❌ FAILED'}")
     
     # Summary
     summary = simulator.get_summary()
-    print(f"\n📊 Final Metrics:")
+    print("\n📊 Final Metrics:")
     print(f"   Transactions Committed: {summary['metrics']['transactions_committed']}")
     print(f"   Events Created: {summary['metrics']['events_created']}")
     print(f"   Events Published: {summary['metrics']['events_published']}")
@@ -1066,7 +1063,7 @@ def run_standalone_test():
     
     # Invariants Check
     print(f"\n{'='*60}")
-    print(f"📋 INVARIANTS CHECK")
+    print("📋 INVARIANTS CHECK")
     print(f"{'='*60}")
     
     invariants = {
@@ -1083,9 +1080,9 @@ def run_standalone_test():
     
     print(f"\n{'='*60}")
     if all_passed:
-        print(f"🎉 ALL INVARIANTS PASSED - Outbox Pattern Verified!")
+        print("🎉 ALL INVARIANTS PASSED - Outbox Pattern Verified!")
     else:
-        print(f"⚠️ SOME INVARIANTS FAILED - Review Required")
+        print("⚠️ SOME INVARIANTS FAILED - Review Required")
     print(f"{'='*60}\n")
     
     return all_passed
@@ -1134,11 +1131,11 @@ def run_http_integration_test(base_url: str = "http://localhost:8000"):
     # ==========================================================================
     # TC-HTTP-1: Health Check
     # ==========================================================================
-    print(f"\n📌 TC-HTTP-1: Server Health Check")
+    print("\n📌 TC-HTTP-1: Server Health Check")
     try:
         resp = session.get(f"{base_url}/api/health/", timeout=10)
         if resp.status_code == 200:
-            print(f"   ✅ Server is healthy")
+            print("   ✅ Server is healthy")
             results["tests_passed"] += 1
         else:
             print(f"   ❌ Server returned {resp.status_code}")
@@ -1151,13 +1148,13 @@ def run_http_integration_test(base_url: str = "http://localhost:8000"):
     # ==========================================================================
     # TC-HTTP-2: DLQ Status Check
     # ==========================================================================
-    print(f"\n📌 TC-HTTP-2: DLQ Status Check")
+    print("\n📌 TC-HTTP-2: DLQ Status Check")
     try:
         resp = session.get(f"{base_url}/api/self-healing/dlq/status/", timeout=10)
         if resp.status_code == 200:
             data = resp.json()
             print(f"   📊 DLQ Pending: {data.get('pending_count', 'N/A')}")
-            print(f"   ✅ DLQ endpoint accessible")
+            print("   ✅ DLQ endpoint accessible")
             results["tests_passed"] += 1
         else:
             print(f"   ⚠️ DLQ endpoint returned {resp.status_code}")
@@ -1170,7 +1167,7 @@ def run_http_integration_test(base_url: str = "http://localhost:8000"):
     # ==========================================================================
     # TC-HTTP-3: Create Order (Trigger Event)
     # ==========================================================================
-    print(f"\n📌 TC-HTTP-3: Create Order (Event Trigger)")
+    print("\n📌 TC-HTTP-3: Create Order (Event Trigger)")
     try:
         # Login first
         login_resp = session.post(f"{base_url}/api/auth/login/", json={
@@ -1193,7 +1190,7 @@ def run_http_integration_test(base_url: str = "http://localhost:8000"):
             if order_resp.status_code in (200, 201):
                 order_data = order_resp.json()
                 print(f"   📊 Order created: {order_data.get('id', 'N/A')}")
-                print(f"   ✅ Order creation successful")
+                print("   ✅ Order creation successful")
                 results["tests_passed"] += 1
                 results["details"].append({"order_id": order_data.get("id")})
             else:
@@ -1210,15 +1207,15 @@ def run_http_integration_test(base_url: str = "http://localhost:8000"):
     # ==========================================================================
     # TC-HTTP-4: Check Event Processing
     # ==========================================================================
-    print(f"\n📌 TC-HTTP-4: Event Processing Verification")
+    print("\n📌 TC-HTTP-4: Event Processing Verification")
     time.sleep(2)  # Wait for async processing
     
     try:
         resp = session.get(f"{base_url}/api/self-healing/metrics/", timeout=10)
         if resp.status_code == 200:
             data = resp.json()
-            print(f"   📊 Metrics retrieved")
-            print(f"   ✅ Event processing observable")
+            print("   📊 Metrics retrieved")
+            print("   ✅ Event processing observable")
             results["tests_passed"] += 1
         else:
             print(f"   ⚠️ Metrics endpoint returned {resp.status_code}")
@@ -1230,7 +1227,7 @@ def run_http_integration_test(base_url: str = "http://localhost:8000"):
     # Summary
     # ==========================================================================
     print(f"\n{'='*60}")
-    print(f"📋 HTTP Integration Test Summary")
+    print("📋 HTTP Integration Test Summary")
     print(f"{'='*60}")
     print(f"   Tests Run: {results['tests_run']}")
     print(f"   Passed: {results['tests_passed']}")
@@ -1240,9 +1237,9 @@ def run_http_integration_test(base_url: str = "http://localhost:8000"):
     print(f"   Success Rate: {success_rate:.1f}%")
     
     if success_rate >= 75:
-        print(f"\n   🎉 HTTP Integration Test PASSED")
+        print("\n   🎉 HTTP Integration Test PASSED")
     else:
-        print(f"\n   ⚠️ HTTP Integration Test needs review")
+        print("\n   ⚠️ HTTP Integration Test needs review")
     
     print(f"{'='*60}\n")
     

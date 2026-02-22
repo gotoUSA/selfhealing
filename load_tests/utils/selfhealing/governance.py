@@ -4,7 +4,7 @@ Governance & Audit API Client.
 변경 관리, 거버넌스 정책, 감사 로그 관련 API.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .base import BaseClient
 

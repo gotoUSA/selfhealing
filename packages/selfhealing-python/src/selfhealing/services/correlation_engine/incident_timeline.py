@@ -27,13 +27,11 @@ from typing import Any
 import structlog
 
 from selfhealing.services.correlation_engine.event_graph import (
-    CausalEdge,
     EventDAG,
     EventNode,
 )
 from selfhealing.services.correlation_engine.root_cause_ranker import (
     RootCauseAnalysis,
-    RootCauseCandidate,
 )
 
 logger = structlog.get_logger()

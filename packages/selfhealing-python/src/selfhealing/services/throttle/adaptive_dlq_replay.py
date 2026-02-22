@@ -22,7 +22,6 @@ import structlog
 
 if TYPE_CHECKING:
     from selfhealing.services.dlq import DLQService
-    from selfhealing.services.throttle.config import ThrottleConfig
 
 logger = structlog.get_logger()
 

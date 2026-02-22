@@ -7,8 +7,7 @@ Tests the role-based access control for Self-Healing API:
 - IsSelfHealingAdmin: Full access including CB control
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
 # Import permission classes
 from selfhealing.api.django.permissions import (

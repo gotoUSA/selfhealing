@@ -33,13 +33,11 @@ import hashlib
 import json
 import logging
 import threading
-import time
 import uuid
-from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone as tz
+from datetime import datetime, timezone as tz
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Tuple, Set
 
 import pytest
 

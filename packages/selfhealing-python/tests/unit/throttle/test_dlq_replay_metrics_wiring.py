@@ -18,9 +18,7 @@ DLQ Replay Prometheus 메트릭 기록(wiring) 단위 테스트.
 9. Fallback 채널별(LMDB/JSONL/stderr) fallback_total 메트릭 증가
 """
 
-from unittest.mock import MagicMock, patch, PropertyMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from selfhealing.services.throttle.config import ThrottleConfig
 
@@ -216,9 +214,10 @@ class TestTtlExpiredMetricWiring:
     def test_ttl_expired_increments_metric(self, mock_metric):
         """TTL 만료 엔트리 처리 시 ttl_expired_total 메트릭이 증가한다."""
         from datetime import datetime, timedelta, timezone
+
         from selfhealing.interfaces.repositories import FailedOperationData
-        from selfhealing.services.dlq.replay_operations import ReplayOperationsMixin
         from selfhealing.services.dlq.query_operations import QueryOperationsMixin
+        from selfhealing.services.dlq.replay_operations import ReplayOperationsMixin
 
         class TestDLQ(ReplayOperationsMixin, QueryOperationsMixin):
             pass

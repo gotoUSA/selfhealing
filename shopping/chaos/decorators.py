@@ -8,7 +8,7 @@ chaos at specific breakpoints in the shopping system.
 import time
 import functools
 import logging
-from typing import Callable, Optional, Any
+from typing import Callable
 
 from .config import chaos_config
 from .breakpoints import (

@@ -6,8 +6,7 @@ JSON, Markdown, HTML 형식의 테스트 결과 보고서를 생성합니다.
 import json
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Optional, List
-import statistics
+from typing import Dict, Any, Optional
 
 
 class ReportGenerator:

@@ -12,14 +12,15 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#8.4
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
+import pytest
+
 from selfhealing.services.coordination.pending_recovery_approval import (
-    RecoveryApprovalStatus,
-    RecoveryApprovalRequest,
     PendingRecoveryApprovalManager,
+    RecoveryApprovalRequest,
+    RecoveryApprovalStatus,
     get_pending_recovery_approval_manager,
     reset_pending_recovery_approval_manager,
 )
@@ -34,7 +35,7 @@ class TestRecoveryApprovalRequest:
             session_id="recovery-123",
             namespace="global",
         )
-        
+
         assert request.request_id.startswith("approval-")
         assert request.session_id == "recovery-123"
         assert request.namespace == "global"
@@ -46,7 +47,7 @@ class TestRecoveryApprovalRequest:
         """요청 ID 자동 생성."""
         request1 = RecoveryApprovalRequest(session_id="s1", namespace="global")
         request2 = RecoveryApprovalRequest(session_id="s2", namespace="global")
-        
+
         assert request1.request_id != request2.request_id
 
     def test_expires_at_calculated(self):
@@ -56,7 +57,7 @@ class TestRecoveryApprovalRequest:
             namespace="global",
             timeout_minutes=30,
         )
-        
+
         expected_expiry = request.requested_at + timedelta(minutes=30)
         assert abs((request.expires_at - expected_expiry).total_seconds()) < 1
 
@@ -68,7 +69,7 @@ class TestRecoveryApprovalRequest:
             timeout_minutes=0,  # 즉시 만료
         )
         request.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
-        
+
         assert request.is_expired() is True
 
     def test_is_not_expired(self):
@@ -78,15 +79,15 @@ class TestRecoveryApprovalRequest:
             namespace="global",
             timeout_minutes=60,
         )
-        
+
         assert request.is_expired() is False
 
     def test_is_pending(self):
         """대기 중 확인."""
         request = RecoveryApprovalRequest(session_id="s1", namespace="global")
-        
+
         assert request.is_pending() is True
-        
+
         request.status = RecoveryApprovalStatus.APPROVED
         assert request.is_pending() is False
 
@@ -94,9 +95,9 @@ class TestRecoveryApprovalRequest:
         """대기 시간 계산."""
         request = RecoveryApprovalRequest(session_id="s1", namespace="global")
         request.requested_at = datetime.now(timezone.utc) - timedelta(minutes=15)
-        
+
         waiting = request.get_waiting_time_minutes()
-        
+
         assert 14.9 <= waiting <= 15.1
 
     def test_to_dict(self):
@@ -106,9 +107,9 @@ class TestRecoveryApprovalRequest:
             namespace="seoul",
             trigger_level="LEVEL_3",
         )
-        
+
         data = request.to_dict()
-        
+
         assert data["session_id"] == "recovery-123"
         assert data["namespace"] == "seoul"
         assert data["trigger_level"] == "LEVEL_3"
@@ -125,9 +126,9 @@ class TestRecoveryApprovalRequest:
             "status": "approved",
             "approved_by": "admin",
         }
-        
+
         request = RecoveryApprovalRequest.from_dict(data)
-        
+
         assert request.request_id == "approval-abc"
         assert request.status == RecoveryApprovalStatus.APPROVED
         assert request.approved_by == "admin"
@@ -148,7 +149,7 @@ class TestPendingRecoveryApprovalManagerCreate:
             namespace="seoul",
             trigger_level="LEVEL_3",
         )
-        
+
         assert request.session_id == "recovery-123"
         assert request.namespace == "seoul"
         assert request.trigger_level == "LEVEL_3"
@@ -162,7 +163,7 @@ class TestPendingRecoveryApprovalManagerCreate:
             trigger_level="LEVEL_3",
             metadata={"initiated_by": "system"},
         )
-        
+
         assert request.metadata["initiated_by"] == "system"
 
     def test_create_duplicate_raises(self, manager):
@@ -172,14 +173,14 @@ class TestPendingRecoveryApprovalManagerCreate:
             namespace="seoul",
             trigger_level="LEVEL_3",
         )
-        
+
         with pytest.raises(ValueError) as exc_info:
             manager.create_request(
                 session_id="recovery-123",
                 namespace="seoul",
                 trigger_level="LEVEL_3",
             )
-        
+
         assert "already exists" in str(exc_info.value)
 
     def test_create_after_approved_allowed(self, manager):
@@ -189,17 +190,17 @@ class TestPendingRecoveryApprovalManagerCreate:
             namespace="seoul",
             trigger_level="LEVEL_3",
         )
-        
+
         # 승인 처리
         manager.approve(request.request_id, "admin")
-        
+
         # 재생성 가능
         new_request = manager.create_request(
             session_id="recovery-123",
             namespace="seoul",
             trigger_level="LEVEL_3",
         )
-        
+
         assert new_request.request_id != request.request_id
 
 
@@ -218,13 +219,13 @@ class TestPendingRecoveryApprovalManagerApprove:
             namespace="seoul",
             trigger_level="LEVEL_3",
         )
-        
+
         result = manager.approve(
             request_id=request.request_id,
             approved_by="admin@example.com",
             reason="Manual review completed",
         )
-        
+
         assert result.status == RecoveryApprovalStatus.APPROVED
         assert result.approved_by == "admin@example.com"
         assert result.approval_reason == "Manual review completed"
@@ -236,7 +237,7 @@ class TestPendingRecoveryApprovalManagerApprove:
             request_id="nonexistent",
             approved_by="admin",
         )
-        
+
         assert result is None
 
     def test_approve_already_approved(self, manager):
@@ -246,10 +247,10 @@ class TestPendingRecoveryApprovalManagerApprove:
             namespace="seoul",
             trigger_level="LEVEL_3",
         )
-        
+
         manager.approve(request.request_id, "admin1")
         result = manager.approve(request.request_id, "admin2")
-        
+
         # 이미 승인됨, 첫 승인자 유지
         assert result.approved_by == "admin1"
 
@@ -260,13 +261,13 @@ class TestPendingRecoveryApprovalManagerApprove:
             namespace="seoul",
             trigger_level="LEVEL_3",
         )
-        
+
         result = manager.reject(
             request_id=request.request_id,
             rejected_by="admin@example.com",
             reason="Stability not confirmed",
         )
-        
+
         assert result.status == RecoveryApprovalStatus.REJECTED
         assert result.approved_by == "admin@example.com"
 
@@ -283,18 +284,18 @@ class TestPendingRecoveryApprovalManagerList:
         """대기 중인 요청 목록."""
         manager.create_request("s1", "seoul", "LEVEL_3")
         manager.create_request("s2", "tokyo", "LEVEL_2")
-        
+
         pending = manager.list_pending_requests()
-        
+
         assert len(pending) == 2
 
     def test_list_pending_by_namespace(self, manager):
         """네임스페이스별 대기 목록."""
         manager.create_request("s1", "seoul", "LEVEL_3")
         manager.create_request("s2", "tokyo", "LEVEL_2")
-        
+
         seoul_pending = manager.list_pending_requests(namespace="seoul")
-        
+
         assert len(seoul_pending) == 1
         assert seoul_pending[0].namespace == "seoul"
 
@@ -302,31 +303,31 @@ class TestPendingRecoveryApprovalManagerList:
         """승인된 요청 제외."""
         r1 = manager.create_request("s1", "seoul", "LEVEL_3")
         manager.create_request("s2", "tokyo", "LEVEL_2")
-        
+
         manager.approve(r1.request_id, "admin")
-        
+
         pending = manager.list_pending_requests()
-        
+
         assert len(pending) == 1
         assert pending[0].namespace == "tokyo"
 
     def test_list_stale_requests(self, manager):
         """방치된 요청 목록."""
         request = manager.create_request("s1", "seoul", "LEVEL_3")
-        
+
         # 시간 조작
         request.requested_at = datetime.now(timezone.utc) - timedelta(minutes=45)
-        
+
         stale = manager.list_stale_requests(stale_threshold_minutes=30)
-        
+
         assert len(stale) == 1
 
     def test_list_stale_excludes_recent(self, manager):
         """최근 요청은 방치 아님."""
         manager.create_request("s1", "seoul", "LEVEL_3")
-        
+
         stale = manager.list_stale_requests(stale_threshold_minutes=30)
-        
+
         assert len(stale) == 0
 
 
@@ -340,14 +341,14 @@ class TestPendingRecoveryApprovalManagerReminders:
             notification_callback=callback,
             reminder_intervals_minutes=[5, 10],
         )
-        
+
         request = manager.create_request("s1", "seoul", "LEVEL_3")
-        
+
         # 시간 조작 (6분 경과)
         request.requested_at = datetime.now(timezone.utc) - timedelta(minutes=6)
-        
+
         reminded = manager.check_and_send_reminders()
-        
+
         assert len(reminded) == 1
         assert reminded[0].reminder_count == 1
         assert callback.call_count >= 2  # created + reminder
@@ -355,17 +356,17 @@ class TestPendingRecoveryApprovalManagerReminders:
     def test_expire_old_requests(self):
         """만료 처리."""
         manager = PendingRecoveryApprovalManager()
-        
+
         request = manager.create_request(
             "s1", "seoul", "LEVEL_3",
             timeout_minutes=30,
         )
-        
+
         # 만료 시간 조작
         request.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
-        
+
         expired = manager.expire_old_requests()
-        
+
         assert len(expired) == 1
         assert expired[0].status == RecoveryApprovalStatus.EXPIRED
 
@@ -382,21 +383,21 @@ class TestPendingRecoveryApprovalManagerCleanup:
         """오래된 요청 정리."""
         request = manager.create_request("s1", "seoul", "LEVEL_3")
         manager.approve(request.request_id, "admin")
-        
+
         # 승인 시간 조작 (25시간 전)
         request.approved_at = datetime.now(timezone.utc) - timedelta(hours=25)
-        
+
         cleaned = manager.cleanup_old_requests(max_age_hours=24)
-        
+
         assert cleaned == 1
 
     def test_cleanup_keeps_pending(self, manager):
         """대기 중인 요청은 유지."""
         request = manager.create_request("s1", "seoul", "LEVEL_3")
         request.requested_at = datetime.now(timezone.utc) - timedelta(hours=48)
-        
+
         cleaned = manager.cleanup_old_requests(max_age_hours=24)
-        
+
         assert cleaned == 0  # 대기 중이므로 유지
 
 
@@ -413,9 +414,9 @@ class TestPendingRecoveryApprovalManagerStats:
         r1 = manager.create_request("s1", "seoul", "LEVEL_3")
         r2 = manager.create_request("s2", "tokyo", "LEVEL_2")
         manager.approve(r1.request_id, "admin")
-        
+
         stats = manager.get_stats()
-        
+
         assert stats["total_requests"] == 2
         assert stats["pending_count"] == 1
         assert stats["approved_count"] == 1
@@ -434,16 +435,16 @@ class TestPendingRecoveryApprovalManagerSessionLookup:
     def test_get_request_by_session(self, manager):
         """세션 ID로 요청 조회."""
         manager.create_request("recovery-123", "seoul", "LEVEL_3")
-        
+
         request = manager.get_request_by_session("recovery-123")
-        
+
         assert request is not None
         assert request.session_id == "recovery-123"
 
     def test_get_request_by_session_not_found(self, manager):
         """없는 세션 조회."""
         request = manager.get_request_by_session("nonexistent")
-        
+
         assert request is None
 
 
@@ -453,22 +454,22 @@ class TestPendingRecoveryApprovalManagerSingleton:
     def test_singleton(self):
         """싱글톤 동작 확인."""
         reset_pending_recovery_approval_manager()
-        
+
         manager1 = get_pending_recovery_approval_manager()
         manager2 = get_pending_recovery_approval_manager()
-        
+
         assert manager1 is manager2
-        
+
         reset_pending_recovery_approval_manager()
 
     def test_reset_singleton(self):
         """싱글톤 리셋."""
         reset_pending_recovery_approval_manager()
-        
+
         manager1 = get_pending_recovery_approval_manager()
         reset_pending_recovery_approval_manager()
         manager2 = get_pending_recovery_approval_manager()
-        
+
         assert manager1 is not manager2
-        
+
         reset_pending_recovery_approval_manager()

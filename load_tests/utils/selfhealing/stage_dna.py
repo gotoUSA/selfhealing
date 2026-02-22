@@ -564,7 +564,7 @@ def validate_all_stages(
         failed = total - passed
         
         print("=" * 60)
-        print(f"Stage DNA Validation Summary")
+        print("Stage DNA Validation Summary")
         print(f"  Total: {total}")
         print(f"  ✅ Passed: {passed}")
         print(f"  ❌ Failed: {failed}")

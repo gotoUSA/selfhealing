@@ -4,8 +4,7 @@ ErrorBudgetGate 히스테리시스 로직 단위 테스트.
 플래핑 방지를 위한 진입/복구 임계치 분리 동작 검증.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from selfhealing.services.error_budget_gate.config import (
     ErrorBudgetGateConfig,

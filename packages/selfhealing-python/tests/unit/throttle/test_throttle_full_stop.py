@@ -9,7 +9,6 @@ AdaptiveThrottle Full Stop 조건 테스트.
 5. KILL_SWITCH_ACTIVATED 이벤트 발행
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 from selfhealing.services.throttle.adaptive import (
@@ -17,7 +16,6 @@ from selfhealing.services.throttle.adaptive import (
     get_adaptive_throttle,
     reset_adaptive_throttle,
 )
-from selfhealing.services.throttle.config import ThrottleConfig
 
 
 class TestCheckFullStopConditions:

@@ -2,24 +2,20 @@
 Tests for Runtime Feedback Loop - 실시간 메트릭 기반 자동 튜닝
 """
 
-import pytest
 import threading
-import time
-from datetime import datetime, timezone, timedelta
-from unittest.mock import MagicMock, patch, PropertyMock
+from datetime import datetime, timedelta, timezone
 
-from selfhealing.core.runtime_feedback import (
-    RuntimeFeedbackLoop,
-    FeedbackLoopState,
-    AdjustmentResult,
-)
+import pytest
+
 from selfhealing.core.decision_engine import (
     DecisionEngine,
-    AdjustmentDecision,
-    AdjustmentPriority,
+)
+from selfhealing.core.runtime_feedback import (
+    AdjustmentResult,
+    FeedbackLoopState,
+    RuntimeFeedbackLoop,
 )
 from selfhealing.core.safety_bounds import SafetyBounds
-
 
 # =============================================================================
 # Fixtures

@@ -15,27 +15,22 @@ Unit tests for Recovery Session 실패 시 DLQ 자동 연동.
 - 마스킹이 원본 객체에 영향 없음
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from selfhealing.core.state_backend import MemoryStateBackend
-from selfhealing.services.coordination.enums import (
-    CompensationStatus,
-    RecoveryStatus,
-)
-from selfhealing.services.coordination.recovery_state import (
-    CompensationResult,
-    RecoverySession,
-    RecoveryStep,
-    RecoveryStepType,
-)
 from selfhealing.services.coordination.distributed_recovery_lock import (
     InMemoryRecoveryLock,
+)
+from selfhealing.services.coordination.enums import (
+    RecoveryStatus,
 )
 from selfhealing.services.coordination.recovery_coordinator import (
     RecoveryCoordinator,
 )
-
+from selfhealing.services.coordination.recovery_state import (
+    CompensationResult,
+    RecoveryStepType,
+)
 
 # =========================================================================
 # Helper: _fail_session()을 직접 호출하기 위한 세션 + 코디네이터 생성

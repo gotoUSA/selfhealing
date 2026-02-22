@@ -7,7 +7,6 @@ Unit tests for BackpressureMetrics.
 - 메트릭 비활성화 시 no-op
 """
 
-from unittest.mock import patch, MagicMock
 
 import pytest
 
@@ -16,14 +15,14 @@ from selfhealing.scaling.config import (
     reset_backpressure_settings,
 )
 from selfhealing.scaling.metrics import (
+    HAS_PROMETHEUS,
     BackpressureMetrics,
     get_backpressure_metrics,
-    HAS_PROMETHEUS,
 )
 
 # prometheus_client 레지스트리 리셋을 위한 import
 if HAS_PROMETHEUS:
-    from prometheus_client import REGISTRY, CollectorRegistry
+    from prometheus_client import REGISTRY
 
 
 def _clean_prometheus_registry():

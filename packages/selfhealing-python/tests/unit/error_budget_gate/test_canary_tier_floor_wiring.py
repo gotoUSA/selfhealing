@@ -5,8 +5,9 @@ CanaryRolloutService._is_stage_healthy() 티어별 하한 적용 테스트.
 tier_id 전달 시 사용자 PassCriteria에 티어 하한이 강제되는 동작 검증.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from selfhealing.services.canary.models import (
     CanaryMetrics,
@@ -15,7 +16,6 @@ from selfhealing.services.canary.models import (
     apply_tier_floor,
 )
 from selfhealing.services.canary.service import CanaryRolloutService
-
 
 # =============================================================================
 # 동작 검증: _is_stage_healthy() tier_id 파라미터
@@ -227,7 +227,7 @@ class TestPromoteTierIdPropagationBehavior:
 
     def test_promote_passes_tier_id_to_stage_health_check(self, service):
         """promote(tier_id=X) 호출 시 _is_stage_healthy에 tier_id 전파."""
-        from selfhealing.services.canary.models import CanaryState, CanaryRollout
+        from selfhealing.services.canary.models import CanaryRollout, CanaryState
 
         rollout = CanaryRollout(
             id="test-rollout",
@@ -266,7 +266,7 @@ class TestPromoteTierIdPropagationBehavior:
 
     def test_promote_without_tier_id_backward_compatible(self, service):
         """promote() tier_id 없이 호출 가능 (하위 호환)."""
-        from selfhealing.services.canary.models import CanaryState, CanaryRollout
+        from selfhealing.services.canary.models import CanaryRollout, CanaryState
 
         rollout = CanaryRollout(
             id="test-rollout",

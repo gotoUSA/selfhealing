@@ -18,18 +18,17 @@ import django
 
 django.setup()
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from selfhealing.api.django.admission_control import (
-    AdmissionControlMiddleware,
     _RTT_MIN_SAMPLE_MS,
     _RTT_SAMPLE_RATE,
+    AdmissionControlMiddleware,
 )
 from selfhealing.scaling.deadline_context import _request_deadline
 from selfhealing.services.throttle.gradient import (
-    get_gradient_calculator,
     reset_gradient_calculators,
 )
 

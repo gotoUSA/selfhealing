@@ -22,8 +22,7 @@ from django.urls import reverse
 
 import pytest
 
-from shopping.models.cart import Cart, CartItem
-from shopping.models.order import Order, OrderItem
+from shopping.models.order import Order
 from shopping.models.product import Product
 from shopping.models.user import User
 

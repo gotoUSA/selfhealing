@@ -21,8 +21,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from selfhealing.interfaces.resilience_policy import (
     PolicyContext,
     PolicyOutcome,
@@ -30,7 +28,6 @@ from selfhealing.interfaces.resilience_policy import (
 )
 from selfhealing.services.throttle.config import ThrottleConfig
 from selfhealing.services.throttle.policy import ThrottlePolicy
-
 
 # =============================================================================
 # ThrottlePolicy 초기화 동작 검증

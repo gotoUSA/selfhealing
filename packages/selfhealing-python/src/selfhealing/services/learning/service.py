@@ -261,7 +261,7 @@ class LearningService:
     _instance: LearningService | None = None
     _lock = Lock()
 
-    def __new__(cls) -> "LearningService":
+    def __new__(cls) -> LearningService:
         """싱글톤 패턴"""
         with cls._lock:
             if cls._instance is None:

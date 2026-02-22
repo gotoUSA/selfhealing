@@ -11,9 +11,6 @@ UDSClient 단위 테스트.
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from selfhealing.adapters.ipc.uds_client import (
     ClientStats,

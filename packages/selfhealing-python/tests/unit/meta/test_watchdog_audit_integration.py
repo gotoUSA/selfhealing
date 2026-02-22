@@ -4,7 +4,6 @@ SelfHealerWatchdog Audit 연동 테스트.
 _attempt_recovery 메서드의 RecoveryAuditRecorder 연동 테스트.
 """
 
-import time
 from datetime import datetime, timezone
 from unittest import mock
 

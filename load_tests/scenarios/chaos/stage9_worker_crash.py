@@ -30,11 +30,10 @@ import random
 import threading
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Callable
+from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
 from collections import deque
-import json
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -490,7 +489,7 @@ class WorkerCrashSimulator:
         print("📊 WORKER CRASH RECOVERY TEST RESULTS")
         print("=" * 60)
         
-        print(f"\n📈 Task Statistics:")
+        print("\n📈 Task Statistics:")
         print(f"  Total Tasks Created: {stats['total_tasks']}")
         print(f"  Completed: {stats['completed']}")
         print(f"  Failed: {stats['failed']}")
@@ -498,7 +497,7 @@ class WorkerCrashSimulator:
         print(f"  Still Pending: {stats['pending']}")
         print(f"  In Progress: {stats['in_progress']}")
         
-        print(f"\n👷 Worker Statistics:")
+        print("\n👷 Worker Statistics:")
         print(f"  Healthy Workers: {stats['workers_healthy']}")
         print(f"  Crashed Workers: {stats['workers_crashed']}")
         print(f"  Total Crashes: {stats['worker_crash_count']}")

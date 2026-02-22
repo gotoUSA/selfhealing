@@ -5,9 +5,9 @@ Pytest configuration and fixtures for selfhealing tests.
 import atexit
 import os
 import sys
-import pytest
 from datetime import datetime
 
+import pytest
 
 # =============================================================================
 # Pytest Configuration - 테스트 환경 초기화
@@ -42,7 +42,9 @@ def pytest_unconfigure(config):
     테스트 종료 시 실제 리소스 접근을 방지합니다.
     """
     try:
-        from selfhealing.audit.async_audit_lifecycle import graceful_shutdown_audit_system
+        from selfhealing.audit.async_audit_lifecycle import (
+            graceful_shutdown_audit_system,
+        )
 
         # atexit에서 핸들러 제거
         atexit.unregister(graceful_shutdown_audit_system)

@@ -11,21 +11,20 @@ Scenarios:
 7. Pool expansion on exhaustion
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, MagicMock
+from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock
 
 from selfhealing.core.pool_monitor import (
-    PoolHealthStatus,
-    PoolStats,
     ConnectionInfo,
     ConnectionPoolMonitor,
+    PoolHealthStatus,
+    PoolStats,
     PoolStatsProvider,
 )
 from selfhealing.core.pool_watchdog import (
     PoolRecoveryAction,
-    PoolWatchdog,
     PoolRecoveryHandler,
+    PoolWatchdog,
 )
 
 

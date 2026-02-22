@@ -34,14 +34,9 @@ import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import contextmanager
-from datetime import timedelta
-from decimal import Decimal
 from typing import Generator
-from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db import connection, transaction
-from django.utils import timezone
 
 from selfhealing.interfaces.repositories import FailedOperationStatus
 
@@ -51,7 +46,7 @@ from selfhealing.services.circuit_breaker_service import (
     CircuitState,
 )
 from selfhealing.services.dlq_service import DLQConfig
-from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
+from shopping.tests.factories import OrderFactory, UserFactory
 
 
 # =============================================================================

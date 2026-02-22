@@ -13,7 +13,6 @@ import pytest
 
 from selfhealing.scaling.config import BackpressureLevel
 from selfhealing.scaling.traffic_gate import (
-    TrafficDecision,
     TrafficGate,
     create_traffic_gate_with_cascade_load_shedding,
     get_traffic_gate,

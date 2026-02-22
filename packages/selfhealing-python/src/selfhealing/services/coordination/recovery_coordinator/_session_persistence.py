@@ -8,14 +8,13 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any
 
 import structlog
 
 from selfhealing.settings.recovery_coordinator import get_recovery_coordinator_settings
 
 from ..enums import CompensationStatus, RecoveryStatus
-from ..recovery_state import CompensationResult, RecoverySession, RecoveryStep
+from ..recovery_state import CompensationResult, RecoverySession
 from . import SESSION_CAS_SCRIPT, SessionVersionConflictError, StepTimeoutError
 
 logger = structlog.get_logger()

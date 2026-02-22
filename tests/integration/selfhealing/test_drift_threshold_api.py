@@ -13,7 +13,6 @@ django.setup()
 
 import pytest
 from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone
 
 from rest_framework.test import APIRequestFactory
 from rest_framework import status
@@ -345,7 +344,6 @@ class TestDriftThresholdIntegration:
     def test_reconciler_uses_stored_config(self, mock_backend):
         """MetricReconciler uses drift config from state backend."""
         from selfhealing.metrics.reconciler import MetricReconciler, DriftResult
-        from selfhealing.models.drift_config import DriftThresholdConfig
 
         # Create a custom config directly for the reconciler
         custom_config = DriftThresholdConfig(

@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.context.cell_context import _current_cell_id, get_current_cell_id
+from selfhealing.context.cell_context import get_current_cell_id
 
 # _reset_cell_context fixture는 conftest.py에서 autouse로 제공 (§5.1: 2+ 파일 공유)
 

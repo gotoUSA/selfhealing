@@ -4,21 +4,21 @@ core/backoff.py의 ExponentialBackoff, LinearBackoff, ConstantBackoff,
 DecorrelatedJitterBackoff, LegacyBackoffCalculator, get_backoff_calculator 팩토리 함수에 대한 단위 테스트.
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from selfhealing.core.backoff import (
-    ExponentialBackoff,
-    LinearBackoff,
+    BackoffStrategy,
     ConstantBackoff,
     DecorrelatedJitterBackoff,
+    ExponentialBackoff,
     LegacyBackoffCalculator,
     LegacyBackoffConfig,
-    get_backoff_calculator,
+    LinearBackoff,
     calculate_backoff,
-    BackoffStrategy,
+    get_backoff_calculator,
 )
-
 
 # =============================================================================
 # ExponentialBackoff Tests

@@ -6,15 +6,13 @@ Phase 3: RollbackValueSource, ResolvedRollbackValue, RollbackValueResolver 단�
 Reference: docs/self_healing/middleware_system/74_CANARY_SAFETY_INTERLOCK.md
 """
 
-import pytest
 from unittest.mock import MagicMock
 
 from selfhealing.services.canary.rollback_resolver import (
-    RollbackValueSource,
     ResolvedRollbackValue,
     RollbackValueResolver,
+    RollbackValueSource,
 )
-
 
 # =============================================================================
 # Test: RollbackValueSource
@@ -47,7 +45,7 @@ class TestResolvedRollbackValue:
             source=RollbackValueSource.PREVIOUS_VALUES,
             is_fallback=False,
         )
-        
+
         assert result.values == {"threshold": 5}
         assert result.source == RollbackValueSource.PREVIOUS_VALUES
         assert result.is_fallback is False
@@ -63,7 +61,7 @@ class TestResolvedRollbackValue:
             fallback_reason="previous_values unavailable",
             warning="Using default config",
         )
-        
+
         assert result.is_fallback is True
         assert result.warning is not None
 
@@ -75,9 +73,9 @@ class TestResolvedRollbackValue:
             is_fallback=True,
             fallback_reason="test reason",
         )
-        
+
         data = result.to_dict()
-        
+
         assert data["source"] == "config_history"
         assert data["is_fallback"] is True
         assert data["fallback_reason"] == "test reason"
@@ -94,13 +92,13 @@ class TestRollbackValueResolver:
     def test_tier1_previous_values(self):
         """Tier 1: previous_values 사용."""
         resolver = RollbackValueResolver()
-        
+
         resolved = resolver.resolve(
             rollout_id="rollout-1",
             config_type="circuit_breaker",
             previous_values={"threshold": 5},
         )
-        
+
         assert resolved.source == RollbackValueSource.PREVIOUS_VALUES
         assert resolved.values == {"threshold": 5}
         assert resolved.is_fallback is False
@@ -111,16 +109,16 @@ class TestRollbackValueResolver:
         mock_version = MagicMock()
         mock_version.values = {"threshold": 4}
         mock_history.get_version_before.return_value = mock_version
-        
+
         resolver = RollbackValueResolver(config_history_service=mock_history)
-        
+
         resolved = resolver.resolve(
             rollout_id="rollout-1",
             config_type="circuit_breaker",
             previous_values=None,  # Tier 1 없음
             created_at="2026-01-22T10:00:00Z",
         )
-        
+
         assert resolved.source == RollbackValueSource.CONFIG_HISTORY
         assert resolved.values == {"threshold": 4}
         assert resolved.is_fallback is True
@@ -129,13 +127,13 @@ class TestRollbackValueResolver:
     def test_tier3_default_config(self):
         """Tier 3: DefaultConfig 사용."""
         resolver = RollbackValueResolver(config_history_service=None)
-        
+
         resolved = resolver.resolve(
             rollout_id="rollout-1",
             config_type="circuit_breaker",
             previous_values=None,
         )
-        
+
         assert resolved.source == RollbackValueSource.DEFAULT_CONFIG
         assert "failure_threshold" in resolved.values
         assert resolved.is_fallback is True
@@ -147,13 +145,13 @@ class TestRollbackValueResolver:
             config_history_service=None,
             default_configs={},  # 빈 기본값
         )
-        
+
         resolved = resolver.resolve(
             rollout_id="rollout-1",
             config_type="unknown_config",
             previous_values=None,
         )
-        
+
         assert resolved.source == RollbackValueSource.UNKNOWN
         assert resolved.values == {}
         assert "CRITICAL" in resolved.warning

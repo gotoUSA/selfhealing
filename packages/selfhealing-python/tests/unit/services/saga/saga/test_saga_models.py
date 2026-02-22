@@ -32,7 +32,6 @@ from selfhealing.services.saga.registry import (
 )
 from selfhealing.services.saga.step import SagaStep
 
-
 # =============================================================================
 # 테스트 헬퍼: SagaStep 구체 구현 (테스트 전용)
 # =============================================================================

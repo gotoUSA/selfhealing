@@ -6,13 +6,12 @@ failure injectors, latency simulators, and resource trackers.
 """
 
 import random
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Generator
 
 import pytest
-
 
 # =============================================================================
 # Failure Injection Framework

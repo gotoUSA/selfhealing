@@ -16,7 +16,6 @@ Note: This module uses Mock-based approach for parallel test execution.
 
 import pytest
 from decimal import Decimal
-from unittest.mock import patch, MagicMock
 from datetime import timedelta
 
 from selfhealing.core.timezone import now

@@ -14,13 +14,11 @@ X-Test/Chaos API 2중 보안 장치 중 1차 Django RBAC 권한을 테스트합�
 """
 
 import os
-import sys
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Django 설정 구성 (테스트용)
 import django
+import pytest
 from django.conf import settings
 
 if not settings.configured:

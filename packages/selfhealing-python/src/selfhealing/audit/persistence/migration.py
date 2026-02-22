@@ -27,14 +27,14 @@ Pod 재시작 시 이전에 영속된 이벤트를 주 스토리지로 플러시
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 if TYPE_CHECKING:
     from selfhealing.audit.persistence.disk_buffer import (
-        BufferEntry,
         DiskPersistentBuffer,
     )
 

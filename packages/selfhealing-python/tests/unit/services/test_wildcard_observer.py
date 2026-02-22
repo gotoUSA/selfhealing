@@ -14,13 +14,10 @@ Tests for WildcardObserver — 전체 이벤트 관찰자.
 
 from __future__ import annotations
 
-import queue
 import threading
 import time
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from selfhealing.services.correlation_engine.co_occurrence_tracker import (
     CoOccurrenceTracker,
@@ -36,7 +33,6 @@ from selfhealing.services.event_bus.bus import (
     SelfHealingEventBus,
 )
 from selfhealing.settings.correlation import CorrelationSettings
-
 
 # =============================================================================
 # Helpers

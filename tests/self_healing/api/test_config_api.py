@@ -12,7 +12,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 django.setup()
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 from rest_framework.test import APIRequestFactory
 from rest_framework import status
 
@@ -21,16 +21,7 @@ from selfhealing.api.django.views.config import (
     AllConfigView,
     ResetConfigView,
     CircuitBreakerConfigView,
-    DLQConfigView,
-    RetryConfigView,
-    SLAConfigView,
-    RateLimitConfigView,
-    SecurityConfigView,
-    IdempotencyConfigView,
-    NotificationConfigView,
-    ForensicConfigView,
     MetricsConfigView,
-    SLOConfigView,
 )
 
 # Import serializers
@@ -38,18 +29,11 @@ from selfhealing.api.django.serializers.config import (
     CircuitBreakerConfigSerializer,
     DLQConfigSerializer,
     RetryConfigSerializer,
-    SLAConfigSerializer,
-    RateLimitConfigSerializer,
-    SecurityConfigSerializer,
-    IdempotencyConfigSerializer,
-    NotificationConfigSerializer,
-    ForensicConfigSerializer,
     MetricsConfigSerializer,
 )
 
 # Import RuntimeConfigManager
 from selfhealing.services.runtime_config import (
-    RuntimeConfigManager,
     get_runtime_config_manager,
 )
 
@@ -272,7 +256,6 @@ class TestConfigValidationAuditLog:
 
     def test_get_client_ip_from_remote_addr(self):
         """Test _get_client_ip extracts IP from REMOTE_ADDR."""
-        from selfhealing.api.django.views.config import BaseConfigView
 
         view = CircuitBreakerConfigView()
         request = MagicMock()

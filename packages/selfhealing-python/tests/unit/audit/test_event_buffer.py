@@ -11,10 +11,8 @@ Django 관련 테스트는 tests/self_healing/unit/test_audit_middleware.py에 �
 Author: SelfHealing Team
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import MagicMock
-
 
 # =============================================================================
 # Test AuditEventType
@@ -157,7 +155,7 @@ class TestRequestAuditBuffer:
 
     def test_add_event_to_buffer(self):
         """버퍼에 이벤트 추가."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
 
@@ -173,7 +171,7 @@ class TestRequestAuditBuffer:
 
     def test_add_multiple_events(self):
         """버퍼에 여러 이벤트 추가."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
 
@@ -185,7 +183,7 @@ class TestRequestAuditBuffer:
 
     def test_add_event_with_all_params(self):
         """모든 파라미터로 이벤트 추가."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
 
@@ -210,7 +208,7 @@ class TestRequestAuditBuffer:
 
     def test_get_events_returns_copy(self):
         """get_events()가 복사본을 반환하는지 확인."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.add(event_type=AuditEventType.DLQ_STORE, source="Test")
@@ -223,7 +221,7 @@ class TestRequestAuditBuffer:
 
     def test_get_events_by_type(self):
         """특정 타입의 이벤트만 가져오기."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.add(event_type=AuditEventType.DLQ_STORE, source="A")
@@ -236,7 +234,7 @@ class TestRequestAuditBuffer:
 
     def test_get_failed_events(self):
         """실패 이벤트만 가져오기."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.add(event_type=AuditEventType.DLQ_STORE, source="A", success=True)
@@ -264,8 +262,9 @@ class TestRequestAuditBuffer:
 
     def test_get_elapsed_seconds(self):
         """경과 시간 계산."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer
         import time
+
+        from selfhealing.audit.event_buffer import RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         time.sleep(0.01)  # 10ms
@@ -276,7 +275,7 @@ class TestRequestAuditBuffer:
 
     def test_buffer_to_dict(self):
         """버퍼 전체를 딕셔너리로 변환."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.request_id = "test-request-123"
@@ -331,7 +330,7 @@ class TestRequestAuditBuffer:
 
     def test_clear_buffer(self):
         """버퍼 초기화."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.add(event_type=AuditEventType.DLQ_STORE, source="Test")
@@ -367,7 +366,11 @@ class TestAddAuditEventFunction:
 
     def test_add_audit_event_to_request(self):
         """request에 이벤트 추가."""
-        from selfhealing.audit.event_buffer import add_audit_event, AuditEventType, RequestAuditBuffer
+        from selfhealing.audit.event_buffer import (
+            AuditEventType,
+            RequestAuditBuffer,
+            add_audit_event,
+        )
 
         mock_request = MagicMock()
         mock_request.META = {}
@@ -388,7 +391,11 @@ class TestAddAuditEventFunction:
 
     def test_add_audit_event_multiple_times(self):
         """여러 번 이벤트 추가."""
-        from selfhealing.audit.event_buffer import add_audit_event, AuditEventType, RequestAuditBuffer
+        from selfhealing.audit.event_buffer import (
+            AuditEventType,
+            RequestAuditBuffer,
+            add_audit_event,
+        )
 
         mock_request = MagicMock()
         mock_request.META = {}
@@ -574,7 +581,7 @@ class TestHasEventFromSource:
 
     def test_has_event_from_source_when_exists(self):
         """특정 source의 이벤트가 존재할 때 True 반환."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.add(
@@ -587,7 +594,7 @@ class TestHasEventFromSource:
 
     def test_has_event_from_source_when_not_exists(self):
         """특정 source의 이벤트가 없을 때 False 반환."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.add(
@@ -607,7 +614,7 @@ class TestHasEventFromSource:
 
     def test_has_event_from_source_multiple_sources(self):
         """여러 source가 있을 때 특정 source만 확인."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.add(event_type=AuditEventType.DLQ_STORE, source="DLQService")
@@ -620,7 +627,7 @@ class TestHasEventFromSource:
 
     def test_has_event_from_source_case_sensitive(self):
         """source 검색이 대소문자를 구분하는지 확인."""
-        from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
+        from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
 
         buffer = RequestAuditBuffer()
         buffer.add(

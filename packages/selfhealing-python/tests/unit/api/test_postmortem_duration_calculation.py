@@ -15,7 +15,6 @@ Postmortem Duration 계산 테스트.
 - 예외: OPEN 이벤트 없음
 """
 
-import pytest
 
 
 class TestCalculateIncidentDuration:

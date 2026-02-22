@@ -38,7 +38,7 @@ class WALEntry:
         }
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "WALEntry":
+    def from_dict(cls, d: dict[str, Any]) -> WALEntry:
         """딕셔너리에서 생성."""
         return cls(
             sequence=d["seq"],

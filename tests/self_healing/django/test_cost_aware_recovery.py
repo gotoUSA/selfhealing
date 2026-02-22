@@ -15,20 +15,13 @@ Test Cases:
 - COST-006: Multiple retries -> Total cost accumulates correctly
 """
 
-from datetime import timedelta
 from decimal import Decimal
-from unittest.mock import patch, MagicMock, PropertyMock
 
 import pytest
-from django.conf import settings
 
 # 이 파일의 모든 테스트는 DB 필요
 pytestmark = pytest.mark.requires_db
-from django.test import override_settings
-from django.utils import timezone
 
-from shopping.models.failed_external_request import FailedExternalRequest
-from shopping.services.payment_recovery_service import CeleryPaymentRecovery
 from shopping.tests.factories import OrderFactory, PaymentFactory, UserFactory
 
 

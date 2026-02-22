@@ -49,13 +49,9 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
-import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Any
-from collections import defaultdict
+from typing import Dict
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -209,20 +205,20 @@ def _update_phase():
         _fp_stats["phase"] = phase
 
         if phase == "high_latency_success":
-            print(f"\n⏳ Phase 2: High Latency Success Scenario")
+            print("\n⏳ Phase 2: High Latency Success Scenario")
             print(f"   - Injecting {HIGH_LATENCY_S}s latency on all requests")
-            print(f"   - All requests should SUCCEED")
-            print(f"   - CB should remain CLOSED")
+            print("   - All requests should SUCCEED")
+            print("   - CB should remain CLOSED")
         elif phase == "single_failure":
-            print(f"\n⚡ Phase 3: Single Failure Among Many")
+            print("\n⚡ Phase 3: Single Failure Among Many")
             print(f"   - Baseline requests: {_fp_stats['baseline_requests']}")
             print(f"   - High latency CB opened: {_fp_stats['high_latency_cb_opened']}")
             print(f"   - Requests rejected: {_fp_stats['high_latency_requests_rejected']}")
         elif phase == "proportional_check":
-            print(f"\n📊 Phase 4: Proportional Response Check")
-            print(f"   - Verifying CB opens only at error threshold")
+            print("\n📊 Phase 4: Proportional Response Check")
+            print("   - Verifying CB opens only at error threshold")
         elif phase == "revenue_impact":
-            print(f"\n💰 Phase 5: Revenue Impact Analysis")
+            print("\n💰 Phase 5: Revenue Impact Analysis")
             _calculate_revenue_impact()
 
 
@@ -290,7 +286,7 @@ def _record_cb_state_change(new_state: str, reason: str):
                 if phase == "high_latency_success":
                     _fp_stats["cb_false_positive_opens"] += 1
                     _fp_stats["high_latency_cb_opened"] = True
-                    print(f"   ⚠️ FALSE POSITIVE: CB opened during high latency success phase!")
+                    print("   ⚠️ FALSE POSITIVE: CB opened during high latency success phase!")
 
             elif new_state == "closed":
                 _fp_stats["cb_close_events"] += 1
@@ -322,7 +318,7 @@ def _calculate_revenue_impact():
 
 def _perform_final_verification():
     """Perform final verification"""
-    print(f"\n📊 Final Verification:")
+    print("\n📊 Final Verification:")
 
     # Check latency didn't open CB
     _fp_stats["verification"]["latency_no_cb_open"] = not _fp_stats["high_latency_cb_opened"]
@@ -381,7 +377,7 @@ def _perform_final_verification():
     else:
         _fp_stats["sla"]["false_positive_rate"] = 0.0
 
-    print(f"\n📈 SLA Metrics:")
+    print("\n📈 SLA Metrics:")
     print(f"   - CB Precision: {_fp_stats['sla']['cb_precision']:.1%}")
     print(f"   - False Positive Rate: {_fp_stats['sla']['false_positive_rate']:.1%}")
 
@@ -738,15 +734,15 @@ def on_test_start(environment, **kwargs):
     global _fp_stats
 
     print(f"\n{'='*70}")
-    print(f"🔍 Stage 21: False Positive Detection Test")
+    print("🔍 Stage 21: False Positive Detection Test")
     print(f"{'='*70}")
-    print(f"Purpose: Verify Self-Healing doesn't trigger on transient issues")
-    print(f"\nConfiguration:")
+    print("Purpose: Verify Self-Healing doesn't trigger on transient issues")
+    print("\nConfiguration:")
     print(f"  - Normal latency: {NORMAL_LATENCY_S}s")
     print(f"  - High latency (simulated): {HIGH_LATENCY_S}s")
     print(f"  - CB error rate threshold: {CB_ERROR_RATE_THRESHOLD:.0%}")
     print(f"  - Average order value: {AVERAGE_ORDER_VALUE:,} won")
-    print(f"\nTest Phases:")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_1_NORMAL_BASELINE}s): Normal baseline")
     print(f"  Phase 2 ({PHASE_2_HIGH_LATENCY_SUCCESS}s): High latency success")
     print(f"  Phase 3 ({PHASE_3_SINGLE_FAILURE}s): Single failure among many")
@@ -767,10 +763,10 @@ def on_test_stop(environment, **kwargs):
     _perform_final_verification()
 
     print(f"\n{'='*70}")
-    print(f"📊 Stage 21: False Positive Detection Test Results")
+    print("📊 Stage 21: False Positive Detection Test Results")
     print(f"{'='*70}")
 
-    print(f"\n📈 Phase 1 - Normal Baseline:")
+    print("\n📈 Phase 1 - Normal Baseline:")
     print(f"   - Requests: {_fp_stats['baseline_requests']}")
     print(f"   - Success: {_fp_stats['baseline_success']}")
     if _fp_stats["baseline_latencies_ms"]:
@@ -778,7 +774,7 @@ def on_test_stop(environment, **kwargs):
         print(f"   - Avg latency: {avg_latency:.0f}ms")
     print(f"   - CB state: {_fp_stats['baseline_cb_state']}")
 
-    print(f"\n⏳ Phase 2 - High Latency Success:")
+    print("\n⏳ Phase 2 - High Latency Success:")
     print(f"   - Requests: {_fp_stats['high_latency_requests']}")
     print(f"   - Success: {_fp_stats['high_latency_success']}")
     if _fp_stats["high_latency_requests"] > 0:
@@ -790,35 +786,35 @@ def on_test_stop(environment, **kwargs):
     print(f"   - CB opened (FALSE POSITIVE): {'YES ✗' if _fp_stats['high_latency_cb_opened'] else 'NO ✓'}")
     print(f"   - Requests rejected by CB: {_fp_stats['high_latency_requests_rejected']}")
 
-    print(f"\n⚡ Phase 3 - Single Failure:")
+    print("\n⚡ Phase 3 - Single Failure:")
     print(f"   - Total requests: {_fp_stats['single_failure_total_requests']}")
     print(f"   - Actual failures: {_fp_stats['single_failure_actual_failures']}")
     print(f"   - CB opened: {'YES' if _fp_stats['single_failure_cb_opened'] else 'NO'}")
 
-    print(f"\n📊 Phase 4 - Proportional Response:")
+    print("\n📊 Phase 4 - Proportional Response:")
     print(f"   - Total requests: {_fp_stats['proportional_total_requests']}")
     print(f"   - Failures injected: {_fp_stats['proportional_failures']}")
     print(f"   - CB state changes: {len(_fp_stats['proportional_cb_state_changes'])}")
 
-    print(f"\n🔌 Circuit Breaker Summary:")
+    print("\n🔌 Circuit Breaker Summary:")
     print(f"   - CB open events: {_fp_stats['cb_open_events']}")
     print(f"   - CB close events: {_fp_stats['cb_close_events']}")
     print(f"   - False positive opens: {_fp_stats['cb_false_positive_opens']}")
     print(f"   - Current state: {_fp_stats['cb_current_state']}")
 
-    print(f"\n🚨 Alert Summary:")
+    print("\n🚨 Alert Summary:")
     print(f"   - Slow service alerts: {_fp_stats['alerts_slow_service']}")
     print(f"   - Broken service alerts: {_fp_stats['alerts_broken_service']}")
     print(
         f"   - Alert differentiation: {'✓' if _fp_stats['alerts_slow_service'] >= _fp_stats['alerts_broken_service'] else '✗'}"
     )
 
-    print(f"\n💰 Revenue Impact:")
+    print("\n💰 Revenue Impact:")
     print(f"   - Requests rejected by CB: {_fp_stats['requests_rejected_by_cb']}")
     print(f"   - Potential revenue lost: {_fp_stats['potential_revenue_lost']:,} won")
     print(f"   - False positive impact: {_fp_stats['false_positive_revenue_impact']:,} won")
 
-    print(f"\n✅ Verification Results:")
+    print("\n✅ Verification Results:")
     all_passed = True
     for check, result in _fp_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
@@ -826,16 +822,16 @@ def on_test_stop(environment, **kwargs):
             all_passed = False
         print(f"   - {check}: {status}")
 
-    print(f"\n📈 SLA Metrics:")
+    print("\n📈 SLA Metrics:")
     print(f"   - CB Precision: {_fp_stats['sla']['cb_precision']:.1%}")
     print(f"   - False Positive Rate: {_fp_stats['sla']['false_positive_rate']:.1%}")
 
     # Final verdict
     print(f"\n{'='*70}")
     if all_passed and _fp_stats["cb_false_positive_opens"] == 0:
-        print(f"✅ TEST PASSED: No false positive CB triggers detected")
+        print("✅ TEST PASSED: No false positive CB triggers detected")
     else:
-        print(f"❌ TEST FAILED: False positive issues detected")
+        print("❌ TEST FAILED: False positive issues detected")
         if _fp_stats["cb_false_positive_opens"] > 0:
             print(f"   - {_fp_stats['cb_false_positive_opens']} false positive CB opens")
     print(f"{'='*70}\n")

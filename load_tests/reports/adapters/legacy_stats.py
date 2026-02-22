@@ -8,7 +8,7 @@ Legacy Stats Adapter - 기존 _extreme_stats 변환 어댑터.
 🏷️ 버전: 1.0.0
 """
 from datetime import datetime
-from typing import Dict, Any, Tuple, List, Optional
+from typing import Dict, Any, Tuple, List
 
 from ..schema import (
     BaseMetrics,

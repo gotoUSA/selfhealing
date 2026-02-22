@@ -19,13 +19,10 @@ Note: This module uses Mock-based repositories for parallel test execution.
 """
 
 import uuid
-from datetime import timedelta
 from decimal import Decimal
 from dataclasses import dataclass, field
-from typing import Any, Optional
-from unittest.mock import patch, MagicMock, PropertyMock
+from typing import Any
 import threading
-import time
 
 import pytest
 

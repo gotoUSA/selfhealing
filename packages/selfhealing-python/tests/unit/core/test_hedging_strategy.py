@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
+from selfhealing.core.hedging.async_strategy import AsyncHedgingStrategy
 from selfhealing.core.hedging.config import HedgingConfig, HedgingMode
 from selfhealing.core.hedging.strategy import HedgingStrategy
-from selfhealing.core.hedging.async_strategy import AsyncHedgingStrategy
 
 
 class TestHedgingStrategy:

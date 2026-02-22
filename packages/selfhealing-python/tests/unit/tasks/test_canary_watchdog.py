@@ -6,29 +6,28 @@ RolloutWatchdog 서비스 및 Celery 태스크 테스트.
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
-import pytest
 from datetime import timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-from selfhealing.utils.time import utc_now
-from selfhealing.tasks.canary_watchdog import (
-    RolloutWatchdog,
-    CanaryWatchdogConfig,
-    WatchdogResult,
-    ZombieRollout,
-    get_rollout_watchdog,
-    reset_watchdog,
-    scan_zombie_rollouts,
-    auto_promote_eligible,
-    collect_canary_metrics,
-)
+import pytest
+
 from selfhealing.services.canary import (
     CanaryRollout,
     CanaryStage,
     CanaryState,
-    CanaryMetrics,
 )
-
+from selfhealing.tasks.canary_watchdog import (
+    CanaryWatchdogConfig,
+    RolloutWatchdog,
+    WatchdogResult,
+    ZombieRollout,
+    auto_promote_eligible,
+    collect_canary_metrics,
+    get_rollout_watchdog,
+    reset_watchdog,
+    scan_zombie_rollouts,
+)
+from selfhealing.utils.time import utc_now
 
 # =============================================================================
 # Fixtures
@@ -337,7 +336,8 @@ class TestRolloutWatchdog:
 
     def test_auto_promote_eligible(self, watchdog_config, sample_rollout):
         """자동 프로모션 조건 충족 시 프로모션."""
-        from unittest.mock import patch, Mock as MockClass
+        from unittest.mock import Mock as MockClass
+        from unittest.mock import patch
 
         # duration 경과한 롤아웃
         sample_rollout.created_at = utc_now() - timedelta(minutes=10)

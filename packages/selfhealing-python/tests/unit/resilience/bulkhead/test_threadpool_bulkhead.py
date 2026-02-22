@@ -23,7 +23,6 @@ from selfhealing.resilience.bulkhead.exceptions import (
 )
 from selfhealing.resilience.bulkhead.threadpool import ThreadPoolBulkhead
 
-
 # 테스트용 ContextVar
 test_context_var: contextvars.ContextVar[str] = contextvars.ContextVar("test_context", default="default")
 

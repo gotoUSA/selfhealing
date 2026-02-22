@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
-from selfhealing.services.cell_topology.models import CellInfo, CellState
+from selfhealing.services.cell_topology.models import CellState
 from selfhealing.services.cell_topology.registry import (
     VNODES_PER_CELL,
     CellRegistry,

@@ -24,7 +24,6 @@ from rest_framework import status
 from ..conftest import (
     assert_list_response,
     assert_paginated_response,
-    SchemaValidationError,
 )
 
 
@@ -77,7 +76,7 @@ class TestSingleObjectResponse:
         # 단일 객체 구조 검증
         assert isinstance(data, dict), f"응답이 dict가 아님: {type(data)}"
         assert "id" in data, "id 필드 누락"
-        assert data["id"] == category_id, f"ID 불일치"
+        assert data["id"] == category_id, "ID 불일치"
 
     def test_order_detail_returns_dict(self, client, auth_headers, schema_test_order):
         """
@@ -97,7 +96,7 @@ class TestSingleObjectResponse:
         # 단일 객체 구조 검증
         assert isinstance(data, dict), f"응답이 dict가 아님: {type(data)}"
         assert "id" in data, "id 필드 누락"
-        assert data["id"] == order_id, f"ID 불일치"
+        assert data["id"] == order_id, "ID 불일치"
 
     def test_user_profile_returns_dict(self, client, auth_headers):
         """

@@ -11,21 +11,19 @@ Tests for:
 """
 
 import os
-import time
 import threading
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+import time
+from unittest.mock import Mock
 
-from selfhealing.core.state_cache import CBStateCache
-from selfhealing.core.degraded_mode_handler import DegradedModeHandler
-from selfhealing.core.adaptive_jitter import AdaptiveJitter
-from selfhealing.utils.async_logger import AsyncHealingLogger, EventSeverity
 from selfhealing.adapters.health_checker import (
-    HealthCheckStrategy,
-    TTLCacheStrategy,
-    SimpleSocketStrategy,
     PortableHealthChecker,
+    SimpleSocketStrategy,
+    TTLCacheStrategy,
 )
+from selfhealing.core.adaptive_jitter import AdaptiveJitter
+from selfhealing.core.degraded_mode_handler import DegradedModeHandler
+from selfhealing.core.state_cache import CBStateCache
+from selfhealing.utils.async_logger import AsyncHealingLogger, EventSeverity
 
 
 # =============================================================================

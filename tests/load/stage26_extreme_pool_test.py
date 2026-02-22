@@ -27,8 +27,6 @@ import time
 import random
 import threading
 import socket
-from datetime import datetime
-from typing import Dict, List, Any
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -36,7 +34,7 @@ _project_root = os.path.dirname(_load_tests_dir)
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from locust import HttpUser, task, between, tag, events, LoadTestShape, constant
+from locust import HttpUser, task, tag, events, LoadTestShape, constant
 
 
 # =============================================================================
@@ -247,7 +245,7 @@ def on_test_stop(environment, **kwargs):
 
     # Circuit Breaker 통계
     cb_stats = _extreme_stats["circuit_breaker"]
-    print(f"\n🛡️ Circuit Breaker 통계:")
+    print("\n🛡️ Circuit Breaker 통계:")
     print(f"  - 503 거부 횟수: {cb_stats['503_count']}")
     print(f"  - OPEN 감지: {'✅ Yes' if cb_stats['open_detected'] else '❌ No'}")
     print(f"  - HALF_OPEN 감지: {'✅ Yes' if cb_stats['half_open_detected'] else '❌ No'}")
@@ -255,7 +253,7 @@ def on_test_stop(environment, **kwargs):
     if cb_stats["state_history"]:
         print(f"  - 상태 변경 이력: {len(cb_stats['state_history'])}건")
 
-    print(f"\n📈 요청 유형별 통계:")
+    print("\n📈 요청 유형별 통계:")
     for req_type, stats in _extreme_stats["requests_by_type"].items():
         total = stats["success"] + stats["failure"]
         if total > 0:
@@ -263,7 +261,7 @@ def on_test_stop(environment, **kwargs):
             avg_time = sum(stats["times"]) / len(stats["times"]) if stats["times"] else 0
             print(f"  {req_type}: 성공={stats['success']}, 실패={stats['failure']} ({fail_rate:.1f}%), 평균={avg_time:.0f}ms")
 
-    print(f"\n🔄 Phase 진행:")
+    print("\n🔄 Phase 진행:")
     print(f"  - 고갈 시작: {_extreme_stats['exhaustion_start']}")
     print(f"  - 고갈 종료: {_extreme_stats['exhaustion_end']}")
     print(f"  - 복구 감지: {_extreme_stats['recovery_detected']}")
@@ -431,7 +429,7 @@ class PoolKillerUser(PatchedHttpUser):
 
             if response.status_code == 200:
                 record_request("connection_holder", True, elapsed)
-                print(f"🔒 Slow query completed (connection released!)")
+                print("🔒 Slow query completed (connection released!)")
                 response.success()
             elif response.status_code == 503:
                 record_pool_exhaustion("503 - Connection Holder")
@@ -633,13 +631,13 @@ class PoolExhaustionRecoveryShape(LoadTestShape):
                     print(f"   Users: {stage['users']}, Time: {run_time:.0f}s")
 
                     if current_phase == "warmup":
-                        print(f"   📊 Baseline - Normal operation check")
+                        print("   📊 Baseline - Normal operation check")
                     elif current_phase == "spike":
-                        print(f"   🔥 SPIKE - Pool 고갈 유도 중...")
+                        print("   🔥 SPIKE - Pool 고갈 유도 중...")
                     elif current_phase == "cooldown":
-                        print(f"   ❄️ COOLDOWN - 부하 감소, 연결 반환 대기")
+                        print("   ❄️ COOLDOWN - 부하 감소, 연결 반환 대기")
                     elif current_phase == "recovery":
-                        print(f"   🔍 RECOVERY - 회복 확인 중")
+                        print("   🔍 RECOVERY - 회복 확인 중")
                     print(f"{'='*70}\n")
                     self._last_phase = current_phase
 
@@ -648,6 +646,6 @@ class PoolExhaustionRecoveryShape(LoadTestShape):
         # 모든 단계 완료
         print(f"\n{'='*70}")
         print("🏁 TEST COMPLETE - 3 minutes of continuous load!")
-        print(f"   If no recovery detected, Circuit Breaker integration needed!")
+        print("   If no recovery detected, Circuit Breaker integration needed!")
         print(f"{'='*70}\n")
         return None

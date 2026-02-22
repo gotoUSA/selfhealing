@@ -6,20 +6,20 @@ Phase 3: MidApplyCheckResult, MidApplyInterlockChecker 단위 테스트.
 Reference: docs/self_healing/middleware_system/74_CANARY_SAFETY_INTERLOCK.md
 """
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
+from selfhealing.services.canary.interlock import (
+    CanarySafetyInterlock,
+    InterlockAction,
+    InterlockResult,
+)
 from selfhealing.services.canary.mid_apply_checker import (
     MidApplyCheckResult,
     MidApplyInterlockChecker,
 )
-from selfhealing.services.canary.interlock import (
-    InterlockAction,
-    InterlockResult,
-    CanarySafetyInterlock,
-)
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
-
 
 # =============================================================================
 # Fixtures
@@ -62,7 +62,7 @@ class TestMidApplyCheckResult:
             remaining_clusters=[],
             rollback_required=False,
         )
-        
+
         assert result.should_continue is True
         assert result.interlock_triggered is False
         assert len(result.applied_clusters) == 2
@@ -75,7 +75,7 @@ class TestMidApplyCheckResult:
             emergency_level_name="LEVEL_2",
             namespace="test",
         )
-        
+
         result = MidApplyCheckResult(
             should_continue=False,
             interlock_triggered=True,
@@ -84,7 +84,7 @@ class TestMidApplyCheckResult:
             rollback_required=True,
             interlock_result=interlock_result,
         )
-        
+
         assert result.should_continue is False
         assert result.interlock_triggered is True
         assert result.rollback_required is True
@@ -104,9 +104,9 @@ class TestMidApplyCheckResult:
                 namespace="test",
             ),
         )
-        
+
         data = result.to_dict()
-        
+
         assert data["should_continue"] is False
         assert data["interlock_triggered"] is True
         assert data["interlock_result"]["action"] == "rollback"
@@ -125,20 +125,20 @@ class TestMidApplyInterlockChecker:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.NORMAL
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
         checker = MidApplyInterlockChecker(safety_interlock=interlock)
-        
+
         apply_fn = MagicMock(return_value=True)
-        
+
         result = checker.apply_with_check(
             rollout_id="rollout-1",
             target_clusters=["cluster-1", "cluster-2", "cluster-3"],
             apply_fn=apply_fn,
         )
-        
+
         assert result.should_continue is True
         assert result.interlock_triggered is False
         assert len(result.applied_clusters) == 3
@@ -155,31 +155,31 @@ class TestMidApplyInterlockChecker:
             if call_count == 1:
                 return create_mock_state(EmergencyLevel.NORMAL)
             return create_mock_state(EmergencyLevel.LEVEL_3)
-        
+
         mock_tracker.get_effective_state.side_effect = mock_get_state
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
         checker = MidApplyInterlockChecker(safety_interlock=interlock)
-        
+
         apply_fn = MagicMock(return_value=True)
         rollback_fn = MagicMock(return_value=True)
-        
+
         result = checker.apply_with_check(
             rollout_id="rollout-1",
             target_clusters=["cluster-1", "cluster-2", "cluster-3"],
             apply_fn=apply_fn,
             rollback_fn=rollback_fn,
         )
-        
+
         # 첫 번째 클러스터만 적용됨
         assert result.should_continue is False
         assert result.interlock_triggered is True
         assert len(result.applied_clusters) == 1
         assert "cluster-2" in result.remaining_clusters
         assert result.rollback_required is True
-        
+
         # 롤백 호출됨
         rollback_fn.assert_called_once_with("cluster-1")
 
@@ -188,7 +188,7 @@ class TestMidApplyInterlockChecker:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.NORMAL
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
@@ -197,15 +197,15 @@ class TestMidApplyInterlockChecker:
             safety_interlock=interlock,
             check_interval=2,
         )
-        
+
         apply_fn = MagicMock(return_value=True)
-        
+
         result = checker.apply_with_check(
             rollout_id="rollout-1",
             target_clusters=["c1", "c2", "c3", "c4"],
             apply_fn=apply_fn,
         )
-        
+
         # get_effective_state는 0, 2번 인덱스에서만 호출 (2회)
         assert mock_tracker.get_effective_state.call_count == 2
 
@@ -214,22 +214,22 @@ class TestMidApplyInterlockChecker:
         mock_tracker.get_effective_state.return_value = create_mock_state(
             EmergencyLevel.LEVEL_3
         )
-        
+
         interlock = CanarySafetyInterlock(
             emergency_tracker_factory=lambda: mock_tracker
         )
         checker = MidApplyInterlockChecker(safety_interlock=interlock)
-        
+
         apply_fn = MagicMock(return_value=True)
         rollback_fn = MagicMock(return_value=True)
-        
+
         result = checker.apply_with_check(
             rollout_id="rollout-1",
             target_clusters=["cluster-1"],
             apply_fn=apply_fn,
             rollback_fn=rollback_fn,
         )
-        
+
         # 첫 체크에서 바로 인터락 발동
         assert result.interlock_triggered is True
         assert len(result.applied_clusters) == 0

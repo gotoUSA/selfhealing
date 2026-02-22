@@ -24,8 +24,6 @@ Prerequisites:
 import os
 import sys
 import time
-from datetime import datetime
-from typing import Dict, List, Optional, Any
 
 # 프로젝트 루트 경로 추가
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -38,7 +36,7 @@ if _project_root not in sys.path:
 from locust import HttpUser, task, between, tag, events
 
 from load_tests.utils import LoginHelper
-from load_tests.metrics import setup_event_hooks, get_metrics_collector
+from load_tests.metrics import setup_event_hooks
 
 
 STAGE_NAME = "[Stage0-SelfHealing]"

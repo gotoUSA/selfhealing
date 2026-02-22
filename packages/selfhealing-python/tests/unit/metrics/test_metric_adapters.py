@@ -2,17 +2,16 @@
 Tests for Metric Source Adapters.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 
 from selfhealing.adapters.metrics.base import (
-    MetricSourceAdapter,
     BaseMetricSourceAdapter,
+    MetricSourceAdapter,
     NullMetricSourceAdapter,
 )
 from selfhealing.adapters.metrics.factory import (
-    get_metric_adapter,
     configure_adapter,
+    get_metric_adapter,
     reset_adapter,
 )
 

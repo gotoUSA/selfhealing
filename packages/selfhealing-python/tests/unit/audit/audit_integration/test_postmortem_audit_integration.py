@@ -9,9 +9,7 @@ Postmortem 자동 트리거의 Audit 로깅 테스트.
 2. Audit 이벤트 타입 검증
 """
 
-import pytest
-from datetime import datetime, timezone as tz
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 
 class TestAutoPostmortemAudit:
@@ -32,9 +30,9 @@ class TestAutoPostmortemAudit:
     def test_auto_postmortem_no_audit_when_disabled(self, monkeypatch):
         """자동 Post-mortem 비활성화 시 Audit이 호출되지 않는지 확인."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_closed_postmortem,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_closed_postmortem,
         )
 
         monkeypatch.setenv("SELFHEALING_API_VIEW_XTEST_AUTO_POSTMORTEM_ENABLED", "false")

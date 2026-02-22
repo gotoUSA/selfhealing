@@ -60,7 +60,7 @@ class WALReaderMixin:
         Yields:
             WALEntry 객체
         """
-        from selfhealing.audit.wal._models import WALCorruptionError, WALEntry
+        from selfhealing.audit.wal._models import WALCorruptionError
 
         # Drift Detection 메트릭 (선택적 import)
         try:

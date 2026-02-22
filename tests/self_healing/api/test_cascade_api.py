@@ -24,7 +24,6 @@ import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 django.setup()
 
-import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 

@@ -15,7 +15,7 @@ except Exception as e:
     print(f"Django setup error: {e}")
     sys.exit(1)
 
-from shopping.models import Return, Order
+from shopping.models import Return
 from shopping.models.point import PointHistory
 from django.contrib.auth import get_user_model
 
@@ -47,7 +47,6 @@ try:
 
     # 유효한 적립 포인트 (FIFO용)
     from django.utils import timezone
-    from django.db.models import Sum
 
     now = timezone.now()
 

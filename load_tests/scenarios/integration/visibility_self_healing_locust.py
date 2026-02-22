@@ -220,7 +220,7 @@ class StockContentionUser(HttpUser):
                         logger.info(f"✅ Logged in as {self.username}, token={self.access_token[:20]}...")
                         return True
                     else:
-                        response.failure(f"Login response missing token")
+                        response.failure("Login response missing token")
                         return False
                 else:
                     response.failure(f"Login failed: {response.status_code}")
@@ -470,7 +470,7 @@ def on_test_stop(environment, **kwargs):
     print("=" * 70)
     
     # 기본 통계
-    print(f"\n📈 Request Statistics:")
+    print("\n📈 Request Statistics:")
     print(f"   Total requests: {stats.total.num_requests}")
     print(f"   Total failures: {stats.total.num_failures}")
     print(f"   Avg response time: {stats.total.avg_response_time:.2f}ms")
@@ -480,7 +480,7 @@ def on_test_stop(environment, **kwargs):
         print(f"   Error rate: {error_rate:.2f}%")
     
     # 힐링 신호 통계
-    print(f"\n🔧 Healing Signals Detected:")
+    print("\n🔧 Healing Signals Detected:")
     print(f"   Lock timeouts: {test_stats.lock_timeout_count}")
     print(f"   Retry signals: {test_stats.retry_observed}")
     print(f"   409 Conflicts: {test_stats.conflict_responses}")
@@ -489,7 +489,7 @@ def on_test_stop(environment, **kwargs):
     print(f"   Stock contention errors: {test_stats.stock_contention_count}")
     
     # 성공 통계
-    print(f"\n✅ Successful Operations:")
+    print("\n✅ Successful Operations:")
     print(f"   Orders created: {test_stats.successful_orders}")
     print(f"   Payments completed: {test_stats.successful_payments}")
     

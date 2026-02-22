@@ -24,7 +24,7 @@ UNIT_TEST_GUIDELINES.md 준수:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -33,13 +33,11 @@ from selfhealing.interfaces.resilience_policy import (
     PolicyOutcome,
     PolicyResult,
 )
-from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
 from selfhealing.services.circuit_breaker.exceptions import CircuitBreakerOpenError
 from selfhealing.services.circuit_breaker.policy import (
     CircuitBreakerPolicy,
     circuit_breaker,
 )
-
 
 # =============================================================================
 # Fixtures — 1개 파일 전용이므로 파일 내부 배치 (§5.1)

@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # =============================================================================
 # 계약 검증 — resilience/policies/__init__.py re-export
 # =============================================================================
@@ -185,7 +184,7 @@ class TestPoliciesLazyImportContract:
         import selfhealing.resilience.policies as policies_mod
 
         with pytest.raises(AttributeError):
-            getattr(policies_mod, "NonExistentPolicy")
+            policies_mod.NonExistentPolicy
 
 
 # =============================================================================

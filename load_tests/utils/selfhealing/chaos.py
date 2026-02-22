@@ -4,7 +4,7 @@ Chaos Engineering API Client.
 킬스위치, 안전 체크, 스케줄, 카오스 실험 관련 API.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .base import BaseClient
 

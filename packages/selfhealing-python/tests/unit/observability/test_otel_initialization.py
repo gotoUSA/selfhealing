@@ -3,8 +3,9 @@ Tests for OpenTelemetry SDK Initialization.
 """
 
 import os
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 def _is_otel_available() -> bool:
@@ -119,7 +120,10 @@ class TestOpenTelemetryInitialization:
 
     def test_initialization_idempotent(self):
         """Test that initialization is idempotent."""
-        from selfhealing.observability import initialize_opentelemetry, reset_opentelemetry
+        from selfhealing.observability import (
+            initialize_opentelemetry,
+            reset_opentelemetry,
+        )
 
         reset_opentelemetry()
 
@@ -133,7 +137,10 @@ class TestOpenTelemetryInitialization:
 
     def test_shutdown_is_safe_when_not_initialized(self):
         """Test that shutdown doesn't raise when not initialized."""
-        from selfhealing.observability import shutdown_opentelemetry, reset_opentelemetry
+        from selfhealing.observability import (
+            reset_opentelemetry,
+            shutdown_opentelemetry,
+        )
 
         reset_opentelemetry()
 
@@ -144,8 +151,8 @@ class TestOpenTelemetryInitialization:
         """Test that reset allows reinitialization."""
         from selfhealing.observability import (
             initialize_opentelemetry,
-            reset_opentelemetry,
             is_otel_enabled,
+            reset_opentelemetry,
         )
 
         with patch.dict(os.environ, {"OTEL_ENABLED": "false"}, clear=False):
@@ -172,7 +179,10 @@ class TestOpenTelemetryWithOtelInstalled:
 
     def teardown_method(self):
         """Clean up after each test."""
-        from selfhealing.observability import reset_opentelemetry, shutdown_opentelemetry
+        from selfhealing.observability import (
+            reset_opentelemetry,
+            shutdown_opentelemetry,
+        )
         from selfhealing.settings.observability import reset_otel_settings
 
         shutdown_opentelemetry()
@@ -186,9 +196,9 @@ class TestOpenTelemetryWithOtelInstalled:
     def test_initialization_enabled_with_otel_installed(self):
         """Test OTEL initialization when enabled and SDK is installed."""
         from selfhealing.observability import (
+            get_tracer,
             initialize_opentelemetry,
             is_otel_enabled,
-            get_tracer,
             reset_opentelemetry,
         )
 

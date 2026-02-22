@@ -20,18 +20,15 @@ Related code:
 
 from __future__ import annotations
 
-import json
 import tempfile
 import threading
 import time
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
-from dataclasses import dataclass
 
 
 @dataclass
@@ -45,17 +42,16 @@ class CircuitBreakerConfig:
 
 
 from selfhealing.audit.graceful_degradation import (
+    CircuitState,
     DegradationLevel,
     FallbackConfig,
-    HashChainFallbackChain,
-    DegradedEntryMarker,
-    HashChainDegradationManager,
-    CircuitState,
-    HashChainCircuitBreakerConfig as RealCircuitBreakerConfig,
     HashChainCircuitBreaker,
-    HashChainGracefulDegradationManager,
+    HashChainDegradationManager,
+    HashChainFallbackChain,
 )
-
+from selfhealing.audit.graceful_degradation import (
+    HashChainCircuitBreakerConfig as RealCircuitBreakerConfig,
+)
 
 # =============================================================================
 # Chaos Mock Redis - Simulates Various Failure Modes
@@ -215,7 +211,7 @@ class ChaosRedisClient:
                 return self.delete(key)
         return 1
 
-    def pipeline(self, transaction: bool = True) -> "MockPipeline":
+    def pipeline(self, transaction: bool = True) -> MockPipeline:
         return MockPipeline(self)
 
 
@@ -226,11 +222,11 @@ class MockPipeline:
         self._redis = redis
         self._commands: list[tuple] = []
 
-    def set(self, key: str, value: Any) -> "MockPipeline":
+    def set(self, key: str, value: Any) -> MockPipeline:
         self._commands.append(("set", key, value))
         return self
 
-    def hset(self, key: str, mapping: dict = None, **kwargs) -> "MockPipeline":
+    def hset(self, key: str, mapping: dict = None, **kwargs) -> MockPipeline:
         self._commands.append(("hset", key, mapping or kwargs))
         return self
 
@@ -724,7 +720,7 @@ class TestMemoryBufferOverflow:
         Since local tier always succeeds (even with None path - it just
         doesn't write to disk), we need to mock the local method to fail.
         """
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
 
         config = FallbackConfig(
             memory_max_entries=5,  # Small buffer for testing

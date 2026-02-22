@@ -14,7 +14,6 @@ Self-Healing 시스템 통합 테스트 스크립트
 import os
 import sys
 import requests
-import json
 from datetime import datetime
 
 # Django 설정

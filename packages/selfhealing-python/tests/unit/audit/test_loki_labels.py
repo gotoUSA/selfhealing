@@ -11,8 +11,6 @@ Loki Labels 단위 테스트.
 
 from __future__ import annotations
 
-import pytest
-
 
 class TestGetStandardLabels:
     """get_standard_labels 함수 테스트."""

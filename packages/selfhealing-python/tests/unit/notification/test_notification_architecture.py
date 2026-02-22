@@ -8,30 +8,28 @@ Daily Report 및 Unified Notification Manager 테스트.
 - Cooldown 및 억제 로직
 """
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-from selfhealing.tasks.daily_report import (
-    DailyReportData,
-    DailyReportCollector,
-    TaskResultEntry,
-    get_daily_report_collector,
-    generate_daily_autonomous_report,
-)
+import pytest
+
 from selfhealing.services.unified_notification import (
-    UnifiedNotificationManager,
+    NotificationCategory,
     NotificationPayload,
     NotificationPriority,
-    NotificationCategory,
     RoutingPolicy,
+    UnifiedNotificationManager,
     get_unified_notification_manager,
     notify,
-    notify_sla,
     notify_error,
+    notify_sla,
     reset_notification_manager,
 )
-
+from selfhealing.tasks.daily_report import (
+    DailyReportCollector,
+    DailyReportData,
+    TaskResultEntry,
+)
 
 # =============================================================================
 # DailyReportData Tests
@@ -44,7 +42,7 @@ class TestDailyReportData:
     def test_create_empty_report(self):
         """Test creating an empty report."""
         report = DailyReportData()
-        
+
         assert report.archived_count == 0
         assert report.expired_count == 0
         assert report.purged_count == 0
@@ -53,16 +51,16 @@ class TestDailyReportData:
     def test_add_entry_updates_counts(self):
         """Test that adding entries updates aggregate counts."""
         report = DailyReportData()
-        
+
         entry = TaskResultEntry(
             task_name="archive_task",
             result={"archived_count": 10, "expired_count": 5},
             timestamp=datetime.now(timezone.utc),
             severity="info",
         )
-        
+
         report.add_entry(entry)
-        
+
         assert report.archived_count == 10
         assert report.expired_count == 5
         assert len(report.entries) == 1
@@ -70,7 +68,7 @@ class TestDailyReportData:
     def test_add_multiple_entries(self):
         """Test adding multiple entries aggregates correctly."""
         report = DailyReportData()
-        
+
         entries = [
             TaskResultEntry(
                 task_name="archive_task_1",
@@ -88,10 +86,10 @@ class TestDailyReportData:
                 timestamp=datetime.now(timezone.utc),
             ),
         ]
-        
+
         for entry in entries:
             report.add_entry(entry)
-        
+
         assert report.archived_count == 30
         assert report.expired_count == 5
         assert len(report.entries) == 3
@@ -99,41 +97,41 @@ class TestDailyReportData:
     def test_track_failures(self):
         """Test that task failures are tracked."""
         report = DailyReportData()
-        
+
         # Add a successful task
         report.add_entry(TaskResultEntry(
             task_name="success_task",
             result={"success": True, "archived_count": 5},
             timestamp=datetime.now(timezone.utc),
         ))
-        
+
         # Add a failed task
         report.add_entry(TaskResultEntry(
             task_name="failed_task",
             result={"success": False, "error": "Connection failed"},
             timestamp=datetime.now(timezone.utc),
         ))
-        
+
         assert report.task_failures == 1
 
     def test_track_critical_alerts(self):
         """Test that critical alerts are counted."""
         report = DailyReportData()
-        
+
         report.add_entry(TaskResultEntry(
             task_name="normal_task",
             result={"count": 5},
             timestamp=datetime.now(timezone.utc),
             severity="info",
         ))
-        
+
         report.add_entry(TaskResultEntry(
             task_name="critical_task",
             result={"count": 1},
             timestamp=datetime.now(timezone.utc),
             severity="critical",
         ))
-        
+
         assert report.critical_alerts == 1
 
     def test_merge_reports(self):
@@ -141,13 +139,13 @@ class TestDailyReportData:
         report1 = DailyReportData()
         report1.archived_count = 10
         report1.expired_count = 5
-        
+
         report2 = DailyReportData()
         report2.archived_count = 20
         report2.purged_count = 3
-        
+
         report1.merge(report2)
-        
+
         assert report1.archived_count == 30
         assert report1.expired_count == 5
         assert report1.purged_count == 3
@@ -155,16 +153,16 @@ class TestDailyReportData:
     def test_to_slack_message(self):
         """Test Slack message formatting using format_report_for_slack."""
         from selfhealing.services.daily_report import format_report_for_slack
-        
+
         report = DailyReportData(
             date=datetime(2026, 1, 2, tzinfo=timezone.utc),
             archived_count=100,
             expired_count=50,
             recovered_count=5,
         )
-        
+
         message = format_report_for_slack(report)
-        
+
         assert "2026-01-02" in message
         assert "100" in message
         assert "아카이브" in message
@@ -175,9 +173,9 @@ class TestDailyReportData:
             archived_count=10,
             expired_count=5,
         )
-        
+
         data = report.to_dict()
-        
+
         assert data["archived_count"] == 10
         assert data["expired_count"] == 5
         assert "date" in data
@@ -197,11 +195,11 @@ class TestDailyReportCollector:
 
     def test_add_result(self):
         """Test adding results to collector - uses memory storage fallback."""
-        # DailyReportCollector uses internal import of now(), 
+        # DailyReportCollector uses internal import of now(),
         # so we test the memory storage fallback path by patching cache import
         test_date = datetime(2026, 1, 2, tzinfo=timezone.utc)
         date_key = test_date.strftime("%Y-%m-%d")
-        
+
         # Directly add to memory storage for testing
         from selfhealing.tasks.daily_report import TaskResultEntry
         entry = TaskResultEntry(
@@ -211,12 +209,12 @@ class TestDailyReportCollector:
             severity="info",
         )
         self.collector._memory_storage[date_key] = [entry]
-        
+
         # Mock Django cache to raise ImportError so memory storage is used
         with patch.dict('sys.modules', {'django.core.cache': None}):
             # Force the get_report to use memory storage fallback
             report = self.collector.get_report(test_date)
-        
+
         assert isinstance(report, DailyReportData)
         # Note: With Django available, it tries cache first, which is empty
         # so we just verify it handles without error
@@ -227,7 +225,7 @@ class TestDailyReportCollector:
         report = self.collector.get_report(
             datetime(2026, 1, 1, tzinfo=timezone.utc)
         )
-        
+
         assert isinstance(report, DailyReportData)
         # Empty report for non-existent date
         assert len(report.entries) == 0
@@ -258,7 +256,7 @@ class TestUnifiedNotificationManager:
     def test_routing_policy_channels(self):
         """Test routing policy returns correct channels."""
         policy = RoutingPolicy()
-        
+
         # Critical priority should include all channels
         channels = policy.get_channels(
             NotificationPriority.CRITICAL,
@@ -266,7 +264,7 @@ class TestUnifiedNotificationManager:
         )
         assert "slack" in channels
         assert "email" in channels
-        
+
         # Medium priority should be Slack only
         channels = policy.get_channels(
             NotificationPriority.MEDIUM,
@@ -277,12 +275,12 @@ class TestUnifiedNotificationManager:
     def test_routing_policy_security_category(self):
         """Test security category gets email by default."""
         policy = RoutingPolicy()
-        
+
         channels = policy.get_channels(
             NotificationPriority.MEDIUM,
             NotificationCategory.SECURITY,
         )
-        
+
         assert "slack" in channels
         assert "email" in channels
 
@@ -297,7 +295,7 @@ class TestUnifiedNotificationManager:
             source="test",
             dedup_key="test:dedup",
         )
-        
+
         # Mock the send to channels
         with patch.object(self.manager, "_send_to_channels") as mock_send:
             mock_send.return_value = MagicMock(
@@ -305,10 +303,10 @@ class TestUnifiedNotificationManager:
                 channels_sent=["slack"],
                 channels_failed=[],
             )
-            
+
             result1 = self.manager.notify(payload)
             assert result1.success
-            
+
             # Second notification should be suppressed
             result2 = self.manager.notify(payload)
             assert result2.suppressed
@@ -316,8 +314,10 @@ class TestUnifiedNotificationManager:
 
     def test_no_cooldown_for_approval_category(self):
         """Test that approval category has no cooldown."""
-        from selfhealing.services.unified_notification import NotificationResult as UnifiedResult
-        
+        from selfhealing.services.unified_notification import (
+            NotificationResult as UnifiedResult,
+        )
+
         payload = NotificationPayload(
             title="Approval Request",
             message="Please approve",
@@ -325,7 +325,7 @@ class TestUnifiedNotificationManager:
             category=NotificationCategory.APPROVAL,
             source="test",
         )
-        
+
         with patch.object(self.manager, "_send_to_channels") as mock_send:
             # Return a proper NotificationResult object instead of MagicMock
             mock_send.return_value = UnifiedResult(
@@ -333,11 +333,11 @@ class TestUnifiedNotificationManager:
                 channels_sent=["slack"],
                 channels_failed=[],
             )
-            
+
             # Both should go through
             result1 = self.manager.notify(payload)
             result2 = self.manager.notify(payload)
-            
+
             assert result1.suppressed is False
             assert result2.suppressed is False
 
@@ -350,9 +350,9 @@ class TestUnifiedNotificationManager:
             category=NotificationCategory.OPERATIONS,
             source="test",
         )
-        
+
         result = self.manager.notify(payload)
-        
+
         assert result.success
         assert result.suppressed
         assert result.suppression_reason == "log_only"
@@ -360,15 +360,15 @@ class TestUnifiedNotificationManager:
     def test_reset_cooldowns(self):
         """Test cooldown reset."""
         self.manager._cooldown_cache["test:key"] = datetime.now(timezone.utc)
-        
+
         self.manager.reset_cooldowns()
-        
+
         assert len(self.manager._cooldown_cache) == 0
 
     def test_get_stats(self):
         """Test getting statistics."""
         stats = self.manager.get_stats()
-        
+
         assert "cooldown_entries" in stats
         assert "notification_counts" in stats
 
@@ -395,7 +395,7 @@ class TestConvenienceFunctions:
             UnifiedNotificationManager, "notify"
         ) as mock_notify:
             mock_notify.return_value = MagicMock(success=True)
-            
+
             result = notify(
                 title="Test",
                 message="Test message",
@@ -403,7 +403,7 @@ class TestConvenienceFunctions:
                 category="operations",
                 source="test",
             )
-            
+
             # Should have been called
             mock_notify.assert_called_once()
 
@@ -413,14 +413,14 @@ class TestConvenienceFunctions:
             UnifiedNotificationManager, "notify"
         ) as mock_notify:
             mock_notify.return_value = MagicMock(success=True)
-            
+
             result = notify_sla(
                 title="SLA Warning",
                 message="Threshold exceeded",
                 domain="payment",
                 priority="high",
             )
-            
+
             mock_notify.assert_called_once()
             # Check that payload has correct dedup key
             call_args = mock_notify.call_args[0][0]
@@ -432,7 +432,7 @@ class TestConvenienceFunctions:
             UnifiedNotificationManager, "notify"
         ) as mock_notify:
             mock_notify.return_value = MagicMock(success=True)
-            
+
             error = ValueError("Test error")
             result = notify_error(
                 title="Error",
@@ -440,7 +440,7 @@ class TestConvenienceFunctions:
                 error=error,
                 source="test_task",
             )
-            
+
             mock_notify.assert_called_once()
             call_args = mock_notify.call_args[0][0]
             assert call_args.category == NotificationCategory.ERROR
@@ -464,7 +464,7 @@ class TestNotificationPayload:
             category=NotificationCategory.SLA,
             source="drift_detection",
         )
-        
+
         assert payload.title == "Test Title"
         assert payload.priority == NotificationPriority.HIGH
         assert payload.category == NotificationCategory.SLA
@@ -477,9 +477,9 @@ class TestNotificationPayload:
             priority=NotificationPriority.MEDIUM,
             category=NotificationCategory.OPERATIONS,
         )
-        
+
         data = payload.to_dict()
-        
+
         assert data["title"] == "Test"
         assert data["priority"] == "medium"
         assert data["category"] == "operations"
@@ -493,7 +493,7 @@ class TestNotificationPayload:
             metadata={"domain": "payment", "rate": 25.5},
             tags=["sla", "payment"],
         )
-        
+
         assert payload.metadata["domain"] == "payment"
         assert "sla" in payload.tags
 
@@ -526,9 +526,9 @@ class TestNotificationIntegration:
                 results=[MagicMock(success=True, channel="slack")]
             )
             mock_get_service.return_value = mock_service
-            
+
             manager = get_unified_notification_manager()
-            
+
             payload = NotificationPayload(
                 title="Integration Test",
                 message="Testing full flow",
@@ -536,9 +536,9 @@ class TestNotificationIntegration:
                 category=NotificationCategory.OPERATIONS,
                 source="integration_test",
             )
-            
+
             result = manager.notify(payload)
-            
+
             assert result.success
             mock_service.send_alert.assert_called_once()
 
@@ -549,9 +549,9 @@ class TestNotificationIntegration:
         mock_emergency_manager = MagicMock()
         mock_emergency_manager.get_current_level.return_value = 3
         mock_emergency_mode.get_emergency_mode_manager.return_value = mock_emergency_manager
-        
+
         with patch.dict(
-            'sys.modules', 
+            'sys.modules',
             {'selfhealing.core.emergency_mode': mock_emergency_mode}
         ), patch(
             "selfhealing.services.security_notification.get_security_notification_service"
@@ -562,9 +562,9 @@ class TestNotificationIntegration:
                 results=[MagicMock(success=True, channel="slack")]
             )
             mock_get_service.return_value = mock_service
-            
+
             manager = UnifiedNotificationManager()
-            
+
             # Send a low priority notification
             payload = NotificationPayload(
                 title="Test",
@@ -572,9 +572,9 @@ class TestNotificationIntegration:
                 priority=NotificationPriority.LOW,
                 category=NotificationCategory.OPERATIONS,
             )
-            
+
             result = manager.notify(payload)
-            
+
             # Priority is passed through (emergency escalation is optional behavior)
             call_kwargs = mock_service.send_alert.call_args[1]
             assert call_kwargs["severity"] in ("low", "high")  # Accept either based on implementation

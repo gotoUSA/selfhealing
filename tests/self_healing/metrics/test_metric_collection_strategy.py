@@ -8,9 +8,8 @@ Tests for:
 - DriftThresholdConfig
 """
 
-import time
 from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 

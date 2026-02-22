@@ -6,14 +6,11 @@ AuditSyncWorker Idempotent Consumer 테스트.
 2. 중복 엔트리 스킵 동작
 """
 
+import sys
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
-import sys
-
-import pytest
 
 from selfhealing.audit.sync_worker import AuditSyncWorker, SyncWorkerConfig
-
 
 # 테스트용 IdempotencyService 모듈 패치 경로
 IDEMPOTENCY_MODULE = "selfhealing.services.idempotency_service"
@@ -89,7 +86,6 @@ class TestAuditSyncWorkerIdempotency:
         )
 
         # IdempotencyService import 실패 시뮬레이션을 위해 모듈 제거
-        import sys
 
         original_modules = {}
         modules_to_remove = [k for k in sys.modules if "idempotency" in k.lower()]

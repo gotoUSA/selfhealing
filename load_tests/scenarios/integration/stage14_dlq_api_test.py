@@ -44,7 +44,6 @@ import os
 import sys
 import time
 import random
-import uuid
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(os.path.dirname(_current_dir))

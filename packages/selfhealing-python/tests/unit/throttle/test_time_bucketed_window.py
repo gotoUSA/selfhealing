@@ -4,10 +4,7 @@ Time-Bucketed RTT Window Unit Tests.
 초당 버킷 기반 RTT 윈도우의 기능 테스트.
 """
 
-import time
 from unittest.mock import patch
-
-import pytest
 
 
 class TestTimeBucketedRTTWindow:

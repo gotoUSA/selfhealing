@@ -12,7 +12,6 @@ from shopping.models.user import User
 from shopping.tests.factories import (
     OrderFactory,
     PaymentFactory,
-    ProductFactory,
     UserFactory,
 )
 

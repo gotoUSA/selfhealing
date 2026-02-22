@@ -34,7 +34,6 @@ from selfhealing.api.django.permissions import (
     IsViewer,
 )
 from selfhealing.services.postmortem.revision import (
-    PostmortemRevisionManager,
     RevisionChangeType,
     get_postmortem_revision_manager,
 )

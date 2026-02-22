@@ -8,7 +8,6 @@ Django 의존성 없이 사용 가능.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 
 class IncidentDurationResult:

@@ -16,23 +16,17 @@ Unit tests for Step-Level Timeout Monitor.
 
 import threading
 import time
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from selfhealing.core.state_backend import MemoryStateBackend
+from selfhealing.services.coordination.distributed_recovery_lock import (
+    InMemoryRecoveryLock,
+)
 from selfhealing.services.coordination.enums import (
     CompensationStatus,
     RecoveryStatus,
-)
-from selfhealing.services.coordination.recovery_state import (
-    CompensationResult,
-    RecoverySession,
-    RecoveryStep,
-    RecoveryStepType,
-)
-from selfhealing.services.coordination.distributed_recovery_lock import (
-    InMemoryRecoveryLock,
 )
 from selfhealing.services.coordination.recovery_coordinator import (
     LOCK_HEARTBEAT_INTERVAL_SECONDS,
@@ -40,12 +34,16 @@ from selfhealing.services.coordination.recovery_coordinator import (
     SessionVersionConflictError,
     StepTimeoutError,
 )
+from selfhealing.services.coordination.recovery_state import (
+    RecoverySession,
+    RecoveryStep,
+    RecoveryStepType,
+)
 from selfhealing.settings.recovery_coordinator import (
     RecoveryCoordinatorSettings,
     get_recovery_coordinator_settings,
     reset_recovery_coordinator_settings,
 )
-
 
 # =========================================================================
 # Contract Tests — 설계 계약값 검증 (하드코딩 필수)

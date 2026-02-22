@@ -32,7 +32,6 @@ from tests.unit.rate_limit.conftest import (
     make_mock_event_bus,
 )
 
-
 # =============================================================================
 # 이벤트 발행 테스트
 # =============================================================================
@@ -314,7 +313,9 @@ class TestRecordRateLimitMetrics:
 
     def test_records_429_counter(self):
         """rate_limit_429_total 카운터 증가 확인."""
-        from selfhealing.services.rate_limit_coordinator import _record_rate_limit_metrics
+        from selfhealing.services.rate_limit_coordinator import (
+            _record_rate_limit_metrics,
+        )
 
         mock_counter = MagicMock()
         mock_labels = MagicMock()
@@ -331,7 +332,9 @@ class TestRecordRateLimitMetrics:
 
     def test_records_cooldown_histogram(self):
         """rate_limit_cooldown_seconds 히스토그램 기록 확인."""
-        from selfhealing.services.rate_limit_coordinator import _record_rate_limit_metrics
+        from selfhealing.services.rate_limit_coordinator import (
+            _record_rate_limit_metrics,
+        )
 
         mock_counter = MagicMock()
         mock_counter.labels.return_value = MagicMock()
@@ -355,7 +358,9 @@ class TestRecordRateLimitMetrics:
 
     def test_records_consecutive_gauge(self):
         """rate_limit_consecutive_429s 게이지 설정 확인."""
-        from selfhealing.services.rate_limit_coordinator import _record_rate_limit_metrics
+        from selfhealing.services.rate_limit_coordinator import (
+            _record_rate_limit_metrics,
+        )
 
         mock_counter = MagicMock()
         mock_counter.labels.return_value = MagicMock()
@@ -379,7 +384,9 @@ class TestRecordRateLimitMetrics:
 
     def test_metrics_fail_open_on_import_error(self):
         """메트릭 모듈 import 실패 시 예외 없이 통과."""
-        from selfhealing.services.rate_limit_coordinator import _record_rate_limit_metrics
+        from selfhealing.services.rate_limit_coordinator import (
+            _record_rate_limit_metrics,
+        )
 
         with patch(
             "selfhealing.services.metrics.definitions.rate_limit_429_total",

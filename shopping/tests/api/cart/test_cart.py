@@ -36,7 +36,6 @@ from shopping.models.cart import Cart, CartItem
 from shopping.tests.factories import (
     CartFactory,
     CartItemFactory,
-    CategoryFactory,
     ProductFactory,
     UserFactory,
 )

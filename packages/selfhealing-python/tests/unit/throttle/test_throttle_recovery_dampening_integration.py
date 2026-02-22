@@ -11,12 +11,9 @@ AdaptiveThrottle Recovery Dampening 연동 테스트.
 7. Emergency 복구 시 Recovery Dampening 연동
 """
 
-import pytest
 import time
-from unittest.mock import patch
 
 from selfhealing.services.throttle.adaptive import (
-    AdaptiveThrottle,
     get_adaptive_throttle,
     reset_adaptive_throttle,
 )

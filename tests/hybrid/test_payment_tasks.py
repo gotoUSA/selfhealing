@@ -5,8 +5,6 @@ import pytest
 # 이 파일의 모든 테스트는 DB 필요
 pytestmark = pytest.mark.requires_db
 
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
 
 from shopping.models.payment import Payment
 from shopping.tasks.payment_tasks import (
@@ -19,7 +17,6 @@ from shopping.tasks.payment_tasks import (
 from shopping.tests.factories import (
     PaymentFactory,
     OrderFactory,
-    ProductFactory,
     UserFactory,
     OrderItemFactory,
 )

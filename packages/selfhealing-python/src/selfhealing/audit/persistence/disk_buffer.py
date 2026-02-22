@@ -26,7 +26,7 @@ import threading
 import time
 import zlib
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
@@ -1074,7 +1074,7 @@ class DiskPersistentBuffer:
                 self._state = BufferState.CLOSED
                 logger.info("disk_buffer.closed")
 
-    def __enter__(self) -> "DiskPersistentBuffer":
+    def __enter__(self) -> DiskPersistentBuffer:
         """Context manager 진입."""
         return self
 

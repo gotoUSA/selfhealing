@@ -5,7 +5,6 @@ Tests for log_emergency_mode_audit function.
 Uses lazy imports to avoid Prometheus registry conflicts.
 """
 
-import pytest
 from unittest.mock import patch
 
 
@@ -21,7 +20,7 @@ class TestLogEmergencyModeAudit:
             "selfhealing.audit.log_config_change",
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
-            
+
             result = log_emergency_mode_audit(
                 action="activate",
                 level="LEVEL_2",
@@ -30,7 +29,7 @@ class TestLogEmergencyModeAudit:
                 reason="High error rate detected",
                 expires_at="2026-01-05T11:00:00+00:00",
             )
-            
+
             assert result == 1
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args[1]
@@ -46,7 +45,7 @@ class TestLogEmergencyModeAudit:
             "selfhealing.audit.log_config_change",
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
-            
+
             log_emergency_mode_audit(
                 action="auto_activate",
                 level="LEVEL_1",
@@ -55,7 +54,7 @@ class TestLogEmergencyModeAudit:
                 is_auto_triggered=True,
                 reason="Circuit breaker cascade",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["event_type"] == "EMERGENCY_MODE_ACTIVATED"
             assert call_kwargs["details"]["is_auto_triggered"] is True
@@ -69,7 +68,7 @@ class TestLogEmergencyModeAudit:
             "selfhealing.audit.log_config_change",
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
-            
+
             log_emergency_mode_audit(
                 action="deactivate",
                 level="NORMAL",
@@ -77,7 +76,7 @@ class TestLogEmergencyModeAudit:
                 deactivated_by="admin",
                 reason="System recovered",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["event_type"] == "EMERGENCY_MODE_DEACTIVATED"
             assert call_kwargs["details"]["deactivated_by"] == "admin"
@@ -91,7 +90,7 @@ class TestLogEmergencyModeAudit:
             "selfhealing.audit.log_config_change",
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
-            
+
             # Activation should be critical
             log_emergency_mode_audit(
                 action="activate",
@@ -100,10 +99,10 @@ class TestLogEmergencyModeAudit:
                 activated_by="admin",
                 reason="Critical failure",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["details"]["severity"] == "critical"
-            
+
             # Deactivation should be warning
             log_emergency_mode_audit(
                 action="deactivate",
@@ -112,7 +111,7 @@ class TestLogEmergencyModeAudit:
                 deactivated_by="admin",
                 reason="Recovered",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["details"]["severity"] == "warning"
 
@@ -125,7 +124,7 @@ class TestLogEmergencyModeAudit:
             "selfhealing.audit.log_config_change",
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
-            
+
             log_emergency_mode_audit(
                 action="escalate",
                 level="LEVEL_3",
@@ -133,7 +132,7 @@ class TestLogEmergencyModeAudit:
                 activated_by="system",
                 reason="Escalation",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             assert call_kwargs["details"]["tag"] == "EMERGENCY_ESCALATE"
 
@@ -148,7 +147,7 @@ class TestLogEmergencyModeAudit:
             "selfhealing.services.audit.chaos_audit.logger"
         ) as mock_logger:
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
-            
+
             log_emergency_mode_audit(
                 action="activate",
                 level="LEVEL_1",
@@ -156,7 +155,7 @@ class TestLogEmergencyModeAudit:
                 activated_by="admin",
                 reason="Test reason",
             )
-            
+
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             assert "[EmergencyModeAudit]" in call_args
@@ -172,7 +171,7 @@ class TestLogEmergencyModeAudit:
             "selfhealing.audit.log_config_change",
         ) as mock_config_change:
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
-            
+
             log_emergency_mode_audit(
                 action="activate",
                 level="LEVEL_2",
@@ -180,7 +179,7 @@ class TestLogEmergencyModeAudit:
                 activated_by="admin",
                 reason="Test",
             )
-            
+
             mock_config_change.assert_called_once()
             call_kwargs = mock_config_change.call_args[1]
             assert call_kwargs["config_type"] == "emergency_mode"

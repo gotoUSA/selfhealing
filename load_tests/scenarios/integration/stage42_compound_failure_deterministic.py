@@ -38,20 +38,13 @@ Controlled Chaos Testing: 복합 장애 상황에서 시스템 안정성 검증
 
 from __future__ import annotations
 
-import gc
-import json
-import logging
 import random
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone as tz
-from enum import Enum
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone as tz
+from typing import Any, Callable, Dict, List, Tuple, TYPE_CHECKING
 
 import pytest
 
@@ -61,13 +54,7 @@ import pytest
 # =============================================================================
 
 if TYPE_CHECKING:
-    from selfhealing.services import (
-        CircuitBreakerConfig,
-        CircuitBreakerService,
-        CircuitState,
-        DLQConfig,
-        DLQService,
-    )
+    pass
 
 
 # =============================================================================

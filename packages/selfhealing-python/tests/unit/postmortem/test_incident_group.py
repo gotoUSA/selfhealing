@@ -13,10 +13,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 
 @dataclass
@@ -430,7 +427,6 @@ class TestIncidentGroupManagerMemory:
         """완료 마킹 시 상태 변경."""
         from selfhealing.services.postmortem.incident_group import (
             IncidentGroupManager,
-            IncidentGroupStatus,
         )
 
         manager = IncidentGroupManager(use_redis=False)

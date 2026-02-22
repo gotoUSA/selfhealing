@@ -4,10 +4,7 @@ Tests for hash chain integrity verification.
 
 import json
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
-
-import pytest
 
 from selfhealing.audit.integrity import (
     HashChainManager,

@@ -21,7 +21,8 @@ bulkhead_policy() / async_bulkhead_policy() 팩토리 함수가 Registry 연동�
 
 from __future__ import annotations
 
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import structlog
 

@@ -9,7 +9,6 @@
 """
 
 from datetime import timedelta
-from decimal import Decimal
 
 import pytest
 from django.utils import timezone

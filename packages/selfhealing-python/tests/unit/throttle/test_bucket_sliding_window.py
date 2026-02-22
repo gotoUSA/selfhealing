@@ -4,8 +4,9 @@ BucketSlidingWindow 단위 테스트.
 O(1) 고정 버킷 기반 슬라이딩 윈도우 테스트.
 """
 
-import time
 import threading
+import time
+
 import pytest
 
 

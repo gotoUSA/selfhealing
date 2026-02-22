@@ -9,16 +9,16 @@ Tests:
 - Django Model is_test 필드 (Abstract Model)
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 from selfhealing.audit.cascade_event import (
     CascadeEffect,
-    CascadeTrigger,
     CascadeEvent,
+    CascadeTrigger,
 )
 from selfhealing.core.test_mode_context import TestModeContext
-
 
 # =============================================================================
 # Fixtures

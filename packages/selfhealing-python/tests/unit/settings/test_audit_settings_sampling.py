@@ -34,8 +34,8 @@ class TestSamplingRateLimitAdjustedField:
 
     def test_value_range_minimum(self):
         """최소값 제약 확인 (0.0)."""
+
         from selfhealing.settings.audit_settings import AuditSettings
-        from pydantic import ValidationError
 
         # 0.0은 허용됨
         settings = AuditSettings(sampling_rate_limit_adjusted=0.0)
@@ -43,8 +43,8 @@ class TestSamplingRateLimitAdjustedField:
 
     def test_value_range_maximum(self):
         """최대값 제약 확인 (1.0)."""
+
         from selfhealing.settings.audit_settings import AuditSettings
-        from pydantic import ValidationError
 
         # 1.0은 허용됨
         settings = AuditSettings(sampling_rate_limit_adjusted=1.0)
@@ -52,16 +52,18 @@ class TestSamplingRateLimitAdjustedField:
 
     def test_value_below_minimum_raises(self):
         """최소값 미만 시 ValidationError 발생."""
-        from selfhealing.settings.audit_settings import AuditSettings
         from pydantic import ValidationError
+
+        from selfhealing.settings.audit_settings import AuditSettings
 
         with pytest.raises(ValidationError):
             AuditSettings(sampling_rate_limit_adjusted=-0.1)
 
     def test_value_above_maximum_raises(self):
         """최대값 초과 시 ValidationError 발생."""
-        from selfhealing.settings.audit_settings import AuditSettings
         from pydantic import ValidationError
+
+        from selfhealing.settings.audit_settings import AuditSettings
 
         with pytest.raises(ValidationError):
             AuditSettings(sampling_rate_limit_adjusted=1.1)
@@ -108,16 +110,18 @@ class TestSamplingRate429Field:
 
     def test_value_below_minimum_raises(self):
         """최소값 미만 시 ValidationError 발생."""
-        from selfhealing.settings.audit_settings import AuditSettings
         from pydantic import ValidationError
+
+        from selfhealing.settings.audit_settings import AuditSettings
 
         with pytest.raises(ValidationError):
             AuditSettings(sampling_rate_429=-0.1)
 
     def test_value_above_maximum_raises(self):
         """최대값 초과 시 ValidationError 발생."""
-        from selfhealing.settings.audit_settings import AuditSettings
         from pydantic import ValidationError
+
+        from selfhealing.settings.audit_settings import AuditSettings
 
         with pytest.raises(ValidationError):
             AuditSettings(sampling_rate_429=1.1)

@@ -242,13 +242,13 @@ def main():
     if stats["circuit_503"] > 0:
         print(f"   ✅ Circuit Breaker 발동: {stats['circuit_503']}회 503 반환")
     else:
-        print(f"   ❌ Circuit Breaker 미발동: 503 없음")
+        print("   ❌ Circuit Breaker 미발동: 503 없음")
 
     # 복구 여부
     if stats["recovery_detected"]:
-        print(f"   ✅ 자동 복구 확인: 부하 해소 후 정상 응답")
+        print("   ✅ 자동 복구 확인: 부하 해소 후 정상 응답")
     else:
-        print(f"   ❌ 복구 미확인")
+        print("   ❌ 복구 미확인")
 
     # 최종 판정
     print("\n" + "=" * 70)

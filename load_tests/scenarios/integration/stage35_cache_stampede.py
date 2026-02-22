@@ -37,13 +37,10 @@ import sys
 import time
 import random
 import threading
-import hashlib
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple, Set, Callable
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum
-from contextlib import contextmanager
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -608,7 +605,7 @@ class StampedePrevention:
             try:
                 value, was_hit, elapsed = cache.get(key)
                 results["response_times"].append(elapsed)
-            except Exception as e:
+            except Exception:
                 pass
 
         # Create all request threads

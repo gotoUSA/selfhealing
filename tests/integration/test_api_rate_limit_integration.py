@@ -5,7 +5,6 @@ Django 환경에서 api/django/rate_limit.py와 ApiRateLimitSettings 연동 검�
 """
 
 import pytest
-from django.test import override_settings
 
 
 @pytest.mark.django_db
@@ -37,7 +36,6 @@ class TestApiRateLimitSettingsIntegration:
         reset_api_rate_limit_settings()
         
         # RuntimeConfigManager를 mock하여 실패하게 만듦
-        import selfhealing.api.django.rate_limit as rate_limit_module
         
         def mock_get_runtime_config_manager():
             raise ImportError("RuntimeConfigManager not available for test")

@@ -17,17 +17,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.interfaces.resilience_policy import (
-    GuardResult,
     PolicyContext,
 )
 from selfhealing.resilience.policies.guards import (
     ErrorBudgetGuard,
     KillSwitchGuard,
 )
-
 
 # =============================================================================
 # 계약 검증 — KillSwitchGuard

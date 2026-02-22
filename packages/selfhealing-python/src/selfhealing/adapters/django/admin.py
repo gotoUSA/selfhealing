@@ -191,7 +191,7 @@ class BasePostmortemRecordAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else object
     # Permission Methods
     # =========================================================================
 
-    def has_add_permission(self, request: "HttpRequest") -> bool:
+    def has_add_permission(self, request: HttpRequest) -> bool:
         """
         Postmortem 레코드 수동 추가 비허용.
 
@@ -202,7 +202,7 @@ class BasePostmortemRecordAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else object
 
     def has_change_permission(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         obj: Any = None,
     ) -> bool:
         """
@@ -214,7 +214,7 @@ class BasePostmortemRecordAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else object
 
     def has_delete_permission(
         self,
-        request: "HttpRequest",
+        request: HttpRequest,
         obj: Any = None,
     ) -> bool:
         """
@@ -569,7 +569,7 @@ class BaseDLQEntryAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else object):
     # =========================================================================
 
     @admin.action(description="Replay selected DLQ entries")
-    def replay_selected(self, request: "HttpRequest", queryset) -> None:
+    def replay_selected(self, request: HttpRequest, queryset) -> None:
         """
         선택된 DLQ 항목을 재시도.
 
@@ -599,7 +599,7 @@ class BaseDLQEntryAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else object):
         )
 
     @admin.action(description="Mark as RESOLVED")
-    def mark_as_resolved(self, request: "HttpRequest", queryset) -> None:
+    def mark_as_resolved(self, request: HttpRequest, queryset) -> None:
         """선택된 항목을 해결됨으로 마킹."""
         count = 0
         for entry in queryset:
@@ -613,7 +613,7 @@ class BaseDLQEntryAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else object):
         self.message_user(request, f"Marked {count} entries as resolved.")
 
     @admin.action(description="Mark as REJECTED (unrecoverable)")
-    def mark_as_rejected(self, request: "HttpRequest", queryset) -> None:
+    def mark_as_rejected(self, request: HttpRequest, queryset) -> None:
         """선택된 항목을 거부됨(복구 불가)으로 마킹."""
         count = 0
         for entry in queryset:
@@ -626,7 +626,7 @@ class BaseDLQEntryAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else object):
         self.message_user(request, f"Marked {count} entries as rejected.")
 
     @admin.action(description="Mark as REQUIRES_REVIEW")
-    def mark_as_requires_review(self, request: "HttpRequest", queryset) -> None:
+    def mark_as_requires_review(self, request: HttpRequest, queryset) -> None:
         """선택된 항목을 검토 필요로 마킹."""
         count = 0
         for entry in queryset:
@@ -799,7 +799,7 @@ class BaseCircuitBreakerStateAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else obj
     # =========================================================================
 
     @admin.action(description="Force OPEN selected circuits (block requests)")
-    def force_open_selected(self, request: "HttpRequest", queryset) -> None:
+    def force_open_selected(self, request: HttpRequest, queryset) -> None:
         """
         선택된 서킷 브레이커를 강제로 열기.
 
@@ -825,7 +825,7 @@ class BaseCircuitBreakerStateAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else obj
         )
 
     @admin.action(description="Force CLOSE selected circuits (allow requests)")
-    def force_close_selected(self, request: "HttpRequest", queryset) -> None:
+    def force_close_selected(self, request: HttpRequest, queryset) -> None:
         """
         선택된 서킷 브레이커를 강제로 닫기 (DLQ 재시도 없음).
 
@@ -852,7 +852,7 @@ class BaseCircuitBreakerStateAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else obj
         )
 
     @admin.action(description="Force CLOSE with DLQ replay")
-    def force_close_with_replay(self, request: "HttpRequest", queryset) -> None:
+    def force_close_with_replay(self, request: HttpRequest, queryset) -> None:
         """
         선택된 서킷 브레이커를 닫고 DLQ 항목을 재시도.
 
@@ -879,7 +879,7 @@ class BaseCircuitBreakerStateAdmin(admin.ModelAdmin if DJANGO_AVAILABLE else obj
         )
 
     @admin.action(description="Reset selected circuits to initial state")
-    def reset_selected(self, request: "HttpRequest", queryset) -> None:
+    def reset_selected(self, request: HttpRequest, queryset) -> None:
         """
         선택된 서킷 브레이커를 초기 상태로 리셋.
 

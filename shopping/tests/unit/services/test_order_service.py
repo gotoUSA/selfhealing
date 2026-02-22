@@ -1,15 +1,10 @@
 """OrderService 단위 테스트"""
 
 from decimal import Decimal
-from unittest.mock import Mock, patch
 
 import pytest
-from django.db import transaction
 
-from shopping.models.cart import Cart, CartItem
-from shopping.models.order import Order, OrderItem
-from shopping.models.product import Category, Product
-from shopping.models.user import User
+from shopping.models.order import Order
 from shopping.services.order_service import OrderService, OrderServiceError
 from shopping.tests.factories import (
     CartFactory,

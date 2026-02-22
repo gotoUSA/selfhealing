@@ -5,9 +5,7 @@ error_budget_remaining_percent, canary_governance_blocked_total 메트릭에
 region/tier 레이블 존재 및 record_error_budget_status() 파라미터 동작 검증.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import patch
 
 # =============================================================================
 # 계약 검증: 메트릭 레이블
@@ -116,6 +114,7 @@ class TestRecordErrorBudgetStatusRegionTierBehavior:
     def test_default_empty_region_and_tier(self):
         """region/tier 미지정 시 빈 문자열 기본값."""
         import inspect
+
         from selfhealing.services.metrics.recorders import record_error_budget_status
 
         sig = inspect.signature(record_error_budget_status)

@@ -11,126 +11,69 @@
     - 6.1.5: Audit Trail Tests (Audit 추적)
 """
 
-import pytest
 import time
-from datetime import datetime, timezone
-from unittest.mock import Mock, patch, MagicMock
 
-# Models
-from selfhealing.services.circuit_breaker.models import (
-    ServiceConfig,
-    SheddingLevel,
-    LoadSheddingPolicy,
-    CanaryRecoveryStageConfig,
-    RecoveryStrategy,
-    ThresholdMultiplier,
-    AdaptiveThresholdPolicy,
-    PanicThresholdConfig,
-)
+import pytest
 
 # Adaptive Threshold
-from selfhealing.services.circuit_breaker.adaptive_threshold import (
-    AdaptiveThresholdManager,
-    get_adaptive_threshold_manager,
-    get_adjusted_cb_threshold,
-    should_allow_cb_auto_open,
-)
-
-# Freeze Mode
-from selfhealing.services.circuit_breaker.freeze_mode import (
-    FreezeModeManager,
-    get_freeze_mode_manager,
-    is_freeze_mode_active,
-    should_allow_cb_state_change,
-)
-
-# Panic Threshold
-from selfhealing.services.circuit_breaker.panic_threshold import (
-    PanicThresholdMonitor,
-    get_panic_threshold_monitor,
-    check_panic_threshold,
-    is_panic_threshold_triggered,
-)
-
-# Tracing
-from selfhealing.services.circuit_breaker.tracing import (
-    TracingConfig,
-    TriggeringRequestInfo,
-    TraceContextProvider,
-    CircuitBreakerTracingManager,
-    get_tracing_manager,
-    record_failure_with_trace,
-)
-
-# Service Config
-from selfhealing.services.circuit_breaker.service_config import (
-    ServiceConfigManager,
-    get_service_config_manager,
-    reset_service_config_manager,
-    register_service,
-    get_service_config,
-    get_services_by_criticality,
-)
-
 # Blast Radius
 from selfhealing.services.circuit_breaker.blast_radius_integration import (
-    BlastRadiusLevel,
-    BlastRadiusAssessment,
-    BlastRadiusIntegration,
-    BlastRadiusConfig,
-    get_blast_radius_integration,
     reset_blast_radius_integration,
-    assess_cb_open_impact,
 )
 
 # Canary Recovery
 from selfhealing.services.circuit_breaker.canary_recovery import (
     CanaryRecoveryStage,
-    CanaryRecoveryManager,
-    CanaryRecoveryDecision,
+    canary_record_failure,
+    canary_record_success,
+    canary_should_allow_request,
     get_canary_recovery_manager,
+    is_in_canary_recovery,
     reset_canary_recovery_manager,
     start_canary_recovery,
     stop_canary_recovery,
-    is_in_canary_recovery,
-    canary_should_allow_request,
-    canary_record_success,
-    canary_record_failure,
+)
+
+# Freeze Mode
+# Load Shedding
+from selfhealing.services.circuit_breaker.load_shedding import (
+    get_load_shedding_manager,
+    is_shedding_active,
+    reset_load_shedding_manager,
+)
+
+# Models
+from selfhealing.services.circuit_breaker.models import (
+    CanaryRecoveryStageConfig,
+    RecoveryStrategy,
+    ServiceConfig,
+)
+
+# Panic Threshold
+# Recovery Strategy
+from selfhealing.services.circuit_breaker.recovery_strategy import (
+    get_recovery_strategy_selector,
+    reset_recovery_strategy_selector,
+)
+
+# Service Config
+from selfhealing.services.circuit_breaker.service_config import (
+    get_service_config,
+    get_service_config_manager,
+    reset_service_config_manager,
 )
 
 # Stale Cache Integration
 from selfhealing.services.circuit_breaker.stale_cache_integration import (
-    CanaryWithStaleCacheConfig,
-    StaleCacheStore,
-    CanaryWithStaleCacheService,
     get_canary_stale_cache_service,
     reset_canary_stale_cache_service,
 )
 
-# Recovery Strategy
-from selfhealing.services.circuit_breaker.recovery_strategy import (
-    RecoveryStrategySelector,
-    get_recovery_strategy_selector,
-    reset_recovery_strategy_selector,
-    select_recovery_strategy,
+# Tracing
+from selfhealing.services.circuit_breaker.tracing import (
+    get_tracing_manager,
+    record_failure_with_trace,
 )
-
-# Load Shedding
-from selfhealing.services.circuit_breaker.load_shedding import (
-    SheddingState,
-    SheddingDecision,
-    SheddingStatus,
-    LoadSheddingManager,
-    LoadSheddingMiddleware,
-    LoadSheddingDashboard,
-    get_load_shedding_manager,
-    reset_load_shedding_manager,
-    evaluate_shedding,
-    should_allow_shedding_request,
-    is_shedding_active,
-    get_shedding_status,
-)
-
 
 # =============================================================================
 # Test Fixtures
@@ -158,7 +101,9 @@ def _reset_all():
 
     # Adaptive Threshold reset
     try:
-        from selfhealing.services.circuit_breaker.adaptive_threshold import reset_adaptive_threshold_manager
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            reset_adaptive_threshold_manager,
+        )
 
         reset_adaptive_threshold_manager()
     except ImportError:
@@ -166,7 +111,9 @@ def _reset_all():
 
     # Freeze Mode reset
     try:
-        from selfhealing.services.circuit_breaker.freeze_mode import reset_freeze_mode_manager
+        from selfhealing.services.circuit_breaker.freeze_mode import (
+            reset_freeze_mode_manager,
+        )
 
         reset_freeze_mode_manager()
     except ImportError:
@@ -174,7 +121,9 @@ def _reset_all():
 
     # Panic Threshold reset
     try:
-        from selfhealing.services.circuit_breaker.panic_threshold import reset_panic_threshold_monitor
+        from selfhealing.services.circuit_breaker.panic_threshold import (
+            reset_panic_threshold_monitor,
+        )
 
         reset_panic_threshold_monitor()
     except ImportError:
@@ -823,7 +772,6 @@ class TestPerformance:
         shedding_manager = setup_full_system["shedding_manager"]
         shedding_manager.set_error_rate("payment-api", 40.0)
 
-        import time
 
         start = time.time()
 
@@ -839,7 +787,6 @@ class TestPerformance:
         """Canary 결정 성능."""
         start_canary_recovery("payment-api")
 
-        import time
 
         start = time.time()
 

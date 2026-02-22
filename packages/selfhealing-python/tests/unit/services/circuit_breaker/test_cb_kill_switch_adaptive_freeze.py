@@ -8,9 +8,7 @@ Circuit Breaker Kill Switch and Adaptive Freeze Tests
 4. Panic Threshold (panic_threshold.py)
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-
+from unittest.mock import Mock, patch
 
 # =============================================================================
 # Kill Switch Override Tests
@@ -22,8 +20,12 @@ class TestKillSwitchOverride:
 
     def test_force_open_blocked_when_kill_switch_active_without_override(self):
         """Kill Switch 활성 시 override 없으면 force_open 차단."""
-        from selfhealing.services.circuit_breaker.manual_control import ManualControlMixin
-        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig, CircuitBreakerResult
+        from selfhealing.services.circuit_breaker.config import (
+            CircuitBreakerConfig,
+        )
+        from selfhealing.services.circuit_breaker.manual_control import (
+            ManualControlMixin,
+        )
 
         # Mock repository
         mock_repo = Mock()
@@ -45,8 +47,12 @@ class TestKillSwitchOverride:
 
     def test_force_open_allowed_with_override(self):
         """Kill Switch 활성 시 override=True면 force_open 허용."""
-        from selfhealing.services.circuit_breaker.manual_control import ManualControlMixin
-        from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig, CircuitBreakerResult
+        from selfhealing.services.circuit_breaker.config import (
+            CircuitBreakerConfig,
+        )
+        from selfhealing.services.circuit_breaker.manual_control import (
+            ManualControlMixin,
+        )
 
         # Mock repository
         mock_repo = Mock()
@@ -70,8 +76,10 @@ class TestKillSwitchOverride:
 
     def test_force_close_blocked_when_kill_switch_active_without_override(self):
         """Kill Switch 활성 시 override 없으면 force_close 차단."""
-        from selfhealing.services.circuit_breaker.manual_control import ManualControlMixin
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        from selfhealing.services.circuit_breaker.manual_control import (
+            ManualControlMixin,
+        )
 
         mock_repo = Mock()
         mixin = ManualControlMixin()
@@ -89,8 +97,10 @@ class TestKillSwitchOverride:
 
     def test_force_close_allowed_with_override(self):
         """Kill Switch 활성 시 override=True면 force_close 허용."""
-        from selfhealing.services.circuit_breaker.manual_control import ManualControlMixin
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
+        from selfhealing.services.circuit_breaker.manual_control import (
+            ManualControlMixin,
+        )
 
         mock_repo = Mock()
         mock_repo.atomic_force_close.return_value = (True, "open", "closed")
@@ -142,7 +152,9 @@ class TestAdaptiveThreshold:
 
     def test_get_adjusted_threshold_elevated(self):
         """ELEVATED 레벨에서 1.5배 보수적 임계값."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
 
         manager = AdaptiveThresholdManager()
         threshold = manager.get_adjusted_threshold(emergency_level="ELEVATED")
@@ -153,7 +165,9 @@ class TestAdaptiveThreshold:
 
     def test_get_adjusted_threshold_high(self):
         """HIGH 레벨에서 2배 보수적 임계값."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
 
         manager = AdaptiveThresholdManager()
         threshold = manager.get_adjusted_threshold(emergency_level="HIGH")
@@ -164,7 +178,9 @@ class TestAdaptiveThreshold:
 
     def test_get_adjusted_threshold_critical(self):
         """CRITICAL 레벨에서 3배 보수적 임계값."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
 
         manager = AdaptiveThresholdManager()
         threshold = manager.get_adjusted_threshold(emergency_level="CRITICAL")
@@ -175,7 +191,9 @@ class TestAdaptiveThreshold:
 
     def test_get_adjusted_threshold_lockdown(self):
         """LOCKDOWN 레벨에서 무한대 임계값 (자동 OPEN 금지)."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
 
         manager = AdaptiveThresholdManager()
         threshold = manager.get_adjusted_threshold(emergency_level="LOCKDOWN")
@@ -186,7 +204,9 @@ class TestAdaptiveThreshold:
 
     def test_should_allow_auto_open_normal(self):
         """NORMAL 레벨에서 자동 OPEN 허용."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
 
         manager = AdaptiveThresholdManager()
 
@@ -198,7 +218,9 @@ class TestAdaptiveThreshold:
 
     def test_should_allow_auto_open_lockdown(self):
         """LOCKDOWN 레벨에서 자동 OPEN 금지."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
 
         manager = AdaptiveThresholdManager()
 
@@ -210,8 +232,11 @@ class TestAdaptiveThreshold:
 
     def test_check_threshold_exceeded_normal(self):
         """임계값 초과 확인 - 초과 케이스."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
         import time
+
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
 
         manager = AdaptiveThresholdManager()
         current_time = time.time()
@@ -228,8 +253,11 @@ class TestAdaptiveThreshold:
 
     def test_check_threshold_exceeded_lockdown_never_exceeds(self):
         """LOCKDOWN에서는 절대 초과하지 않음."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
         import time
+
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
 
         manager = AdaptiveThresholdManager()
         current_time = time.time()
@@ -379,8 +407,8 @@ class TestPanicThreshold:
     def test_panic_threshold_disabled(self):
         """비활성화 시 발동하지 않음."""
         from selfhealing.services.circuit_breaker.panic_threshold import (
-            PanicThresholdMonitor,
             PanicThresholdConfig,
+            PanicThresholdMonitor,
         )
 
         config = PanicThresholdConfig(enabled=False)
@@ -394,8 +422,8 @@ class TestPanicThreshold:
     def test_panic_threshold_below_threshold(self):
         """임계값 미만이면 발동하지 않음."""
         from selfhealing.services.circuit_breaker.panic_threshold import (
-            PanicThresholdMonitor,
             PanicThresholdConfig,
+            PanicThresholdMonitor,
         )
 
         config = PanicThresholdConfig(enabled=True, threshold_percent=70.0)
@@ -418,8 +446,8 @@ class TestPanicThreshold:
     def test_panic_threshold_insufficient_services(self):
         """최소 서비스 수 미만이면 발동하지 않음."""
         from selfhealing.services.circuit_breaker.panic_threshold import (
-            PanicThresholdMonitor,
             PanicThresholdConfig,
+            PanicThresholdMonitor,
         )
 
         config = PanicThresholdConfig(enabled=True)
@@ -442,8 +470,8 @@ class TestPanicThreshold:
     def test_panic_threshold_triggers_on_threshold_exceeded(self):
         """임계값 초과 시 발동."""
         from selfhealing.services.circuit_breaker.panic_threshold import (
-            PanicThresholdMonitor,
             PanicThresholdConfig,
+            PanicThresholdMonitor,
         )
 
         config = PanicThresholdConfig(enabled=True, threshold_percent=70.0, action="alert_only")
@@ -470,8 +498,8 @@ class TestPanicThreshold:
     def test_panic_threshold_requires_consecutive_triggers(self):
         """연속 감지 횟수 미충족 시 발동하지 않음."""
         from selfhealing.services.circuit_breaker.panic_threshold import (
-            PanicThresholdMonitor,
             PanicThresholdConfig,
+            PanicThresholdMonitor,
         )
 
         config = PanicThresholdConfig(enabled=True, threshold_percent=70.0)
@@ -493,7 +521,9 @@ class TestPanicThreshold:
 
     def test_panic_threshold_result_fields(self):
         """PanicThresholdResult 필드 검증."""
-        from selfhealing.services.circuit_breaker.panic_threshold import PanicThresholdResult
+        from selfhealing.services.circuit_breaker.panic_threshold import (
+            PanicThresholdResult,
+        )
 
         result = PanicThresholdResult(
             triggered=True,
@@ -521,7 +551,9 @@ class TestKillSwitchAdaptiveFreezeIntegration:
 
     def test_adaptive_threshold_with_freeze_mode(self):
         """Adaptive Threshold와 Freeze Mode 연동."""
-        from selfhealing.services.circuit_breaker.adaptive_threshold import AdaptiveThresholdManager
+        from selfhealing.services.circuit_breaker.adaptive_threshold import (
+            AdaptiveThresholdManager,
+        )
         from selfhealing.services.circuit_breaker.freeze_mode import FreezeModeManager
 
         # Freeze Mode 활성화
@@ -544,22 +576,8 @@ class TestKillSwitchAdaptiveFreezeIntegration:
         from selfhealing.services.circuit_breaker import (
             # Adaptive Threshold
             AdaptiveThresholdManager,
-            AdjustedThreshold,
-            get_adaptive_threshold_manager,
-            get_adjusted_cb_threshold,
-            should_allow_cb_auto_open,
-            # Freeze Mode
             FreezeModeManager,
-            FreezeReason,
-            get_freeze_mode_manager,
-            is_freeze_mode_active,
-            should_allow_cb_state_change,
-            # Panic Threshold
             PanicThresholdMonitor,
-            PanicThresholdResult,
-            get_panic_threshold_monitor,
-            check_panic_threshold,
-            is_panic_threshold_triggered,
         )
 
         # 모든 import 성공

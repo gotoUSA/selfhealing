@@ -23,10 +23,11 @@ from __future__ import annotations
 
 import contextvars
 import threading
+from collections.abc import Callable, Generator
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Callable, Generator, TypeVar
+from typing import Any, TypeVar
 
 import structlog
 

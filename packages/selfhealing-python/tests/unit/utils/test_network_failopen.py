@@ -17,10 +17,7 @@ Fail-Open 원칙:
 from __future__ import annotations
 
 import logging
-from unittest.mock import Mock, patch, MagicMock
-
-import pytest
-
+from unittest.mock import MagicMock, Mock, patch
 
 # =============================================================================
 # 1. actor_context._get_client_ip Fail-Open

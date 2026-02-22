@@ -6,7 +6,6 @@ Service Locality Router 테스트.
 - ServiceLocalityRouter: 서비스 지역성 라우터
 """
 
-import pytest
 
 from selfhealing.multiregion.config import reset_multiregion_settings
 from selfhealing.multiregion.router import (

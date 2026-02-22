@@ -25,10 +25,9 @@ import time
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Optional
 
-from locust import HttpUser, task, between, tag, events, constant
-from locust.runners import MasterRunner, WorkerRunner
+from locust import HttpUser, task, tag, events, constant
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

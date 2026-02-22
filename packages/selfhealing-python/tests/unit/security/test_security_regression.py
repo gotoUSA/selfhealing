@@ -12,13 +12,11 @@ Self-Healing 보안 취약점 회귀 방지 테스트.
 from __future__ import annotations
 
 import os
-from unittest import mock
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Django 설정 구성 (테스트용 — REST_FRAMEWORK import 시 필요)
 import django
+import pytest
 from django.conf import settings
 
 if not settings.configured:
@@ -38,9 +36,7 @@ from selfhealing.api.django.permissions import _is_auth_disabled
 from selfhealing.meta.recovery_adapter import (
     DockerComposeRecoveryAdapter,
     KubernetesRecoveryAdapter,
-    RecoveryAction,
 )
-
 
 # =============================================================================
 # 취약점 #1: 환경변수 인증 우회 - Fail-Secure 검증

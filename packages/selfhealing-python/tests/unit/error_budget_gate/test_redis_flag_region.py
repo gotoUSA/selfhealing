@@ -4,18 +4,15 @@ BudgetExhaustedFlagManager 리전별 Redis 키 분리 테스트.
 리전별 키 생성, set_exhausted/is_exhausted의 region 파라미터 동작 검증.
 """
 
-import pytest
-import time
 from unittest.mock import MagicMock
 
 from selfhealing.services.error_budget_gate.redis_flag import (
-    BudgetExhaustedFlagManager,
     BUDGET_EXHAUSTED_BY_SLO_KEY,
     BUDGET_EXHAUSTED_BY_SLO_REGION_KEY,
     BUDGET_STATUS_KEY,
     BUDGET_STATUS_REGION_KEY,
+    BudgetExhaustedFlagManager,
 )
-
 
 # =============================================================================
 # 계약 검증: 리전별 키 패턴

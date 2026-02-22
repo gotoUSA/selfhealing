@@ -5,7 +5,6 @@ Enum 테스트.
 Uses lazy imports to avoid Prometheus registry conflicts.
 """
 
-import pytest
 
 
 class TestEventSeverity:

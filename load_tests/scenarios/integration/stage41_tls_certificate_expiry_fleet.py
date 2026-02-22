@@ -33,16 +33,10 @@ Stage 41: TLS / Certificate Expiry Tests (Part 2 - Fleet Level)
 from __future__ import annotations
 
 import json
-import logging
-import time
 import threading
-import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone as tz
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
-from unittest.mock import MagicMock, patch
-from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timezone as tz
+from typing import Any, Dict, List, TYPE_CHECKING
 from enum import Enum
 
 import pytest
@@ -50,13 +44,7 @@ import pytest
 
 # Conditional imports for type checking
 if TYPE_CHECKING:
-    from selfhealing.services import (
-        CircuitBreakerConfig,
-        CircuitBreakerService,
-        CircuitState,
-        DLQConfig,
-        DLQService,
-    )
+    pass
 
 
 # =============================================================================

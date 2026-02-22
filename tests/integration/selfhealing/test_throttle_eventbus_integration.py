@@ -21,7 +21,7 @@ import django
 
 django.setup()
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 # =============================================================================

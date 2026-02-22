@@ -101,7 +101,10 @@ class TestAutoPromoteGovernance:
     @pytest.fixture
     def watchdog(self):
         """Watchdog fixture."""
-        from selfhealing.tasks.canary_watchdog import RolloutWatchdog, CanaryWatchdogConfig
+        from selfhealing.tasks.canary_watchdog import (
+            CanaryWatchdogConfig,
+            RolloutWatchdog,
+        )
 
         config = CanaryWatchdogConfig(enable_auto_promote=True)
         watchdog = RolloutWatchdog(config)
@@ -205,7 +208,10 @@ class TestZombieExemption:
     @pytest.fixture
     def watchdog(self):
         """Watchdog fixture."""
-        from selfhealing.tasks.canary_watchdog import RolloutWatchdog, CanaryWatchdogConfig
+        from selfhealing.tasks.canary_watchdog import (
+            CanaryWatchdogConfig,
+            RolloutWatchdog,
+        )
 
         config = CanaryWatchdogConfig(zombie_threshold_minutes=30)
         return RolloutWatchdog(config)
@@ -346,7 +352,6 @@ class TestCanaryGovernanceSettings:
     def test_settings_exist(self):
         """CanaryGovernanceSettings가 존재하는지 확인."""
         from selfhealing.settings.canary_governance import (
-            CanaryGovernanceSettings,
             get_canary_governance_settings,
         )
 

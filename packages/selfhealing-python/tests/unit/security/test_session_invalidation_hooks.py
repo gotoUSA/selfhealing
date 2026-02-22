@@ -17,7 +17,6 @@ from selfhealing.services.security.hooks import (
 from selfhealing.services.security.models import SecurityConfig
 from selfhealing.services.security.service import SecurityViolationService
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -72,7 +71,7 @@ class TestInvalidateUserSessionsWithHooksBehavior:
     @patch("selfhealing.services.security.service.log_security_violation_audit")
     def test_hook_result_in_invalidated_items(self, mock_audit, service):
         """콜백 반환값이 결과에 포함되는지 확인."""
-        register_session_invalidation_hook(lambda uid: f"jwt_blacklisted(5)")
+        register_session_invalidation_hook(lambda uid: "jwt_blacklisted(5)")
 
         result = service._invalidate_user_sessions(42)
 

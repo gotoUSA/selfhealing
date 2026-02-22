@@ -8,8 +8,9 @@ Tests for:
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 
 # 직접 모듈에서 import하여 순환 참조 방지

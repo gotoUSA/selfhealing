@@ -19,9 +19,9 @@ Usage:
 from __future__ import annotations
 
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Generator
 
 import structlog
 

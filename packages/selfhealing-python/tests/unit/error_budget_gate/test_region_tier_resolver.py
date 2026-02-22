@@ -4,15 +4,13 @@
 RegionalRecoveryConfig.priority 기반 리전 → 티어 추론 동작 검증.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from selfhealing.services.error_budget_gate.region_tier_resolver import (
-    resolve_tier_from_region,
-    _PRIORITY_TIER_RANGES,
     _DEFAULT_TIER,
+    _PRIORITY_TIER_RANGES,
+    resolve_tier_from_region,
 )
-
 
 # =============================================================================
 # 계약 검증: 기본값 및 매핑 범위

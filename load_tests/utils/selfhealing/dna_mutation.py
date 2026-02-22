@@ -9,7 +9,7 @@ Mutation DNA - 진화적 테스트
 Phase 3 구현
 """
 
-from typing import Dict, List, Optional, Any, Set, Callable
+from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from datetime import datetime

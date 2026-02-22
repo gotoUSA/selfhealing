@@ -18,7 +18,8 @@ Features:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -102,7 +103,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     def register_state_change_callback(
         self,
         state: str,
-        callback: "Callable[[str, str, str], None]",
+        callback: Callable[[str, str, str], None],
     ) -> None:
         """
         CB 상태 변경 시 호출될 동기 콜백 등록.
@@ -132,7 +133,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     def unregister_state_change_callback(
         self,
         state: str,
-        callback: "Callable[[str, str, str], None]",
+        callback: Callable[[str, str, str], None],
     ) -> bool:
         """
         등록된 동기 콜백 해제.
@@ -1062,7 +1063,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         return result
 
-    def _archive_orphan_cb(self, state: "CircuitBreakerStateData") -> None:
+    def _archive_orphan_cb(self, state: CircuitBreakerStateData) -> None:
         """고아 CB를 히스토리에 기록 후 삭제 준비."""
         try:
             if hasattr(self.repository, "_record_history"):

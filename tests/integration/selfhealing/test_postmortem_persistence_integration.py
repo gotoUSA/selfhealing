@@ -232,7 +232,6 @@ class TestAddHealingIncidentWithDbPersistence:
             set_db_persistence_enabled,
             _healing_incidents,
             _healing_events_lock,
-            _get_postmortem_model,
         )
         from unittest.mock import patch
 

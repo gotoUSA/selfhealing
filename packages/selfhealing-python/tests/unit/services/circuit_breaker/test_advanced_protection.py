@@ -6,25 +6,25 @@ Circuit Breaker Advanced Protection Tests
 
 import pytest
 
-from selfhealing.services.circuit_breaker.models import (
-    ServiceConfig,
-    SheddingLevel,
-    LoadSheddingPolicy,
-    CanaryRecoveryStageConfig,
-    RecoveryStrategy,
-    ThresholdMultiplier,
-    AdaptiveThresholdPolicy,
-    OpenStrategy,
-    CircuitBreakerAdvancedConfig,
-    PanicThresholdConfig,
-    FreezeModeState,
-)
 from selfhealing.core.config import (
     CircuitBreakerAdvancedConfig as CoreCBAdvancedConfig,
-    SelfHealingConfig,
+)
+from selfhealing.core.config import (
     get_circuit_breaker_advanced_settings,
 )
-
+from selfhealing.services.circuit_breaker.models import (
+    AdaptiveThresholdPolicy,
+    CanaryRecoveryStageConfig,
+    CircuitBreakerAdvancedConfig,
+    FreezeModeState,
+    LoadSheddingPolicy,
+    OpenStrategy,
+    PanicThresholdConfig,
+    RecoveryStrategy,
+    ServiceConfig,
+    SheddingLevel,
+    ThresholdMultiplier,
+)
 
 # =============================================================================
 # ServiceConfig Tests

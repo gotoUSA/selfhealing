@@ -8,20 +8,16 @@ Phase 3: Chaos Safety Implementation Plan
 Reference: docs/self_healing/CHAOS_SAFETY_IMPLEMENTATION_PLAN.md
 """
 
-from datetime import datetime
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from selfhealing.services.chaos.stop_conditions import (
-    StopConditionsConfig,
-    StopConditionViolation,
     StopConditionCheckResult,
     StopConditionsChecker,
+    StopConditionsConfig,
+    StopConditionViolation,
     get_stop_conditions_checker,
     reset_stop_conditions_checker,
 )
-
 
 # =============================================================================
 # StopConditionsConfig Tests

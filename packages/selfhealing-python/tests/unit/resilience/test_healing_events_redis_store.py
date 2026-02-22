@@ -5,9 +5,8 @@ Redis 저장소 로직의 순수 단위 테스트입니다.
 Redis/Django 의존성은 Mock으로 처리합니다.
 """
 
-import pytest
 import json
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 
@@ -33,8 +32,8 @@ class TestHealingEventsStoreConstants:
     def test_enable_disable_redis(self):
         """Redis 활성화/비활성화 설정 테스트."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
             get_redis_events_enabled,
+            set_redis_events_enabled,
         )
 
         # 기본값 확인
@@ -58,8 +57,8 @@ class TestKeyGeneration:
     def test_today_key_format(self):
         """오늘 날짜 키 형식 확인."""
         from selfhealing.services.healing_events_store import (
-            _get_today_key,
             EVENTS_KEY_PREFIX,
+            _get_today_key,
         )
 
         key = _get_today_key()
@@ -74,8 +73,8 @@ class TestKeyGeneration:
     def test_date_key_format(self):
         """특정 날짜 키 형식 확인."""
         from selfhealing.services.healing_events_store import (
-            _get_date_key,
             EVENTS_KEY_PREFIX,
+            _get_date_key,
         )
 
         key = _get_date_key("2026-01-28")
@@ -88,16 +87,18 @@ class TestAddHealingEventRedis:
     def test_adds_recorded_at_if_missing(self):
         """recorded_at 필드가 없으면 추가."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
             _events_memory,
             _events_memory_lock,
+            set_redis_events_enabled,
         )
 
         # Redis 비활성화 (In-Memory만 테스트)
         set_redis_events_enabled(False)
 
         try:
-            from selfhealing.services.healing_events_store import add_healing_event_redis
+            from selfhealing.services.healing_events_store import (
+                add_healing_event_redis,
+            )
 
             event = {"type": "test", "data": "value"}
 
@@ -115,10 +116,10 @@ class TestAddHealingEventRedis:
     def test_preserves_existing_recorded_at(self):
         """이미 recorded_at이 있으면 유지."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
-            add_healing_event_redis,
             _events_memory,
             _events_memory_lock,
+            add_healing_event_redis,
+            set_redis_events_enabled,
         )
 
         set_redis_events_enabled(False)
@@ -140,10 +141,10 @@ class TestAddHealingEventRedis:
     def test_fallback_to_memory_when_redis_disabled(self):
         """Redis 비활성화 시 In-Memory에 저장."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
-            add_healing_event_redis,
             _events_memory,
             _events_memory_lock,
+            add_healing_event_redis,
+            set_redis_events_enabled,
         )
 
         set_redis_events_enabled(False)
@@ -170,11 +171,10 @@ class TestAddHealingEventRedis:
     def test_memory_limit_enforced(self):
         """In-Memory 최대 개수 제한 확인."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
-            add_healing_event_redis,
             _events_memory,
             _events_memory_lock,
-            _max_events_memory,
+            add_healing_event_redis,
+            set_redis_events_enabled,
         )
 
         set_redis_events_enabled(False)
@@ -206,11 +206,11 @@ class TestGetHealingEventsRedis:
     def test_returns_from_memory_when_redis_disabled(self):
         """Redis 비활성화 시 In-Memory에서 조회."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
-            add_healing_event_redis,
-            get_healing_events_redis,
             _events_memory,
             _events_memory_lock,
+            add_healing_event_redis,
+            get_healing_events_redis,
+            set_redis_events_enabled,
         )
 
         set_redis_events_enabled(False)
@@ -236,11 +236,11 @@ class TestGetHealingEventsRedis:
     def test_respects_limit_parameter(self):
         """limit 파라미터 존중 확인."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
-            add_healing_event_redis,
-            get_healing_events_redis,
             _events_memory,
             _events_memory_lock,
+            add_healing_event_redis,
+            get_healing_events_redis,
+            set_redis_events_enabled,
         )
 
         set_redis_events_enabled(False)
@@ -267,11 +267,11 @@ class TestGetHealingEventsCountRedis:
     def test_returns_memory_count_when_redis_disabled(self):
         """Redis 비활성화 시 In-Memory 카운트 반환."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
-            add_healing_event_redis,
-            get_healing_events_count_redis,
             _events_memory,
             _events_memory_lock,
+            add_healing_event_redis,
+            get_healing_events_count_redis,
+            set_redis_events_enabled,
         )
 
         set_redis_events_enabled(False)
@@ -298,11 +298,11 @@ class TestClearHealingEventsRedis:
     def test_clears_memory(self):
         """In-Memory 초기화 확인."""
         from selfhealing.services.healing_events_store import (
-            set_redis_events_enabled,
-            add_healing_event_redis,
-            clear_healing_events_redis,
             _events_memory,
             _events_memory_lock,
+            add_healing_event_redis,
+            clear_healing_events_redis,
+            set_redis_events_enabled,
         )
 
         set_redis_events_enabled(False)
@@ -336,8 +336,8 @@ class TestRedisIntegrationMocked:
     def test_lpush_called_with_correct_key(self):
         """Redis LPUSH가 올바른 키로 호출되는지 확인."""
         from selfhealing.services.healing_events_store import (
-            add_healing_event_redis,
             EVENTS_KEY_PREFIX,
+            add_healing_event_redis,
             set_redis_events_enabled,
         )
 
@@ -362,8 +362,8 @@ class TestRedisIntegrationMocked:
     def test_expire_called_for_new_key(self):
         """새 키 생성 시 TTL 설정되는지 확인."""
         from selfhealing.services.healing_events_store import (
-            add_healing_event_redis,
             EVENTS_TTL_SECONDS,
+            add_healing_event_redis,
             set_redis_events_enabled,
         )
 

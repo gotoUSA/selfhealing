@@ -13,8 +13,6 @@ AdaptiveThrottle ↔ Governance 연동 테스트.
 """
 
 import time
-
-import pytest
 from unittest.mock import MagicMock, patch
 
 

@@ -4,7 +4,7 @@ System Configuration API Client.
 동적 설정, 시스템 정보, 로그 레벨, 진단 관련 API.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .base import BaseClient
 

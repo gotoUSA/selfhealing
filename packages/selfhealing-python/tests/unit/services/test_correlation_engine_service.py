@@ -21,11 +21,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.interfaces.ml_strategy import (
-    AnomalyDetectionStrategy,
-    BatchCapable,
-    StrategyLifecycle,
-)
 from selfhealing.services.correlation_engine.co_occurrence_tracker import (
     CorrelationResult,
     EventPairKey,
@@ -35,23 +30,16 @@ from selfhealing.services.correlation_engine.event_graph import (
     EventDAG,
     EventNode,
 )
-from selfhealing.services.correlation_engine.interfaces import (
-    CorrelationStrategy,
-    GraphBuildStrategy,
-    RootCauseStrategy,
-)
 from selfhealing.services.correlation_engine.root_cause_ranker import (
     RootCauseAnalysis,
     RootCauseCandidate,
-    RootCauseRanker,
     StrategyMetadata,
 )
 from selfhealing.services.correlation_engine.service import (
-    CorrelationEngineService,
     ML_PRIORITY_WATERMARKS,
+    CorrelationEngineService,
 )
 from selfhealing.settings.correlation import CorrelationSettings
-
 
 # =============================================================================
 # Fixtures (이 파일 전용)

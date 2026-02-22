@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestResourceGuardSettings:
     """ResourceGuardSettings 설정 테스트."""
@@ -325,9 +323,9 @@ class TestResourceGuardExport:
     def test_export_from_package(self):
         """ResourceGuard가 패키지에서 export됨."""
         from selfhealing.services.chaos.safety_guard import (
+            ResourceCheckResult,
             ResourceGuard,
             ResourceStatus,
-            ResourceCheckResult,
             get_resource_guard,
             reset_resource_guard,
         )

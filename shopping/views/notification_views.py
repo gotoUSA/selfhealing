@@ -14,7 +14,6 @@ from rest_framework.decorators import action
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from ..models.notification import Notification
 from ..serializers.notification_serializers import (
     NotificationListSerializer,
     NotificationMarkReadSerializer,

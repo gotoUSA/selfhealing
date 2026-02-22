@@ -2,8 +2,7 @@
 Tests for Time Utilities.
 """
 
-from datetime import datetime, timezone, timedelta
-from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -133,7 +132,7 @@ class TestFromIsoString:
         from selfhealing.utils.time import from_iso_string
 
         iso_str = "2024-01-15T10:30:00Z"
-        
+
         # Python 3.11+ supports Z suffix directly
         try:
             result = from_iso_string(iso_str)
@@ -196,7 +195,7 @@ class TestTimezoneAwarenessConsistency:
 
     def test_round_trip_conversion(self):
         """Should maintain consistency in round-trip conversion."""
-        from selfhealing.utils.time import utc_now, to_iso_string, from_iso_string
+        from selfhealing.utils.time import from_iso_string, to_iso_string, utc_now
 
         original = utc_now()
         iso_str = to_iso_string(original)
@@ -208,7 +207,7 @@ class TestTimezoneAwarenessConsistency:
 
     def test_all_outputs_are_timezone_aware(self):
         """All datetime outputs should be timezone-aware."""
-        from selfhealing.utils.time import utc_now, ensure_aware, from_iso_string
+        from selfhealing.utils.time import ensure_aware, from_iso_string, utc_now
 
         # utc_now
         assert utc_now().tzinfo is not None

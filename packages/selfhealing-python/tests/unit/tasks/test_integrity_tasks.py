@@ -10,16 +10,15 @@ integrity_tasks 단위 테스트.
     - get_integrity_beat_schedule: Celery Beat 스케줄 구성
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from selfhealing.tasks.integrity_tasks import (
-    verify_hash_chain_integrity,
-    _verify_with_retry,
-    _merkle_spot_check,
-    _get_entries_since_last_anchor,
     _alert_integrity_violation,
+    _get_entries_since_last_anchor,
+    _merkle_spot_check,
+    _verify_with_retry,
     get_integrity_beat_schedule,
+    verify_hash_chain_integrity,
 )
 
 # ---------------------------------------------------------------------------

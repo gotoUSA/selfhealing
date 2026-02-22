@@ -23,21 +23,21 @@ class MockPipeline:
     context manager 프로토콜을 지원합니다.
     """
 
-    def __init__(self, redis: "MockRedisClient"):
+    def __init__(self, redis: MockRedisClient):
         self._redis = redis
         self._commands: list[tuple] = []
 
-    def get(self, key: str) -> "MockPipeline":
+    def get(self, key: str) -> MockPipeline:
         """GET 명령 추가."""
         self._commands.append(("get", key))
         return self
 
-    def set(self, key: str, value: Any, ex: int = None, nx: bool = False) -> "MockPipeline":
+    def set(self, key: str, value: Any, ex: int = None, nx: bool = False) -> MockPipeline:
         """SET 명령 추가."""
         self._commands.append(("set", key, value, ex, nx))
         return self
 
-    def delete(self, *keys: str) -> "MockPipeline":
+    def delete(self, *keys: str) -> MockPipeline:
         """DELETE 명령 추가."""
         decoded_keys = []
         for k in keys:
@@ -48,32 +48,32 @@ class MockPipeline:
         self._commands.append(("delete", tuple(decoded_keys)))
         return self
 
-    def hset(self, key: str, mapping: dict[str, Any] = None, **kwargs) -> "MockPipeline":
+    def hset(self, key: str, mapping: dict[str, Any] = None, **kwargs) -> MockPipeline:
         """HSET 명령 추가."""
         self._commands.append(("hset", key, mapping or kwargs))
         return self
 
-    def hget(self, key: str, field: str) -> "MockPipeline":
+    def hget(self, key: str, field: str) -> MockPipeline:
         """HGET 명령 추가."""
         self._commands.append(("hget", key, field))
         return self
 
-    def hgetall(self, key: str) -> "MockPipeline":
+    def hgetall(self, key: str) -> MockPipeline:
         """HGETALL 명령 추가."""
         self._commands.append(("hgetall", key))
         return self
 
-    def exists(self, key: str) -> "MockPipeline":
+    def exists(self, key: str) -> MockPipeline:
         """EXISTS 명령 추가."""
         self._commands.append(("exists", key))
         return self
 
-    def incr(self, key: str) -> "MockPipeline":
+    def incr(self, key: str) -> MockPipeline:
         """INCR 명령 추가."""
         self._commands.append(("incr", key))
         return self
 
-    def expire(self, key: str, seconds: int) -> "MockPipeline":
+    def expire(self, key: str, seconds: int) -> MockPipeline:
         """EXPIRE 명령 추가."""
         self._commands.append(("expire", key, seconds))
         return self
@@ -114,7 +114,7 @@ class MockPipeline:
         self._commands = []
         return results
 
-    def __enter__(self) -> "MockPipeline":
+    def __enter__(self) -> MockPipeline:
         return self
 
     def __exit__(self, *args) -> None:
@@ -140,7 +140,7 @@ class MockDistributedLock:
         """락 해제."""
         self._acquired = False
 
-    def __enter__(self) -> "MockDistributedLock":
+    def __enter__(self) -> MockDistributedLock:
         self.acquire()
         return self
 

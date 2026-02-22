@@ -2,7 +2,6 @@
 Analyze imports from selfhealing.services in multiple directories
 """
 import re
-import sys
 from collections import Counter
 from pathlib import Path
 

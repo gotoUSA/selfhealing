@@ -18,7 +18,6 @@ import pytest
 from selfhealing.audit.ring_buffer import (
     BackpressureStrategy,
     RingBuffer,
-    RingBufferStats,
 )
 
 

@@ -108,7 +108,7 @@ class TestXSS:
             if response.status_code in [status.HTTP_200_OK, status.HTTP_201_CREATED]:
                 content = response.content.decode("utf-8", errors="ignore")
                 # 실행 가능한 스크립트 태그가 그대로 포함되면 안 됨
-                assert "<script>alert" not in content, f"XSS 페이로드가 응답에 포함됨!"
+                assert "<script>alert" not in content, "XSS 페이로드가 응답에 포함됨!"
 
 
 @pytest.mark.security

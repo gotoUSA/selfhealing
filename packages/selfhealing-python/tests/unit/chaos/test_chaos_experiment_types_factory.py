@@ -10,18 +10,15 @@ Chaos Experiment 확장 테스트.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
 import pytest
 
-from selfhealing.services.chaos.base import ExperimentType, ExperimentConfig
+from selfhealing.services.chaos.base import ExperimentConfig, ExperimentType
 from selfhealing.services.chaos.experiments import (
-    create_experiment,
     CircuitBreakerOpenExperiment,
-    RateLimitExperiment,
     LatencyInjectionExperiment,
+    RateLimitExperiment,
+    create_experiment,
 )
-
 
 # =============================================================================
 # ExperimentType Enum 확장 테스트

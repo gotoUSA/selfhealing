@@ -4,8 +4,9 @@ Error Budget Gate 테스트 공통 fixtures.
 분리된 테스트 파일들이 사용하는 공통 설정 및 mock 객체.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
 
 
 @pytest.fixture
@@ -20,7 +21,7 @@ def mock_error_budget_percent():
 def default_gate_config():
     """기본 Gate 설정 fixture."""
     from selfhealing.services.error_budget_gate import ErrorBudgetGateConfig
-    
+
     return ErrorBudgetGateConfig(
         enabled=True,
         critical_threshold_percent=10.0,
@@ -37,7 +38,7 @@ def gate_with_rate_limit():
         ErrorBudgetGate,
         ErrorBudgetGateConfig,
     )
-    
+
     config = ErrorBudgetGateConfig(
         enabled=True,
         fail_open=True,
@@ -55,7 +56,7 @@ def gate_with_circuit_breaker():
         ErrorBudgetGate,
         ErrorBudgetGateConfig,
     )
-    
+
     config = ErrorBudgetGateConfig(
         enabled=True,
         circuit_breaker_enabled=True,

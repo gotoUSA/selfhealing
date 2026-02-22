@@ -18,14 +18,13 @@ pytestmark = pytest.mark.requires_db
 from decimal import Decimal
 from django.db import transaction
 
-from shopping.models import Order, OrderItem, Payment, Product, User
+from shopping.models import Order, Payment
 from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
     ProductFactory,
     UserFactory,
-    TestConstants,
 )
 
 
@@ -117,7 +116,7 @@ class TestL2TransactionCrash:
         ), f"Payment status should be '{original_payment_status}', got '{payment.status}'"
         assert order.status == original_order_status, f"Order status should be '{original_order_status}', got '{order.status}'"
 
-        print(f"✓ L2-A(변형) PASSED: Both Payment and Order rolled back")
+        print("✓ L2-A(변형) PASSED: Both Payment and Order rolled back")
 
     def test_l2b_points_deducted_then_crash(self):
         """
@@ -205,7 +204,7 @@ class TestL2TransactionCrash:
             final_history_count == initial_history_count
         ), f"PointHistory count should be {initial_history_count}, got {final_history_count}"
 
-        print(f"✓ L2-B(변형) PASSED: Points and PointHistory both rolled back")
+        print("✓ L2-B(변형) PASSED: Points and PointHistory both rolled back")
 
     def test_l2c_stock_decreased_then_crash(self):
         """
@@ -266,7 +265,7 @@ class TestL2TransactionCrash:
             product.sold_count == original_sold_count
         ), f"Sold count should be {original_sold_count}, got {product.sold_count}"
 
-        print(f"✓ L2-C(변형) PASSED: Stock and sold_count both rolled back")
+        print("✓ L2-C(변형) PASSED: Stock and sold_count both rolled back")
 
     def test_nested_transaction_savepoint_rollback(self):
         """

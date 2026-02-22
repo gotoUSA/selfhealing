@@ -8,13 +8,14 @@ Migrated from: shopping/tests/unit/self_healing/test_backoff_jitter_distribution
 """
 
 import statistics
-from collections import Counter
 
 import pytest
 
 from selfhealing.core.backoff import (
-    LegacyBackoffConfig,
     LegacyBackoffCalculator as BackoffCalculator,
+)
+from selfhealing.core.backoff import (
+    LegacyBackoffConfig,
 )
 
 

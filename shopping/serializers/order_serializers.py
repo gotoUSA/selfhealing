@@ -1,17 +1,13 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
-from django.db import transaction
-from django.db.models import F, QuerySet
+from django.db.models import QuerySet
 
 from rest_framework import serializers
 
 from ..models.cart import Cart
 from ..models.order import Order, OrderItem
-from ..models.point import PointHistory
-from ..models.product import Product
 from ..services.order_service import OrderService, OrderServiceError
 from .product_serializers import ProductListSerializer
 

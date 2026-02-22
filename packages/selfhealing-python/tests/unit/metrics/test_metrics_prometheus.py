@@ -2,7 +2,7 @@
 Tests for Prometheus Metrics Module.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -12,7 +12,7 @@ class TestDomainRegistry:
 
     def test_get_domains_returns_copy(self):
         """Should return a copy of registered domains."""
-        from selfhealing.metrics.prometheus import get_domains, _registered_domains
+        from selfhealing.metrics.prometheus import _registered_domains, get_domains
 
         domains = get_domains()
         # Should return a copy, not the original
@@ -22,15 +22,15 @@ class TestDomainRegistry:
 
     def test_register_domain_adds_new_domain(self):
         """Should add new domain to registry."""
-        from selfhealing.metrics.prometheus import register_domain, get_domains
+        from selfhealing.metrics.prometheus import get_domains, register_domain
 
         original_count = len(get_domains())
-        
+
         # Register new domain
         register_domain("test_new_domain")
-        
+
         assert "test_new_domain" in get_domains()
-        
+
         # Clean up: remove added domain
         from selfhealing.metrics import prometheus
         if "test_new_domain" in prometheus._registered_domains:
@@ -38,16 +38,16 @@ class TestDomainRegistry:
 
     def test_register_domain_ignores_duplicate(self):
         """Should not add duplicate domain."""
-        from selfhealing.metrics.prometheus import register_domain, get_domains
+        from selfhealing.metrics.prometheus import get_domains, register_domain
 
         # Get a domain that already exists
         existing_domains = get_domains()
         if existing_domains:
             existing_domain = existing_domains[0]
             count_before = len(get_domains())
-            
+
             register_domain(existing_domain)
-            
+
             assert len(get_domains()) == count_before
 
 
@@ -56,7 +56,10 @@ class TestSelfHealingMetricsInit:
 
     def test_init_with_prefix(self):
         """Should initialize with custom prefix."""
-        from selfhealing.metrics.prometheus import SelfHealingMetrics, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+            SelfHealingMetrics,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -80,7 +83,10 @@ class TestSelfHealingMetricsCounters:
     @pytest.fixture
     def mock_metrics(self):
         """Create metrics with mocked prometheus counters."""
-        from selfhealing.metrics.prometheus import SelfHealingMetrics, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+            SelfHealingMetrics,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -105,7 +111,9 @@ class TestSelfHealingMetricsGauges:
 
     def test_dlq_pending_gauge_exists(self):
         """Should have dlq_pending_gauge attribute."""
-        from selfhealing.metrics.prometheus import SelfHealingMetrics, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -117,7 +125,9 @@ class TestSelfHealingMetricsGauges:
 
     def test_dlq_by_status_gauge_exists(self):
         """Should have dlq_by_status_gauge attribute."""
-        from selfhealing.metrics.prometheus import SelfHealingMetrics, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -142,8 +152,6 @@ class TestPrometheusAvailability:
         # This test verifies the module can be imported
         from selfhealing.metrics.prometheus import (
             get_domains,
-            register_domain,
-            SelfHealingMetrics,
         )
 
         # Basic operations should work
@@ -160,7 +168,7 @@ class TestREDMetrics:
     @pytest.fixture
     def metrics(self):
         """Get global metrics instance."""
-        from selfhealing.metrics.prometheus import get_metrics, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import PROMETHEUS_AVAILABLE, get_metrics
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -231,7 +239,7 @@ class TestFourGoldenSignals:
     @pytest.fixture
     def metrics(self):
         """Get global metrics instance."""
-        from selfhealing.metrics.prometheus import get_metrics, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import PROMETHEUS_AVAILABLE, get_metrics
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -321,7 +329,10 @@ class TestConvenienceFunctions:
 
     def test_record_http_request_function(self):
         """Should have record_http_request convenience function."""
-        from selfhealing.metrics.prometheus import record_http_request, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+            record_http_request,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -331,7 +342,10 @@ class TestConvenienceFunctions:
 
     def test_record_http_error_function(self):
         """Should have record_http_error convenience function."""
-        from selfhealing.metrics.prometheus import record_http_error, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+            record_http_error,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -341,7 +355,10 @@ class TestConvenienceFunctions:
 
     def test_set_request_queue_depth_function(self):
         """Should have set_request_queue_depth convenience function."""
-        from selfhealing.metrics.prometheus import set_request_queue_depth, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+            set_request_queue_depth,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -351,7 +368,10 @@ class TestConvenienceFunctions:
 
     def test_set_worker_utilization_function(self):
         """Should have set_worker_utilization convenience function."""
-        from selfhealing.metrics.prometheus import set_worker_utilization, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+            set_worker_utilization,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -361,7 +381,10 @@ class TestConvenienceFunctions:
 
     def test_set_active_connections_function(self):
         """Should have set_active_connections convenience function."""
-        from selfhealing.metrics.prometheus import set_active_connections, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+            set_active_connections,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -371,7 +394,10 @@ class TestConvenienceFunctions:
 
     def test_set_latency_percentile_function(self):
         """Should have set_latency_percentile convenience function."""
-        from selfhealing.metrics.prometheus import set_latency_percentile, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import (
+            PROMETHEUS_AVAILABLE,
+            set_latency_percentile,
+        )
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")
@@ -381,7 +407,7 @@ class TestConvenienceFunctions:
 
     def test_set_error_rate_function(self):
         """Should have set_error_rate convenience function."""
-        from selfhealing.metrics.prometheus import set_error_rate, PROMETHEUS_AVAILABLE
+        from selfhealing.metrics.prometheus import PROMETHEUS_AVAILABLE, set_error_rate
 
         if not PROMETHEUS_AVAILABLE:
             pytest.skip("prometheus_client not installed")

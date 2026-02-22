@@ -18,15 +18,14 @@ from unittest.mock import patch
 import pytest
 
 from selfhealing.services.error_budget.exception_weights import (
+    DEFAULT_CATEGORY_WEIGHTS,
     ExceptionBudgetWeightMap,
     WeightCombinePolicy,
-    get_exception_weight_map,
-    reset_exception_weight_map,
-    get_weight_for_error_code,
     combine_weights,
+    get_exception_weight_map,
     get_weight_combine_policy,
-    DEFAULT_CATEGORY_WEIGHTS,
-    DEFAULT_CODE_WEIGHTS,
+    get_weight_for_error_code,
+    reset_exception_weight_map,
 )
 
 

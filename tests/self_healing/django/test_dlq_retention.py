@@ -13,8 +13,6 @@ Compliance:
 """
 
 from datetime import timedelta
-from decimal import Decimal
-from unittest.mock import patch
 
 import pytest
 from django.utils import timezone

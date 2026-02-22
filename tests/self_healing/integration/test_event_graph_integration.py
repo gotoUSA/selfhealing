@@ -21,9 +21,7 @@ from selfhealing.services.correlation_engine.co_occurrence_tracker import (
     CoOccurrenceTracker,
 )
 from selfhealing.services.correlation_engine.event_graph import (
-    CONFIDENCE_DEPENDENCY,
     EVIDENCE_DEPENDENCY,
-    EventDAG,
 )
 from selfhealing.services.correlation_engine.event_graph_builder import (
     EventGraphBuilder,
@@ -32,12 +30,10 @@ from selfhealing.services.correlation_engine.event_graph_trigger import (
     EventGraphTrigger,
 )
 from selfhealing.services.event_bus.bus import (
-    EventPriority,
     EventType,
     SelfHealingEvent,
 )
 from selfhealing.settings.correlation import (
-    CorrelationSettings,
     reset_correlation_settings,
 )
 

@@ -16,12 +16,10 @@ Redis Mock을 사용하여 실제 AtomicStateQuery와 NamespacedEmergencyTracker
 """
 
 import json
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Django 설정 구성 (테스트용)
 import django
+import pytest
 from django.conf import settings
 
 if not settings.configured:
@@ -146,7 +144,7 @@ class MockRedisClient:
             return [
                 json.dumps(global_state).encode("utf-8"),
                 b"GLOBAL_OVERRIDE",
-                f"Global STRICT overrides regional {regional_state.get('namespace', 'unknown')}".encode("utf-8"),
+                f"Global STRICT overrides regional {regional_state.get('namespace', 'unknown')}".encode(),
             ]
         elif regional_is_strict:
             return [
@@ -420,9 +418,9 @@ class TestScenarioRegistry:
     def test_get_scenario_class_returns_correct_class(self):
         """get_scenario_class가 올바른 클래스를 반환하는지 확인."""
         from selfhealing.api.django.views.xtest.scenarios import (
-            get_scenario_class,
-            RegionalOverrideConflictScenario,
             MultiRegionIsolationTestScenario,
+            RegionalOverrideConflictScenario,
+            get_scenario_class,
         )
 
         assert get_scenario_class("regional_override_conflict") == RegionalOverrideConflictScenario
@@ -432,8 +430,8 @@ class TestScenarioRegistry:
         """새 시나리오들이 IntegrationScenario를 상속하는지 확인."""
         from selfhealing.api.django.views.xtest.scenarios import (
             IntegrationScenario,
-            RegionalOverrideConflictScenario,
             MultiRegionIsolationTestScenario,
+            RegionalOverrideConflictScenario,
         )
 
         assert issubclass(RegionalOverrideConflictScenario, IntegrationScenario)
@@ -513,6 +511,7 @@ class TestAtomicStateQueryIntegration:
     def test_atomic_query_global_override(self, mock_redis_client):
         """Global STRICT가 Regional을 오버라이드하는지 검증."""
         import json
+
         from selfhealing.services.namespace_emergency.atomic_query import (
             AtomicStateQuery,
         )
@@ -540,6 +539,7 @@ class TestAtomicStateQueryIntegration:
     def test_atomic_query_admin_override(self, mock_redis_client):
         """Admin Override가 작동하는지 검증."""
         import json
+
         from selfhealing.services.namespace_emergency.atomic_query import (
             AtomicStateQuery,
         )
@@ -597,11 +597,11 @@ class TestHelperMethods:
             MockStateBackend,
         )
         from selfhealing.services.emergency_mode.enums import EmergencyLevel
-        from selfhealing.services.namespace_emergency.tracker import (
-            NamespacedEmergencyTracker,
-        )
         from selfhealing.services.namespace_emergency.atomic_query import (
             AtomicStateQuery,
+        )
+        from selfhealing.services.namespace_emergency.tracker import (
+            NamespacedEmergencyTracker,
         )
 
         scenario = RegionalOverrideConflictScenario(
@@ -632,11 +632,11 @@ class TestHelperMethods:
             MockStateBackend,
         )
         from selfhealing.services.emergency_mode.enums import EmergencyLevel
-        from selfhealing.services.namespace_emergency.tracker import (
-            NamespacedEmergencyTracker,
-        )
         from selfhealing.services.namespace_emergency.atomic_query import (
             AtomicStateQuery,
+        )
+        from selfhealing.services.namespace_emergency.tracker import (
+            NamespacedEmergencyTracker,
         )
 
         scenario = RegionalOverrideConflictScenario(
@@ -666,11 +666,11 @@ class TestHelperMethods:
         from selfhealing.api.django.views.xtest.scenarios.regional import (
             MockStateBackend,
         )
-        from selfhealing.services.namespace_emergency.tracker import (
-            NamespacedEmergencyTracker,
-        )
         from selfhealing.services.namespace_emergency.atomic_query import (
             AtomicStateQuery,
+        )
+        from selfhealing.services.namespace_emergency.tracker import (
+            NamespacedEmergencyTracker,
         )
 
         scenario = RegionalOverrideConflictScenario(

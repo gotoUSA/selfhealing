@@ -5,7 +5,6 @@ shopping 앱의 PostmortemRecordAdmin이 BasePostmortemRecordAdmin을
 올바르게 상속하는지 확인합니다.
 """
 
-import pytest
 from unittest.mock import MagicMock
 
 
@@ -142,7 +141,6 @@ class TestPostmortemRecordAdminCustomization:
     def test_can_override_list_display(self):
         """list_display를 오버라이드할 수 있는지 확인."""
         from selfhealing.adapters.django.admin import BasePostmortemRecordAdmin
-        from django.contrib import admin
 
         class CustomAdmin(BasePostmortemRecordAdmin):
             list_display = ["incident_id", "started_at"]

@@ -50,13 +50,10 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
 import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Any
-from collections import defaultdict
+from typing import Dict
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -199,18 +196,18 @@ def _update_phase():
         _webhook_stats["phase"] = phase
 
         if phase == "delayed_webhook":
-            print(f"\n⏰ Phase 2: Delayed Webhook Scenarios")
-            print(f"   - Simulating webhook delays > order timeout")
+            print("\n⏰ Phase 2: Delayed Webhook Scenarios")
+            print("   - Simulating webhook delays > order timeout")
         elif phase == "out_of_order":
-            print(f"\n🔀 Phase 3: Out-of-Order Webhook Scenarios")
+            print("\n🔀 Phase 3: Out-of-Order Webhook Scenarios")
             print(f"   - Normal webhooks processed: {_webhook_stats['normal_webhooks_processed']}")
             print(f"   - Delayed webhooks sent: {_webhook_stats['delayed_webhooks_sent']}")
         elif phase == "duplicate_webhook":
-            print(f"\n📋 Phase 4: Duplicate Webhook Scenarios")
+            print("\n📋 Phase 4: Duplicate Webhook Scenarios")
             print(f"   - Out-of-order scenarios: {_webhook_stats['out_of_order_scenarios']}")
             print(f"   - Handled correctly: {_webhook_stats['out_of_order_handled_correctly']}")
         elif phase == "verification":
-            print(f"\n✅ Phase 5: Verification")
+            print("\n✅ Phase 5: Verification")
             _perform_final_verification()
 
 
@@ -311,7 +308,7 @@ def _record_recovery_latency(conflict_resolution_ms: float = 0, refund_trigger_m
 
 def _perform_final_verification():
     """Perform final verification"""
-    print(f"\n📊 Final Verification:")
+    print("\n📊 Final Verification:")
 
     # Check no resurrection
     _webhook_stats["verification"]["no_resurrection"] = _webhook_stats["delayed_webhook_resurrected_order"] == 0
@@ -326,7 +323,7 @@ def _perform_final_verification():
         print(f"     (Reject rate: {reject_rate:.1%})")
     else:
         _webhook_stats["verification"]["idempotency_works"] = True
-        print(f"   - Idempotency works: ✓ (No duplicates to test)")
+        print("   - Idempotency works: ✓ (No duplicates to test)")
 
     # Check out-of-order handling
     if _webhook_stats["out_of_order_scenarios"] > 0:
@@ -336,7 +333,7 @@ def _perform_final_verification():
         print(f"     (Handle rate: {handle_rate:.1%})")
     else:
         _webhook_stats["verification"]["out_of_order_handled"] = True
-        print(f"   - Out-of-order handled: ✓ (No scenarios to test)")
+        print("   - Out-of-order handled: ✓ (No scenarios to test)")
 
     # Check refund triggered
     if _webhook_stats["order_state_conflicts"] > 0:
@@ -954,15 +951,15 @@ def on_test_start(environment, **kwargs):
     global _webhook_stats
 
     print(f"\n{'='*70}")
-    print(f"⏰ Stage 20: Delayed Webhook Out-of-Order Test")
+    print("⏰ Stage 20: Delayed Webhook Out-of-Order Test")
     print(f"{'='*70}")
-    print(f"Purpose: Verify handling of delayed/out-of-order payment webhooks")
-    print(f"\nTiming Configurations:")
+    print("Purpose: Verify handling of delayed/out-of-order payment webhooks")
+    print("\nTiming Configurations:")
     print(f"  - Normal webhook delay: {NORMAL_WEBHOOK_DELAY_S}s")
     print(f"  - Delayed webhook delay: {DELAYED_WEBHOOK_DELAY_S}s")
     print(f"  - Order timeout: {ORDER_TIMEOUT_S}s")
     print(f"  - Alert threshold: {WEBHOOK_DELAY_THRESHOLD_S}s")
-    print(f"\nTest Phases:")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_1_NORMAL_WEBHOOK}s): Normal webhook flow")
     print(f"  Phase 2 ({PHASE_2_DELAYED_WEBHOOK}s): Delayed webhook scenarios")
     print(f"  Phase 3 ({PHASE_3_OUT_OF_ORDER}s): Out-of-order webhooks")
@@ -981,10 +978,10 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Generate final report"""
     print(f"\n{'='*70}")
-    print(f"📊 Stage 20: Delayed Webhook Test Results")
+    print("📊 Stage 20: Delayed Webhook Test Results")
     print(f"{'='*70}")
 
-    print(f"\n📈 Normal Webhook Metrics:")
+    print("\n📈 Normal Webhook Metrics:")
     print(f"   - Sent: {_webhook_stats['normal_webhooks_sent']}")
     print(f"   - Processed: {_webhook_stats['normal_webhooks_processed']}")
     print(f"   - Success: {_webhook_stats['normal_webhooks_success']}")
@@ -992,47 +989,47 @@ def on_test_stop(environment, **kwargs):
         avg_latency = sum(_webhook_stats["webhook_latencies_ms"]) / len(_webhook_stats["webhook_latencies_ms"])
         print(f"   - Avg latency: {avg_latency:.0f}ms")
 
-    print(f"\n⏰ Delayed Webhook Metrics:")
+    print("\n⏰ Delayed Webhook Metrics:")
     print(f"   - Sent: {_webhook_stats['delayed_webhooks_sent']}")
     print(f"   - Processed: {_webhook_stats['delayed_webhooks_processed']}")
     print(f"   - Resurrected orders (BAD): {_webhook_stats['delayed_webhook_resurrected_order']}")
     print(f"   - Correctly rejected: {_webhook_stats['delayed_webhook_correctly_rejected']}")
     print(f"   - Refund triggered: {_webhook_stats['delayed_webhook_refund_triggered']}")
 
-    print(f"\n🔀 Out-of-Order Metrics:")
+    print("\n🔀 Out-of-Order Metrics:")
     print(f"   - Scenarios: {_webhook_stats['out_of_order_scenarios']}")
     print(f"   - Handled correctly: {_webhook_stats['out_of_order_handled_correctly']}")
     print(f"   - State corruption: {_webhook_stats['out_of_order_state_corruption']}")
 
-    print(f"\n📋 Duplicate Webhook Metrics:")
+    print("\n📋 Duplicate Webhook Metrics:")
     print(f"   - Sent: {_webhook_stats['duplicate_webhooks_sent']}")
     print(f"   - Rejected (good): {_webhook_stats['duplicate_webhooks_rejected']}")
     print(f"   - Processed (bad): {_webhook_stats['duplicate_webhooks_processed']}")
     print(f"   - Duplicate payments created: {_webhook_stats['duplicate_payments_created']}")
 
-    print(f"\n🔑 Idempotency Metrics:")
+    print("\n🔑 Idempotency Metrics:")
     print(f"   - Keys used: {_webhook_stats['idempotent_key_used']}")
     print(f"   - Violations: {_webhook_stats['idempotent_key_violations']}")
 
-    print(f"\n📦 Order State Metrics:")
+    print("\n📦 Order State Metrics:")
     print(f"   - Pending: {_webhook_stats['orders_pending']}")
     print(f"   - Confirmed: {_webhook_stats['orders_confirmed']}")
     print(f"   - Failed: {_webhook_stats['orders_failed']}")
     print(f"   - Timeout: {_webhook_stats['orders_timeout']}")
     print(f"   - State conflicts: {_webhook_stats['order_state_conflicts']}")
 
-    print(f"\n🚨 Alert Metrics:")
+    print("\n🚨 Alert Metrics:")
     print(f"   - Delay alerts: {_webhook_stats['delay_alerts_triggered']}")
     print(f"   - Conflict alerts: {_webhook_stats['conflict_alerts_triggered']}")
 
-    print(f"\n✅ Verification Results:")
+    print("\n✅ Verification Results:")
     for check, result in _webhook_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
         print(f"   - {check}: {status}")
 
     # Recovery Latency Report
     recovery = _webhook_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
+    print("\n🔄 Recovery Latency Metrics:")
 
     all_latencies = (
         recovery["conflict_resolution_latencies_ms"]
@@ -1053,11 +1050,11 @@ def on_test_stop(environment, **kwargs):
         # SLA check (conflicts should be resolved within 5s)
         recovery["sla_compliant"] = max_latency < 5000
         if recovery["sla_compliant"]:
-            print(f"   - SLA Status: ✓ All resolutions under 5s")
+            print("   - SLA Status: ✓ All resolutions under 5s")
         else:
-            print(f"   - SLA Status: ✗ Some resolutions exceeded 5s")
+            print("   - SLA Status: ✗ Some resolutions exceeded 5s")
     else:
-        print(f"   - No conflict resolutions recorded")
+        print("   - No conflict resolutions recorded")
 
     print(f"\n{'='*70}\n")
 

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
-from enum import Enum
 
 import structlog
 

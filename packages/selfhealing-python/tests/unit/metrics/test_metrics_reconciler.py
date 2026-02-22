@@ -2,8 +2,7 @@
 Tests for Metric Reconciler.
 """
 
-from datetime import datetime, timezone
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -66,7 +65,7 @@ class TestSyncResult:
 
     def test_custom_values(self):
         """Should accept custom values."""
-        from selfhealing.metrics.reconciler import SyncResult, DriftResult
+        from selfhealing.metrics.reconciler import DriftResult, SyncResult
 
         drift = DriftResult()
         result = SyncResult(

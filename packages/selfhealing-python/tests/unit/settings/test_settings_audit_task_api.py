@@ -14,8 +14,6 @@ Tests:
 import os
 from unittest import mock
 
-import pytest
-
 
 class TestAuditSettingsPhase3Extension:
     """Test AuditSettings Phase 3 extensions."""
@@ -53,8 +51,8 @@ class TestAuditSettingsPhase3Extension:
     def test_self_audit_env_override(self):
         """Test environment variable override for self_audit settings."""
         from selfhealing.settings.audit_settings import (
-            reset_audit_settings,
             get_audit_settings,
+            reset_audit_settings,
         )
 
         with mock.patch.dict(
@@ -100,8 +98,8 @@ class TestCanarySettingsPhase3Extension:
     def test_env_override(self):
         """Test environment variable override."""
         from selfhealing.settings.canary import (
-            reset_canary_settings,
             get_canary_settings,
+            reset_canary_settings,
         )
 
         with mock.patch.dict(
@@ -155,8 +153,8 @@ class TestApiViewSettingsPhase3Extension:
     def test_env_override(self):
         """Test environment variable override."""
         from selfhealing.settings.api_view import (
-            reset_api_view_settings,
             get_api_view_settings,
+            reset_api_view_settings,
         )
 
         with mock.patch.dict(
@@ -178,19 +176,25 @@ class TestIntelligenceTaskSettings:
 
     def setup_method(self):
         """Reset settings before each test."""
-        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            reset_intelligence_task_settings,
+        )
 
         reset_intelligence_task_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
-        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            reset_intelligence_task_settings,
+        )
 
         reset_intelligence_task_settings()
 
     def test_default_values(self):
         """Test default values are set correctly."""
-        from selfhealing.settings.intelligence_task import get_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            get_intelligence_task_settings,
+        )
 
         settings = get_intelligence_task_settings()
 
@@ -207,8 +211,8 @@ class TestIntelligenceTaskSettings:
     def test_env_override(self):
         """Test environment variable override."""
         from selfhealing.settings.intelligence_task import (
-            reset_intelligence_task_settings,
             get_intelligence_task_settings,
+            reset_intelligence_task_settings,
         )
 
         with mock.patch.dict(
@@ -226,7 +230,9 @@ class TestIntelligenceTaskSettings:
 
     def test_singleton_pattern(self):
         """Test singleton pattern works correctly."""
-        from selfhealing.settings.intelligence_task import get_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            get_intelligence_task_settings,
+        )
 
         settings1 = get_intelligence_task_settings()
         settings2 = get_intelligence_task_settings()
@@ -264,8 +270,8 @@ class TestDriftDetectionSettings:
     def test_env_override(self):
         """Test environment variable override."""
         from selfhealing.settings.drift_detection import (
-            reset_drift_detection_settings,
             get_drift_detection_settings,
+            reset_drift_detection_settings,
         )
 
         with mock.patch.dict(
@@ -296,8 +302,8 @@ class TestSLOSettingsIntegration:
 
     def test_slo_uses_settings_defaults(self):
         """Test SLO dataclass uses Settings default values."""
-        from selfhealing.slo import SLO, SLI
         from selfhealing.settings.slo import get_slo_settings
+        from selfhealing.slo import SLI, SLO
 
         settings = get_slo_settings()
 
@@ -317,16 +323,16 @@ class TestSelfAuditSettingsIntegration:
 
     def setup_method(self):
         """Reset settings before each test."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.self_audit import SelfAuditLogger
+        from selfhealing.settings.audit_settings import reset_audit_settings
 
         SelfAuditLogger.reset_instance()
         reset_audit_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.self_audit import SelfAuditLogger
+        from selfhealing.settings.audit_settings import reset_audit_settings
 
         SelfAuditLogger.reset_instance()
         reset_audit_settings()
@@ -356,16 +362,16 @@ class TestCascadeLoadSheddingSettingsIntegration:
 
     def setup_method(self):
         """Reset settings before each test."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.cascade_load_shedding import reset_cascade_load_shedding
+        from selfhealing.settings.audit_settings import reset_audit_settings
 
         reset_cascade_load_shedding()
         reset_audit_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.cascade_load_shedding import reset_cascade_load_shedding
+        from selfhealing.settings.audit_settings import reset_audit_settings
 
         reset_cascade_load_shedding()
         reset_audit_settings()
@@ -381,11 +387,11 @@ class TestCascadeLoadSheddingSettingsIntegration:
 
     def test_env_override_affects_instance(self):
         """Test environment variable override affects new instance."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.audit.cascade_load_shedding import (
             CascadeLoadShedding,
             reset_cascade_load_shedding,
         )
+        from selfhealing.settings.audit_settings import reset_audit_settings
 
         with mock.patch.dict(
             os.environ,
@@ -443,13 +449,17 @@ class TestIntelligenceTasksSettingsIntegration:
 
     def setup_method(self):
         """Reset settings before each test."""
-        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            reset_intelligence_task_settings,
+        )
 
         reset_intelligence_task_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
-        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            reset_intelligence_task_settings,
+        )
 
         reset_intelligence_task_settings()
 
@@ -504,7 +514,9 @@ class TestIntelligenceTasksSettingsIntegration:
 
     def test_env_override_affects_notification_policy(self):
         """Test environment variable override affects notification_policy."""
-        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            reset_intelligence_task_settings,
+        )
         from selfhealing.tasks.intelligence_tasks import CheckSLADriftTask
 
         with mock.patch.dict(
@@ -524,13 +536,17 @@ class TestTrafficAwareReplaySettingsIntegration:
 
     def setup_method(self):
         """Reset settings before each test."""
-        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            reset_intelligence_task_settings,
+        )
 
         reset_intelligence_task_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
-        from selfhealing.settings.intelligence_task import reset_intelligence_task_settings
+        from selfhealing.settings.intelligence_task import (
+            reset_intelligence_task_settings,
+        )
 
         reset_intelligence_task_settings()
 

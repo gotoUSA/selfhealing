@@ -10,7 +10,7 @@ SidecarMetrics 단위 테스트.
 from __future__ import annotations
 
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

@@ -43,13 +43,11 @@ import random
 import threading
 import json
 import hashlib
-import struct
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple, Callable
+from typing import Dict, List, Optional, Any, Tuple
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from contextlib import contextmanager
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -573,34 +571,34 @@ if LOCUST_AVAILABLE and events:
         metrics = _simulator.get_metrics()
         poison_stats = _simulator.get_poison_stats()
         
-        print(f"\n📊 Cache Metrics:")
+        print("\n📊 Cache Metrics:")
         print(f"   Cache Hits:        {metrics['cache_hits']}")
         print(f"   Cache Misses:      {metrics['cache_misses']}")
         print(f"   Cache Sets:        {metrics['cache_sets']}")
         print(f"   DB Fallbacks:      {metrics['db_fallbacks']}")
         
-        print(f"\n🔴 Poison Detection Metrics:")
+        print("\n🔴 Poison Detection Metrics:")
         print(f"   Poison Injected:   {metrics['poison_injected']}")
         print(f"   Poison Detected:   {metrics['poison_detected']}")
         print(f"   Poison Served:     {metrics['poison_served']}")
         print(f"   Auto Invalidations:{metrics['auto_invalidations']}")
         
-        print(f"\n🔍 Error Breakdown:")
+        print("\n🔍 Error Breakdown:")
         print(f"   JSON Parse Errors:  {metrics['json_parse_errors']}")
         print(f"   Checksum Failures:  {metrics['checksum_failures']}")
         print(f"   Validation Failures:{metrics['validation_failures']}")
         
-        print(f"\n📈 Poison Statistics:")
+        print("\n📈 Poison Statistics:")
         print(f"   Detection Rate:     {poison_stats['detection_rate']*100:.1f}%")
         print(f"   Avg Detection Time: {poison_stats['avg_detection_time_ms']:.2f}ms")
         
         if poison_stats["by_type"]:
-            print(f"\n   By Poison Type:")
+            print("\n   By Poison Type:")
             for ptype, counts in poison_stats["by_type"].items():
                 print(f"     - {ptype}: {counts['detected']}/{counts['injected']} detected")
         
         # Invariant 검증
-        print(f"\n✅ Invariant Verification:")
+        print("\n✅ Invariant Verification:")
         passed = True
         
         # poison_detected >= 95% of poison_injected (동시성 환경에서 race condition 허용)
@@ -613,7 +611,7 @@ if LOCUST_AVAILABLE and events:
         
         # poison_served_to_user == 0
         if metrics['poison_served'] == 0:
-            print(f"   ✅ PASS: poison_served_to_user == 0")
+            print("   ✅ PASS: poison_served_to_user == 0")
         else:
             print(f"   ❌ FAIL: poison_served_to_user == 0 (got {metrics['poison_served']})")
             passed = False
@@ -622,7 +620,7 @@ if LOCUST_AVAILABLE and events:
         if metrics['auto_invalidations'] > 0:
             print(f"   ✅ PASS: auto_invalidation_triggered ({metrics['auto_invalidations']} times)")
         else:
-            print(f"   ⚠️  WARN: auto_invalidation not triggered (no poison may have been tested)")
+            print("   ⚠️  WARN: auto_invalidation not triggered (no poison may have been tested)")
         
         print(f"\n{'='*60}")
         if passed:
@@ -920,7 +918,7 @@ def run_standalone_test():
     metrics = simulator.get_metrics()
     poison_stats = simulator.get_poison_stats()
     
-    print(f"\n   Metrics:")
+    print("\n   Metrics:")
     print(f"   - Poison Injected: {metrics['poison_injected']}")
     print(f"   - Poison Detected: {metrics['poison_detected']}")
     print(f"   - Poison Served:   {metrics['poison_served']}")
@@ -929,25 +927,25 @@ def run_standalone_test():
     print(f"\n   Detection Rate:    {poison_stats['detection_rate']*100:.1f}%")
     
     # Invariant 검증
-    print(f"\n✅ Invariant Verification:")
+    print("\n✅ Invariant Verification:")
     passed = True
     
     if metrics['poison_detected'] >= metrics['poison_injected']:
-        print(f"   ✅ poison_detected >= poison_injected")
+        print("   ✅ poison_detected >= poison_injected")
     else:
-        print(f"   ❌ poison_detected < poison_injected")
+        print("   ❌ poison_detected < poison_injected")
         passed = False
     
     if metrics['poison_served'] == 0:
-        print(f"   ✅ poison_served_to_user == 0")
+        print("   ✅ poison_served_to_user == 0")
     else:
         print(f"   ❌ poison_served_to_user == {metrics['poison_served']}")
         passed = False
     
     if metrics['auto_invalidations'] > 0:
-        print(f"   ✅ auto_invalidation_triggered")
+        print("   ✅ auto_invalidation_triggered")
     else:
-        print(f"   ⚠️  auto_invalidation not triggered")
+        print("   ⚠️  auto_invalidation not triggered")
     
     print(f"\n{'='*60}")
     if passed:

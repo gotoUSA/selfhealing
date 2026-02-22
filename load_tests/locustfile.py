@@ -66,7 +66,7 @@ def on_test_start(environment, **kwargs):
     print("\n" + "=" * 60)
     print("🚀 부하 테스트 시작")
     print("=" * 60)
-    print(f"📊 사용자 비율:")
+    print("📊 사용자 비율:")
     print(f"   - Browser (조회): {USER_WEIGHTS['browser']}%")
     print(f"   - Shopper (장바구니): {USER_WEIGHTS['shopper']}%")
     print(f"   - Buyer (구매): {USER_WEIGHTS['buyer']}%")
@@ -83,7 +83,7 @@ def on_test_stop(environment, **kwargs):
     # 통계 요약
     stats = environment.stats
 
-    print(f"\n📈 요약:")
+    print("\n📈 요약:")
     print(f"   - 총 요청 수: {stats.total.num_requests}")
     print(f"   - 실패 수: {stats.total.num_failures}")
     print(f"   - 평균 응답시간: {stats.total.avg_response_time:.2f}ms")

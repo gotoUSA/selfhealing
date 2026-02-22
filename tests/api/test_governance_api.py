@@ -14,14 +14,13 @@ Reference: docs/self_healing/18_METRIC_DRIFT_STRATEGY.md
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime, timezone
 
 from rest_framework.test import APIRequestFactory
 from rest_framework import status
 
 from selfhealing.api.django.views.governance import (
-    GovernanceService,
     MetricStatusView,
     GovernanceReconcileView,
     GovernanceModeView,

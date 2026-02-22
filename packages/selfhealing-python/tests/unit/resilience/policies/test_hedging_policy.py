@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import warnings
 from dataclasses import fields
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -29,21 +29,17 @@ from selfhealing.core.hedging.config import (
     HedgingMode,
 )
 from selfhealing.core.hedging.exceptions import HedgingError
-from selfhealing.core.hedging.result import HedgingResult
 from selfhealing.interfaces.resilience_policy import (
-    AsyncResiliencePolicy,
-    PolicyContext,
     PolicyOutcome,
     PolicyResult,
     ResiliencePolicy,
 )
 from selfhealing.resilience.policies.hedging import (
+    _LOAD_LEVEL_ORDER,
     AsyncHedgingPolicy,
     HedgingConfigUpdateHook,
     HedgingPolicy,
-    _LOAD_LEVEL_ORDER,
 )
-
 
 # =============================================================================
 # Fixtures — 1개 파일 전용이므로 파일 내부 배치 (§5.1)

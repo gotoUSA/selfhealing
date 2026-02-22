@@ -5,8 +5,7 @@ Tests for request buffer integration with audit helpers.
 Uses lazy imports to avoid Prometheus registry conflicts.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestBufferIntegration:
@@ -22,15 +21,15 @@ class TestBufferIntegration:
             return_value=True,
         ) as mock_buffer:
             from selfhealing.services.audit_helpers import log_chaos_experiment_audit
-            
+
             mock_request = MagicMock()
-            
+
             log_chaos_experiment_audit(
                 experiment_id="chaos-buf123",
                 event_type="experiment_started",
                 request=mock_request,
             )
-            
+
             mock_buffer.assert_called_once()
             call_kwargs = mock_buffer.call_args[1]
             assert call_kwargs["request"] == mock_request
@@ -48,9 +47,9 @@ class TestBufferIntegration:
             "selfhealing.audit.log_config_change",
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
-            
+
             mock_request = MagicMock()
-            
+
             log_emergency_mode_audit(
                 action="activate",
                 level="LEVEL_1",
@@ -59,7 +58,7 @@ class TestBufferIntegration:
                 reason="Test",
                 request=mock_request,
             )
-            
+
             mock_buffer.assert_called_once()
             call_kwargs = mock_buffer.call_args[1]
             assert call_kwargs["request"] == mock_request
@@ -74,10 +73,12 @@ class TestBufferIntegration:
             "selfhealing.services.audit.chaos_audit._try_add_to_buffer",
             return_value=True,
         ) as mock_buffer:
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             mock_request = MagicMock()
-            
+
             log_error_budget_blocked_audit(
                 action="test",
                 gate_status="blocked",
@@ -86,7 +87,7 @@ class TestBufferIntegration:
                 reason="Test",
                 request=mock_request,
             )
-            
+
             mock_buffer.assert_called_once()
             call_kwargs = mock_buffer.call_args[1]
             assert call_kwargs["request"] == mock_request

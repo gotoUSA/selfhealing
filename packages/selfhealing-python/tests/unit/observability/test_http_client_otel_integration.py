@@ -9,8 +9,7 @@ Tests for:
 """
 
 import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestSuppressOtelInstrumentation:
@@ -40,9 +39,8 @@ class TestSelfHealingHttpClientOtelIntegration:
     def test_chaos_context_preserved_regardless_of_otel(self):
         """Chaos context headers are always propagated."""
         from selfhealing.services.http_client import (
-            SelfHealingHttpClient,
             SYNTHETIC_HEADER,
-            CHAOS_EXPERIMENT_ID_HEADER,
+            SelfHealingHttpClient,
         )
 
         client = SelfHealingHttpClient()
@@ -73,8 +71,8 @@ class TestSelfHealingHttpClientOtelIntegration:
     def test_get_headers_without_chaos_context(self):
         """Headers do not include chaos headers when not in chaos mode."""
         from selfhealing.services.http_client import (
-            SelfHealingHttpClient,
             SYNTHETIC_HEADER,
+            SelfHealingHttpClient,
         )
 
         client = SelfHealingHttpClient(base_headers={"X-Custom": "value"})

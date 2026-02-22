@@ -13,7 +13,8 @@ import queue
 import re
 import threading
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import structlog
 from prometheus_client import REGISTRY, Counter, Gauge, Histogram

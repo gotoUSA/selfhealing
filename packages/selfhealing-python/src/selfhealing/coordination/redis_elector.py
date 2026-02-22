@@ -10,9 +10,10 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -184,7 +185,7 @@ class RedisLeaderElector(LeaderElector):
             )
         return self._callback_executor
 
-    def _get_metrics(self) -> "LeaderElectorMetrics | None":
+    def _get_metrics(self) -> LeaderElectorMetrics | None:
         """메트릭 헬퍼 반환 (lazy initialization)."""
         if self._metrics is None:
             try:

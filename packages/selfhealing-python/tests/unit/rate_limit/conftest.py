@@ -10,10 +10,9 @@ import threading
 import time
 from dataclasses import dataclass
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-
 
 # =============================================================================
 # 테스트 상수 (Config 기본값에서 파생)

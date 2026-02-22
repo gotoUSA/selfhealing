@@ -10,10 +10,7 @@ Audit 플러시 Celery 태스크 단위 테스트.
 
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import MagicMock, Mock, patch
-
-import pytest
+from unittest.mock import Mock, patch
 
 
 class TestFlushRedisAuditToDb:
@@ -233,7 +230,9 @@ class TestBeatScheduleIntegration:
 
     def test_audit_flush_included_in_selfhealing_schedule(self) -> None:
         """audit flush가 selfhealing beat schedule에 포함되는지 확인."""
-        from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
+        from selfhealing.adapters.celery.beat_schedule import (
+            get_selfhealing_beat_schedule,
+        )
 
         schedule = get_selfhealing_beat_schedule(
             include_cleanup=False,

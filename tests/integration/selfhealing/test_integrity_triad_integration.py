@@ -19,9 +19,7 @@ Requirements:
 
 from __future__ import annotations
 
-import json
 import os
-import tempfile
 
 import pytest
 
@@ -194,7 +192,6 @@ class TestIntegrityGateEventBusIntegration:
         IntegrityGate가 무결성을 검증하여 리플레이를 허용한다.
         """
         from selfhealing.audit.integrity.health_score import (
-            IntegrityHealthScore,
             get_integrity_health_score,
             reset_integrity_health_score,
         )

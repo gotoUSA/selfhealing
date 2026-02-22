@@ -13,7 +13,6 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 import os
 import pytest
 import tempfile
-from datetime import datetime, timezone
 
 # Import test constants for Redis configuration
 from tests.factories.constants import REDIS_CONFIG
@@ -126,7 +125,6 @@ class TestNamespaceIsolation:
         from selfhealing.adapters.redis.circuit_breaker import (
             RedisCircuitBreakerStateRepository,
         )
-        from selfhealing.interfaces.repositories import CircuitBreakerStateEnum
         
         service_name = "payment-api"
         
@@ -333,7 +331,7 @@ class TestTieredRedisProvider:
         """
         TieredRedisProvider의 health_check 테스트.
         """
-        from selfhealing.core.tiered_redis import TieredRedisProvider, RedisScope
+        from selfhealing.core.tiered_redis import TieredRedisProvider
         
         provider = TieredRedisProvider(
             local_url=REDIS_URL,

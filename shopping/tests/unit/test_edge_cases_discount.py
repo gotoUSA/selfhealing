@@ -11,7 +11,6 @@ from decimal import Decimal
 
 import pytest
 
-from shopping.models.product import Product
 from shopping.serializers.wishlist_serializers import WishlistProductSerializer
 from shopping.tests.factories import ProductFactory
 

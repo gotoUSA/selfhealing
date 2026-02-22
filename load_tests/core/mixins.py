@@ -9,7 +9,7 @@ import threading
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from locust import HttpUser
+    pass
 
 
 class AdminAuthMixin:

@@ -1,10 +1,7 @@
 import logging
-from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.db import transaction
-from django.db.models import F
 from django.shortcuts import get_object_or_404, redirect, render
 
 from drf_spectacular.utils import extend_schema, OpenApiParameter
@@ -12,11 +9,8 @@ from rest_framework import permissions, serializers as drf_serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ..models.cart import Cart
 from ..models.order import Order
 from ..models.payment import Payment, PaymentLog
-from ..models.point import PointHistory
-from ..models.product import Product
 from ..serializers.payment_serializers import (
     PaymentCancelSerializer,
     PaymentConfirmSerializer,
@@ -26,7 +20,7 @@ from ..serializers.payment_serializers import (
 )
 from ..services.payment_service import PaymentConfirmError, PaymentService
 from ..throttles import PaymentCancelRateThrottle, PaymentConfirmRateThrottle, PaymentRequestRateThrottle
-from ..utils.toss_payment import TossPaymentClient, TossPaymentError
+from ..utils.toss_payment import TossPaymentError
 from .mixins import EmailVerificationRequiredMixin
 
 logger = logging.getLogger(__name__)

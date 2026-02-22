@@ -3,22 +3,18 @@
 Note: URL namespace가 설정되어 있지 않으므로 reverse("payment_test") 형식 사용
 """
 
-from decimal import Decimal
-from unittest.mock import patch
 
 from django.urls import reverse
 
 import pytest
 from rest_framework import status
 
-from shopping.models.payment import Payment
 from shopping.services.payment_service import PaymentConfirmError
 from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
     CompletedPaymentFactory,
-    ProductFactory,
     UserFactory,
     TossResponseBuilder,
 )

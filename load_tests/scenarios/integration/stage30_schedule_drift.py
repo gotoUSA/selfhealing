@@ -39,10 +39,9 @@ import random
 import threading
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional, Any, Callable, Set
+from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
-from collections import deque
 import heapq
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -703,9 +702,9 @@ def on_test_stop(environment, **kwargs):
     print(f"Executed: {_stats.executed_jobs}")
     print(f"Skipped (Stale): {_stats.skipped_jobs}")
     print(f"Failed: {_stats.failed_jobs}")
-    print(f"\nDuplicate Prevention:")
+    print("\nDuplicate Prevention:")
     print(f"  - Duplicates Prevented: {stats['duplicate_prevented']}")
-    print(f"\nConcurrency:")
+    print("\nConcurrency:")
     print(f"  - Max Concurrent Peak: {stats['max_concurrent_peak']}")
     print(f"  - Current Concurrent: {stats['current_concurrent']}")
     print(f"\nDrift Events: {len(_stats.drift_events)}")

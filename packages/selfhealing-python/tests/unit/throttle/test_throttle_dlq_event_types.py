@@ -12,7 +12,6 @@ DLQ + Throttle EventType 및 EventChannel 매핑 단위 테스트.
 4. 매핑 채널이 THROTTLE인지 확인
 """
 
-import pytest
 
 from selfhealing.services.event_bus import EventType
 

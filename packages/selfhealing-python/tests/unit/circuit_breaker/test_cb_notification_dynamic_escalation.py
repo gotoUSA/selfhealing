@@ -15,7 +15,6 @@ Review points:
 - Channel variability: SMS/PagerDuty channels auto-added at Level 3
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -40,10 +39,10 @@ class TestDynamicEscalationLevel2:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -66,10 +65,10 @@ class TestDynamicEscalationLevel2:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -92,10 +91,10 @@ class TestDynamicEscalationLevel2:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -118,10 +117,10 @@ class TestDynamicEscalationLevel2:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -148,10 +147,10 @@ class TestDynamicEscalationLevel3:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -174,10 +173,10 @@ class TestDynamicEscalationLevel3:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -200,10 +199,10 @@ class TestDynamicEscalationLevel3:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -226,10 +225,10 @@ class TestDynamicEscalationLevel3:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -256,10 +255,10 @@ class TestCriticalCeiling:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -282,10 +281,10 @@ class TestCriticalCeiling:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -302,10 +301,10 @@ class TestCriticalCeiling:
     def test_critical_early_return_without_manager(self):
         """CRITICAL returns early without calling emergency_mode_manager."""
         from selfhealing.services.unified_notification import (
-            UnifiedNotificationManager,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            UnifiedNotificationManager,
         )
 
         manager = UnifiedNotificationManager()
@@ -333,10 +332,10 @@ class TestNormalLevelNoEscalation:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -359,10 +358,10 @@ class TestNormalLevelNoEscalation:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -383,9 +382,9 @@ class TestChannelVariability:
     def test_critical_priority_includes_all_channels(self):
         """CRITICAL priority includes all channels (slack, email, sms, pagerduty)."""
         from selfhealing.services.unified_notification import (
-            RoutingPolicy,
-            NotificationPriority,
             NotificationCategory,
+            NotificationPriority,
+            RoutingPolicy,
         )
 
         policy = RoutingPolicy()
@@ -402,9 +401,9 @@ class TestChannelVariability:
     def test_high_priority_channels(self):
         """HIGH priority includes slack, email channels."""
         from selfhealing.services.unified_notification import (
-            RoutingPolicy,
-            NotificationPriority,
             NotificationCategory,
+            NotificationPriority,
+            RoutingPolicy,
         )
 
         policy = RoutingPolicy()
@@ -421,9 +420,9 @@ class TestChannelVariability:
     def test_medium_priority_channels(self):
         """MEDIUM priority includes only slack."""
         from selfhealing.services.unified_notification import (
-            RoutingPolicy,
-            NotificationPriority,
             NotificationCategory,
+            NotificationPriority,
+            RoutingPolicy,
         )
 
         policy = RoutingPolicy()
@@ -447,11 +446,11 @@ class TestChannelVariability:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
-                RoutingPolicy,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                RoutingPolicy,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -489,10 +488,10 @@ class TestEdgeCases:
             {'selfhealing.services.emergency_mode': mock_emergency_mode}
         ):
             from selfhealing.services.unified_notification import (
-                UnifiedNotificationManager,
+                NotificationCategory,
                 NotificationPayload,
                 NotificationPriority,
-                NotificationCategory,
+                UnifiedNotificationManager,
             )
 
             manager = UnifiedNotificationManager()
@@ -510,10 +509,10 @@ class TestEdgeCases:
     def test_import_error_returns_original_priority(self):
         """ImportError returns original priority."""
         from selfhealing.services.unified_notification import (
-            UnifiedNotificationManager,
+            NotificationCategory,
             NotificationPayload,
             NotificationPriority,
-            NotificationCategory,
+            UnifiedNotificationManager,
         )
 
         manager = UnifiedNotificationManager()

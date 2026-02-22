@@ -8,7 +8,6 @@ Celery Task trace_id 표준화 테스트.
 4. restore_trace_from_celery() 수정사항
 """
 
-import pytest
 
 
 class TestGenerateCeleryTraceId:
@@ -47,9 +46,9 @@ class TestCeleryContextManagement:
     def test_set_and_get_celery_context(self):
         """set_celery_context() 후 get_celery_context()로 조회 가능한지 검증."""
         from selfhealing.audit.trace import (
-            set_celery_context,
-            get_celery_context,
             clear_celery_context,
+            get_celery_context,
+            set_celery_context,
         )
 
         set_celery_context(
@@ -71,9 +70,9 @@ class TestCeleryContextManagement:
     def test_clear_celery_context(self):
         """clear_celery_context() 후 None이 되는지 검증."""
         from selfhealing.audit.trace import (
-            set_celery_context,
-            get_celery_context,
             clear_celery_context,
+            get_celery_context,
+            set_celery_context,
         )
 
         set_celery_context(task_id="test", task_name="test", retries=0)
@@ -84,9 +83,9 @@ class TestCeleryContextManagement:
     def test_is_celery_task_true(self):
         """Celery 컨텍스트 설정 후 is_celery_task()가 True 반환하는지 검증."""
         from selfhealing.audit.trace import (
-            set_celery_context,
-            is_celery_task,
             clear_celery_context,
+            is_celery_task,
+            set_celery_context,
         )
 
         set_celery_context(task_id="test", task_name="test", retries=0)
@@ -98,8 +97,8 @@ class TestCeleryContextManagement:
     def test_is_celery_task_false(self):
         """Celery 컨텍스트 없을 때 is_celery_task()가 False 반환하는지 검증."""
         from selfhealing.audit.trace import (
-            is_celery_task,
             clear_celery_context,
+            is_celery_task,
         )
 
         clear_celery_context()  # 확실히 정리
@@ -109,9 +108,9 @@ class TestCeleryContextManagement:
     def test_set_celery_context_also_sets_trace_id(self):
         """set_celery_context()가 trace_id도 함께 설정하는지 검증."""
         from selfhealing.audit.trace import (
-            set_celery_context,
-            get_trace_id,
             clear_celery_context,
+            get_trace_id,
+            set_celery_context,
         )
 
         task_id = "abc-123-def"
@@ -129,9 +128,9 @@ class TestRestoreTraceFromCelery:
     def test_with_trace_info(self):
         """trace_info가 있을 때 전파된 trace_id를 사용하는지 검증."""
         from selfhealing.audit.trace import (
-            restore_trace_from_celery,
-            get_trace_id,
             clear_celery_context,
+            get_trace_id,
+            restore_trace_from_celery,
         )
 
         http_trace_id = "req-original-http"
@@ -146,11 +145,10 @@ class TestRestoreTraceFromCelery:
     def test_with_celery_task_id(self):
         """celery_task_id가 있을 때 CELERY_{task_id} 형식으로 생성하는지 검증."""
         from selfhealing.audit.trace import (
-            restore_trace_from_celery,
-            get_trace_id,
             get_celery_context,
+            get_trace_id,
             is_celery_task,
-            clear_celery_context,
+            restore_trace_from_celery,
         )
 
         task_id = "celery-task-789"
@@ -174,8 +172,8 @@ class TestRestoreTraceFromCelery:
     def test_fallback_without_trace_info_or_task_id(self):
         """trace_info와 celery_task_id 모두 없을 때 Fallback 동작 검증."""
         from selfhealing.audit.trace import (
-            restore_trace_from_celery,
             clear_celery_context,
+            restore_trace_from_celery,
         )
 
         with restore_trace_from_celery() as active_trace_id:
@@ -186,8 +184,8 @@ class TestRestoreTraceFromCelery:
     def test_trace_info_takes_priority_over_celery_task_id(self):
         """trace_info가 celery_task_id보다 우선하는지 검증."""
         from selfhealing.audit.trace import (
-            restore_trace_from_celery,
             clear_celery_context,
+            restore_trace_from_celery,
         )
 
         http_trace_id = "req-priority-test"
@@ -213,7 +211,8 @@ class TestTaskPrerunHandler:
     def test_prerun_sets_celery_trace_id(self):
         """task_prerun이 CELERY_{task_id} 형식의 trace_id를 설정하는지 검증."""
         from unittest.mock import MagicMock, patch
-        from selfhealing.audit.trace import get_trace_id, clear_celery_context
+
+        from selfhealing.audit.trace import clear_celery_context, get_trace_id
 
         with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
             mock_config.enabled = True
@@ -241,7 +240,8 @@ class TestTaskPrerunHandler:
     def test_prerun_preserves_http_trace_id(self):
         """HTTP에서 전파된 trace_id가 있으면 그대로 유지하는지 검증."""
         from unittest.mock import MagicMock, patch
-        from selfhealing.audit.trace import get_trace_id, clear_celery_context
+
+        from selfhealing.audit.trace import clear_celery_context, get_trace_id
 
         with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
             mock_config.enabled = True
@@ -269,10 +269,11 @@ class TestTaskPrerunHandler:
     def test_prerun_sets_celery_context(self):
         """task_prerun이 celery_context를 설정하는지 검증."""
         from unittest.mock import MagicMock, patch
+
         from selfhealing.audit.trace import (
+            clear_celery_context,
             get_celery_context,
             is_celery_task,
-            clear_celery_context,
         )
 
         with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
@@ -305,7 +306,8 @@ class TestTaskPrerunHandler:
     def test_prerun_skips_excluded_tasks(self):
         """excluded_tasks에 있는 태스크는 건너뛰는지 검증."""
         from unittest.mock import MagicMock, patch
-        from selfhealing.audit.trace import is_celery_task, clear_celery_context
+
+        from selfhealing.audit.trace import clear_celery_context, is_celery_task
 
         clear_celery_context()  # 먼저 정리
 
@@ -332,7 +334,8 @@ class TestTaskPrerunHandler:
     def test_prerun_disabled_config(self):
         """enabled=False일 때 핸들러가 동작하지 않는지 검증."""
         from unittest.mock import MagicMock, patch
-        from selfhealing.audit.trace import is_celery_task, clear_celery_context
+
+        from selfhealing.audit.trace import clear_celery_context, is_celery_task
 
         clear_celery_context()
 
@@ -361,10 +364,10 @@ class TestTaskPostrunHandler:
     def test_postrun_clears_celery_context(self):
         """task_postrun이 celery_context를 정리하는지 검증."""
         from unittest.mock import MagicMock, patch
+
         from selfhealing.audit.trace import (
-            set_celery_context,
             is_celery_task,
-            clear_celery_context,
+            set_celery_context,
         )
 
         # 먼저 컨텍스트 설정
@@ -396,10 +399,11 @@ class TestTaskPostrunHandler:
     def test_postrun_skips_excluded_tasks(self):
         """excluded_tasks에 있는 태스크는 건너뛰는지 검증."""
         from unittest.mock import MagicMock, patch
+
         from selfhealing.audit.trace import (
-            set_celery_context,
-            is_celery_task,
             clear_celery_context,
+            is_celery_task,
+            set_celery_context,
         )
 
         # 먼저 컨텍스트 설정
@@ -441,8 +445,11 @@ class TestWalCeleryContext:
 
     def test_wal_includes_celery_context(self):
         """WAL 레코드에 celery_context가 포함되는지 검증."""
-        from unittest.mock import MagicMock, patch
-        from selfhealing.audit.trace import set_celery_context, clear_celery_context, get_celery_context
+        from selfhealing.audit.trace import (
+            clear_celery_context,
+            get_celery_context,
+            set_celery_context,
+        )
 
         # Clear previous celery context
         clear_celery_context()
@@ -466,6 +473,7 @@ class TestWalCeleryContext:
     def test_wal_celery_context_none_outside_celery(self):
         """Celery Task 외부에서는 celery_context가 None인지 검증."""
         from unittest.mock import MagicMock, patch
+
         from selfhealing.audit.trace import clear_celery_context
 
         mock_wal = MagicMock()
@@ -541,7 +549,8 @@ class TestCeleryTraceFlowE2E:
         HTTP 요청의 trace_id가 Celery Task까지 전파되는지 검증
         """
         from unittest.mock import MagicMock, patch
-        from selfhealing.audit.trace import get_trace_id, clear_celery_context
+
+        from selfhealing.audit.trace import clear_celery_context, get_trace_id
 
         mock_sender = MagicMock()
         mock_sender.name = "test_task"

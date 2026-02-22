@@ -19,7 +19,7 @@ Postmortem에 포함시켜 장애 원인 분석 정확도를 높입니다.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any
 

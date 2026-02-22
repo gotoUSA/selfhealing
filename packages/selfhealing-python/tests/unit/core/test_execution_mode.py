@@ -5,22 +5,20 @@ Verifies that Shadow/Evaluation mode correctly prevents action execution
 while still logging decisions.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
+from unittest.mock import Mock, patch
 
-from selfhealing.core.execution_mode import (
-    ExecutionMode,
-    ExecutionModeType,
-    get_execution_mode,
-    set_execution_mode,
-    clear_execution_mode_override,
-)
 from selfhealing.core.action_executor import (
     Action,
-    ActionResult,
     ActionExecutor,
+    ActionResult,
     execute_action,
+)
+from selfhealing.core.execution_mode import (
+    ExecutionMode,
+    clear_execution_mode_override,
+    get_execution_mode,
+    set_execution_mode,
 )
 
 

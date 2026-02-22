@@ -9,15 +9,15 @@ Chaos Guard 단위 테스트.
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 from selfhealing.services.canary.chaos_guard import (
+    CanaryChaosGuard,
     ChaosConflictPolicy,
     ChaosConflictResult,
-    CanaryChaosGuard,
 )
-
 
 # =============================================================================
 # Test: ChaosConflictPolicy
@@ -56,7 +56,7 @@ class TestChaosConflictResult:
             policy_applied=ChaosConflictPolicy.SMART,
             can_proceed=True,
         )
-        
+
         assert result.has_conflict is False
         assert result.can_proceed is True
         assert len(result.safe_clusters) == 2
@@ -72,7 +72,7 @@ class TestChaosConflictResult:
             can_proceed=True,
             warning_message="SMART: Excluding chaos clusters",
         )
-        
+
         assert result.has_conflict is True
         assert result.can_proceed is True
         assert "seoul" in result.chaos_clusters
@@ -125,11 +125,11 @@ class TestCanaryChaosGuard:
         """카오스 실험이 없을 때 충돌 없음."""
         with patch.object(guard_smart, "_get_clusters_with_active_chaos") as mock:
             mock.return_value = set()
-            
+
             result = guard_smart.check_conflict(
                 target_clusters=["seoul", "tokyo"]
             )
-        
+
         assert result.has_conflict is False
         assert result.can_proceed is True
         assert result.safe_clusters == ["seoul", "tokyo"]
@@ -139,11 +139,11 @@ class TestCanaryChaosGuard:
         """다른 클러스터에서 카오스 실험 중일 때."""
         with patch.object(guard_smart, "_get_clusters_with_active_chaos") as mock:
             mock.return_value = {"singapore"}  # 다른 클러스터
-            
+
             result = guard_smart.check_conflict(
                 target_clusters=["seoul", "tokyo"]
             )
-        
+
         assert result.has_conflict is False
         assert result.can_proceed is True
 
@@ -155,11 +155,11 @@ class TestCanaryChaosGuard:
         """STRICT: 충돌 시 전체 차단."""
         with patch.object(guard_strict, "_get_clusters_with_active_chaos") as mock:
             mock.return_value = {"seoul"}
-            
+
             result = guard_strict.check_conflict(
                 target_clusters=["seoul", "tokyo"]
             )
-        
+
         assert result.has_conflict is True
         assert result.can_proceed is False
         assert result.safe_clusters == []
@@ -173,11 +173,11 @@ class TestCanaryChaosGuard:
         """SMART: 카오스 클러스터만 제외."""
         with patch.object(guard_smart, "_get_clusters_with_active_chaos") as mock:
             mock.return_value = {"seoul"}
-            
+
             result = guard_smart.check_conflict(
                 target_clusters=["seoul", "tokyo", "singapore"]
             )
-        
+
         assert result.has_conflict is True
         assert result.can_proceed is True
         assert "seoul" in result.chaos_clusters
@@ -189,11 +189,11 @@ class TestCanaryChaosGuard:
         """SMART: 모든 클러스터가 카오스 중일 때 차단."""
         with patch.object(guard_smart, "_get_clusters_with_active_chaos") as mock:
             mock.return_value = {"seoul", "tokyo"}
-            
+
             result = guard_smart.check_conflict(
                 target_clusters=["seoul", "tokyo"]
             )
-        
+
         assert result.has_conflict is True
         assert result.can_proceed is False
         assert len(result.safe_clusters) == 0
@@ -207,11 +207,11 @@ class TestCanaryChaosGuard:
         """LOOSE: 경고 후 전체 진행."""
         with patch.object(guard_loose, "_get_clusters_with_active_chaos") as mock:
             mock.return_value = {"seoul"}
-            
+
             result = guard_loose.check_conflict(
                 target_clusters=["seoul", "tokyo"]
             )
-        
+
         assert result.has_conflict is True
         assert result.can_proceed is True
         assert result.safe_clusters == ["seoul", "tokyo"]  # 전체 진행
@@ -225,12 +225,12 @@ class TestCanaryChaosGuard:
         """force_during_chaos=True는 모든 정책을 무시."""
         with patch.object(guard_strict, "_get_clusters_with_active_chaos") as mock:
             mock.return_value = {"seoul", "tokyo"}
-            
+
             result = guard_strict.check_conflict(
                 target_clusters=["seoul", "tokyo"],
                 force_during_chaos=True,
             )
-        
+
         assert result.has_conflict is True
         assert result.can_proceed is True  # 강제 진행
         assert result.safe_clusters == ["seoul", "tokyo"]
@@ -246,12 +246,12 @@ class TestCanaryChaosGuard:
         with patch.object(guard_smart, "_get_clusters_with_active_chaos") as mock:
             mock.side_effect = Exception("Redis error")
             mock.return_value = set()
-            
+
             # 다시 정상 동작 패치
             with patch.object(guard_smart, "_get_clusters_with_active_chaos", return_value=set()):
                 result = guard_smart.check_conflict(
                     target_clusters=["seoul", "tokyo"]
                 )
-        
+
         # 에러 시에도 정상 처리
         assert result.can_proceed is True

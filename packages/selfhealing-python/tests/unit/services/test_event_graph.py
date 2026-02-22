@@ -15,13 +15,11 @@ Tests for Event Graph — 이벤트 DAG 자동 구축.
 
 from __future__ import annotations
 
-import time
 import uuid
 from datetime import datetime, timezone
 
 import pytest
 
-from selfhealing.services.blast_radius.models import ServiceDependencyEdge
 from selfhealing.services.blast_radius.service import BlastRadiusService
 from selfhealing.services.correlation_engine.co_occurrence_tracker import (
     CoOccurrenceSnapshot,
@@ -29,15 +27,14 @@ from selfhealing.services.correlation_engine.co_occurrence_tracker import (
 )
 from selfhealing.services.correlation_engine.event_graph import (
     CO_OCCURRENCE_CONFIDENCE_MULTIPLIER,
-    CO_OCCURRENCE_MIN_SCORE,
     CONFIDENCE_CONTEXTUAL,
     CONFIDENCE_CORRELATION_ID,
     CONFIDENCE_DEPENDENCY,
     DEFAULT_MAX_EVENTS_PER_DAG,
     DEFAULT_MAX_GRAPH_DEPTH,
     DEFAULT_MIN_CONFIDENCE,
-    EVIDENCE_CONTEXTUAL,
     EVIDENCE_CO_OCCURRENCE,
+    EVIDENCE_CONTEXTUAL,
     EVIDENCE_CORRELATION_ID,
     EVIDENCE_DEPENDENCY,
     EVIDENCE_TEMPORAL,
@@ -66,7 +63,6 @@ from selfhealing.settings.correlation import (
     get_correlation_settings,
     reset_correlation_settings,
 )
-
 
 # =============================================================================
 # Fixtures

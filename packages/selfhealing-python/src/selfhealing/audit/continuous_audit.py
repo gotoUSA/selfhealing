@@ -36,7 +36,6 @@ from selfhealing.interfaces.audit_adapter import (
 if TYPE_CHECKING:
     from selfhealing.audit.checkpoint_strategy import (
         CheckpointStorageStrategy,
-        UnifiedCheckpointData,
     )
     from selfhealing.audit.wal import WALConfig, WriteAheadLog
 

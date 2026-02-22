@@ -5,7 +5,7 @@ Redis 기반 상태 저장소 테스트.
 """
 
 import threading
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest import mock
 
 import pytest

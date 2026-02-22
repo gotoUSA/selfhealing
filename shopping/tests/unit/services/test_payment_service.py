@@ -13,7 +13,6 @@ from unittest.mock import patch
 import pytest
 
 from shopping.models.payment import Payment, PaymentLog
-from shopping.models.product import Product
 from shopping.services.order_service import OrderService
 from shopping.services.payment_service import PaymentCancelError, PaymentConfirmError, PaymentService
 from shopping.tests.factories import (

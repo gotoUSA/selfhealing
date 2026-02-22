@@ -8,19 +8,17 @@ Region Replicator 테스트.
 - RegionReplicator: 리전 복제기
 """
 
-import time
 
-import pytest
 
 from selfhealing.multiregion.config import (
     MultiRegionSettings,
     reset_multiregion_settings,
 )
 from selfhealing.multiregion.replicator import (
+    RegionReplicator,
     ReplicationEvent,
     ReplicationEventType,
     ReplicationFilter,
-    RegionReplicator,
 )
 
 

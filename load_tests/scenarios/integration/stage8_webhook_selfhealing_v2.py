@@ -49,9 +49,7 @@ import hashlib
 import hmac
 import threading
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from locust import HttpUser, task, constant, constant_pacing, tag, events
-from locust.runners import MasterRunner, WorkerRunner
+from locust import HttpUser, task, constant, tag, events
 
 from dotenv import load_dotenv
 load_dotenv()

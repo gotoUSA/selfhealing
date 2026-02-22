@@ -601,11 +601,11 @@ class AdminChaosUser(HttpUser):
         
         # Admin으로 로그인
         if not self.login_helper.login_as_admin():
-            print(f"  [WARN] Admin login failed - chaos tests will be skipped")
+            print("  [WARN] Admin login failed - chaos tests will be skipped")
             _chaos_stats["admin_auth_failed"] = True
         else:
             _chaos_stats["enabled"] = True
-            print(f"  [INFO] Admin logged in - chaos tests enabled")
+            print("  [INFO] Admin logged in - chaos tests enabled")
 
     # =========================================================================
     # Chaos Injection Tasks (v2.0 - 실제 Selfhealing 동작 검증)
@@ -892,7 +892,7 @@ def on_test_stop(environment, **kwargs):
         print("  No duplicate payments were processed")
         idempotency_passed = True
     else:
-        print(f"  [FAIL] IDEMPOTENCY TEST FAILED")
+        print("  [FAIL] IDEMPOTENCY TEST FAILED")
         print(f"  CRITICAL: {_duplicate_payment_success_count} duplicate payments succeeded!")
         print("  This is a DATA INTEGRITY issue!")
         idempotency_passed = False
@@ -965,7 +965,7 @@ def on_test_stop(environment, **kwargs):
         avg = sum(latencies) / len(latencies)
         p95_idx = int(len(latencies) * 0.95)
         p95 = latencies[min(p95_idx, len(latencies) - 1)]
-        print(f"\n[Part 6] L3 Health Latency")
+        print("\n[Part 6] L3 Health Latency")
         print("-" * 50)
         print(f"  Avg: {avg:.1f}ms, P95: {p95:.1f}ms")
         if p95 < 50:
@@ -1095,7 +1095,7 @@ def on_test_stop(environment, **kwargs):
         _chaos_stats['recovery_success']
     )
     
-    print(f"\n[Part 9] Selfhealing Integration Summary")
+    print("\n[Part 9] Selfhealing Integration Summary")
     print("-" * 50)
     print(f"  Total Selfhealing API Calls: {selfhealing_checks}")
     print(f"  Chaos Operations Executed: {chaos_operations}")

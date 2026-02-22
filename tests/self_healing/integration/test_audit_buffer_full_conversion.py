@@ -16,10 +16,6 @@ Phase 3 목표:
 """
 
 import os
-import sys
-import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
 
 # Django 설정 구성 (테스트 실행 전)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings.test")

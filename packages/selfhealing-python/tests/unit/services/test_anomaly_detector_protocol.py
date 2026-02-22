@@ -15,13 +15,10 @@ get_feature_schema() 메서드를 검증한다.
 
 from __future__ import annotations
 
-import pytest
-
 from selfhealing.services.predictive_forecaster.anomaly_detector import (
     IQRDetector,
     ZScoreDetector,
 )
-
 
 # =============================================================================
 # ZScoreDetector Protocol 메서드 계약 검증

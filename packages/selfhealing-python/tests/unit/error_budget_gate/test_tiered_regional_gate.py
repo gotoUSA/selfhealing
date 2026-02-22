@@ -5,16 +5,13 @@ Gate.check()에 tier_id/region 전달 시 차등 임계치 적용과
 캐시 키 분리, 리전 Fallback 동작 검증.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from selfhealing.services.error_budget_gate.config import (
     ErrorBudgetGateConfig,
-    GateCheckResult,
     GateStatus,
 )
 from selfhealing.services.error_budget_gate.gate import ErrorBudgetGate
-
 
 # =============================================================================
 # 동작 검증: 티어별 차등 임계치 적용

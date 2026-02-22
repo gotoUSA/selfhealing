@@ -12,7 +12,7 @@ from unittest.mock import Mock
 import pytest
 import requests
 
-from shopping.utils.toss_payment import TOSS_ERROR_MESSAGES, TossPaymentClient, TossPaymentError, get_error_message
+from shopping.utils.toss_payment import TOSS_ERROR_MESSAGES, TossPaymentError, get_error_message
 
 
 # ==========================================

@@ -32,23 +32,14 @@ import logging
 import random
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import timedelta
-from typing import Any, Callable, Dict, Generator, List, Optional, TYPE_CHECKING
-from unittest.mock import MagicMock, patch
+from typing import Any, Dict, List, TYPE_CHECKING
 
 import pytest
 
 # Conditional imports for type checking
 if TYPE_CHECKING:
-    from selfhealing.services import (
-        CircuitBreakerConfig,
-        CircuitBreakerService,
-        CircuitState,
-        DLQConfig,
-        DLQService,
-    )
+    pass
 
 
 def _get_selfhealing_services():

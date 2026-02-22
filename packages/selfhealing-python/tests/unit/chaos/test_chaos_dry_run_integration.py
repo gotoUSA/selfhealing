@@ -7,8 +7,6 @@ Tests for Dry Run full flow integration:
 Total: 4 tests
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
 
 
 # =============================================================================
@@ -21,10 +19,10 @@ class TestChaosDryRunIntegration:
 
     def test_dry_run_produces_complete_analysis(self):
         """Test dry run produces complete analysis with all components."""
-        from selfhealing.services.chaos.impact_predictor import get_impact_predictor
         from selfhealing.services.chaos.blast_radius_analyzer import (
             get_blast_radius_analyzer,
         )
+        from selfhealing.services.chaos.impact_predictor import get_impact_predictor
 
         predictor = get_impact_predictor()
         analyzer = get_blast_radius_analyzer()
@@ -56,10 +54,11 @@ class TestChaosDryRunIntegration:
     def test_dry_run_analysis_serializable(self):
         """Test all dry run results are JSON serializable."""
         import json
-        from selfhealing.services.chaos.impact_predictor import get_impact_predictor
+
         from selfhealing.services.chaos.blast_radius_analyzer import (
             get_blast_radius_analyzer,
         )
+        from selfhealing.services.chaos.impact_predictor import get_impact_predictor
 
         predictor = get_impact_predictor()
         analyzer = get_blast_radius_analyzer()

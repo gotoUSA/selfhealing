@@ -7,8 +7,6 @@ using mock services (Django-free).
 Migrated from: shopping/tests/integration/self_healing/test_dlq_storage_and_replay.py
 """
 
-import pytest
-from datetime import datetime
 
 
 # =============================================================================

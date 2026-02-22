@@ -11,13 +11,11 @@ Redis 기반 Cooldown 저장소 단위 테스트.
 from __future__ import annotations
 
 import time
-from unittest.mock import ANY, MagicMock, patch
-
-import pytest
+from unittest.mock import ANY, patch
 
 from tests.unit.throttle.conftest import (
-    DEFAULT_COOLDOWN_SECONDS,
     DEDUP_KEY_PAYMENT,
+    DEFAULT_COOLDOWN_SECONDS,
     KEY_PREFIX,
     make_redis_key,
 )

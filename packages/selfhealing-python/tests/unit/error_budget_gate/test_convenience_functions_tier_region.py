@@ -4,11 +4,9 @@
 check_automation_allowed(tier_id, region) 시그니처 검증.
 """
 
-import pytest
 import inspect
 
 from selfhealing.services.error_budget_gate.gate import check_automation_allowed
-
 
 # =============================================================================
 # 계약 검증: 시그니처

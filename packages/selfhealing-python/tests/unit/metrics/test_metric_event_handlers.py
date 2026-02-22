@@ -2,12 +2,11 @@
 Tests for Metric Event Handlers.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from selfhealing.metrics.event_handlers import (
-    DLQMetricEventHandler,
     CircuitBreakerEventHandler,
+    DLQMetricEventHandler,
     ReplayEventHandler,
 )
 

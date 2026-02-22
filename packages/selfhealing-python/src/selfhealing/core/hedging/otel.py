@@ -13,8 +13,9 @@ Usage:
 from __future__ import annotations
 
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Generator
+from typing import Any
 
 import structlog
 
@@ -48,7 +49,7 @@ class _NoOpSpan:
         """예외 기록 (무시)."""
         pass
 
-    def __enter__(self) -> "_NoOpSpan":
+    def __enter__(self) -> _NoOpSpan:
         return self
 
     def __exit__(self, *args: Any) -> None:

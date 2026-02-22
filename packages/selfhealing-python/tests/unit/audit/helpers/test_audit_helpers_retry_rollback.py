@@ -4,9 +4,7 @@ Tests for retry and rollback audit helpers.
 Tests retry, system control, and rollback audit logging functionality.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, call
-import logging
+from unittest.mock import patch
 
 
 class TestLogRetryAudit:
@@ -500,7 +498,7 @@ class TestRetryHandlerAuditIntegration:
                 return_value=100,
             ) as mock_wal,
         ):
-            from selfhealing.services.retry_handler import RetryHandler, RetryConfig
+            from selfhealing.services.retry_handler import RetryConfig, RetryHandler
 
             config = RetryConfig(max_attempts=3, domain="payment")
             handler = RetryHandler(config=config)
@@ -530,7 +528,7 @@ class TestRetryHandlerAuditIntegration:
                 return_value=None,
             ),
         ):
-            from selfhealing.services.retry_handler import RetryHandler, RetryConfig
+            from selfhealing.services.retry_handler import RetryConfig, RetryHandler
 
             config = RetryConfig(max_attempts=2, domain="payment", enable_dlq=False)
             handler = RetryHandler(config=config)
@@ -633,7 +631,10 @@ class TestRollbackServiceAuditIntegration:
             "selfhealing.services.audit.retry_audit._write_to_wal",
             return_value=301,
         ) as mock_wal:
-            from selfhealing.services.rollback.service import RollbackService, RollbackStrategy
+            from selfhealing.services.rollback.service import (
+                RollbackService,
+                RollbackStrategy,
+            )
 
             # Reset singleton for test
             RollbackService._instance = None

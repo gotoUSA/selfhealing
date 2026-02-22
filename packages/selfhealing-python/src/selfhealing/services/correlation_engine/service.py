@@ -52,7 +52,7 @@ from selfhealing.services.correlation_engine.co_occurrence_tracker import (
     CoOccurrenceTracker,
     CorrelationResult,
 )
-from selfhealing.services.correlation_engine.event_graph import EventDAG, EventNode
+from selfhealing.services.correlation_engine.event_graph import EventDAG
 from selfhealing.services.correlation_engine.interfaces import (
     CorrelationStrategy,
     GraphBuildStrategy,
@@ -68,7 +68,6 @@ from selfhealing.settings.correlation import (
     get_correlation_settings,
 )
 from selfhealing.settings.correlation_engine import (
-    CorrelationEngineSettings,
     get_correlation_engine_settings,
 )
 

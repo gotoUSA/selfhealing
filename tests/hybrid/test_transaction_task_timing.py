@@ -24,11 +24,9 @@ import pytest
 pytestmark = pytest.mark.requires_db
 
 from django.db import transaction
-from unittest.mock import patch, MagicMock, call
-from decimal import Decimal
+from unittest.mock import patch, MagicMock
 
-from shopping.models import FailedOperation, Order, User
-from shopping.tests.factories import UserFactory, OrderFactory, ProductFactory
+from shopping.models import FailedOperation
 
 
 @pytest.mark.django_db(transaction=True)

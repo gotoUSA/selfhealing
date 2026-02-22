@@ -24,8 +24,6 @@ import pytest
 
 from selfhealing.scaling.config import BackpressureLevel
 from selfhealing.scaling.deadline_context import (
-    DEFAULT_ESTIMATED_MS_CRITICAL,
-    DEFAULT_ESTIMATED_MS_NON_ESSENTIAL,
     DEFAULT_ESTIMATED_MS_STANDARD,
     DEFAULT_NETWORK_LATENCY_BUFFER_MS,
     _request_deadline,
@@ -35,10 +33,8 @@ from selfhealing.scaling.deadline_context import (
     get_propagation_header_value,
     get_remaining_ms,
     get_tier_default_estimated_ms,
-    is_expired,
     parse_deadline_header,
     set_deadline,
-    should_fast_fail,
 )
 from selfhealing.scaling.traffic_gate import TrafficGate, reset_traffic_gate
 from selfhealing.services.throttle.gradient import (
@@ -46,7 +42,6 @@ from selfhealing.services.throttle.gradient import (
     get_gradient_calculator,
     reset_gradient_calculators,
 )
-
 
 # =============================================================================
 # Fixtures

@@ -26,12 +26,11 @@ import structlog
 from selfhealing.core.timezone import now
 from selfhealing.services.audit import log_dlq_replay_audit
 from selfhealing.services.governance.checks import (
-    GovernanceCheckResult,
     check_all_governance,
 )
 from selfhealing.settings import get_config
 
-from .handlers import DefaultReplayHandler, get_replay_handler
+from .handlers import get_replay_handler
 from .models import BatchReplayResult, ReplayResult
 
 if TYPE_CHECKING:

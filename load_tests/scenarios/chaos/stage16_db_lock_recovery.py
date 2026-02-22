@@ -48,11 +48,9 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict
 from collections import defaultdict
 
 # Ensure project root is in sys.path
@@ -191,19 +189,19 @@ def _update_phase():
         _lock_stats["phase"] = phase
 
         if phase == "lock_injection":
-            print(f"\n🔒 Phase 2: Lock Contention Injection")
+            print("\n🔒 Phase 2: Lock Contention Injection")
             print(f"   - Simulating {CONCURRENT_UPDATES_PER_PRODUCT} concurrent updates per product")
             print(f"   - Lock hold duration: {LOCK_HOLD_DURATION}s")
         elif phase == "deadlock_simulation":
-            print(f"\n💀 Phase 3: Deadlock Simulation")
-            print(f"   - Injecting circular dependency scenarios")
+            print("\n💀 Phase 3: Deadlock Simulation")
+            print("   - Injecting circular dependency scenarios")
         elif phase == "recovery":
-            print(f"\n🔄 Phase 4: Recovery Observation")
+            print("\n🔄 Phase 4: Recovery Observation")
             print(f"   - Lock timeouts: {_lock_stats['lock_timeout_count']}")
             print(f"   - Lock retries: {_lock_stats['lock_retry_count']}")
             print(f"   - Deadlocks detected: {_lock_stats['deadlock_detected_count']}")
         elif phase == "verification":
-            print(f"\n✅ Phase 5: Verification")
+            print("\n✅ Phase 5: Verification")
             _verify_consistency()
 
 
@@ -260,7 +258,7 @@ def _record_error(error_type: str):
 
 def _verify_consistency():
     """Verify data consistency after test"""
-    print(f"\n📊 Verification Results:")
+    print("\n📊 Verification Results:")
 
     # Check lock timeout handling
     if _lock_stats["lock_timeout_count"] > 0:
@@ -270,7 +268,7 @@ def _verify_consistency():
         print(f"     (Retry rate: {retry_rate:.1%})")
     else:
         _lock_stats["verification"]["lock_timeout_handled"] = True
-        print(f"   - Lock timeout handling: ✓ (No timeouts occurred)")
+        print("   - Lock timeout handling: ✓ (No timeouts occurred)")
 
     # Check no crash on deadlock
     if _lock_stats["deadlock_detected_count"] > 0:
@@ -280,7 +278,7 @@ def _verify_consistency():
         print(f"     (Resolution rate: {resolution_rate:.1%})")
     else:
         _lock_stats["verification"]["no_crash_on_deadlock"] = True
-        print(f"   - Deadlock handling: ✓ (No deadlocks occurred)")
+        print("   - Deadlock handling: ✓ (No deadlocks occurred)")
 
     # Check no stuck pending orders (will be verified via API)
     pending_rate = _lock_stats["orders_pending"] / max(_lock_stats["orders_created"], 1)
@@ -678,10 +676,10 @@ def on_test_start(environment, **kwargs):
     global _lock_stats
 
     print(f"\n{'='*70}")
-    print(f"🔒 Stage 16: DB Lock / Deadlock Recovery Test")
+    print("🔒 Stage 16: DB Lock / Deadlock Recovery Test")
     print(f"{'='*70}")
-    print(f"Purpose: Verify recovery from database lock contention and deadlocks")
-    print(f"\nTest Phases:")
+    print("Purpose: Verify recovery from database lock contention and deadlocks")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_1_BASELINE_DURATION}s): Baseline - Normal operations")
     print(f"  Phase 2 ({PHASE_2_LOCK_INJECTION_DURATION}s): Lock Injection - High concurrency")
     print(f"  Phase 3 ({PHASE_3_DEADLOCK_SIMULATION_DURATION}s): Deadlock Simulation")
@@ -700,44 +698,44 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Generate final report"""
     print(f"\n{'='*70}")
-    print(f"📊 Stage 16: DB Lock Recovery Test Results")
+    print("📊 Stage 16: DB Lock Recovery Test Results")
     print(f"{'='*70}")
 
-    print(f"\n📈 Lock Contention Metrics:")
+    print("\n📈 Lock Contention Metrics:")
     print(f"   - Concurrent update attempts: {_lock_stats['concurrent_update_attempts']}")
     print(f"   - Lock timeouts: {_lock_stats['lock_timeout_count']}")
     print(f"   - Lock retries: {_lock_stats['lock_retry_count']}")
     print(f"   - Lock retry success: {_lock_stats['lock_retry_success_count']}")
 
-    print(f"\n💀 Deadlock Metrics:")
+    print("\n💀 Deadlock Metrics:")
     print(f"   - Deadlocks detected: {_lock_stats['deadlock_detected_count']}")
     print(f"   - Deadlocks resolved: {_lock_stats['deadlock_resolved_count']}")
 
-    print(f"\n📦 Order Metrics:")
+    print("\n📦 Order Metrics:")
     print(f"   - Orders created: {_lock_stats['orders_created']}")
     print(f"   - Orders completed: {_lock_stats['orders_completed']}")
     print(f"   - Orders pending: {_lock_stats['orders_pending']}")
     print(f"   - Orders failed: {_lock_stats['orders_failed']}")
 
-    print(f"\n⏱️ Response Time Analysis:")
+    print("\n⏱️ Response Time Analysis:")
     for phase, times in _lock_stats["response_times"].items():
         if times:
             avg_time = sum(times) / len(times)
             max_time = max(times)
             print(f"   - {phase}: avg={avg_time:.0f}ms, max={max_time:.0f}ms")
 
-    print(f"\n❌ Error Summary:")
+    print("\n❌ Error Summary:")
     for error_type, count in _lock_stats["errors"].items():
         print(f"   - {error_type}: {count}")
 
-    print(f"\n✅ Verification Results:")
+    print("\n✅ Verification Results:")
     for check, result in _lock_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
         print(f"   - {check}: {status}")
 
     # Recovery Latency Report
     recovery = _lock_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
+    print("\n🔄 Recovery Latency Metrics:")
     if recovery["lock_retry_latencies_ms"]:
         avg_retry = sum(recovery["lock_retry_latencies_ms"]) / len(recovery["lock_retry_latencies_ms"])
         max_retry = max(recovery["lock_retry_latencies_ms"])
@@ -752,18 +750,18 @@ def on_test_stop(environment, **kwargs):
         print(f"   - Total recovery latency: {recovery['total_recovery_latency_seconds']:.1f}s")
         recovery["sla_compliant"] = recovery["total_recovery_latency_seconds"] < 2.0
         if recovery["sla_compliant"]:
-            print(f"   - SLA Status: ✓ Under 2s threshold")
+            print("   - SLA Status: ✓ Under 2s threshold")
         else:
-            print(f"   - SLA Status: ✗ Exceeded 2s threshold")
+            print("   - SLA Status: ✗ Exceeded 2s threshold")
     else:
         # Calculate from retry latencies
         if recovery["lock_retry_latencies_ms"]:
             max_latency_s = max(recovery["lock_retry_latencies_ms"]) / 1000
             recovery["sla_compliant"] = max_latency_s < 2.0
             if recovery["sla_compliant"]:
-                print(f"   - SLA Status: ✓ All retries under 2s threshold")
+                print("   - SLA Status: ✓ All retries under 2s threshold")
             else:
-                print(f"   - SLA Status: ✗ Some retries exceeded 2s")
+                print("   - SLA Status: ✗ Some retries exceeded 2s")
 
     print(f"\n{'='*70}\n")
 

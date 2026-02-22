@@ -4,7 +4,7 @@ Rate Limiter API Client.
 L1/L2 Rate Limiting, Quota, Throttling 관련 API.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .base import BaseClient
 

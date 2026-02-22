@@ -4,9 +4,8 @@ Tests for Metric Reconciler.
 메트릭 불일치 감지 및 자동 동기화 테스트.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime, timezone
+from unittest.mock import Mock, patch
+from datetime import datetime
 
 from selfhealing.metrics.reconciler import (
     MetricReconciler,

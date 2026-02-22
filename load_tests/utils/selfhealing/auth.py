@@ -8,7 +8,6 @@ import logging
 from typing import Optional, Tuple
 
 from .base import BaseClient
-from .config import get_config, SelfHealingConfig
 
 logger = logging.getLogger(__name__)
 

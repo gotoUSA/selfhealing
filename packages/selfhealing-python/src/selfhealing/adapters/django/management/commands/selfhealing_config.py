@@ -14,8 +14,7 @@ Reference: docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md �
 """
 
 import json
-import os
-from typing import Any, Dict
+from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -99,13 +98,13 @@ class Command(BaseCommand):
             data = self._model_to_dict(config)
             self._output_data(data, fmt)
 
-    def _model_to_dict(self, model) -> Dict[str, Any]:
+    def _model_to_dict(self, model) -> dict[str, Any]:
         """Pydantic 모델을 dict로 변환 (중첩 처리)."""
         if hasattr(model, "model_dump"):
             return model.model_dump()
         return dict(model)
 
-    def _output_data(self, data: Dict[str, Any], fmt: str):
+    def _output_data(self, data: dict[str, Any], fmt: str):
         """포맷에 따라 출력."""
         if fmt == "json":
             self.stdout.write(json.dumps(data, indent=2, default=str, ensure_ascii=False))
@@ -114,7 +113,7 @@ class Command(BaseCommand):
         else:
             self._output_text(data)
 
-    def _output_text(self, data: Dict[str, Any], prefix: str = ""):
+    def _output_text(self, data: dict[str, Any], prefix: str = ""):
         """텍스트 형식 출력."""
         for key, value in data.items():
             full_key = f"{prefix}{key}" if prefix else key
@@ -124,14 +123,14 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f"  {key}: {value}")
 
-    def _output_table(self, data: Dict[str, Any], prefix: str = ""):
+    def _output_table(self, data: dict[str, Any], prefix: str = ""):
         """테이블 형식 출력."""
         self.stdout.write(self.style.SUCCESS("=" * 70))
         self.stdout.write(f"{'Key':<40} {'Value':<30}")
         self.stdout.write("=" * 70)
         self._output_table_rows(data, prefix)
 
-    def _output_table_rows(self, data: Dict[str, Any], prefix: str = ""):
+    def _output_table_rows(self, data: dict[str, Any], prefix: str = ""):
         """테이블 행 출력 (재귀)."""
         for key, value in data.items():
             full_key = f"{prefix}{key}"
@@ -204,7 +203,7 @@ class Command(BaseCommand):
         except ImportError as e:
             raise CommandError(f"설정 모듈을 로드할 수 없습니다: {e}")
 
-    def _get_settings_map(self) -> Dict[str, type]:
+    def _get_settings_map(self) -> dict[str, type]:
         """설정 타입 → 클래스 매핑."""
         from selfhealing.settings import (
             ChaosSettings,

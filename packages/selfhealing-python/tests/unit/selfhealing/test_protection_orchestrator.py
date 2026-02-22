@@ -13,17 +13,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.services.security import (
-    ActionPolicy,
-    ACTION_POLICY_PRIORITY,
     ACTION_POLICY_BY_VIOLATION_TYPE,
+    ACTION_POLICY_PRIORITY,
+    SEVERITY_BY_VIOLATION_TYPE,
+    ActionPolicy,
     ProtectionOrchestrator,
     ProtectionResult,
     SecurityViolationService,
     Severity,
     ViolationType,
-    SEVERITY_BY_VIOLATION_TYPE,
 )
-
 
 # =============================================================================
 # ActionPolicy Enum Tests (순위 0)

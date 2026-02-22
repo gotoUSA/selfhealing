@@ -12,12 +12,13 @@ Bulkhead Base - 리소스 격리 추상 인터페이스.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from functools import wraps
-from typing import Any, Callable, Generator, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 

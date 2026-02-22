@@ -40,12 +40,10 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
 import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
@@ -65,8 +63,7 @@ if _project_root not in sys.path:
 
 from locust import HttpUser, task, between, tag, events, LoadTestShape
 
-from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
-from load_tests.metrics import setup_event_hooks
+from load_tests.utils import LoginHelper
 
 
 STAGE_NAME = "[Stage34-DBDeadlock]"
@@ -832,23 +829,23 @@ def _update_phase():
         _deadlock_stats.phase = phase
 
         if phase == "order_deadlock":
-            print(f"\n🔴 Phase 2: Concurrent Order Deadlock")
-            print(f"   - Testing multi-product stock contention")
-            print(f"   - Target: 100 concurrent orders")
+            print("\n🔴 Phase 2: Concurrent Order Deadlock")
+            print("   - Testing multi-product stock contention")
+            print("   - Target: 100 concurrent orders")
 
             # Record initial stock state
             with _db_lock:
                 _deadlock_stats.stock_before = dict(_db_state.product_stock)
 
         elif phase == "payment_point":
-            print(f"\n🟠 Phase 3: Payment + Point Deadlock")
+            print("\n🟠 Phase 3: Payment + Point Deadlock")
             print(f"   - Order deadlocks: {_deadlock_stats.order_deadlocks}")
             print(f"   - Retry success: {_deadlock_stats.order_retry_success}")
 
         elif phase == "pool_deadlock":
-            print(f"\n🟡 Phase 4: Pool Exhaustion + Deadlock")
+            print("\n🟡 Phase 4: Pool Exhaustion + Deadlock")
             print(f"   - Payment deadlocks: {_deadlock_stats.payment_point_deadlocks}")
-            print(f"   - Testing compound failure")
+            print("   - Testing compound failure")
 
             # Reduce pool size to simulate exhaustion
             with _db_lock:
@@ -856,7 +853,7 @@ def _update_phase():
                 _db_state.connections_available = min(_db_state.connections_available, 20)
 
         elif phase == "verification":
-            print(f"\n✅ Phase 5: Verification and Recovery")
+            print("\n✅ Phase 5: Verification and Recovery")
             print(f"   - Pool exhaustion events: {_deadlock_stats.pool_exhaustion_events}")
 
             # Restore pool
@@ -875,7 +872,7 @@ def _update_phase():
 
 def _perform_final_verification():
     """Perform final verification of deadlock handling"""
-    print(f"\n📊 Final Verification:")
+    print("\n📊 Final Verification:")
 
     total_deadlocks = _deadlock_stats.order_deadlocks + _deadlock_stats.payment_point_deadlocks
     total_retries = _deadlock_stats.order_deadlock_retries + _deadlock_stats.payment_point_retries
@@ -904,7 +901,7 @@ def _perform_final_verification():
     else:
         # No deadlocks is now a FAIL condition
         _deadlock_stats.verification["deadlock_detection_under_3s"] = False
-        print(f"   - Deadlock detection < 3s: ✗ (No deadlocks detected - test incomplete)")
+        print("   - Deadlock detection < 3s: ✗ (No deadlocks detected - test incomplete)")
 
     # Auto-retry success > 95%
     if _deadlock_stats.auto_retry_attempts > 0:
@@ -915,7 +912,7 @@ def _perform_final_verification():
     else:
         # No retries is now a FAIL condition
         _deadlock_stats.verification["auto_retry_success_95"] = False
-        print(f"   - Auto-retry success > 95%: ✗ (No retries occurred - test incomplete)")
+        print("   - Auto-retry success > 95%: ✗ (No retries occurred - test incomplete)")
 
     # Data consistency 100%
     total_errors = _deadlock_stats.stock_consistency_errors + _deadlock_stats.balance_consistency_errors
@@ -931,7 +928,7 @@ def _perform_final_verification():
         print(f"     (Max: {max_recovery:.0f}ms)")
     else:
         _deadlock_stats.verification["pool_recovery_under_10s"] = True
-        print(f"   - Pool recovery < 10s: ✓ (No recovery events needed)")
+        print("   - Pool recovery < 10s: ✓ (No recovery events needed)")
 
     # Overall pass/fail
     all_passed = all(v for v in _deadlock_stats.verification.values() if v is not None)
@@ -1275,12 +1272,12 @@ def on_test_start(environment, **kwargs):
         _db_state.product_stock[f"product_{i}"] = INITIAL_STOCK
 
     print(f"\n{'='*60}")
-    print(f"🚀 Stage 34: DB Deadlock Locust Extended")
+    print("🚀 Stage 34: DB Deadlock Locust Extended")
     print(f"{'='*60}")
     print(f"Total Duration: {TOTAL_DURATION}s")
     print(f"Connection Pool: {DB_CONNECTION_POOL_SIZE}")
     print(f"Products: {NUM_PRODUCTS} (Stock: {INITIAL_STOCK} each)")
-    print(f"Phases:")
+    print("Phases:")
     print(f"  1. Baseline: {PHASE_1_BASELINE}s")
     print(f"  2. Order Deadlock: {PHASE_2_ORDER_DEADLOCK}s")
     print(f"  3. Payment + Point: {PHASE_3_PAYMENT_POINT}s")
@@ -1293,28 +1290,28 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Test stop - print final report"""
     print(f"\n{'='*60}")
-    print(f"📊 Stage 34 Final Report")
+    print("📊 Stage 34 Final Report")
     print(f"{'='*60}")
     print(f"Total Requests: {_deadlock_stats.total_requests}")
     print(f"  Successful: {_deadlock_stats.successful_requests}")
     print(f"  Failed: {_deadlock_stats.failed_requests}")
-    print(f"\nOrder Deadlock:")
+    print("\nOrder Deadlock:")
     print(f"  Attempts: {_deadlock_stats.order_attempts}")
     print(f"  Success: {_deadlock_stats.order_success}")
     print(f"  Deadlocks: {_deadlock_stats.order_deadlocks}")
     print(f"  Retry Success: {_deadlock_stats.order_retry_success}")
-    print(f"\nPayment + Point:")
+    print("\nPayment + Point:")
     print(f"  Attempts: {_deadlock_stats.payment_point_attempts}")
     print(f"  Success: {_deadlock_stats.payment_point_success}")
     print(f"  Deadlocks: {_deadlock_stats.payment_point_deadlocks}")
-    print(f"\nPool + Deadlock:")
+    print("\nPool + Deadlock:")
     print(f"  Pool Exhaustion: {_deadlock_stats.pool_exhaustion_events}")
     print(f"  Deadlock During Exhaustion: {_deadlock_stats.deadlock_during_exhaustion}")
     print(f"  Connections Released: {_deadlock_stats.connections_released_on_deadlock}")
 
     # === DETAILED DEBUG LOG ===
     print(f"\n{'='*60}")
-    print(f"🔍 AUTO-RETRY DEBUG INFO")
+    print("🔍 AUTO-RETRY DEBUG INFO")
     print(f"{'='*60}")
     print(f"  auto_retry_attempts: {_deadlock_stats.auto_retry_attempts}")
     print(f"  auto_retry_success: {_deadlock_stats.auto_retry_success}")
@@ -1322,7 +1319,7 @@ def on_test_stop(environment, **kwargs):
         rate = (_deadlock_stats.auto_retry_success / _deadlock_stats.auto_retry_attempts) * 100
         print(f"  Calculated Rate: {rate:.1f}%")
     else:
-        print(f"  Calculated Rate: N/A (no attempts)")
+        print("  Calculated Rate: N/A (no attempts)")
     print(f"  order_retry_success: {_deadlock_stats.order_retry_success}")
     print(f"  order_deadlock_retries: {_deadlock_stats.order_deadlock_retries}")
     print(f"  payment_point_retries: {_deadlock_stats.payment_point_retries}")

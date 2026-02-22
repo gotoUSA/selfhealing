@@ -7,9 +7,9 @@ Backpressure 레벨에 따라 자동으로 기능을 활성화/비활성화합�
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Callable
 
 import structlog
 

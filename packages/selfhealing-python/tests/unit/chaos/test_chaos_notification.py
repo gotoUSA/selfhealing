@@ -10,9 +10,7 @@ Test Categories:
 Reference: docs/self_healing/middleware_system/24_CHAOS_INTEGRATION_PLAN.md §8.1, §8.2
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import MagicMock, patch
 
 # =============================================================================
 # Phase 0 Tests: NotificationCategory.CHAOS (3 tests)
@@ -33,8 +31,8 @@ class TestNotificationCategory:
     def test_chaos_cooldown_configured(self):
         """Test that CHAOS cooldown is 300 seconds (5 minutes)."""
         from selfhealing.services.unified_notification import (
-            RoutingPolicy,
             NotificationCategory,
+            RoutingPolicy,
         )
 
         policy = RoutingPolicy()
@@ -50,8 +48,8 @@ class TestNotificationCategory:
     def test_chaos_dedup_key_independent(self):
         """Test that CHAOS notifications have independent dedup keys."""
         from selfhealing.services.unified_notification import (
-            NotificationPayload,
             NotificationCategory,
+            NotificationPayload,
             NotificationPriority,
         )
 

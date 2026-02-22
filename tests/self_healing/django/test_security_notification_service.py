@@ -9,7 +9,7 @@ Tests for SecurityNotificationService functionality including:
 - PagerDuty integration
 """
 
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -18,7 +18,6 @@ pytestmark = pytest.mark.requires_db
 
 from shopping.models.security_incident import SecurityIncident
 from selfhealing.services import (
-    NotificationChannel,
     NotificationConfig,
     NotificationResult,
     SecurityNotificationResult,
@@ -26,7 +25,6 @@ from selfhealing.services import (
     get_security_notification_service,
     notify_security_incident,
 )
-from shopping.tests.factories import UserFactory
 
 
 # =============================================================================

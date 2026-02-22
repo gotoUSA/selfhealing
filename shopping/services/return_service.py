@@ -15,7 +15,7 @@ from shopping.models.return_request import Return
 from .point_service import PointService
 
 if TYPE_CHECKING:
-    from shopping.models.order import Order, OrderItem
+    from shopping.models.order import Order
     from shopping.models.user import User
 
 logger = logging.getLogger(__name__)

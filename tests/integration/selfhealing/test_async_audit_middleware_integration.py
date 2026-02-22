@@ -18,7 +18,6 @@ Version: 1.0.0
 """
 
 import os
-import sys
 import time
 
 import pytest
@@ -55,7 +54,6 @@ def reset_async_logger():
 @pytest.fixture
 def configured_async_logger():
     """설정된 AsyncHealingLogger 반환."""
-    from selfhealing.audit.async_audit_lifecycle import create_audit_flush_callback
     from selfhealing.utils.async_logger import AsyncHealingLogger
 
     events_captured = []

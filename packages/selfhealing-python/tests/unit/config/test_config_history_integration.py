@@ -5,20 +5,18 @@ RuntimeConfigManager와 ConfigHistory 자동 연동 테스트.
 설정 변경 시 자동으로 이력이 기록되고 롤백 가능한지 검증합니다.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import MagicMock, patch
 
-from selfhealing.services.runtime_config import (
-    RuntimeConfigManager,
-    get_runtime_config_manager,
-    reset_runtime_config_manager,
-)
+import pytest
+
 from selfhealing.services.config_history import (
     ConfigHistoryService,
-    get_config_history_service,
     reset_config_history_service,
 )
-
+from selfhealing.services.runtime_config import (
+    RuntimeConfigManager,
+    reset_runtime_config_manager,
+)
 
 # =============================================================================
 # Fixtures

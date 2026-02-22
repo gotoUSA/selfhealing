@@ -6,21 +6,19 @@ Tests for DLQService:
 - Data classes (ReplayResult, CleanupStats, DLQPaginatedResult, DlqReplayResult, ResolveResult)
 """
 
-import pytest
-from datetime import timedelta
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 
-from selfhealing.services.dlq_service import (
-    DLQService,
-    DLQConfig,
-    get_dlq_service,
-)
 from selfhealing.services.dlq_models import (
     CleanupStats,
     DLQPaginatedResult,
     DlqReplayResult,
-    ResolveResult,
     ReplayResult,
+    ResolveResult,
+)
+from selfhealing.services.dlq_service import (
+    DLQConfig,
+    DLQService,
+    get_dlq_service,
 )
 
 

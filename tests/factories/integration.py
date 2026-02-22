@@ -26,13 +26,12 @@ Usage:
 
 import os
 import time
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, List, Callable
 from dataclasses import dataclass
 
 from tests.factories.constants import (
     RedisTestConfig,
     DatabaseTestConfig,
-    CeleryTestConfig,
 )
 
 

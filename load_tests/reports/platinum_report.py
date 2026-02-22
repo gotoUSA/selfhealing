@@ -109,11 +109,11 @@ def print_console_report(stats: Dict[str, Any], config: Dict[str, Any]) -> None:
         latency = recovery["recovery_latency_seconds"]
         print(f"  - Total Recovery Time: {latency:.1f}s")
         if latency < 120:
-            print(f"  - SLA Status: ✅ Under 2min threshold")
+            print("  - SLA Status: ✅ Under 2min threshold")
         else:
-            print(f"  - SLA Status: ❌ Exceeded 2min threshold")
+            print("  - SLA Status: ❌ Exceeded 2min threshold")
     else:
-        print(f"  - Recovery not measured (system may not have failed)")
+        print("  - Recovery not measured (system may not have failed)")
 
     print("\n" + "=" * 80)
 
@@ -237,7 +237,7 @@ def save_json_report(
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(
             {
-                "test_name": f"Stage 12: EXTREME Spike & Recovery",
+                "test_name": "Stage 12: EXTREME Spike & Recovery",
                 "timestamp": datetime.now().isoformat(),
                 "config": config,
                 "results": json_stats,

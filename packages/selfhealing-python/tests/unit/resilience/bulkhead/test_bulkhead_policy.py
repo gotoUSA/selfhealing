@@ -14,7 +14,7 @@ UNIT_TEST_GUIDELINES.md 준수:
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -39,7 +39,6 @@ from selfhealing.resilience.bulkhead.policy import (
 )
 from selfhealing.resilience.bulkhead.semaphore import SemaphoreBulkhead
 from selfhealing.resilience.bulkhead.threadpool import ThreadPoolBulkhead
-
 
 # =============================================================================
 # Fixtures — 1개 파일 전용이므로 파일 내부 배치 (§5.1)
@@ -1002,7 +1001,9 @@ class TestBulkheadPackageExportContract:
 
     def test_async_bulkhead_policy_factory_exported(self):
         """async_bulkhead_policy 팩토리가 __init__.py에서 export된다."""
-        from selfhealing.resilience.bulkhead import async_bulkhead_policy as exported_factory
+        from selfhealing.resilience.bulkhead import (
+            async_bulkhead_policy as exported_factory,
+        )
 
         assert exported_factory is async_bulkhead_policy
 

@@ -4,10 +4,8 @@ ErrorBudgetStatus 리전/티어 필드 테스트.
 ErrorBudgetStatus.region, tier_id 필드 존재 및 기본값 검증.
 """
 
-import pytest
 
 from selfhealing.services.error_budget.models import ErrorBudgetStatus
-
 
 # =============================================================================
 # 계약 검증: 필드 존재

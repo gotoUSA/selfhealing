@@ -6,7 +6,6 @@ AbstractPostmortemRecord abstract model.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 try:
@@ -165,7 +164,7 @@ class AbstractPostmortemRecord(models.Model if DJANGO_AVAILABLE else object):
     def create_from_incident_dict(
         cls,
         incident_data: dict[str, Any],
-    ) -> "AbstractPostmortemRecord":
+    ) -> AbstractPostmortemRecord:
         """
         In-Memory 인시던트 딕셔너리로부터 Postmortem 레코드 생성.
 

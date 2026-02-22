@@ -8,7 +8,7 @@ Celery 비동기 작업의 이메일 발송 기능 검증:
 
 import pytest
 
-from shopping.models.email_verification import EmailLog, EmailVerificationToken
+from shopping.models.email_verification import EmailLog
 from shopping.tasks.email_tasks import retry_failed_emails_task, send_verification_email_task
 from shopping.tests.factories import (
     EmailLogFactory,

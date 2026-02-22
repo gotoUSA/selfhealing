@@ -21,7 +21,6 @@ from .base import (
     DeploymentEvent,
     DeploymentSource,
     DeploymentType,
-    ExternalDeploymentAdapter,
 )
 
 logger = structlog.get_logger()

@@ -44,13 +44,10 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
-import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
-from collections import defaultdict
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
 # Ensure project root is in sys.path
@@ -333,13 +330,13 @@ def _update_phase():
         _cascade_stats.phase = phase
 
         if phase == "redis_failure":
-            print(f"\n🔴 Phase 2: Redis Failure → DB Surge → CB Cascade")
-            print(f"   - Simulating Redis connection failures")
-            print(f"   - Expecting cache miss → DB query surge")
+            print("\n🔴 Phase 2: Redis Failure → DB Surge → CB Cascade")
+            print("   - Simulating Redis connection failures")
+            print("   - Expecting cache miss → DB query surge")
             _simulate_redis_failure()
 
         elif phase == "payment_failure":
-            print(f"\n🟠 Phase 3: Payment API Failure → Retry Storm → Rate Limit")
+            print("\n🟠 Phase 3: Payment API Failure → Retry Storm → Rate Limit")
             print(f"   - Redis failures: {_cascade_stats.redis_failures}")
             print(f"   - DB surge events: {_cascade_stats.db_surge_detected}")
             print(f"   - CB false positives: {_cascade_stats.cb_false_positives}")
@@ -347,7 +344,7 @@ def _update_phase():
             _simulate_payment_failure()
 
         elif phase == "health_check_delay":
-            print(f"\n🟡 Phase 4: Health Check Delay → Wrong Decision")
+            print("\n🟡 Phase 4: Health Check Delay → Wrong Decision")
             print(f"   - Payment failures: {_cascade_stats.payment_failures}")
             print(f"   - Retry storms: {_cascade_stats.retry_storms_detected}")
             print(f"   - Rate limit deadlocks: {_cascade_stats.rate_limit_deadlocks}")
@@ -355,7 +352,7 @@ def _update_phase():
             _simulate_health_check_delay()
 
         elif phase == "verification":
-            print(f"\n✅ Phase 5: Verification and Recovery")
+            print("\n✅ Phase 5: Verification and Recovery")
             print(f"   - Health check wrong decisions: {_cascade_stats.health_check_wrong}")
             print(f"   - False down decisions: {_cascade_stats.false_down_decisions}")
             _simulate_health_check_normal()
@@ -364,7 +361,7 @@ def _update_phase():
 
 def _perform_final_verification():
     """Perform final verification of cascade handling"""
-    print(f"\n📊 Final Verification:")
+    print("\n📊 Final Verification:")
 
     # CB False Positive check
     _cascade_stats.verification["cb_false_positive_zero"] = _cascade_stats.cb_false_positives == 0
@@ -380,7 +377,7 @@ def _perform_final_verification():
         print(f"     (Max: {max_isolation/1000:.1f}s, Avg: {avg_isolation/1000:.1f}s)")
     else:
         _cascade_stats.verification["cascade_isolation_under_30s"] = True
-        print(f"   - Cascade isolation < 30s: ✓ (No cascade events)")
+        print("   - Cascade isolation < 30s: ✓ (No cascade events)")
 
     # Rate Limit Deadlock check
     active_deadlocks = _cascade_stats.rate_limit_deadlocks - _cascade_stats.deadlock_auto_releases
@@ -396,7 +393,7 @@ def _perform_final_verification():
         print(f"     (Accuracy: {accuracy:.1%})")
     else:
         _cascade_stats.verification["health_check_accuracy_95"] = True
-        print(f"   - Health Check accuracy > 95%: ✓ (No health checks)")
+        print("   - Health Check accuracy > 95%: ✓ (No health checks)")
 
     # Overall pass/fail
     all_passed = all(v for v in _cascade_stats.verification.values() if v is not None)
@@ -523,7 +520,7 @@ class RedisDBCascadeUser(HttpUser):
                         with _stats_lock:
                             _cascade_stats.cb_false_positives += 1
                             _cascade_stats.cb_opened_for_db += 1
-                        print(f"   ⚠️ CB False Positive: DB is healthy but CB opened")
+                        print("   ⚠️ CB False Positive: DB is healthy but CB opened")
 
                 self.client.get("/api/products/", name=f"{STAGE_NAME} cache_miss_db_exhausted", catch_response=True).failure(
                     "DB connection exhausted"
@@ -832,10 +829,10 @@ class HealthCheckUser(HttpUser):
 def on_test_start(environment, **kwargs):
     """Initialize test"""
     print(f"\n{'='*60}")
-    print(f"  Stage 31: Cascade Failure Extended Test")
+    print("  Stage 31: Cascade Failure Extended Test")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*60}")
-    print(f"\nTest Configuration:")
+    print("\nTest Configuration:")
     print(f"  - Phase 1 (Baseline): {PHASE_1_BASELINE_DURATION}s")
     print(f"  - Phase 2 (Redis Failure): {PHASE_2_REDIS_FAILURE}s")
     print(f"  - Phase 3 (Payment Failure): {PHASE_3_PAYMENT_FAILURE}s")
@@ -853,34 +850,34 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Print final statistics"""
     print(f"\n{'='*60}")
-    print(f"  Stage 31: Test Complete")
+    print("  Stage 31: Test Complete")
     print(f"{'='*60}")
 
-    print(f"\n📈 Overall Statistics:")
+    print("\n📈 Overall Statistics:")
     print(f"  - Total Requests: {_cascade_stats.total_requests}")
     print(f"  - Successful: {_cascade_stats.successful_requests}")
     print(f"  - Failed: {_cascade_stats.failed_requests}")
 
-    print(f"\n🔴 Scenario 1 (Redis→DB→CB):")
+    print("\n🔴 Scenario 1 (Redis→DB→CB):")
     print(f"  - Redis Failures: {_cascade_stats.redis_failures}")
     print(f"  - DB Surge Events: {_cascade_stats.db_surge_detected}")
     print(f"  - DB Connection Exhausted: {_cascade_stats.db_connection_exhausted}")
     print(f"  - CB False Positives: {_cascade_stats.cb_false_positives}")
 
-    print(f"\n🟠 Scenario 2 (Payment→Retry→Rate Limit):")
+    print("\n🟠 Scenario 2 (Payment→Retry→Rate Limit):")
     print(f"  - Payment Failures: {_cascade_stats.payment_failures}")
     print(f"  - Retry Storms: {_cascade_stats.retry_storms_detected}")
     print(f"  - Rate Limit Hits: {_cascade_stats.rate_limit_hits}")
     print(f"  - Deadlocks: {_cascade_stats.rate_limit_deadlocks}")
     print(f"  - Auto-Released: {_cascade_stats.deadlock_auto_releases}")
 
-    print(f"\n🟡 Scenario 3 (Health Check Delay):")
+    print("\n🟡 Scenario 3 (Health Check Delay):")
     print(f"  - Health Checks: {_cascade_stats.health_checks_performed}")
     print(f"  - Correct: {_cascade_stats.health_check_correct}")
     print(f"  - Wrong: {_cascade_stats.health_check_wrong}")
     print(f"  - False DOWN: {_cascade_stats.false_down_decisions}")
 
-    print(f"\n🟣 Scenario 4 (Redis Degradation + Stampede - TC-31-4):")
+    print("\n🟣 Scenario 4 (Redis Degradation + Stampede - TC-31-4):")
     print(f"  - Requests under degradation: {_cascade_stats.redis_degradation_requests}")
     print(f"  - Stampede lock timeouts: {_cascade_stats.stampede_lock_timeouts}")
     print(f"  - Fallback DB queries: {_cascade_stats.stampede_fallback_db_queries}")
@@ -888,7 +885,7 @@ def on_test_stop(environment, **kwargs):
     print(f"  - DB Explosion: {explosion_status}")
 
     # Verification summary
-    print(f"\n✅ Verification Summary:")
+    print("\n✅ Verification Summary:")
     for key, value in _cascade_stats.verification.items():
         status = "✓" if value else "✗" if value is not None else "?"
         print(f"  - {key}: {status}")

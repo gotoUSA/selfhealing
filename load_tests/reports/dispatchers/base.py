@@ -7,7 +7,7 @@ Load Test Reports - Dispatcher Base Interface.
 🏷️ 버전: 1.0.0
 """
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 # Forward declaration to avoid circular imports
 # from ..base_report import BaseReport

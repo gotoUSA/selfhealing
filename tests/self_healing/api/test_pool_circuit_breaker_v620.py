@@ -18,7 +18,6 @@ v6.2.1 추가 개선:
 
 import time
 import os
-import threading
 from unittest.mock import patch, MagicMock
 import pytest
 

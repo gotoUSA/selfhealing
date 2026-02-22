@@ -10,8 +10,6 @@ AdaptiveThrottle Governance 통합 상태 동기화 테스트.
 """
 
 import time
-
-import pytest
 from unittest.mock import MagicMock, patch
 
 
@@ -342,6 +340,7 @@ class TestNoGracefulDegradationManagerDirectImport:
     def test_no_direct_gdm_import_in_sync_methods(self):
         """sync 메서드들이 GracefulDegradationManager를 직접 import하지 않음."""
         import inspect
+
         from selfhealing.services.throttle.adaptive import AdaptiveThrottle
 
         # _sync_governance_state 소스에서 직접 import 확인

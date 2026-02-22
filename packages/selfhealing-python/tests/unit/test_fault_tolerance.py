@@ -9,7 +9,6 @@ Tests that verify:
 Core Principle: Self-healing features should NEVER make things worse.
 """
 
-import pytest
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
@@ -71,8 +70,8 @@ class TestDriftDetectionFaultTolerance:
 
     def test_sla_detector_handles_empty_queryset(self):
         """SLADriftDetector handles empty querysets properly."""
+
         from selfhealing.tasks.drift_detection import SLADriftDetector
-        from django.utils import timezone
 
         mock_sla = MagicMock()
         mock_sla.get_all_thresholds.return_value = {"payment": timedelta(hours=1)}
@@ -96,10 +95,11 @@ class TestAuditTrailResilience:
 
     def test_control_api_audit_is_best_effort(self):
         """ControlAPI audit logging should never block response."""
+        import inspect
+
         from selfhealing.services.control_api_service import (
             ControlAPIService,
         )
-        import inspect
 
         # Verify by code inspection that _record_audit has try/except
         source = inspect.getsource(ControlAPIService._record_audit)
@@ -114,10 +114,11 @@ class TestGracefulDegradation:
 
     def test_idempotency_service_graceful_degradation(self):
         """IdempotencyService should gracefully degrade to DB-only."""
+        import inspect
+
         from selfhealing.services.idempotency_service import (
             IdempotencyService,
         )
-        import inspect
 
         # Verify by code inspection - check_event is the generic method
         source = inspect.getsource(IdempotencyService.check_event)
@@ -133,8 +134,8 @@ class TestGracefulDegradation:
         # - ChaosContext is OPTIONAL metadata
         # - Drift Detection runs in separate Celery tasks
 
-        from selfhealing.services.dlq_service import DLQService
         from selfhealing.services.chaos_context import ChaosExperimentContext
+        from selfhealing.services.dlq_service import DLQService
 
         # Verify DLQService works without additional dependencies
         dlq = DLQService()

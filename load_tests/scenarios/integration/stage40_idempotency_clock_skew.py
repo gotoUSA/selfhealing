@@ -28,30 +28,20 @@ Stage 40: Idempotency + Clock Skew Tests
 from __future__ import annotations
 
 import json
-import logging
 import time
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone as tz
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
-from unittest.mock import MagicMock, patch
-from contextlib import contextmanager
 
 import pytest
 
 
 # Conditional imports for type checking
 if TYPE_CHECKING:
-    from selfhealing.services import (
-        CircuitBreakerConfig,
-        CircuitBreakerService,
-        CircuitState,
-        DLQConfig,
-        DLQService,
-    )
-    from selfhealing.services.idempotency_service import IdempotencyService
+    pass
 
 
 # =============================================================================

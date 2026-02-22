@@ -14,8 +14,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any
-from unittest.mock import MagicMock, Mock, patch, PropertyMock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -435,7 +434,6 @@ class TestAuditBufferMetrics:
     def test_metrics_module_imports(self) -> None:
         """메트릭 모듈 임포트 확인."""
         from selfhealing.metrics.audit_buffer_metrics import (
-            METRICS_AVAILABLE,
             audit_buffer_backpressure,
             audit_buffer_dropped_total,
             audit_buffer_size,

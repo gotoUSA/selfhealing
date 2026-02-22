@@ -28,7 +28,7 @@ import pytest
 
 # Skip entire module - Infrastructure tests require Redis
 pytestmark = pytest.mark.requires_redis
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 

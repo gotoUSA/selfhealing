@@ -14,36 +14,32 @@ core/safe_defaults.py의 안전한 기본값 관리, 유효성 검증, Fatal 설
 """
 
 import os
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from selfhealing.core.safe_defaults import (
+    FATAL_CONFIGS,
     SAFE_DEFAULTS,
     VALIDATION_RULES,
-    VALID_LOG_LEVELS,
-    VALID_BACKOFF_STRATEGIES,
-    FATAL_CONFIGS,
-    ENABLE_QUARANTINE_ON_FATAL,
-    get_safe_default,
-    get_safe_defaults_for_type,
-    is_valid_value,
-    validate_with_safe_fallback,
-    validate_all_with_safe_fallback,
-    apply_safe_defaults_to_missing,
-    get_validation_errors,
-    is_fatal_config,
-    get_all_fatal_configs,
-    FatalConfigError,
     ConfigValidationResult,
-    validate_startup_config,
-    validate_config_preflight,
-    validate_chaos_config,
+    FatalConfigError,
+    _finalize_validation,
     _handle_fatal_violation,
     _handle_non_fatal_violation,
-    _validate_single_config_value,
-    _finalize_validation,
+    apply_safe_defaults_to_missing,
+    get_all_fatal_configs,
+    get_safe_default,
+    get_safe_defaults_for_type,
+    get_validation_errors,
+    is_fatal_config,
+    is_valid_value,
+    validate_all_with_safe_fallback,
+    validate_chaos_config,
+    validate_config_preflight,
+    validate_startup_config,
+    validate_with_safe_fallback,
 )
-
 
 # =============================================================================
 # get_safe_default / get_safe_defaults_for_type Tests

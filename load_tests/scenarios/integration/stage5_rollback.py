@@ -293,7 +293,7 @@ def on_test_stop(environment, **kwargs):
     failed = _rollback_stats["rollback_failed"]
     variance = _rollback_stats["variance_concurrent"]
 
-    print(f"\n📊 SUMMARY")
+    print("\n📊 SUMMARY")
     print(f"   Failures Triggered:    {triggered}")
     print(f"   ✅ Rollback Verified:  {verified}")
     print(f"   ❌ Rollback Failed:    {failed} (System Bug)")
@@ -305,18 +305,18 @@ def on_test_stop(environment, **kwargs):
         effective_success = verified + variance
         success_rate = (effective_success / triggered) * 100
         print(f"\n   Effective Success Rate: {success_rate:.1f}%")
-        print(f"   (Verified + Expected Variance) / Triggered")
+        print("   (Verified + Expected Variance) / Triggered")
 
     # Product별 Variance 집계 (Top 5)
     if _rollback_stats["product_variance"]:
-        print(f"\n📦 VARIANCE BY PRODUCT (Top 5)")
+        print("\n📦 VARIANCE BY PRODUCT (Top 5)")
         sorted_variance = sorted(_rollback_stats["product_variance"].items(), key=lambda x: x[1], reverse=True)[:5]
         for product_id, count in sorted_variance:
             print(f"   Product {product_id}: {count} variance occurrences")
 
     # 진짜 실패 상세 (Critical)
     if _rollback_stats["details"]["failed"]:
-        print(f"\n🚨 CRITICAL FAILURES (Stock Increased - BUG)")
+        print("\n🚨 CRITICAL FAILURES (Stock Increased - BUG)")
         for detail in _rollback_stats["details"]["failed"][:5]:
             print(
                 f"   - Product {detail.get('product_id')}: "

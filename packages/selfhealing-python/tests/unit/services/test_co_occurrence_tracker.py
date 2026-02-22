@@ -13,16 +13,12 @@ Tests for Co-occurrence Tracker — 이벤트 쌍별 동시발생 이상 탐지.
 
 from __future__ import annotations
 
-import collections
 import time
 from dataclasses import FrozenInstanceError
-from unittest.mock import patch
 
 import pytest
 
 from selfhealing.services.correlation_engine.co_occurrence_tracker import (
-    TIME_GAPS_MAXLEN,
-    CoOccurrenceRecord,
     CoOccurrenceSnapshot,
     CoOccurrenceTracker,
     CorrelationResult,
@@ -32,7 +28,6 @@ from selfhealing.services.predictive_forecaster.anomaly_detector import (
     ZScoreDetector,
 )
 from selfhealing.settings.correlation import CorrelationSettings
-
 
 # =============================================================================
 # EventPairKey 계약 검증

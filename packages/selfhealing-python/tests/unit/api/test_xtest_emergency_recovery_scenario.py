@@ -14,12 +14,10 @@ Emergency LEVEL_3 → SafetyInterlock 롤백 → RecoveryCoordinator 4단계 역
 - test_scenario_registry_contains_new_scenarios: 레지스트리에 새 시나리오 등록 확인
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 # Django 설정 구성 (테스트용)
 import django
+import pytest
 from django.conf import settings
 
 if not settings.configured:
@@ -90,11 +88,11 @@ class TestFullEmergencyRecoveryScenario:
 
     def test_skip_wait_option_skips_health_check_delay(self):
         """skip_wait=True 옵션이 HEALTH_CHECK 대기를 스킵하는지 확인."""
+        import time
+
         from selfhealing.api.django.views.xtest.scenarios import (
             FullEmergencyRecoveryScenario,
         )
-
-        import time
 
         start_time = time.time()
 
@@ -267,9 +265,9 @@ class TestScenarioRegistry:
     def test_get_scenario_class_returns_correct_class(self):
         """get_scenario_class가 올바른 클래스를 반환하는지 확인."""
         from selfhealing.api.django.views.xtest.scenarios import (
-            get_scenario_class,
             FullEmergencyRecoveryScenario,
             SafetyInterlockCanaryRollbackScenario,
+            get_scenario_class,
         )
 
         cls1 = get_scenario_class("full_emergency_recovery_flow")

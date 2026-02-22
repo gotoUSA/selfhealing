@@ -86,7 +86,6 @@ def flush_redis_audit_buffer(
         }
 
     try:
-        from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
 
         # Redis 버퍼 인스턴스 획득
         redis_buffer = _get_redis_buffer()
@@ -115,7 +114,7 @@ def flush_redis_audit_buffer(
         duration_ms = (time.time() - start_time) * 1000
 
         logger.info(
-            f"[flush_redis_audit_buffer] Completed",  # noqa: G004
+            "[flush_redis_audit_buffer] Completed",  # noqa: G004
             extra={
                 "flushed_count": flushed_count,
                 "duration_ms": round(duration_ms, 1),
@@ -196,7 +195,7 @@ def recover_orphaned_processing_queues(
         recovered_total = redis_buffer.recover_orphaned_processing_queues(timeout_seconds=timeout_seconds)
 
         logger.info(
-            f"[recover_orphaned_processing_queues] Completed",  # noqa: G004
+            "[recover_orphaned_processing_queues] Completed",  # noqa: G004
             extra={
                 "recovered_total": recovered_total,
                 "task_id": task_id,
@@ -258,7 +257,7 @@ def apply_audit_buffer_safety_ltrim(self) -> dict:
         total_trimmed = sum(trimmed.values())
 
         logger.info(
-            f"[apply_audit_buffer_safety_ltrim] Completed",  # noqa: G004
+            "[apply_audit_buffer_safety_ltrim] Completed",  # noqa: G004
             extra={
                 "trimmed_domains": trimmed,
                 "total_trimmed": total_trimmed,

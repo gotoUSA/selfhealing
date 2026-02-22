@@ -20,7 +20,6 @@ import uuid
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from typing import Dict, Optional
 
 # Redis 임포트
 try:
@@ -153,7 +152,7 @@ class StampedeTestV2:
         time.sleep(DB_QUERY_TIME_MS / 1000)
         
         return {
-            "data": f"value_from_db",
+            "data": "value_from_db",
             "queried_by": self.worker_id,
             "query_number": query_number,
             "is_duplicate": is_duplicate,
@@ -325,7 +324,7 @@ class StampedeTestV2:
         print(f"  │   ├─ Wait Success:   {result['stats']['lock_wait_success']}")
         print(f"  │   └─ Wait Timeout:   {result['stats']['lock_wait_timeout']}")
         print(f"  ├─ P95 Response:       {result['performance']['p95_response_ms']}ms")
-        print(f"  └─ Verification:")
+        print("  └─ Verification:")
         print(f"      ├─ Global DB Count:  {result['verification']['global_db_query_count']}")
         print(f"      ├─ Duplicate Queries: {result['verification']['duplicate_queries']}")
         print(f"      └─ Stampede Prevented: {'✅ YES' if result['verification']['stampede_prevented'] else '❌ NO'}")

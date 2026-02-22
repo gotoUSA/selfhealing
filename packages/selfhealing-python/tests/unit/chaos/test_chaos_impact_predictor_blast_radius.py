@@ -9,9 +9,6 @@ Tests for Chaos 시스템 영향도 예측 및 분석:
 Total: 12 tests
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-from datetime import datetime
 
 
 # =============================================================================
@@ -196,8 +193,8 @@ class TestDryRunAPI:
 
     def test_dry_run_no_side_effects(self):
         """Test that dry run has no side effects."""
-        from selfhealing.services.chaos.impact_predictor import ImpactPredictor
         from selfhealing.services.chaos.blast_radius_analyzer import BlastRadiusAnalyzer
+        from selfhealing.services.chaos.impact_predictor import ImpactPredictor
 
         predictor = ImpactPredictor()
         analyzer = BlastRadiusAnalyzer()
@@ -223,8 +220,8 @@ class TestDryRunAPI:
     def test_dry_run_with_blast_radius(self):
         """Test dry run analysis includes blast radius."""
         from selfhealing.services.chaos.blast_radius_analyzer import (
-            BlastRadiusAnalyzer,
             BlastRadiusAnalysisResult,
+            BlastRadiusAnalyzer,
         )
 
         analyzer = BlastRadiusAnalyzer()
@@ -267,10 +264,10 @@ class TestPhase2Integration:
 
     def test_full_dry_run_analysis_flow(self):
         """Test complete dry run analysis flow."""
-        from selfhealing.services.chaos.impact_predictor import get_impact_predictor
         from selfhealing.services.chaos.blast_radius_analyzer import (
             get_blast_radius_analyzer,
         )
+        from selfhealing.services.chaos.impact_predictor import get_impact_predictor
 
         predictor = get_impact_predictor()
         analyzer = get_blast_radius_analyzer()
@@ -302,8 +299,8 @@ class TestPhase2Integration:
 
     def test_serialization_roundtrip(self):
         """Test that predictions serialize correctly."""
-        from selfhealing.services.chaos.impact_predictor import ImpactPredictor
         from selfhealing.services.chaos.blast_radius_analyzer import BlastRadiusAnalyzer
+        from selfhealing.services.chaos.impact_predictor import ImpactPredictor
 
         predictor = ImpactPredictor()
         analyzer = BlastRadiusAnalyzer()

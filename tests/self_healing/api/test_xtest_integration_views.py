@@ -31,7 +31,6 @@ from selfhealing.api.django.views.xtest.scenarios import (
     SCENARIO_REGISTRY,
     ScenarioStatus,
     ScenarioResult,
-    IntegrationScenario,
     get_scenario_class,
     list_available_scenarios,
     store_scenario_result,

@@ -18,8 +18,6 @@ Requirements:
 from __future__ import annotations
 
 import os
-import sys
-import time
 
 import pytest
 
@@ -37,19 +35,13 @@ from selfhealing.settings.error_budget_gate import (
 )
 from selfhealing.services.error_budget_gate.gate import (
     ErrorBudgetGate,
-    get_error_budget_gate,
 )
-from selfhealing.services.error_budget_gate import gate as gate_module
 from selfhealing.services.error_budget_gate.config import (
     GateCheckResult,
     GateStatus,
 )
 from selfhealing.services.error_budget_gate.redis_flag import (
     BudgetExhaustedFlagManager,
-    BUDGET_EXHAUSTED_BY_SLO_KEY,
-    BUDGET_EXHAUSTED_BY_SLO_REGION_KEY,
-    BUDGET_STATUS_KEY,
-    BUDGET_STATUS_REGION_KEY,
     reset_budget_exhausted_flag_manager,
 )
 from selfhealing.services.error_budget_gate.region_tier_resolver import (
@@ -65,7 +57,6 @@ from selfhealing.services.governance.checks import (
 )
 from selfhealing.services.canary.models import PassCriteria, apply_tier_floor
 from selfhealing.services.metrics.recorders import record_error_budget_status
-from selfhealing.core.cluster_identity import reset_cluster_identity
 
 
 # ============================================================================

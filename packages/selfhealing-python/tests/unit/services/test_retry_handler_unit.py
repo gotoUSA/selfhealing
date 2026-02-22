@@ -4,18 +4,18 @@ retry_handler.py의 RetryHandler, RetryConfig, RetryResult, with_retry 데코레
 Kill Switch, ErrorBudgetGate, 429 감지, should_retry 로직 등을 테스트합니다.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
 
 from selfhealing.services.retry_handler import (
+    MaxRetriesExceededError,
     RetryAction,
     RetryConfig,
-    RetryResult,
     RetryHandler,
-    MaxRetriesExceededError,
+    RetryResult,
     with_retry,
 )
-
 
 # =============================================================================
 # RetryConfig Tests

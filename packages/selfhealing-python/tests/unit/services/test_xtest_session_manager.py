@@ -8,9 +8,10 @@ XTestSessionManager 클래스 테스트:
 - 아티팩트 등록
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+import pytest
 
 
 class TestXTestSessionMetadata:

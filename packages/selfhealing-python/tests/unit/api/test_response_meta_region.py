@@ -19,9 +19,8 @@ Note:
 
 import os
 import sys
+from importlib.util import module_from_spec, spec_from_file_location
 from unittest.mock import patch
-from datetime import datetime, timezone
-from importlib.util import spec_from_file_location, module_from_spec
 
 import pytest
 

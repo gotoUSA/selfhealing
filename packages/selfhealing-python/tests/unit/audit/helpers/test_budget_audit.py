@@ -5,7 +5,6 @@ Tests for log_error_budget_blocked_audit function.
 Uses lazy imports to avoid Prometheus registry conflicts.
 """
 
-import pytest
 from unittest.mock import patch
 
 
@@ -18,8 +17,10 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             result = log_error_budget_blocked_audit(
                 action="chaos_experiment",
                 gate_status="blocked",
@@ -27,7 +28,7 @@ class TestLogErrorBudgetBlockedAudit:
                 threshold_percent=10.0,
                 reason="Error budget critically low: 5.5% < 10%",
             )
-            
+
             assert result == 1
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args[1]
@@ -42,8 +43,10 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=2,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             log_error_budget_blocked_audit(
                 action="auto_replay",
                 gate_status="blocked",
@@ -51,7 +54,7 @@ class TestLogErrorBudgetBlockedAudit:
                 threshold_percent=10.0,
                 reason="Budget low",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             details = call_kwargs["details"]
             assert details["action"] == "auto_replay"
@@ -66,8 +69,10 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=3,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             log_error_budget_blocked_audit(
                 action="deployment",
                 gate_status="fail_open_rate_limited",
@@ -75,7 +80,7 @@ class TestLogErrorBudgetBlockedAudit:
                 threshold_percent=10.0,
                 reason="Rate limit exceeded during fail-open",
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             details = call_kwargs["details"]
             assert details["gate_status"] == "fail_open_rate_limited"
@@ -89,8 +94,10 @@ class TestLogErrorBudgetBlockedAudit:
         ), patch(
             "selfhealing.services.audit.chaos_audit.logger"
         ) as mock_logger:
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             log_error_budget_blocked_audit(
                 action="chaos_experiment",
                 gate_status="blocked",
@@ -98,7 +105,7 @@ class TestLogErrorBudgetBlockedAudit:
                 threshold_percent=10.0,
                 reason="Budget low",
             )
-            
+
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
             assert "[ErrorBudgetAudit]" in call_args
@@ -114,8 +121,10 @@ class TestLogErrorBudgetBlockedAudit:
         ), patch(
             "selfhealing.services.audit.chaos_audit.logger"
         ) as mock_logger:
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             log_error_budget_blocked_audit(
                 action="test_action",
                 gate_status="blocked",
@@ -123,7 +132,7 @@ class TestLogErrorBudgetBlockedAudit:
                 threshold_percent=10.0,
                 reason="Budget unavailable",
             )
-            
+
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
             assert "N/A" in call_args  # None displayed as N/A
@@ -134,8 +143,10 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=6,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             log_error_budget_blocked_audit(
                 action="auto_replay",
                 gate_status="blocked",
@@ -145,15 +156,15 @@ class TestLogErrorBudgetBlockedAudit:
                 blocked_request_trace_id="trace-abc123",
                 actor_roles=["operator", "admin"],
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             details = call_kwargs["details"]
-            
+
             # 포렌식 필드 확인
             assert details["blocked_request_trace_id"] == "trace-abc123"
             assert details["actor_roles_at_block"] == ["operator", "admin"]
             assert "blocked_at" in details  # timestamp 포함
-            
+
             # WAL 최상위에도 전달되어야 함
             assert call_kwargs.get("trace_id") == "trace-abc123"
             assert call_kwargs.get("actor_roles") == ["operator", "admin"]
@@ -167,15 +178,17 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.audit.trace.get_trace_id",
             return_value="auto-trace-456",
         ):
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             log_error_budget_blocked_audit(
                 action="auto_replay",
                 gate_status="blocked",
                 error_budget_percent=5.0,
                 # blocked_request_trace_id 미지정 → 자동 추출
             )
-            
+
             call_kwargs = mock_wal.call_args[1]
             details = call_kwargs["details"]
             assert details.get("blocked_request_trace_id") == "auto-trace-456"
@@ -189,15 +202,17 @@ class TestLogErrorBudgetBlockedAudit:
             "sys.modules",
             {"selfhealing.audit.trace": None},
         ):
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             # ImportError 발생해도 실패하지 않음
             result = log_error_budget_blocked_audit(
                 action="auto_replay",
                 gate_status="blocked",
                 error_budget_percent=5.0,
             )
-            
+
             assert result == 8  # WAL 기록은 성공
             call_kwargs = mock_wal.call_args[1]
             details = call_kwargs["details"]
@@ -212,15 +227,17 @@ class TestLogErrorBudgetBlockedAudit:
         ), patch(
             "selfhealing.services.audit.chaos_audit.logger"
         ) as mock_logger:
-            from selfhealing.services.audit_helpers import log_error_budget_blocked_audit
-            
+            from selfhealing.services.audit_helpers import (
+                log_error_budget_blocked_audit,
+            )
+
             log_error_budget_blocked_audit(
                 action="test_action",
                 gate_status="blocked",
                 error_budget_percent=5.5,
                 blocked_request_trace_id="trace-xyz789",
             )
-            
+
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
             # trace_id 앞 8자리가 로그에 포함되어야 함

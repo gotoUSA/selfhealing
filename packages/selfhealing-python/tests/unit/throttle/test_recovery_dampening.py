@@ -7,10 +7,7 @@ Phase 5: Recovery Dampening 기능 테스트
 - Gradient 계산 지연
 """
 
-import pytest
 import threading
-import time
-from unittest.mock import MagicMock, patch
 
 from selfhealing.services.throttle.recovery_dampening import (
     RecoveryDampeningConfig,

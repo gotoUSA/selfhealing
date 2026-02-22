@@ -16,12 +16,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from selfhealing.interfaces.resilience_policy import GuardResult
 from selfhealing.services.throttle.config import ThrottleResult
 from selfhealing.services.throttle.facade import AdaptiveThrottleFacade
-
 
 # =============================================================================
 # check() Guard → rate limit → DLQ 파이프라인 동작 검증

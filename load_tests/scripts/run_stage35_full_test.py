@@ -19,10 +19,7 @@ from scenarios.stage35_cache_stampede import (
     reset_stats,
     get_stats,
     get_cache,
-    generate_stage35_report,
     TARGET_RESPONSE_TIME_MS,
-    TARGET_RESPONSE_TIME_MS_SIMULATION,
-    TARGET_RESPONSE_TIME_MS_REDIS,
 )
 
 
@@ -67,7 +64,6 @@ def wait_for_background_refreshes(cache, timeout_s: float = 2.0) -> bool:
     백그라운드 refresh 완료 대기.
     테스트 종료 전 pending refresh가 모두 완료되도록 함.
     """
-    import time
     start = time.time()
     while time.time() - start < timeout_s:
         with cache._lock:

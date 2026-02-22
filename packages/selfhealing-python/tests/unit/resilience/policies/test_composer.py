@@ -14,23 +14,17 @@ UNIT_TEST_GUIDELINES.md 준수:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
-from typing import Any, Callable
-from unittest.mock import MagicMock, call, patch
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
 from selfhealing.interfaces.resilience_policy import (
-    AsyncResiliencePolicy,
-    FailureSink,
     GuardResult,
     PolicyContext,
-    PolicyGuard,
-    PolicyHook,
     PolicyOutcome,
     PolicyRejectedException,
     PolicyResult,
-    ResiliencePolicy,
 )
 from selfhealing.resilience.policies.composer import (
     AsyncPolicyComposer,
@@ -39,7 +33,6 @@ from selfhealing.resilience.policies.composer import (
     compose,
     compose_async,
 )
-
 
 # =============================================================================
 # Mock 구현체 — Protocol 준수

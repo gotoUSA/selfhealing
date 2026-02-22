@@ -19,8 +19,9 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from selfhealing.core.hedging.async_strategy import AsyncHedgingStrategy
 from selfhealing.core.hedging.config import HedgingConfig, HedgingMode

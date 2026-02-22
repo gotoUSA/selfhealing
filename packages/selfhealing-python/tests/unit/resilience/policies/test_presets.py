@@ -16,10 +16,6 @@ Note:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
-
 from selfhealing.resilience.policies.composer import PolicyComposer
 from selfhealing.resilience.policies.fallback import FallbackPolicy
 from selfhealing.resilience.policies.guards.error_budget import ErrorBudgetGuard
@@ -31,7 +27,6 @@ from selfhealing.resilience.policies.presets import (
     ha_pipeline,
     standard_pipeline,
 )
-
 
 # =============================================================================
 # 동작 검증 — standard_pipeline

@@ -6,7 +6,6 @@ Note: These tests require a running database connection.
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
 
 
 class TestChaosAPIEndpointsRegistered:

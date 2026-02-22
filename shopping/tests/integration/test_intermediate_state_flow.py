@@ -17,7 +17,6 @@ from shopping.models.cart import Cart
 from shopping.models.order import Order
 from shopping.services.cart_service import CartService
 from shopping.tests.factories import (
-    CartFactory,
     ProductFactory,
     UserFactory,
     ShippingDataBuilder,

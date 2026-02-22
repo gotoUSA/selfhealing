@@ -1,13 +1,9 @@
 from decimal import Decimal
-from unittest.mock import Mock
 
 import pytest
 from rest_framework import status
-from django.db.models import F
-from shopping.models.order import OrderItem
 from shopping.models.payment import PaymentLog
 from shopping.models.point import PointHistory
-from shopping.models.product import Product
 from shopping.tests.factories import (
     CompletedPaymentFactory,
     OrderFactory,

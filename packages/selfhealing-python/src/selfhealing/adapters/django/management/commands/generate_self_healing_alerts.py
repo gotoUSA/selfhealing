@@ -155,7 +155,7 @@ class Command(BaseCommand):
             self.stdout.write("Run without --validate to generate the file.")
             return
 
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             existing_content = f.read()
 
         if existing_content.strip() == expected_content.strip():

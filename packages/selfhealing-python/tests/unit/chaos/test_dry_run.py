@@ -9,20 +9,16 @@ Reference: docs/self_healing/CHAOS_SAFETY_IMPLEMENTATION_PLAN.md
 """
 
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
-
-from selfhealing.services.chaos.stop_conditions import (
-    DryRunConfig,
-)
 from selfhealing.services.chaos.experiments import (
     ExperimentConfig,
     ExperimentStatus,
-    ExperimentResult,
     LatencyInjectionExperiment,
 )
-
+from selfhealing.services.chaos.stop_conditions import (
+    DryRunConfig,
+)
 
 # =============================================================================
 # DryRunConfig Tests

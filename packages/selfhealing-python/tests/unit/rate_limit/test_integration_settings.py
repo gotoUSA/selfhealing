@@ -22,7 +22,6 @@ from tests.unit.rate_limit.conftest import (
     SLA_WARNING_THRESHOLD,
 )
 
-
 # =============================================================================
 # Settings 테스트
 # =============================================================================
@@ -108,6 +107,7 @@ class TestRateLimitThrottleIntegrationSettings:
     def test_pydantic_validation_rejects_out_of_range(self, field, invalid_value):
         """Pydantic 검증 - 범위 초과 비율 거부."""
         from pydantic import ValidationError
+
         from selfhealing.settings.rate_limit_throttle_integration import (
             RateLimitThrottleIntegrationSettings,
         )

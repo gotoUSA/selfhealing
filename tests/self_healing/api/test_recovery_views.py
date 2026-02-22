@@ -13,8 +13,7 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#10.2.4
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from selfhealing.services.coordination.enums import RecoveryStatus
 

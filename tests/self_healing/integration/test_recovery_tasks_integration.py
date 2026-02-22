@@ -14,10 +14,8 @@ Run with:
         python -m pytest tests/self_healing/integration/test_recovery_tasks_integration.py -v
 """
 
-import pytest
 import time
 import os
-from datetime import datetime, timezone
 from celery import current_app
 
 from django.conf import settings

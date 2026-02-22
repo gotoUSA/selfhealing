@@ -12,10 +12,7 @@ Tests for Correlation Engine Interfaces — 전략 Protocol 검증.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
-
-import pytest
 
 from selfhealing.services.correlation_engine.interfaces import (
     CorrelationStrategy,
@@ -25,7 +22,6 @@ from selfhealing.services.correlation_engine.interfaces import (
 from selfhealing.services.correlation_engine.root_cause_ranker import (
     StrategyMetadata,
 )
-
 
 # =============================================================================
 # Stub 구현 (테스트 전용)

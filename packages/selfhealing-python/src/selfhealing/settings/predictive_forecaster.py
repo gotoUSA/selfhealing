@@ -171,7 +171,7 @@ class PredictiveForecasterSettings(BaseSettings):
     )
 
     @model_validator(mode="after")
-    def validate_confidence_range(self) -> "PredictiveForecasterSettings":
+    def validate_confidence_range(self) -> PredictiveForecasterSettings:
         """warmup_samples가 prediction_steps보다 충분히 큰지 검증."""
         if self.warmup_samples < self.prediction_steps:
             raise ValueError(

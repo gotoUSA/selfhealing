@@ -4,8 +4,7 @@ AdaptiveThrottle 동적 레이블 단위 테스트.
 service_name이 config에서 메트릭으로 전파되는지 확인.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestAdaptiveThrottleDynamicLabels:
@@ -13,9 +12,9 @@ class TestAdaptiveThrottleDynamicLabels:
 
     def test_service_name_from_config(self):
         """ThrottleConfig의 service_name이 AdaptiveThrottle에 전달되는지 확인."""
-        from selfhealing.services.throttle.config import ThrottleConfig
-        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
         from selfhealing.services.metrics.registry import sanitize_label_value
+        from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
 
         test_input = "test-api-service"
         config = ThrottleConfig(
@@ -32,8 +31,8 @@ class TestAdaptiveThrottleDynamicLabels:
 
     def test_service_name_default(self):
         """service_name 기본값 확인."""
-        from selfhealing.services.throttle.config import ThrottleConfig
         from selfhealing.services.throttle.adaptive import AdaptiveThrottle
+        from selfhealing.services.throttle.config import ThrottleConfig
         from selfhealing.settings.throttle import ThrottleSettings
 
         config = ThrottleConfig(
@@ -114,8 +113,8 @@ class TestThrottleSettingsServiceName:
 
     def test_settings_service_name_default(self):
         """ThrottleSettings의 service_name 기본값 확인."""
+
         from selfhealing.settings.throttle import ThrottleSettings
-        import inspect
 
         settings = ThrottleSettings()
 

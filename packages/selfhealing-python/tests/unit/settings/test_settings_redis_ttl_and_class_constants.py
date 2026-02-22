@@ -28,7 +28,6 @@ from unittest import mock
 
 import pytest
 
-
 # =============================================================================
 # 1. RateLimitSettings.redis_ttl
 # =============================================================================
@@ -62,8 +61,9 @@ class TestRateLimitSettingsRedisTtl:
 
     def test_redis_ttl_validation_bounds(self):
         """Redis TTL 범위 검증 (60 <= x <= 86400)."""
-        from selfhealing.settings.rate_limit import RateLimitSettings
         from pydantic import ValidationError
+
+        from selfhealing.settings.rate_limit import RateLimitSettings
 
         # 너무 작은 값
         with pytest.raises(ValidationError):
@@ -346,8 +346,8 @@ class TestHelperFunctions:
 
     def test_rate_limit_redis_adapter_uses_settings(self):
         """RedisRateLimitStorage가 Settings에서 TTL을 가져오는지 확인."""
-        from selfhealing.settings.rate_limit import reset_rate_limit_settings
         from selfhealing.adapters.rate_limit.redis_adapter import _get_redis_ttl
+        from selfhealing.settings.rate_limit import reset_rate_limit_settings
 
         reset_rate_limit_settings()
         ttl = _get_redis_ttl()
@@ -355,11 +355,11 @@ class TestHelperFunctions:
 
     def test_airgap_redis_adapter_uses_settings(self):
         """RedisAirGapAdapter가 Settings에서 TTL을 가져오는지 확인."""
-        from selfhealing.settings.airgap import reset_airgap_settings
         from selfhealing.adapters.airgap.redis_adapter import (
-            _get_airgap_redis_ttl,
             _get_airgap_key_prefix,
+            _get_airgap_redis_ttl,
         )
+        from selfhealing.settings.airgap import reset_airgap_settings
 
         reset_airgap_settings()
         ttl = _get_airgap_redis_ttl()
@@ -369,8 +369,8 @@ class TestHelperFunctions:
 
     def test_audit_buffer_uses_settings(self):
         """RedisAuditBuffer가 Settings에서 TTL을 가져오는지 확인."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
         from selfhealing.adapters.audit.redis_buffer import _get_audit_buffer_ttl
+        from selfhealing.settings.audit_settings import reset_audit_settings
 
         reset_audit_settings()
         ttl = _get_audit_buffer_ttl()
@@ -378,11 +378,11 @@ class TestHelperFunctions:
 
     def test_error_budget_multiplier_uses_settings(self):
         """CrisisMultiplierProvider가 Settings에서 값을 가져오는지 확인."""
-        from selfhealing.settings.error_budget import reset_error_budget_settings
         from selfhealing.services.error_budget.multiplier import (
             _get_multiplier_cache_ttl,
             _get_multiplier_max,
         )
+        from selfhealing.settings.error_budget import reset_error_budget_settings
 
         reset_error_budget_settings()
         cache_ttl = _get_multiplier_cache_ttl()
@@ -392,11 +392,11 @@ class TestHelperFunctions:
 
     def test_recovery_dashboard_uses_settings(self):
         """RecoveryDashboardService가 Settings에서 값을 가져오는지 확인."""
-        from selfhealing.settings.dashboard import reset_dashboard_settings
         from selfhealing.services.coordination.recovery_dashboard import (
-            _get_stale_threshold_minutes,
             _get_max_regional_status,
+            _get_stale_threshold_minutes,
         )
+        from selfhealing.settings.dashboard import reset_dashboard_settings
 
         reset_dashboard_settings()
         stale = _get_stale_threshold_minutes()
@@ -406,8 +406,8 @@ class TestHelperFunctions:
 
     def test_metric_snapshot_storage_uses_settings(self):
         """MetricSnapshotStorage가 Settings에서 값을 가져오는지 확인."""
-        from selfhealing.settings.metrics import reset_metrics_settings
         from selfhealing.metrics.snapshot_storage import _get_snapshot_max_age
+        from selfhealing.settings.metrics import reset_metrics_settings
 
         reset_metrics_settings()
         max_age = _get_snapshot_max_age()
@@ -415,8 +415,8 @@ class TestHelperFunctions:
 
     def test_safe_gauge_uses_settings(self):
         """SafeGauge가 Settings에서 값을 가져오는지 확인."""
-        from selfhealing.settings.safe_gauge import reset_safe_gauge_settings
         from selfhealing.metrics.safe_gauge.core import _get_max_label_combinations
+        from selfhealing.settings.safe_gauge import reset_safe_gauge_settings
 
         reset_safe_gauge_settings()
         max_combinations = _get_max_label_combinations()
@@ -502,8 +502,9 @@ class TestRedisTtlAppliedToMock:
     def test_rate_limit_storage_uses_settings_ttl(self):
         """RedisRateLimitStorage가 Settings TTL로 Redis 호출하는지 확인."""
         from unittest.mock import MagicMock
-        from selfhealing.settings.rate_limit import reset_rate_limit_settings
+
         from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
+        from selfhealing.settings.rate_limit import reset_rate_limit_settings
 
         reset_rate_limit_settings()
 
@@ -521,6 +522,7 @@ class TestRedisTtlAppliedToMock:
     def test_rate_limit_storage_custom_ttl_override(self):
         """생성자에서 TTL 오버라이드 가능."""
         from unittest.mock import MagicMock
+
         from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
 
         mock_redis = MagicMock()
@@ -531,8 +533,9 @@ class TestRedisTtlAppliedToMock:
     def test_rate_limit_storage_ttl_from_env(self):
         """환경 변수로 설정된 TTL이 적용되는지 확인."""
         from unittest.mock import MagicMock
-        from selfhealing.settings.rate_limit import reset_rate_limit_settings
+
         from selfhealing.adapters.rate_limit.redis_adapter import RedisRateLimitStorage
+        from selfhealing.settings.rate_limit import reset_rate_limit_settings
 
         reset_rate_limit_settings()
 
@@ -548,8 +551,9 @@ class TestRedisTtlAppliedToMock:
     def test_airgap_adapter_uses_settings_ttl(self):
         """RedisAirGapAdapter가 Settings TTL로 Redis 호출하는지 확인."""
         from unittest.mock import MagicMock
-        from selfhealing.settings.airgap import reset_airgap_settings
+
         from selfhealing.adapters.airgap.redis_adapter import RedisAirGapAdapter
+        from selfhealing.settings.airgap import reset_airgap_settings
 
         reset_airgap_settings()
 
@@ -568,8 +572,9 @@ class TestRedisTtlAppliedToMock:
     def test_airgap_adapter_ttl_from_env(self):
         """환경 변수로 설정된 AirGap TTL이 적용되는지 확인."""
         from unittest.mock import MagicMock
-        from selfhealing.settings.airgap import reset_airgap_settings
+
         from selfhealing.adapters.airgap.redis_adapter import RedisAirGapAdapter
+        from selfhealing.settings.airgap import reset_airgap_settings
 
         reset_airgap_settings()
 
@@ -589,8 +594,9 @@ class TestRedisTtlAppliedToMock:
     def test_audit_buffer_uses_settings_ttl(self):
         """RedisAuditBuffer가 Settings TTL로 Redis expire 호출하는지 확인."""
         from unittest.mock import MagicMock
-        from selfhealing.settings.audit_settings import reset_audit_settings
+
         from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        from selfhealing.settings.audit_settings import reset_audit_settings
 
         reset_audit_settings()
 
@@ -612,8 +618,9 @@ class TestRedisTtlAppliedToMock:
     def test_audit_buffer_ttl_from_env(self):
         """환경 변수로 설정된 Audit Buffer TTL이 적용되는지 확인."""
         from unittest.mock import MagicMock
-        from selfhealing.settings.audit_settings import reset_audit_settings
+
         from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
+        from selfhealing.settings.audit_settings import reset_audit_settings
 
         reset_audit_settings()
 

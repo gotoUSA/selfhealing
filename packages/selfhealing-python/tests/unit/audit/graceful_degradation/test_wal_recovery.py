@@ -6,8 +6,6 @@ WAL-based crash recovery 테스트.
 
 import json
 
-import pytest
-
 
 class TestHashChainWALRecovery:
     """Tests for HashChainWALRecovery."""
@@ -35,7 +33,7 @@ class TestHashChainWALRecovery:
         wal_files = list(temp_dir.glob("hash_chain_wal_*.jsonl"))
         assert len(wal_files) == 1
 
-        with open(wal_files[0], "r") as f:
+        with open(wal_files[0]) as f:
             content = f.read()
             assert "add_integrity" in content
 
@@ -52,7 +50,7 @@ class TestHashChainWALRecovery:
 
         # Read and verify commit marker
         wal_files = list(temp_dir.glob("hash_chain_wal_*.jsonl"))
-        with open(wal_files[0], "r") as f:
+        with open(wal_files[0]) as f:
             lines = f.readlines()
 
         assert len(lines) == 2
@@ -78,7 +76,7 @@ class TestHashChainWALRecovery:
 
     def test_recover_uncommitted_entries(self, temp_dir, mock_redis):
         """Test recovery replays uncommitted entries."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import patch
 
         from selfhealing.audit.graceful_degradation import HashChainWALRecovery
 

@@ -10,15 +10,12 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 from tests.unit.throttle.conftest import (
     SVC_PAYMENT,
     make_critical_event_data,
     make_recovered_event_data,
     make_warning_event_data,
 )
-
 
 # Celery 태스크 상수 (소스에서 정의된 값)
 TASK_NAME = "selfhealing.adapters.celery.tasks.send_sla_notification"

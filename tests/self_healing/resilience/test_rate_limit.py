@@ -12,10 +12,8 @@ Tests the Defense-in-Depth rate limiting strategy:
 import json
 import time
 import threading
-from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 
-import pytest
 
 
 # =============================================================================
@@ -398,7 +396,7 @@ class TestShadowAudit:
 
     def test_logs_to_fallback_file(self, tmp_path):
         """Should log to fallback file in emergency mode."""
-        from selfhealing.api.django.rate_limit import HybridRateLimitMiddleware, FALLBACK_LOG_PATH
+        from selfhealing.api.django.rate_limit import HybridRateLimitMiddleware
         
         # Use tmp_path for test
         with patch('selfhealing.api.django.rate_limit.FALLBACK_LOG_PATH', tmp_path / "rate_limit_fallback.jsonl"):
@@ -444,8 +442,6 @@ class TestRateLimitIntegration:
         """Test complete flow from Redis failure to emergency mode."""
         from selfhealing.api.django.rate_limit import (
             HybridRateLimitMiddleware,
-            RedisHealthChecker,
-            LocalMemoryRateLimiter,
             reset_rate_limit_state,
         )
         

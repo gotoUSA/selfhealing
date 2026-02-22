@@ -7,9 +7,7 @@ Tests for:
 3. ChaosScheduler.get_experiments_by_status()
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
-from dataclasses import dataclass
 
 
 # =============================================================================
@@ -305,7 +303,6 @@ class TestCheckRecoveryMonitoringTask:
     def test_task_returns_correct_format(self):
         """Test task returns expected dictionary format."""
         from selfhealing.celery_tasks import check_recovery_monitoring_experiments
-        from selfhealing.services.chaos.base import ExperimentStatus
         
         # Patch where the import happens (inside the function)
         with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler:

@@ -39,7 +39,6 @@ import hmac
 import threading
 from datetime import datetime
 from locust import HttpUser, task, between, tag, events
-from locust.runners import MasterRunner, WorkerRunner
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -164,7 +163,7 @@ def get_healing_client() -> "SelfHealingClient":
                     timeout=10,
                 )
                 safe_increment("healing_client_init")
-            except Exception as e:
+            except Exception:
                 safe_increment("healing_client_failed")
                 return None
     
@@ -1001,7 +1000,7 @@ def _print_failure_reasons():
     if _extreme_stats["dlq_replay_failed"] > 0:
         print(f"   ✗ DLQ replay failed: {_extreme_stats['dlq_replay_failed']}")
     if _extreme_stats["healing_client_failed"] > 0:
-        print(f"   ✗ Self-Healing client initialization failed")
+        print("   ✗ Self-Healing client initialization failed")
 
 
 def _save_results(summary, is_passed):

@@ -4,7 +4,6 @@ Exception Handler 테스트 - 표준 응답 (response.py).
 StandardErrorResponse, ErrorInfo, ResponseMeta 및 편의 함수 검증.
 """
 
-import pytest
 from datetime import datetime, timezone
 
 from selfhealing.api.django.exceptions.response import (

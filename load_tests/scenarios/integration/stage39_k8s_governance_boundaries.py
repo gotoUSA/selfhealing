@@ -36,26 +36,15 @@ import json
 import logging
 import random
 import time
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import timedelta
-from typing import Any, Callable, Dict, Generator, List, Optional, TYPE_CHECKING
-from unittest.mock import MagicMock, patch
-from contextlib import contextmanager
-import copy
+from typing import Any, Dict, List, TYPE_CHECKING
 
 import pytest
 
 # Conditional imports for type checking
 if TYPE_CHECKING:
-    from selfhealing.services import (
-        CircuitBreakerConfig,
-        CircuitBreakerService,
-        CircuitState,
-        DLQConfig,
-        DLQService,
-    )
+    pass
 
 
 # Singleton storage for shared in-memory repository

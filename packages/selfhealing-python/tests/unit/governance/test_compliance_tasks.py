@@ -7,23 +7,20 @@ Tests for compliance tasks implementation:
 - CollectSelfHealingMetricsTask
 """
 
-import pytest
 from datetime import datetime, timezone
-from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from selfhealing.tasks.compliance_tasks import (
-    RunComplianceCheckTask,
-    GenerateFinOpsReportTask,
-    CollectSelfHealingMetricsTask,
     COMPLIANCE_TASKS,
+    CollectSelfHealingMetricsTask,
+    GenerateFinOpsReportTask,
+    RunComplianceCheckTask,
     get_compliance_beat_schedule,
 )
 from selfhealing.tasks.notification_policy import (
     NotificationPolicy,
     NotificationTiming,
 )
-
 
 # =============================================================================
 # RunComplianceCheckTask Tests

@@ -14,15 +14,18 @@ AdaptiveThrottle Load Shedding 연동 단위 테스트.
 10. Emergency Mode + Shedding 동시 활성 시 Conservative Limit (Min-Winner)
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+from selfhealing.services.event_bus.bus import (
+    EventPriority,
+    EventType,
+    SelfHealingEvent,
+)
 from selfhealing.services.throttle.adaptive import (
     AdaptiveThrottle,
     reset_adaptive_throttle,
 )
 from selfhealing.services.throttle.config import ThrottleConfig
-from selfhealing.services.event_bus.bus import EventType, SelfHealingEvent, EventPriority
 from selfhealing.settings.throttle import ThrottleSettings
 
 

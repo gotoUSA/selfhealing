@@ -10,11 +10,10 @@ Goals:
 - Data access audit integration (log_data_access_audit, ADR-002)
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, call
 from decimal import Decimal
-import logging
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # =============================================================================
 # AuditEventType Tests
@@ -27,37 +26,37 @@ class TestAuditEventTypeComplianceFinOps:
     def test_compliance_event_types_exist(self):
         """Should have Compliance-related event types."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "COMPLIANCE_VIOLATION")
         assert hasattr(AuditEventType, "COMPLIANCE_CHECK_PASSED")
-        
+
         assert AuditEventType.COMPLIANCE_VIOLATION.value == "compliance_violation"
         assert AuditEventType.COMPLIANCE_CHECK_PASSED.value == "compliance_check_passed"
 
     def test_blast_radius_event_types_exist(self):
         """Should have Blast Radius-related event types."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "BLAST_RADIUS_ISOLATION")
         assert hasattr(AuditEventType, "BLAST_RADIUS_VIOLATION")
-        
+
         assert AuditEventType.BLAST_RADIUS_ISOLATION.value == "blast_radius_isolation"
         assert AuditEventType.BLAST_RADIUS_VIOLATION.value == "blast_radius_violation"
 
     def test_finops_event_types_exist(self):
         """Should have FinOps-related event types."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "FINOPS_THRESHOLD_EXCEEDED")
         assert hasattr(AuditEventType, "FINOPS_BUDGET_EXCEEDED")
-        
+
         assert AuditEventType.FINOPS_THRESHOLD_EXCEEDED.value == "finops_threshold_exceeded"
         assert AuditEventType.FINOPS_BUDGET_EXCEEDED.value == "finops_budget_exceeded"
 
     def test_data_access_event_type_exists(self):
         """Should have DATA_ACCESS event type for ADR-002."""
         from selfhealing.audit.event_buffer import AuditEventType
-        
+
         assert hasattr(AuditEventType, "DATA_ACCESS")
         assert AuditEventType.DATA_ACCESS.value == "data_access"
 
@@ -77,14 +76,14 @@ class TestLogComplianceAudit:
             return_value=42,
         ):
             from selfhealing.services.audit_helpers import log_compliance_audit
-            
+
             result = log_compliance_audit(
                 stage_name="production",
                 standard="DORA_2025",
                 check_id="DORA-001",
                 passed=True,
             )
-            
+
             assert result == 42
 
     def test_logs_passed_check_to_wal(self):
@@ -94,7 +93,7 @@ class TestLogComplianceAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_compliance_audit
-            
+
             log_compliance_audit(
                 stage_name="staging",
                 standard="SOC2",
@@ -102,10 +101,10 @@ class TestLogComplianceAudit:
                 passed=True,
                 compliance_score=95.5,
             )
-            
+
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args.kwargs
-            
+
             assert call_kwargs["event_type"] == "COMPLIANCE_CHECK_PASSED"
             assert call_kwargs["source"] == "ComplianceService"
             assert call_kwargs["success"] is True
@@ -121,7 +120,7 @@ class TestLogComplianceAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_compliance_audit
-            
+
             log_compliance_audit(
                 stage_name="production",
                 standard="PCI_DSS",
@@ -131,10 +130,10 @@ class TestLogComplianceAudit:
                 severity="high",
                 message="Cardholder data not encrypted",
             )
-            
+
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args.kwargs
-            
+
             assert call_kwargs["event_type"] == "COMPLIANCE_VIOLATION"
             assert call_kwargs["success"] is False
             assert call_kwargs["error_message"] == "Cardholder data not encrypted"
@@ -145,7 +144,7 @@ class TestLogComplianceAudit:
         """Should add to buffer when request is provided."""
         mock_request = MagicMock()
         mock_request.META = {}
-        
+
         with patch(
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
@@ -154,7 +153,7 @@ class TestLogComplianceAudit:
             return_value=True,
         ) as mock_buffer:
             from selfhealing.services.audit_helpers import log_compliance_audit
-            
+
             log_compliance_audit(
                 stage_name="production",
                 standard="DORA_2025",
@@ -162,7 +161,7 @@ class TestLogComplianceAudit:
                 passed=True,
                 request=mock_request,
             )
-            
+
             mock_buffer.assert_called_once()
 
     def test_fallback_logging_without_request(self):
@@ -174,14 +173,14 @@ class TestLogComplianceAudit:
             "selfhealing.services.audit.compliance_audit.logger"
         ) as mock_logger:
             from selfhealing.services.audit_helpers import log_compliance_audit
-            
+
             log_compliance_audit(
                 stage_name="test-stage",
                 standard="DORA_2025",
                 check_id="DORA-001",
                 passed=True,
             )
-            
+
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             assert "ComplianceAudit" in call_args
@@ -203,7 +202,7 @@ class TestLogBlastRadiusAudit:
             return_value=99,
         ):
             from selfhealing.services.audit_helpers import log_blast_radius_audit
-            
+
             result = log_blast_radius_audit(
                 experiment_id="exp-12345",
                 blast_radius="instance",
@@ -211,7 +210,7 @@ class TestLogBlastRadiusAudit:
                 action="check",
                 allowed=True,
             )
-            
+
             assert result == 99
 
     def test_logs_allowed_check_to_wal(self):
@@ -221,7 +220,7 @@ class TestLogBlastRadiusAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_blast_radius_audit
-            
+
             log_blast_radius_audit(
                 experiment_id="chaos-test-001",
                 blast_radius="service",
@@ -231,10 +230,10 @@ class TestLogBlastRadiusAudit:
                 approval_status="approved",
                 traffic_percent=50.0,
             )
-            
+
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args.kwargs
-            
+
             assert call_kwargs["event_type"] == "BLAST_RADIUS_ISOLATION"
             assert call_kwargs["source"] == "BlastRadiusManager"
             assert call_kwargs["success"] is True
@@ -248,12 +247,12 @@ class TestLogBlastRadiusAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_blast_radius_audit
-            
+
             violations = [
                 "Region level requires approval",
                 "Outside maintenance window",
             ]
-            
+
             log_blast_radius_audit(
                 experiment_id="chaos-blocked-001",
                 blast_radius="region",
@@ -262,10 +261,10 @@ class TestLogBlastRadiusAudit:
                 allowed=False,
                 violations=violations,
             )
-            
+
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args.kwargs
-            
+
             assert call_kwargs["event_type"] == "BLAST_RADIUS_VIOLATION"
             assert call_kwargs["success"] is False
             assert "Region level requires approval" in call_kwargs["error_message"]
@@ -280,7 +279,7 @@ class TestLogBlastRadiusAudit:
             "selfhealing.services.audit.compliance_audit.logger"
         ) as mock_logger:
             from selfhealing.services.audit_helpers import log_blast_radius_audit
-            
+
             log_blast_radius_audit(
                 experiment_id="exp-blocked",
                 blast_radius="region",
@@ -289,7 +288,7 @@ class TestLogBlastRadiusAudit:
                 allowed=False,
                 violations=["Test violation"],
             )
-            
+
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
             assert "BlastRadiusAudit" in call_args
@@ -311,7 +310,7 @@ class TestLogFinopsAudit:
             return_value=77,
         ):
             from selfhealing.services.audit_helpers import log_finops_audit
-            
+
             result = log_finops_audit(
                 stage_name="production",
                 alert_type="threshold",
@@ -319,7 +318,7 @@ class TestLogFinopsAudit:
                 budget_limit=10.00,
                 usage_percent=85.0,
             )
-            
+
             assert result == 77
 
     def test_logs_threshold_alert_to_wal(self):
@@ -329,7 +328,7 @@ class TestLogFinopsAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_finops_audit
-            
+
             log_finops_audit(
                 stage_name="staging",
                 alert_type="threshold",
@@ -339,10 +338,10 @@ class TestLogFinopsAudit:
                 severity="warning",
                 message="Budget usage at 75%",
             )
-            
+
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args.kwargs
-            
+
             assert call_kwargs["event_type"] == "FINOPS_THRESHOLD_EXCEEDED"
             assert call_kwargs["source"] == "FinOpsService"
             assert call_kwargs["success"] is True  # threshold is not critical
@@ -356,7 +355,7 @@ class TestLogFinopsAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_finops_audit
-            
+
             log_finops_audit(
                 stage_name="production",
                 alert_type="over_budget",
@@ -365,10 +364,10 @@ class TestLogFinopsAudit:
                 severity="critical",
                 message="Budget exceeded: $12.50 > $10.00",
             )
-            
+
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args.kwargs
-            
+
             assert call_kwargs["event_type"] == "FINOPS_BUDGET_EXCEEDED"
             assert call_kwargs["success"] is False  # over_budget is critical
 
@@ -381,14 +380,14 @@ class TestLogFinopsAudit:
             "selfhealing.services.audit.compliance_audit.logger"
         ) as mock_logger:
             from selfhealing.services.audit_helpers import log_finops_audit
-            
+
             log_finops_audit(
                 stage_name="production",
                 alert_type="over_budget",
                 current_cost=15.00,
                 budget_limit=10.00,
             )
-            
+
             mock_logger.critical.assert_called_once()
             call_args = mock_logger.critical.call_args[0][0]
             assert "FinOpsAudit" in call_args
@@ -410,13 +409,13 @@ class TestLogDataAccessAudit:
             return_value=55,
         ):
             from selfhealing.services.audit_helpers import log_data_access_audit
-            
+
             result = log_data_access_audit(
                 path="/api/admin/users/",
                 method="GET",
                 actor_id="admin-123",
             )
-            
+
             assert result == 55
 
     def test_logs_data_access_to_wal(self):
@@ -426,7 +425,7 @@ class TestLogDataAccessAudit:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.audit_helpers import log_data_access_audit
-            
+
             log_data_access_audit(
                 path="/api/payments/transactions/",
                 method="GET",
@@ -434,10 +433,10 @@ class TestLogDataAccessAudit:
                 resource_type="payment",
                 resource_id="txn-789",
             )
-            
+
             mock_wal.assert_called_once()
             call_kwargs = mock_wal.call_args.kwargs
-            
+
             assert call_kwargs["event_type"] == "DATA_ACCESS"
             assert call_kwargs["source"] == "DataAccessAudit"
             assert call_kwargs["success"] is True
@@ -450,7 +449,7 @@ class TestLogDataAccessAudit:
         """Should add to buffer when request is provided."""
         mock_request = MagicMock()
         mock_request.META = {}
-        
+
         with patch(
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
@@ -459,13 +458,13 @@ class TestLogDataAccessAudit:
             return_value=True,
         ) as mock_buffer:
             from selfhealing.services.audit_helpers import log_data_access_audit
-            
+
             log_data_access_audit(
                 path="/api/admin/config/",
                 method="GET",
                 request=mock_request,
             )
-            
+
             mock_buffer.assert_called_once()
 
 
@@ -484,14 +483,14 @@ class TestComplianceServiceIntegration:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.compliance.service import ComplianceService
-            
+
             # Reset singleton for test
             ComplianceService._instance = None
             service = ComplianceService()
-            
+
             # Run a check (default checks always pass)
             result = service.run_check("DORA-001", "test-stage")
-            
+
             # Should have logged to WAL
             assert mock_wal.called
 
@@ -502,15 +501,15 @@ class TestComplianceServiceIntegration:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.compliance.service import ComplianceService
-            
+
             # Reset singleton for test
             ComplianceService._instance = None
             service = ComplianceService()
-            
+
             # Register a check function that fails
             def always_fail():
                 return False
-            
+
             service.register_check(
                 check_id="TEST-FAIL",
                 name="Test Failure",
@@ -518,10 +517,10 @@ class TestComplianceServiceIntegration:
                 standard=service._checks["DORA-001"].standard,
                 check_function=always_fail,
             )
-            
+
             # Run the failing check
             violation = service.run_check("TEST-FAIL", "test-stage")
-            
+
             assert violation is not None
             # Should have logged violation to WAL
             assert any(
@@ -539,20 +538,23 @@ class TestBlastRadiusManagerIntegration:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.chaos.blast_radius import BlastRadiusManager, ChaosBlastRadiusPolicy
-            
+            from selfhealing.services.chaos.blast_radius import (
+                BlastRadiusManager,
+                ChaosBlastRadiusPolicy,
+            )
+
             policy = ChaosBlastRadiusPolicy(
                 instance_auto_approve=True,
                 allow_outside_window=True,
             )
             manager = BlastRadiusManager(policy=policy)
-            
+
             result = manager.check(
                 blast_radius="instance",
                 target_service="test-service",
                 experiment_id="exp-test-001",
             )
-            
+
             # Should be allowed
             assert result.allowed
             # Should have logged to WAL
@@ -564,20 +566,23 @@ class TestBlastRadiusManagerIntegration:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.chaos.blast_radius import BlastRadiusManager, ChaosBlastRadiusPolicy
-            
+            from selfhealing.services.chaos.blast_radius import (
+                BlastRadiusManager,
+                ChaosBlastRadiusPolicy,
+            )
+
             policy = ChaosBlastRadiusPolicy(
                 excluded_services=["blocked-service"],
                 allow_outside_window=True,
             )
             manager = BlastRadiusManager(policy=policy)
-            
+
             result = manager.check(
                 blast_radius="instance",
                 target_service="blocked-service",
                 experiment_id="exp-blocked-001",
             )
-            
+
             # Should be blocked
             assert not result.allowed
             assert len(result.violations) > 0
@@ -595,11 +600,11 @@ class TestFinOpsServiceIntegration:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.finops.service import FinOpsService
-            
+
             # Reset singleton for test
             FinOpsService._instance = None
             service = FinOpsService()
-            
+
             # Set budget with low threshold
             service.set_budget(
                 stage_name="test-stage",
@@ -607,17 +612,17 @@ class TestFinOpsServiceIntegration:
                 alert_threshold=0.1,  # 10%
                 hard_limit=False,
             )
-            
+
             # Clear any initialization calls
             mock_wal.reset_mock()
-            
+
             # Record cost that exceeds threshold
             service.record_cost(
                 operation="test_op",
                 stage_name="test-stage",
                 cost=Decimal("2.00"),  # 20% > 10% threshold
             )
-            
+
             # Check if alert was triggered (which calls _create_alert which logs)
             # Note: threshold alert only triggers if budget.should_alert is true
             # and we need to exceed the threshold
@@ -633,11 +638,11 @@ class TestFinOpsServiceIntegration:
             return_value=1,
         ) as mock_wal:
             from selfhealing.services.finops.service import FinOpsService
-            
+
             # Reset singleton for test
             FinOpsService._instance = None
             service = FinOpsService()
-            
+
             # Set budget with hard limit
             service.set_budget(
                 stage_name="limit-stage",
@@ -645,7 +650,7 @@ class TestFinOpsServiceIntegration:
                 alert_threshold=0.5,
                 hard_limit=True,
             )
-            
+
             # Record cost that exceeds budget
             with pytest.raises(ValueError, match="Budget exceeded"):
                 service.record_cost(
@@ -653,7 +658,7 @@ class TestFinOpsServiceIntegration:
                     stage_name="limit-stage",
                     cost=Decimal("2.00"),
                 )
-            
+
             # Should have logged over_budget alert to WAL
             assert mock_wal.called
 

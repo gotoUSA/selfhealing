@@ -8,8 +8,6 @@ Quorum Witness 테스트.
 
 import time
 
-import pytest
-
 from selfhealing.multiregion.quorum import (
     InMemoryQuorumWitness,
     QuorumLease,

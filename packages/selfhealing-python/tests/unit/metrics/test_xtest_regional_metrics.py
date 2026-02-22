@@ -15,8 +15,6 @@ Section 7.1 구현 검증:
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 
 class TestXTestRegionalMetricDefinitions:
     """X-Test Regional 메트릭 정의 테스트."""

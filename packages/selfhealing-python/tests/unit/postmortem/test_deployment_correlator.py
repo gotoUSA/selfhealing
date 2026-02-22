@@ -22,11 +22,9 @@ from selfhealing.adapters.deployment import (
 )
 from selfhealing.services.postmortem.deployment_correlator import (
     CorrelationType,
-    DeploymentCorrelationResult,
     DeploymentCorrelator,
     reset_deployment_correlator,
 )
-
 
 # =============================================================================
 # Fixtures

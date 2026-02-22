@@ -8,8 +8,8 @@ Core Principle Verification: System provides warnings, never auto-adjusts settin
 """
 
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch, PropertyMock
+from datetime import timedelta
+from unittest.mock import MagicMock
 
 from django.utils import timezone
 

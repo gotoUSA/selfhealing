@@ -5,12 +5,10 @@ get_budget_status()의 region 파라미터 전달,
 ClusterIdentity 자동 해석, get_all_region_statuses() 동작 검증.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from selfhealing.services.error_budget.service import ErrorBudgetService
 from selfhealing.services.error_budget.models import ErrorBudgetStatus
-
+from selfhealing.services.error_budget.service import ErrorBudgetService
 
 # =============================================================================
 # 동작 검증: get_budget_status() region 전달

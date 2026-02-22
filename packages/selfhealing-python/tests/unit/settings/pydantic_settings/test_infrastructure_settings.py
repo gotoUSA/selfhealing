@@ -295,7 +295,9 @@ class TestDomainSensitivitySettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.domain_sensitivity import reset_domain_sensitivity_settings
+        from selfhealing.settings.domain_sensitivity import (
+            reset_domain_sensitivity_settings,
+        )
 
         reset_domain_sensitivity_settings()
         yield
@@ -339,7 +341,9 @@ class TestDomainSensitivitySettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.domain_sensitivity import get_domain_sensitivity_settings
+        from selfhealing.settings.domain_sensitivity import (
+            get_domain_sensitivity_settings,
+        )
 
         settings1 = get_domain_sensitivity_settings()
         settings2 = get_domain_sensitivity_settings()
@@ -461,7 +465,9 @@ class TestRegionalRecoveryPolicySettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.regional_recovery_policy import reset_regional_recovery_policy_settings
+        from selfhealing.settings.regional_recovery_policy import (
+            reset_regional_recovery_policy_settings,
+        )
 
         reset_regional_recovery_policy_settings()
         yield
@@ -469,7 +475,9 @@ class TestRegionalRecoveryPolicySettings:
 
     def test_default_values(self):
         """기본값 검증."""
-        from selfhealing.settings.regional_recovery_policy import RegionalRecoveryPolicySettings
+        from selfhealing.settings.regional_recovery_policy import (
+            RegionalRecoveryPolicySettings,
+        )
 
         settings = RegionalRecoveryPolicySettings()
 
@@ -481,7 +489,9 @@ class TestRegionalRecoveryPolicySettings:
 
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
-        from selfhealing.settings.regional_recovery_policy import RegionalRecoveryPolicySettings
+        from selfhealing.settings.regional_recovery_policy import (
+            RegionalRecoveryPolicySettings,
+        )
 
         monkeypatch.setenv("SELFHEALING_REGIONAL_RECOVERY_ERROR_RATE_THRESHOLD", "0.15")
 
@@ -491,7 +501,9 @@ class TestRegionalRecoveryPolicySettings:
 
     def test_validation_rate_range(self):
         """rate 범위 검증."""
-        from selfhealing.settings.regional_recovery_policy import RegionalRecoveryPolicySettings
+        from selfhealing.settings.regional_recovery_policy import (
+            RegionalRecoveryPolicySettings,
+        )
 
         with pytest.raises(ValidationError):
             RegionalRecoveryPolicySettings(error_rate_threshold=0.0)  # < 0.01
@@ -501,7 +513,9 @@ class TestRegionalRecoveryPolicySettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.regional_recovery_policy import get_regional_recovery_policy_settings
+        from selfhealing.settings.regional_recovery_policy import (
+            get_regional_recovery_policy_settings,
+        )
 
         settings1 = get_regional_recovery_policy_settings()
         settings2 = get_regional_recovery_policy_settings()

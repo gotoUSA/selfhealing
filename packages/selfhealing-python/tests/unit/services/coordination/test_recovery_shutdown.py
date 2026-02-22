@@ -12,16 +12,14 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#11.3
 """
 
-import pytest
-import threading
 import time
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from selfhealing.services.coordination.recovery_shutdown import (
     RecoveryAwareShutdownConfig,
-    RecoveryShutdownStats,
     RecoveryAwareShutdownHook,
+    RecoveryShutdownStats,
     create_recovery_aware_shutdown_hook,
 )
 
@@ -266,7 +264,7 @@ class TestCreateRecoveryAwareShutdownHook:
 
     def test_create_hook_with_defaults(self):
         """기본값으로 Hook 생성."""
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock
 
         # RecoveryCoordinator를 mock하여 활성 세션이 없는 상태로 테스트
         # check_recovery() 함수 내부에서 import하므로 coordinator 모듈을 patch

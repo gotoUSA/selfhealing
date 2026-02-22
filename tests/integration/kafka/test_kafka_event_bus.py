@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any
 
-import pytest
 
 
 class TestKafkaProducerIntegration:

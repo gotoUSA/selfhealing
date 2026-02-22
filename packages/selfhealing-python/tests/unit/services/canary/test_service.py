@@ -12,22 +12,21 @@ Canary Rollout Service 단위 테스트.
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
-from datetime import datetime
 
+import pytest
+
+from selfhealing.services.canary.locking import ConfigLockError
 from selfhealing.services.canary.models import (
-    CanaryState,
-    CanaryStage,
     CanaryRollout,
+    CanaryStage,
+    CanaryState,
 )
 from selfhealing.services.canary.service import (
     CanaryRolloutService,
     get_canary_rollout_service,
     reset_canary_rollout_service,
 )
-from selfhealing.services.canary.locking import ConfigLockError
-
 
 # =============================================================================
 # Fixtures
@@ -63,14 +62,14 @@ def service(mock_redis):
     reset_canary_rollout_service()
     svc = CanaryRolloutService()
     svc._redis_client = mock_redis
-    
+
     # Mock config_lock
     mock_lock = MagicMock()
     mock_lock.is_locked.return_value = False
     mock_lock.acquire.return_value = True
     mock_lock.release.return_value = True
     svc._config_lock = mock_lock
-    
+
     # Mock chaos_guard
     mock_guard = MagicMock()
     mock_guard.check_conflict.return_value = MagicMock(
@@ -82,12 +81,12 @@ def service(mock_redis):
         warning_message=None,
     )
     svc._chaos_guard = mock_guard
-    
+
     # Mock config_history
     mock_history = MagicMock()
     mock_history.get_current_version.return_value = None
     svc._config_history = mock_history
-    
+
     return svc
 
 
@@ -103,7 +102,7 @@ class TestCreateRollout:
         """롤아웃 생성 성공."""
         with patch("selfhealing.services.canary.service.get_key_prefix") as mock_prefix:
             mock_prefix.return_value = "selfhealing:test:"
-            
+
             with patch("selfhealing.services.canary.service.log_canary_action"):
                 rollout = service.create_rollout(
                     config_type="circuit_breaker",
@@ -112,7 +111,7 @@ class TestCreateRollout:
                     created_by="admin@example.com",
                     reason="Reduce threshold",
                 )
-        
+
         assert rollout is not None
         assert rollout.config_type == "circuit_breaker"
         assert rollout.new_values == {"failure_threshold": 3}
@@ -134,7 +133,7 @@ class TestCreateRollout:
         """이미 락이 있을 때 ConfigLockError."""
         service._config_lock.is_locked.return_value = True
         service._config_lock.get_lock_owner.return_value = "other-rollout"
-        
+
         with pytest.raises(ConfigLockError):
             service.create_rollout(
                 config_type="circuit_breaker",
@@ -148,10 +147,10 @@ class TestCreateRollout:
         mock_version = MagicMock()
         mock_version.values = {"failure_threshold": 5}
         service._config_history.get_current_version.return_value = mock_version
-        
+
         with patch("selfhealing.services.canary.service.get_key_prefix") as mock_prefix:
             mock_prefix.return_value = "selfhealing:test:"
-            
+
             with patch("selfhealing.services.canary.service.log_canary_action"):
                 rollout = service.create_rollout(
                     config_type="circuit_breaker",
@@ -159,7 +158,7 @@ class TestCreateRollout:
                     stages=sample_stages,
                     created_by="admin@example.com",
                 )
-        
+
         assert rollout.previous_values == {"failure_threshold": 5}
 
 
@@ -176,7 +175,7 @@ class TestStartRollout:
         """테스트용 롤아웃."""
         with patch("selfhealing.services.canary.service.get_key_prefix") as mock_prefix:
             mock_prefix.return_value = "selfhealing:test:"
-            
+
             with patch("selfhealing.services.canary.service.log_canary_action"):
                 return service.create_rollout(
                     config_type="circuit_breaker",
@@ -191,10 +190,10 @@ class TestStartRollout:
         with patch.object(service, "get_rollout", return_value=rollout):
             with patch("selfhealing.services.canary.service.get_key_prefix") as mock_prefix:
                 mock_prefix.return_value = "selfhealing:test:"
-                
+
                 with patch("selfhealing.services.canary.service.log_canary_action"):
                     result = service.start_rollout(rollout.id)
-        
+
         assert result is True
         assert rollout.state == CanaryState.CANARY
         assert rollout.current_stage_index == 0
@@ -203,16 +202,16 @@ class TestStartRollout:
         """존재하지 않는 롤아웃."""
         with patch.object(service, "get_rollout", return_value=None):
             result = service.start_rollout("nonexistent")
-        
+
         assert result is False
 
     def test_start_rollout_wrong_state(self, service, rollout):
         """이미 시작된 롤아웃."""
         rollout.state = CanaryState.CANARY
-        
+
         with patch.object(service, "get_rollout", return_value=rollout):
             result = service.start_rollout(rollout.id)
-        
+
         assert result is False
 
 
@@ -239,15 +238,15 @@ class TestPromote:
             ],
             created_by="admin",
         )
-        
+
         with patch.object(service, "get_rollout", return_value=rollout):
             with patch.object(service, "_save_rollout"):
                 with patch("selfhealing.services.canary.service.get_key_prefix") as mock_prefix:
                     mock_prefix.return_value = "selfhealing:test:"
-                    
+
                     with patch("selfhealing.services.canary.service.log_canary_action"):
                         result = service.promote(rollout.id)
-        
+
         assert result is True
         assert rollout.current_stage_index == 1
 
@@ -266,13 +265,13 @@ class TestPromote:
             ],
             created_by="admin",
         )
-        
+
         with patch.object(service, "get_rollout", return_value=rollout):
             with patch.object(service, "_save_rollout"):
                 with patch.object(service, "_remove_from_active"):
                     with patch("selfhealing.services.canary.service.log_canary_action"):
                         result = service.promote(rollout.id)
-        
+
         assert result is True
         assert rollout.state == CanaryState.COMPLETED
         assert rollout.completed_at is not None
@@ -288,10 +287,10 @@ class TestPromote:
             stages=[],
             created_by="admin",
         )
-        
+
         with patch.object(service, "get_rollout", return_value=rollout):
             result = service.promote(rollout.id)
-        
+
         assert result is False
 
 
@@ -318,14 +317,14 @@ class TestRollback:
             ],
             created_by="admin",
         )
-        
+
         with patch.object(service, "get_rollout", return_value=rollout):
             with patch.object(service, "_save_rollout"):
                 with patch.object(service, "_remove_from_active"):
                     with patch.object(service, "_apply_config_to_cluster"):
                         with patch("selfhealing.services.canary.service.log_canary_action"):
                             result = service.rollback(rollout.id, reason="High error rate")
-        
+
         assert result is True
         assert rollout.state == CanaryState.ROLLED_BACK
         assert rollout.rollback_reason == "High error rate"
@@ -342,10 +341,10 @@ class TestRollback:
             stages=[],
             created_by="admin",
         )
-        
+
         with patch.object(service, "get_rollout", return_value=rollout):
             result = service.rollback(rollout.id, reason="Test")
-        
+
         assert result is False
 
 
@@ -368,12 +367,12 @@ class TestPauseResume:
             stages=[],
             created_by="admin",
         )
-        
+
         with patch.object(service, "get_rollout", return_value=rollout):
             with patch.object(service, "_save_rollout"):
                 with patch("selfhealing.services.canary.service.log_canary_action"):
                     result = service.pause(rollout.id)
-        
+
         assert result is True
         assert rollout.state == CanaryState.PAUSED
 
@@ -388,12 +387,12 @@ class TestPauseResume:
             stages=[],
             created_by="admin",
         )
-        
+
         with patch.object(service, "get_rollout", return_value=rollout):
             with patch.object(service, "_save_rollout"):
                 with patch("selfhealing.services.canary.service.log_canary_action"):
                     result = service.resume(rollout.id)
-        
+
         assert result is True
         assert rollout.state == CanaryState.CANARY
 
@@ -409,11 +408,11 @@ class TestSingleton:
     def test_get_canary_rollout_service_returns_same_instance(self):
         """싱글톤 인스턴스 반환."""
         reset_canary_rollout_service()
-        
+
         with patch("selfhealing.services.canary.service._service", None):
             svc1 = get_canary_rollout_service()
             svc2 = get_canary_rollout_service()
-        
+
         # 두 번 호출해도 새 인스턴스 생성은 한 번
         assert svc1 is not None
         assert svc2 is not None

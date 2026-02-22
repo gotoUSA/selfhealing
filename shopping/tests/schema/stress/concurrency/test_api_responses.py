@@ -1,7 +1,6 @@
 """동시 API 요청 응답 일관성 테스트"""
 
 import time
-from decimal import Decimal
 
 import jwt as pyjwt
 import pytest
@@ -83,7 +82,7 @@ class TestConcurrentApiResponses:
         assert success_count == num_requests, f"일부 요청 실패: {success_count}/{num_requests}"
 
         # Assert: 5xx 에러 없음
-        assert error_5xx_count == 0, f"서버 에러 발생!"
+        assert error_5xx_count == 0, "서버 에러 발생!"
 
     def test_concurrent_login_requests(self, db):
         """
@@ -135,7 +134,7 @@ class TestConcurrentApiResponses:
         assert token_count == num_requests, f"일부 응답에 토큰 없음: {token_count}/{num_requests}"
 
         # Assert: 5xx 에러 없음
-        assert error_5xx_count == 0, f"서버 에러 발생!"
+        assert error_5xx_count == 0, "서버 에러 발생!"
 
         # ✅ JWT JTI 고유성 검증 - 동시 로그인에서 토큰 중복 방지
         tokens = [r.get("access_token") for r in results if r.get("access_token")]
@@ -253,7 +252,7 @@ class TestConcurrentApiResponses:
         assert read_json_valid == 10, f"쓰기 중 GET 응답에서 JSON 파싱 오류 발생! " f"(유효: {read_json_valid}/10)"
 
         # Assert: 5xx 에러 없음
-        assert error_5xx_count == 0, f"서버 에러 발생!"
+        assert error_5xx_count == 0, "서버 에러 발생!"
 
         # ✅ 최종 상태 검증 - 장바구니 수량이 논리적으로 맞는지
         # 각 사용자별로 장바구니가 생성되었는지 확인

@@ -12,14 +12,12 @@ Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
 import os
-import sys
 import pytest
 
 # 이 파일의 모든 테스트는 Redis 필요
 pytestmark = pytest.mark.requires_redis
 
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
 
 # Setup Django before importing selfhealing
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
@@ -29,18 +27,14 @@ django.setup()
 
 from selfhealing.utils.time import utc_now
 from selfhealing.services.canary import (
-    CanaryRolloutService,
-    CanaryRollout,
     CanaryStage,
     CanaryState,
     get_canary_rollout_service,
     reset_canary_rollout_service,
 )
-from selfhealing.services.canary.locking import CanaryConfigLock
 from selfhealing.tasks.canary_watchdog import (
     RolloutWatchdog,
     WatchdogConfig,
-    get_rollout_watchdog,
     reset_watchdog,
 )
 

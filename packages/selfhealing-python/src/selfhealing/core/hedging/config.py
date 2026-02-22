@@ -11,10 +11,10 @@ Hedging Configuration - 헷징 전략 설정 및 후보 정의.
 
 from __future__ import annotations
 
-import warnings
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 T = TypeVar("T")
 

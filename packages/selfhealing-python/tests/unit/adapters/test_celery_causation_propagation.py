@@ -13,16 +13,15 @@ Celery Task 호출 시 causation_id 자동 전파 기능을 테스트합니다.
 - 시스템 시작 태스크 (Celery Beat) causation 자동 생성
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from selfhealing.context.causation_context import (
-    CausationContext,
-    CausationInfo,
     CELERY_HEADER_CASCADE_ID,
-    CELERY_HEADER_PARENT_EVENT,
     CELERY_HEADER_CHAIN_DEPTH,
     CELERY_HEADER_NAMESPACE,
+    CELERY_HEADER_PARENT_EVENT,
+    CausationContext,
+    CausationInfo,
     get_causation_for_celery,
     restore_causation_from_celery,
 )
@@ -241,8 +240,8 @@ class TestBeforeTaskPublishHandler:
     def test_handler_disabled_when_config_disabled(self):
         """_config.enabled=False면 동작 안 함."""
         from selfhealing.adapters.celery.signal_hooks import (
-            on_before_task_publish,
             _config,
+            on_before_task_publish,
         )
 
         original_enabled = _config.enabled

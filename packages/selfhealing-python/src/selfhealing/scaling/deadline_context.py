@@ -25,9 +25,9 @@ from __future__ import annotations
 import os
 import re
 import time
+from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Generator
 
 import structlog
 

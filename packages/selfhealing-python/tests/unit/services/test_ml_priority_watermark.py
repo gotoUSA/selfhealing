@@ -13,16 +13,13 @@ Tests for ML Bulkhead Priority Watermark — should_admit_by_priority().
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from selfhealing.services.correlation_engine.service import (
     ML_PRIORITY_WATERMARKS,
     STARVATION_RELIEF_SECONDS,
     CorrelationEngineService,
 )
-
 
 # =============================================================================
 # 상수 계약 검증

@@ -15,25 +15,23 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import time
-from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, patch
 
 import pytest
 
+from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
 from selfhealing.core.hedging.config import (
     HedgingCandidate,
     HedgingConfig,
     HedgingMode,
 )
-from selfhealing.core.hedging.executor import HedgingExecutor
-from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
 from selfhealing.core.hedging.exceptions import (
     HedgingAllFailedError,
     HedgingTimeoutError,
     NonRetryableHedgingError,
 )
-from selfhealing.core.hedging.result import HedgingResult
+from selfhealing.core.hedging.executor import HedgingExecutor
 from selfhealing.core.hedging.latency_tracker import HedgingLatencyTracker
+from selfhealing.core.hedging.result import HedgingResult
 
 
 class TestHedgingConfig:

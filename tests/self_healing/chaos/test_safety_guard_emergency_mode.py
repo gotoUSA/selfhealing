@@ -6,7 +6,6 @@ SafetyGuard가 Emergency Mode LEVEL_2+ 상태에서 Chaos 실험을 차단하는
 Reference: docs/self_healing/middleware_system/26_IMPROVEMENT_PART1_GOVERNANCE_INTEGRATION.md
 """
 
-import pytest
 from unittest.mock import patch, MagicMock
 
 

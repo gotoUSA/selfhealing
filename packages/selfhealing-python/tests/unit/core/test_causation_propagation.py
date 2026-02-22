@@ -5,20 +5,19 @@ request_id → causation_id 전파, Celery 헤더 주입/복원,
 System-initiated Cascade 생성 테스트.
 """
 
+
 import pytest
-from unittest.mock import patch, MagicMock, ANY
-import uuid
 
 from selfhealing.context.causation_context import (
+    CELERY_HEADER_CASCADE_ID,
+    CELERY_HEADER_CHAIN_DEPTH,
+    CELERY_HEADER_NAMESPACE,
+    CELERY_HEADER_PARENT_EVENT,
     CausationContext,
     CausationInfo,
     _current_causation,
     get_causation_for_celery,
     restore_causation_from_celery,
-    CELERY_HEADER_CASCADE_ID,
-    CELERY_HEADER_PARENT_EVENT,
-    CELERY_HEADER_CHAIN_DEPTH,
-    CELERY_HEADER_NAMESPACE,
 )
 
 

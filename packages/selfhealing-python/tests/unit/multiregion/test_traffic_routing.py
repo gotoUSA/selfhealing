@@ -14,14 +14,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from selfhealing.adapters.traffic_routing.logging_adapter import (
+    LoggingTrafficRoutingAdapter,
+)
 from selfhealing.interfaces.traffic_routing import (
     RoutingChange,
     TrafficRoutingAdapter,
 )
-from selfhealing.adapters.traffic_routing.logging_adapter import (
-    LoggingTrafficRoutingAdapter,
-)
-
 
 # =============================================================================
 # RoutingChange 계약 검증 (Contract)

@@ -9,12 +9,10 @@ Tests:
 - 최근 이벤트 조회
 """
 
-import pytest
 
 from selfhealing.audit.self_audit import (
     SelfAuditEvent,
     SelfAuditLogger,
-    SelfAuditStats,
     self_audit,
 )
 

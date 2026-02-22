@@ -3,17 +3,17 @@ Tests for SelfHealingEventBus.
 event_bus.py의 이벤트 버스 구독/발행/해제, 히스토리, 통계, 제어 기능을 검증합니다.
 """
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
 from selfhealing.services.event_bus import (
-    EventType,
     EventPriority,
-    SelfHealingEvent,
     EventSubscription,
+    EventType,
+    SelfHealingEvent,
     SelfHealingEventBus,
 )
-
 
 # =============================================================================
 # Fixtures

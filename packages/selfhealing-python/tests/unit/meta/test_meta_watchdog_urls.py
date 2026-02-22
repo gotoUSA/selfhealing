@@ -6,7 +6,6 @@ urls.py에 등록된 Meta-Watchdog 엔드포인트 테스트.
 """
 
 import os
-import pytest
 
 
 class TestMetaWatchdogUrlRouting:

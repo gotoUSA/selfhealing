@@ -48,12 +48,9 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
-import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict
 from collections import defaultdict
 
 # Ensure project root is in sys.path
@@ -195,18 +192,18 @@ def _update_phase():
         _rollback_stats["phase"] = phase
 
         if phase == "single_failure":
-            print(f"\n🔄 Phase 2: Single Rollback Failure")
-            print(f"   - Injecting failures during rollback operations")
+            print("\n🔄 Phase 2: Single Rollback Failure")
+            print("   - Injecting failures during rollback operations")
         elif phase == "double_failure":
-            print(f"\n💥 Phase 3: Double Failure (Action + Rollback)")
+            print("\n💥 Phase 3: Double Failure (Action + Rollback)")
             print(f"   - Single failures: {_rollback_stats['single_rollback_failures']}")
             print(f"   - Retries attempted: {_rollback_stats['single_rollback_retries']}")
         elif phase == "recovery_observation":
-            print(f"\n🔍 Phase 4: Recovery Observation")
+            print("\n🔍 Phase 4: Recovery Observation")
             print(f"   - Double failures: {_rollback_stats['double_failure_count']}")
             print(f"   - DLQ captured: {_rollback_stats['double_failure_dlq_captured']}")
         elif phase == "consistency_check":
-            print(f"\n✅ Phase 5: Consistency Check")
+            print("\n✅ Phase 5: Consistency Check")
             _perform_final_verification()
 
 
@@ -297,16 +294,16 @@ def _record_reconciliation(needed: bool = False, performed: bool = False, succes
 
 def _perform_final_verification():
     """Perform final verification"""
-    print(f"\n📊 Final Verification:")
+    print("\n📊 Final Verification:")
 
     # Check rollback failure logging
     if _rollback_stats["single_rollback_failures"] > 0:
         # Assume logged if we captured the failures
         _rollback_stats["verification"]["rollback_failure_logged"] = True
-        print(f"   - Rollback failure logged: ✓")
+        print("   - Rollback failure logged: ✓")
     else:
         _rollback_stats["verification"]["rollback_failure_logged"] = True
-        print(f"   - Rollback failure logged: ✓ (No failures to log)")
+        print("   - Rollback failure logged: ✓ (No failures to log)")
 
     # Check secondary retry mechanism
     if _rollback_stats["single_rollback_failures"] > 0:
@@ -316,7 +313,7 @@ def _perform_final_verification():
         print(f"     (Retry rate: {retry_rate:.1%})")
     else:
         _rollback_stats["verification"]["secondary_retry_exists"] = True
-        print(f"   - Secondary retry exists: ✓ (No failures to retry)")
+        print("   - Secondary retry exists: ✓ (No failures to retry)")
 
     # Check DLQ captures failed rollbacks
     if _rollback_stats["double_failure_count"] > 0:
@@ -326,7 +323,7 @@ def _perform_final_verification():
         print(f"     (Capture rate: {dlq_rate:.1%})")
     else:
         _rollback_stats["verification"]["dlq_captures_failed"] = True
-        print(f"   - DLQ captures failed: ✓ (No double failures)")
+        print("   - DLQ captures failed: ✓ (No double failures)")
 
     # Check no double decrement
     _rollback_stats["verification"]["no_double_decrement"] = _rollback_stats["double_decrement_detected"] == 0
@@ -774,14 +771,14 @@ def on_test_start(environment, **kwargs):
     global _rollback_stats
 
     print(f"\n{'='*70}")
-    print(f"🔄 Stage 19: Rollback Failure (Secondary Action) Test")
+    print("🔄 Stage 19: Rollback Failure (Secondary Action) Test")
     print(f"{'='*70}")
-    print(f"Purpose: Verify handling when rollback itself fails")
-    print(f"\nFault Injection:")
-    print(f"  - DB connection failure during rollback")
-    print(f"  - Timeout during compensating transaction")
-    print(f"  - Concurrent rollback conflicts")
-    print(f"\nTest Phases:")
+    print("Purpose: Verify handling when rollback itself fails")
+    print("\nFault Injection:")
+    print("  - DB connection failure during rollback")
+    print("  - Timeout during compensating transaction")
+    print("  - Concurrent rollback conflicts")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_1_BASELINE_DURATION}s): Baseline - Normal rollback")
     print(f"  Phase 2 ({PHASE_2_SINGLE_ROLLBACK_FAILURE}s): Single rollback failures")
     print(f"  Phase 3 ({PHASE_3_DOUBLE_FAILURE}s): Double failures")
@@ -801,48 +798,48 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Generate final report"""
     print(f"\n{'='*70}")
-    print(f"📊 Stage 19: Rollback Failure Test Results")
+    print("📊 Stage 19: Rollback Failure Test Results")
     print(f"{'='*70}")
 
-    print(f"\n📈 Baseline Metrics:")
+    print("\n📈 Baseline Metrics:")
     print(f"   - Operations: {_rollback_stats['baseline_operations']}")
     print(f"   - Rollbacks triggered: {_rollback_stats['baseline_rollbacks_triggered']}")
     print(f"   - Rollbacks success: {_rollback_stats['baseline_rollbacks_success']}")
 
-    print(f"\n🔄 Single Rollback Failure Metrics:")
+    print("\n🔄 Single Rollback Failure Metrics:")
     print(f"   - Attempts: {_rollback_stats['single_rollback_attempts']}")
     print(f"   - Failures: {_rollback_stats['single_rollback_failures']}")
     print(f"   - Retries: {_rollback_stats['single_rollback_retries']}")
     print(f"   - Retry success: {_rollback_stats['single_rollback_retry_success']}")
 
-    print(f"\n💥 Double Failure Metrics:")
+    print("\n💥 Double Failure Metrics:")
     print(f"   - Count: {_rollback_stats['double_failure_count']}")
     print(f"   - DLQ captured: {_rollback_stats['double_failure_dlq_captured']}")
     print(f"   - Manual queued: {_rollback_stats['double_failure_manual_queued']}")
     print(f"   - Unhandled: {_rollback_stats['double_failure_unhandled']}")
 
-    print(f"\n📦 Stock Consistency:")
+    print("\n📦 Stock Consistency:")
     print(f"   - Double decrements detected: {_rollback_stats['double_decrement_detected']}")
     print(f"   - Stock mismatches: {_rollback_stats['stock_mismatches']}")
 
-    print(f"\n📋 DLQ Metrics:")
+    print("\n📋 DLQ Metrics:")
     print(f"   - Insertions: {_rollback_stats['dlq_insertions']}")
     print(f"   - Processing attempts: {_rollback_stats['dlq_processing_attempts']}")
     print(f"   - Processing success: {_rollback_stats['dlq_processing_success']}")
 
-    print(f"\n🔧 Reconciliation:")
+    print("\n🔧 Reconciliation:")
     print(f"   - Needed: {_rollback_stats['reconciliation_needed']}")
     print(f"   - Performed: {_rollback_stats['reconciliation_performed']}")
     print(f"   - Success: {_rollback_stats['reconciliation_success']}")
 
-    print(f"\n✅ Verification Results:")
+    print("\n✅ Verification Results:")
     for check, result in _rollback_stats["verification"].items():
         status = "✓" if result else "✗" if result is False else "?"
         print(f"   - {check}: {status}")
 
     # Recovery Latency Report
     recovery = _rollback_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
+    print("\n🔄 Recovery Latency Metrics:")
 
     all_latencies = (
         recovery["rollback_retry_latencies_ms"]
@@ -871,11 +868,11 @@ def on_test_stop(environment, **kwargs):
         # SLA check
         recovery["sla_compliant"] = max_latency < 5000  # 5s for secondary recovery
         if recovery["sla_compliant"]:
-            print(f"   - SLA Status: ✓ All secondary recoveries under 5s")
+            print("   - SLA Status: ✓ All secondary recoveries under 5s")
         else:
-            print(f"   - SLA Status: ✗ Some recoveries exceeded 5s")
+            print("   - SLA Status: ✗ Some recoveries exceeded 5s")
     else:
-        print(f"   - No secondary recovery operations recorded")
+        print("   - No secondary recovery operations recorded")
 
     print(f"\n{'='*70}\n")
 

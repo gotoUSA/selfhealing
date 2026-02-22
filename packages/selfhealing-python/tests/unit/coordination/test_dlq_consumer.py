@@ -6,20 +6,16 @@ packages/selfhealing-python/tests/unit/coordination/test_dlq_consumer.py
 
 from __future__ import annotations
 
-import threading
 import time
-from dataclasses import dataclass
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.coordination.dlq_consumer import (
-    DLQConsumerCoordinator,
-    DLQ_CONSUMER_RESOURCE,
-)
 from selfhealing.coordination.base import LeadershipState
-
+from selfhealing.coordination.dlq_consumer import (
+    DLQ_CONSUMER_RESOURCE,
+    DLQConsumerCoordinator,
+)
 
 # =============================================================================
 # Fixtures

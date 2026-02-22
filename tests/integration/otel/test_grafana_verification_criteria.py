@@ -11,7 +11,6 @@
 6. Metrics → Traces - Exemplar 클릭 → Trace 상세 표시
 7. 성능 검증 - 대시보드 로딩 < 3초, Trace/로그 검색 < 5초
 """
-import json
 import os
 import time
 import uuid

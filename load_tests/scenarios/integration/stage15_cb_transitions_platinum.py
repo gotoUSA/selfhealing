@@ -35,7 +35,7 @@ import time
 import json
 import random
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -226,24 +226,24 @@ def _update_phase():
 
         if phase == "failure_injection":
             print(f"\n{'='*60}")
-            print(f"[PHASE 2] 🔥 Injecting failures to trigger OPEN state")
-            print(f"   - Using X-Test-Mode header to bypass Rate Limit")
+            print("[PHASE 2] 🔥 Injecting failures to trigger OPEN state")
+            print("   - Using X-Test-Mode header to bypass Rate Limit")
             print(f"{'='*60}")
         elif phase == "wait_recovery":
             print(f"\n{'='*60}")
             print(f"[PHASE 3] ⏳ Waiting for recovery_timeout ({CB_RECOVERY_TIMEOUT}s)")
-            print(f"   - CB should auto-transition: OPEN → HALF_OPEN")
+            print("   - CB should auto-transition: OPEN → HALF_OPEN")
             print(f"{'='*60}")
         elif phase == "flapping":
             print(f"\n{'='*60}")
-            print(f"[PHASE 4] 🌀 FLAPPING CHAOS - Mixed success/failure injection")
-            print(f"   - Testing CB resilience to unstable service")
-            print(f"   - Expected: CB should detect flapping and stay OPEN")
+            print("[PHASE 4] 🌀 FLAPPING CHAOS - Mixed success/failure injection")
+            print("   - Testing CB resilience to unstable service")
+            print("   - Expected: CB should detect flapping and stay OPEN")
             print(f"{'='*60}")
         elif phase == "recovery":
             print(f"\n{'='*60}")
-            print(f"[PHASE 5] ✅ Final Recovery - Stable success injection")
-            print(f"   - CB should transition: HALF_OPEN → CLOSED")
+            print("[PHASE 5] ✅ Final Recovery - Stable success injection")
+            print("   - CB should transition: HALF_OPEN → CLOSED")
             print(f"{'='*60}")
 
 
@@ -367,7 +367,7 @@ class CBPlatinumUser(HttpUser):
         if _cb_stats["start_time"] is None:
             _cb_stats["start_time"] = time.time()
             print(f"\n{'='*60}")
-            print(f"🔥 STAGE 15 PLATINUM - Circuit Breaker Extreme Test")
+            print("🔥 STAGE 15 PLATINUM - Circuit Breaker Extreme Test")
             print(f"{'='*60}")
             print(f"DNA: {STAGE_DNA['type']} grade")
             print(f"Modules: {STAGE_DNA['required_modules']}")
@@ -427,9 +427,9 @@ class CBPlatinumUser(HttpUser):
                         self.admin_token = data.get("access") or data.get("token")
                     
                     if self.admin_token:
-                        print(f"✅ Admin login successful (PLATINUM mode)")
+                        print("✅ Admin login successful (PLATINUM mode)")
                     else:
-                        print(f"⚠️ Admin login: token not found in response")
+                        print("⚠️ Admin login: token not found in response")
                     response.success()
                 else:
                     print(f"⚠️ Admin login: {response.status_code}")
@@ -452,9 +452,9 @@ class CBPlatinumUser(HttpUser):
             ) as response:
                 if response.status_code == 200:
                     _cb_stats["platinum"]["emergency_released"] = True
-                    print(f"🔓 Emergency Mode released successfully")
+                    print("🔓 Emergency Mode released successfully")
                 elif response.status_code == 404:
-                    print(f"ℹ️ Emergency Mode not active (404)")
+                    print("ℹ️ Emergency Mode not active (404)")
                 else:
                     print(f"⚠️ Emergency release: {response.status_code}")
                 response.success()
@@ -490,7 +490,7 @@ class CBPlatinumUser(HttpUser):
                     if initial:
                         _cb_stats["initial_state"] = "closed"
                         _cb_stats["current_state"] = "closed"
-                        print(f"🔍 CB not exists, assuming CLOSED")
+                        print("🔍 CB not exists, assuming CLOSED")
                     response.success()
                     return "closed"
                 else:
@@ -534,7 +534,7 @@ class CBPlatinumUser(HttpUser):
                     # Record state change if CB opened
                     if cb_state.lower() == "open" or force_opened or state_changed:
                         _record_state_change("open", "failure_injection")
-                        print(f"🔴 CB transitioned to OPEN state!")
+                        print("🔴 CB transitioned to OPEN state!")
                         
                         # ⚡ CRITICAL: Switch to auto mode to allow automatic transitions
                         self._switch_to_auto_mode()
@@ -679,7 +679,7 @@ class CBPlatinumUser(HttpUser):
                     
                     if recovery_success or state_after == "closed":
                         _record_state_change("closed", "recovery")
-                        print(f"🟢 CB recovered to CLOSED state!")
+                        print("🟢 CB recovered to CLOSED state!")
                 response.success()
         except Exception as e:
             print(f"Inject success error: {e}")
@@ -807,7 +807,7 @@ def on_test_stop(environment, **kwargs):
     print("=" * 70)
 
     # DNA Info
-    print(f"\n🧬 DNA Configuration:")
+    print("\n🧬 DNA Configuration:")
     print(f"   Type: {STAGE_DNA['type']}")
     print(f"   Required Modules: {STAGE_DNA['required_modules']}")
     print(f"   max_recovery_budget: {STAGE_DNA['config']['max_recovery_budget']}")

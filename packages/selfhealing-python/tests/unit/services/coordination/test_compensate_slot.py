@@ -11,13 +11,20 @@ Unit tests for Recovery Step Compensate Slot.
 - 하위 호환성 (기존 JSON 역직렬화)
 """
 
+from unittest.mock import MagicMock, call, patch
+
 import pytest
-from unittest.mock import MagicMock, patch, call
 
 from selfhealing.core.state_backend import MemoryStateBackend
+from selfhealing.services.coordination.distributed_recovery_lock import (
+    InMemoryRecoveryLock,
+)
 from selfhealing.services.coordination.enums import (
     CompensationStatus,
     RecoveryStatus,
+)
+from selfhealing.services.coordination.recovery_coordinator import (
+    RecoveryCoordinator,
 )
 from selfhealing.services.coordination.recovery_state import (
     CompensationResult,
@@ -25,13 +32,6 @@ from selfhealing.services.coordination.recovery_state import (
     RecoveryStep,
     RecoveryStepType,
 )
-from selfhealing.services.coordination.distributed_recovery_lock import (
-    InMemoryRecoveryLock,
-)
-from selfhealing.services.coordination.recovery_coordinator import (
-    RecoveryCoordinator,
-)
-
 
 # =========================================================================
 # Contract Tests — 설계 계약값 검증 (하드코딩 필수)

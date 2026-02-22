@@ -27,8 +27,9 @@ from __future__ import annotations
 
 import asyncio
 import warnings
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 import structlog
 

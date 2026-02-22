@@ -21,29 +21,22 @@ Related code:
 from __future__ import annotations
 
 import json
-import os
 import tempfile
 import threading
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from selfhealing.audit.graceful_degradation import (
     HashChainWALRecovery,
-    HashChainGracefulDegradationManager,
-    FallbackConfig,
-    HashChainFallbackChain,
 )
 from selfhealing.audit.integrity import (
-    StartupHashChainSync,
     PendingSequenceManager,
+    StartupHashChainSync,
     compute_hash,
 )
-
 
 # =============================================================================
 # Mock Redis for Crash Tests
@@ -135,7 +128,7 @@ class CrashTestRedis:
     def expire(self, key: str, seconds: int) -> int:
         return 1
 
-    def pipeline(self, transaction: bool = True) -> "MockPipeline":
+    def pipeline(self, transaction: bool = True) -> MockPipeline:
         return MockPipeline(self)
 
 
@@ -146,16 +139,16 @@ class MockPipeline:
         self._redis = redis
         self._commands: list[tuple] = []
 
-    def set(self, key: str, value: Any, ex: int = None) -> "MockPipeline":
+    def set(self, key: str, value: Any, ex: int = None) -> MockPipeline:
         """ex parameter is accepted but ignored in mock."""
         self._commands.append(("set", key, value))
         return self
 
-    def hset(self, key: str, mapping: dict = None, **kwargs) -> "MockPipeline":
+    def hset(self, key: str, mapping: dict = None, **kwargs) -> MockPipeline:
         self._commands.append(("hset", key, mapping or kwargs))
         return self
 
-    def delete(self, *keys) -> "MockPipeline":
+    def delete(self, *keys) -> MockPipeline:
         self._commands.append(("delete", keys))
         return self
 

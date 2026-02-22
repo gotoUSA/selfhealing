@@ -14,7 +14,6 @@ Environment Variables:
 
 """
 
-from typing import Any
 
 import structlog
 from pydantic import Field, model_validator

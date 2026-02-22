@@ -13,7 +13,7 @@ import concurrent.futures
 import os
 import time
 import uuid
-from typing import List, Tuple
+from typing import Tuple
 
 import pytest
 import requests

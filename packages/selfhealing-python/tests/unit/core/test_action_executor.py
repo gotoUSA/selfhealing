@@ -4,19 +4,17 @@ core/action_executor.py의 Action, ActionResult, ActionExecutor에 대한 단위
 실행 모드별 동작(ACTIVE, SHADOW, EVALUATION)과 편의 함수를 검증합니다.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
 from datetime import datetime
+from unittest.mock import patch
 
 from selfhealing.core.action_executor import (
     Action,
-    ActionResult,
     ActionExecutor,
-    get_action_executor,
+    ActionResult,
     execute_action,
+    get_action_executor,
 )
 from selfhealing.core.execution_mode import ExecutionMode, ExecutionModeType
-
 
 # =============================================================================
 # Action Dataclass Tests

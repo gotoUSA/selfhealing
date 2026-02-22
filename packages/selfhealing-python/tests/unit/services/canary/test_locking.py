@@ -11,14 +11,14 @@ Canary Config Lock 단위 테스트.
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from selfhealing.services.canary.locking import (
-    ConfigLockError,
-    CanaryConfigLock,
-)
+import pytest
 
+from selfhealing.services.canary.locking import (
+    CanaryConfigLock,
+    ConfigLockError,
+)
 
 # =============================================================================
 # Test: ConfigLockError

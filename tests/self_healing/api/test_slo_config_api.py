@@ -11,7 +11,6 @@ Coverage:
 """
 
 import os
-import sys
 
 # Configure Django settings before importing DRF components
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "")
@@ -52,7 +51,6 @@ from selfhealing.api.django.serializers.config import (
     SLODefinitionSerializer,
 )
 from selfhealing.services.runtime_config import (
-    RuntimeConfigManager,
     reset_runtime_config_manager,
     get_runtime_config_manager,
 )

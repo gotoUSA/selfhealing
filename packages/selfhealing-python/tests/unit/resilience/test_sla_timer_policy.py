@@ -14,7 +14,6 @@ import pytest
 
 from selfhealing.settings import SLASettings as SLAConfig
 
-
 # Shopping domain-specific SLA thresholds for testing
 SHOPPING_SLA_THRESHOLDS = {
     "payment": 1,      # 1 hour - strictest (revenue impact)
@@ -67,7 +66,7 @@ class TestSLAConfigDefaults:
             Verify custom thresholds can be set via constructor.
         """
         config = get_shopping_sla_config()
-        
+
         assert config.thresholds_by_domain["payment"] == 1
         assert config.thresholds_by_domain["point"] == 4
         assert config.thresholds_by_domain["inventory"] == 2
@@ -303,10 +302,10 @@ class TestSLAConfigModifiability:
             Verify thresholds can be added/updated at runtime (for adapter configuration).
         """
         config = SLAConfig()
-        
+
         # Add custom thresholds
         config.thresholds_by_domain["custom_domain"] = 12
-        
+
         result = config.get_threshold("custom_domain")
         assert result == timedelta(hours=12)
 
@@ -317,6 +316,6 @@ class TestSLAConfigModifiability:
         """
         config = SLAConfig()
         result = config.get_all_thresholds()
-        
+
         assert "default" in result
         assert result["default"] == timedelta(hours=24)

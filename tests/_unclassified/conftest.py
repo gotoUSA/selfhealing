@@ -6,11 +6,9 @@ failure injectors, latency simulators, and resource trackers.
 """
 
 import random
-import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Callable, Generator
-from unittest.mock import MagicMock
+from typing import Generator
 
 import pytest
 from django.utils import timezone

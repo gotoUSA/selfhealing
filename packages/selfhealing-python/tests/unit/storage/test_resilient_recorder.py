@@ -10,9 +10,6 @@ Tests:
 
 import threading
 import time
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from selfhealing.audit.ring_buffer import RingBuffer
 from selfhealing.audit.self_audit import SelfAuditLogger
@@ -288,21 +285,9 @@ class TestModuleImports:
     def test_import_from_audit_package(self):
         """audit 패키지에서 임포트."""
         from selfhealing.audit import (
-            BackpressureStrategy,
-            ChecksumResult,
             RingBuffer,
-            RingBufferStats,
-            SelfAuditEvent,
             SelfAuditLogger,
-            SelfAuditStats,
-            checksum_dict,
-            compute_checksum,
             compute_crc32,
-            compute_sha256,
-            self_audit,
-            verify_checksum,
-            verify_crc32,
-            verify_sha256,
         )
 
         assert RingBuffer is not None

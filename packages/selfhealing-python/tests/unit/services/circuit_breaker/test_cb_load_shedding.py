@@ -11,43 +11,39 @@ Load Shedding (부분적 차단) 테스트
     - 5.4: LoadSheddingDashboard (API 엔드포인트)
 """
 
-import pytest
 from datetime import datetime, timezone
-from unittest.mock import Mock, patch, MagicMock
 
-from selfhealing.services.circuit_breaker.models import (
-    ServiceConfig,
-    SheddingLevel,
-    LoadSheddingPolicy,
-)
+import pytest
+
 from selfhealing.services.circuit_breaker.load_shedding import (
-    # Data Models
-    SheddingState,
-    SheddingDecision,
-    SheddingStatus,
-    SheddingAuditEntry,
     # Error Rate Provider
     ErrorRateProvider,
+    # Dashboard
+    LoadSheddingDashboard,
     # Manager
     LoadSheddingManager,
     # Middleware
     LoadSheddingMiddleware,
-    # Dashboard
-    LoadSheddingDashboard,
-    # Convenience Functions
-    get_load_shedding_manager,
-    reset_load_shedding_manager,
-    get_load_shedding_middleware,
-    get_load_shedding_dashboard,
-    register_load_shedding_service,
+    SheddingAuditEntry,
+    SheddingDecision,
+    # Data Models
+    SheddingState,
+    SheddingStatus,
     evaluate_shedding,
-    should_allow_shedding_request,
-    is_shedding_active,
+    get_load_shedding_manager,
     get_shedding_status,
+    is_shedding_active,
+    register_load_shedding_service,
+    reset_load_shedding_manager,
     set_service_error_rate,
+    should_allow_shedding_request,
     update_shedding_state,
 )
-
+from selfhealing.services.circuit_breaker.models import (
+    LoadSheddingPolicy,
+    ServiceConfig,
+    SheddingLevel,
+)
 
 # =============================================================================
 # Test Fixtures

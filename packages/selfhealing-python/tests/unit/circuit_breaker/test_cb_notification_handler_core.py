@@ -11,8 +11,9 @@ Tests for:
 핵심 알림 연결
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import MagicMock, patch
 
 
 class TestCircuitBreakerOpenedNotifyHandler:
@@ -38,9 +39,8 @@ class TestCircuitBreakerOpenedNotifyHandler:
     def test_handler_registered_on_default_handlers(self):
         """register_default_handlers에서 CB OPENED 핸들러가 등록되는지 확인."""
         from selfhealing.services.event_bus import (
-            register_default_handlers,
             EventType,
-            _on_circuit_breaker_opened_notify,
+            register_default_handlers,
         )
 
         register_default_handlers()
@@ -55,9 +55,9 @@ class TestCircuitBreakerOpenedNotifyHandler:
     def test_notification_sent_on_cb_opened(self, mock_delay):
         """CB OPENED 이벤트 발생 시 Celery task로 알림이 위임되는지 확인."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_opened_notify,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_opened_notify,
         )
 
         event = SelfHealingEvent(
@@ -85,9 +85,9 @@ class TestCircuitBreakerOpenedNotifyHandler:
     def test_trace_url_included_in_delay_args(self, mock_delay):
         """Celery task 위임 시 trace_url이 전달되는지 확인."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_opened_notify,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_opened_notify,
         )
 
         event = SelfHealingEvent(
@@ -110,9 +110,9 @@ class TestCircuitBreakerOpenedNotifyHandler:
     def test_service_name_passed_to_delay(self, mock_delay):
         """Celery task 위임 시 service_name이 정확히 전달되는지 확인."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_opened_notify,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_opened_notify,
         )
 
         event = SelfHealingEvent(
@@ -130,9 +130,9 @@ class TestCircuitBreakerOpenedNotifyHandler:
     def test_celery_enqueue_failure_does_not_raise(self, mock_delay):
         """Celery task 위임 실패 시 예외가 전파되지 않는지 확인 (신뢰성 보장)."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_opened_notify,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_opened_notify,
         )
 
         mock_delay.side_effect = Exception("Broker connection failed!")
@@ -153,9 +153,9 @@ class TestCircuitBreakerOpenedNotifyHandler:
     def test_unknown_service_name_handled(self, mock_delay):
         """service_name이 없을 때 'unknown'으로 전달되는지 확인."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_opened_notify,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_opened_notify,
         )
 
         event = SelfHealingEvent(
@@ -190,8 +190,8 @@ class TestEventBusIntegration:
     def test_full_integration_via_emit(self, mock_notify_delay, mock_throttle, mock_snapshot_delay):
         """emit을 통한 전체 흐름 테스트 — Celery task 위임 확인."""
         from selfhealing.services.event_bus import (
-            register_default_handlers,
             EventType,
+            register_default_handlers,
         )
 
         register_default_handlers()
@@ -216,9 +216,9 @@ class TestEventBusIntegration:
     def test_handler_priority_is_high(self):
         """CB OPENED 핸들러의 우선순위가 HIGH인지 확인."""
         from selfhealing.services.event_bus import (
-            register_default_handlers,
-            EventType,
             EventPriority,
+            EventType,
+            register_default_handlers,
         )
 
         register_default_handlers()

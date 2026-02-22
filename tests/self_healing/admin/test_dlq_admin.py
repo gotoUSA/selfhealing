@@ -5,7 +5,6 @@ shopping 앱의 FailedOperationAdmin이 BaseDLQEntryAdmin을
 올바르게 상속하는지 확인합니다.
 """
 
-import pytest
 from unittest.mock import MagicMock
 
 

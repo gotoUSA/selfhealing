@@ -99,14 +99,9 @@ from decimal import Decimal
 from enum import Enum, auto
 
 import pytest
-from hypothesis import given, settings as hypothesis_settings, Phase
-from hypothesis import strategies as st
 from rest_framework import status
 
-from shopping.models.cart import Cart, CartItem
-from shopping.models.order import Order, OrderItem
 from shopping.models.product import Category, Product
-from shopping.models.user import User
 
 
 # ==========================================

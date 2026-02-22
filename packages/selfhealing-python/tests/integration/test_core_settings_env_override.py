@@ -26,7 +26,9 @@ class TestRuntimeFeedbackEnvOverride:
     @pytest.fixture(autouse=True)
     def reset_settings(self):
         """테스트 전후 싱글톤 초기화."""
-        from selfhealing.settings.runtime_feedback import reset_runtime_feedback_settings
+        from selfhealing.settings.runtime_feedback import (
+            reset_runtime_feedback_settings,
+        )
         reset_runtime_feedback_settings()
         yield
         reset_runtime_feedback_settings()
@@ -36,18 +38,20 @@ class TestRuntimeFeedbackEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_RUNTIME_MAX_CONSECUTIVE_FAILURES": "10",
         }):
-            from selfhealing.settings.runtime_feedback import reset_runtime_feedback_settings
             from selfhealing.core.runtime_feedback import RuntimeFeedbackLoop
-            
+            from selfhealing.settings.runtime_feedback import (
+                reset_runtime_feedback_settings,
+            )
+
             reset_runtime_feedback_settings()
-            
+
             mock_metrics = mock.MagicMock()
             mock_decision = mock.MagicMock()
             mock_safety = mock.MagicMock()
             mock_audit = mock.MagicMock()
             mock_alert = mock.MagicMock()
             mock_applier = mock.MagicMock()
-            
+
             loop = RuntimeFeedbackLoop(
                 metrics_adapter=mock_metrics,
                 decision_engine=mock_decision,
@@ -56,7 +60,7 @@ class TestRuntimeFeedbackEnvOverride:
                 alert_manager=mock_alert,
                 config_applier=mock_applier,
             )
-            
+
             # 환경변수로 변경된 값이 적용됨
             assert loop.MAX_CONSECUTIVE_FAILURES == 10
 
@@ -65,13 +69,15 @@ class TestRuntimeFeedbackEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_RUNTIME_ROLLBACK_COOLDOWN": "300",
         }):
-            from selfhealing.settings.runtime_feedback import reset_runtime_feedback_settings
             from selfhealing.core.runtime_feedback import RuntimeFeedbackLoop
-            
+            from selfhealing.settings.runtime_feedback import (
+                reset_runtime_feedback_settings,
+            )
+
             reset_runtime_feedback_settings()
-            
+
             mock_deps = [mock.MagicMock() for _ in range(6)]
-            
+
             loop = RuntimeFeedbackLoop(
                 metrics_adapter=mock_deps[0],
                 decision_engine=mock_deps[1],
@@ -80,7 +86,7 @@ class TestRuntimeFeedbackEnvOverride:
                 alert_manager=mock_deps[4],
                 config_applier=mock_deps[5],
             )
-            
+
             assert loop.POST_ROLLBACK_COOLDOWN == 300
 
 
@@ -101,19 +107,19 @@ class TestAutoRollbackGuardEnvOverride:
             "SELFHEALING_ROLLBACK_ERROR_RATE_MAJOR": "0.05",
             "SELFHEALING_ROLLBACK_ERROR_RATE_CRITICAL": "0.15",
         }):
-            from selfhealing.settings.auto_rollback import reset_auto_rollback_settings
             from selfhealing.core.auto_rollback_guard import AutoRollbackGuard
-            
+            from selfhealing.settings.auto_rollback import reset_auto_rollback_settings
+
             reset_auto_rollback_settings()
-            
+
             mock_metrics = mock.MagicMock()
             mock_applier = mock.MagicMock()
-            
+
             guard = AutoRollbackGuard(
                 metrics_provider=mock_metrics,
                 config_applier=mock_applier,
             )
-            
+
             # 더 민감한 임계값으로 변경됨
             assert guard.ERROR_RATE_MAJOR == 0.05
             assert guard.ERROR_RATE_CRITICAL == 0.15
@@ -124,19 +130,19 @@ class TestAutoRollbackGuardEnvOverride:
             "SELFHEALING_ROLLBACK_LATENCY_MAJOR_MS": "3000",
             "SELFHEALING_ROLLBACK_LATENCY_CRITICAL_MS": "7000",
         }):
-            from selfhealing.settings.auto_rollback import reset_auto_rollback_settings
             from selfhealing.core.auto_rollback_guard import AutoRollbackGuard
-            
+            from selfhealing.settings.auto_rollback import reset_auto_rollback_settings
+
             reset_auto_rollback_settings()
-            
+
             mock_metrics = mock.MagicMock()
             mock_applier = mock.MagicMock()
-            
+
             guard = AutoRollbackGuard(
                 metrics_provider=mock_metrics,
                 config_applier=mock_applier,
             )
-            
+
             assert guard.LATENCY_MAJOR_MS == 3000
             assert guard.LATENCY_CRITICAL_MS == 7000
 
@@ -146,19 +152,19 @@ class TestAutoRollbackGuardEnvOverride:
             "SELFHEALING_ROLLBACK_FAILURES_ALERT": "5",
             "SELFHEALING_ROLLBACK_FAILURES_EMERGENCY": "10",
         }):
-            from selfhealing.settings.auto_rollback import reset_auto_rollback_settings
             from selfhealing.core.auto_rollback_guard import AutoRollbackGuard
-            
+            from selfhealing.settings.auto_rollback import reset_auto_rollback_settings
+
             reset_auto_rollback_settings()
-            
+
             mock_metrics = mock.MagicMock()
             mock_applier = mock.MagicMock()
-            
+
             guard = AutoRollbackGuard(
                 metrics_provider=mock_metrics,
                 config_applier=mock_applier,
             )
-            
+
             assert guard.CONSECUTIVE_FAILURES_ALERT == 5
             assert guard.CONSECUTIVE_FAILURES_EMERGENCY == 10
 
@@ -182,11 +188,11 @@ class TestAdaptiveJitterEnvOverride:
             "SELFHEALING_JITTER_ERROR_BUDGET_DANGER_THRESHOLD": "0.3",
             "SELFHEALING_JITTER_ERROR_BUDGET_SAFE_THRESHOLD": "0.6",
         }):
-            from selfhealing.settings.jitter import reset_jitter_settings
             from selfhealing.core.adaptive_jitter import AdaptiveJitter
-            
+            from selfhealing.settings.jitter import reset_jitter_settings
+
             reset_jitter_settings()
-            
+
             # 25% 남음: 기본값에서는 danger(0.2) 초과로 normal, 변경 후에는 danger(0.3) 미만으로 stressed
             jitter_range = AdaptiveJitter.get_jitter_range(
                 error_budget_remaining=0.25,
@@ -203,11 +209,11 @@ class TestAdaptiveJitterEnvOverride:
             "SELFHEALING_JITTER_LOAD_HIGH_THRESHOLD": "0.7",
             "SELFHEALING_JITTER_LOAD_LOW_THRESHOLD": "0.2",
         }):
-            from selfhealing.settings.jitter import reset_jitter_settings
             from selfhealing.core.adaptive_jitter import AdaptiveJitter
-            
+            from selfhealing.settings.jitter import reset_jitter_settings
+
             reset_jitter_settings()
-            
+
             # 75% 부하: 기본값에서는 high(0.8) 미만으로 normal, 변경 후에는 high(0.7) 초과로 stressed
             jitter_range = AdaptiveJitter.get_jitter_range(
                 error_budget_remaining=0.6,  # 충분한 에러 버짓
@@ -234,21 +240,21 @@ class TestSafetyBoundsEnvOverride:
             "SELFHEALING_BOUNDS_TIMEOUT_MS_MIN": "500",
             "SELFHEALING_BOUNDS_TIMEOUT_MS_MAX": "20000",
         }):
-            from selfhealing.settings.safety_bounds import reset_safety_bounds_settings
             from selfhealing.core.safety_bounds import SafetyBounds
-            
+            from selfhealing.settings.safety_bounds import reset_safety_bounds_settings
+
             reset_safety_bounds_settings()
-            
+
             bounds = SafetyBounds()
-            
+
             # 변경된 min/max 범위 확인
             assert bounds.bounds["timeout_ms"].min_value == 500
             assert bounds.bounds["timeout_ms"].max_value == 20000
-            
+
             # clamp_to_bounds로 클램핑 동작 확인: 100 → 500 (min), 30000 → 20000 (max)
             clamped_min = bounds.clamp_to_bounds("timeout_ms", 100)
             clamped_max = bounds.clamp_to_bounds("timeout_ms", 30000)
-            
+
             assert clamped_min == 500
             assert clamped_max == 20000
 
@@ -257,16 +263,16 @@ class TestSafetyBoundsEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_BOUNDS_TIMEOUT_MS_MAX_CHANGE": "0.5",  # 50%로 확대
         }):
-            from selfhealing.settings.safety_bounds import reset_safety_bounds_settings
             from selfhealing.core.safety_bounds import SafetyBounds
-            
+            from selfhealing.settings.safety_bounds import reset_safety_bounds_settings
+
             reset_safety_bounds_settings()
-            
+
             bounds = SafetyBounds()
-            
+
             # 변경된 max_change_per_cycle 확인
             assert bounds.bounds["timeout_ms"].max_change_per_cycle == 0.5
-            
+
             # clamp_to_bounds로 제한된 조정폭 확인: current=1000, new=2000 (100% 변경 시도)
             # 기본값 0.3이면 1000 → 1300, 0.5면 1000 → 1500
             limited = bounds.clamp_to_bounds("timeout_ms", 2000, current_value=1000)
@@ -290,11 +296,11 @@ class TestStateCacheEnvOverride:
             "SELFHEALING_STATE_CACHE_BASE_TTL": "10.0",
             "SELFHEALING_STATE_CACHE_JITTER_RANGE": "2.0",
         }):
-            from selfhealing.settings.state_cache import reset_state_cache_settings
             from selfhealing.core.state_cache import CBStateCache
-            
+            from selfhealing.settings.state_cache import reset_state_cache_settings
+
             reset_state_cache_settings()
-            
+
             # TTL 범위 확인: 10.0 ± 2.0 = 8.0 ~ 12.0
             for _ in range(20):
                 ttl = CBStateCache._calculate_ttl()
@@ -307,7 +313,9 @@ class TestResourceMonitorEnvOverride:
     @pytest.fixture(autouse=True)
     def reset_settings(self):
         """테스트 전후 싱글톤 초기화."""
-        from selfhealing.settings.resource_monitor import reset_resource_monitor_settings
+        from selfhealing.settings.resource_monitor import (
+            reset_resource_monitor_settings,
+        )
         reset_resource_monitor_settings()
         yield
         reset_resource_monitor_settings()
@@ -317,11 +325,13 @@ class TestResourceMonitorEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_RESOURCE_SAFETY_MARGIN": "0.25",
         }):
-            from selfhealing.settings.resource_monitor import reset_resource_monitor_settings
             from selfhealing.core.resource_monitor import CgroupResourceMonitor
-            
+            from selfhealing.settings.resource_monitor import (
+                reset_resource_monitor_settings,
+            )
+
             reset_resource_monitor_settings()
-            
+
             margin = CgroupResourceMonitor._get_default_safety_margin()
             assert margin == 0.25
 
@@ -342,11 +352,13 @@ class TestApplyStrategyEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_APPLY_CIRCUIT_BREAKER_DELAY": "60",
         }):
-            from selfhealing.settings.apply_strategy import reset_apply_strategy_settings
             from selfhealing.core.apply_strategy import get_default_apply_config
-            
+            from selfhealing.settings.apply_strategy import (
+                reset_apply_strategy_settings,
+            )
+
             reset_apply_strategy_settings()
-            
+
             config = get_default_apply_config("circuit_breaker")
             assert config.delay_seconds == 60
 
@@ -355,11 +367,13 @@ class TestApplyStrategyEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_APPLY_SECURITY_DELAY": "120",
         }):
-            from selfhealing.settings.apply_strategy import reset_apply_strategy_settings
             from selfhealing.core.apply_strategy import get_default_apply_config
-            
+            from selfhealing.settings.apply_strategy import (
+                reset_apply_strategy_settings,
+            )
+
             reset_apply_strategy_settings()
-            
+
             config = get_default_apply_config("security")
             assert config.delay_seconds == 120
 
@@ -370,11 +384,13 @@ class TestApplyStrategyEnvOverride:
             "SELFHEALING_APPLY_DLQ_DELAY": "25",
             "SELFHEALING_APPLY_ERROR_BUDGET_DELAY": "45",
         }):
-            from selfhealing.settings.apply_strategy import reset_apply_strategy_settings
             from selfhealing.core.apply_strategy import get_default_apply_config
-            
+            from selfhealing.settings.apply_strategy import (
+                reset_apply_strategy_settings,
+            )
+
             reset_apply_strategy_settings()
-            
+
             assert get_default_apply_config("retry").delay_seconds == 20
             assert get_default_apply_config("dlq").delay_seconds == 25
             assert get_default_apply_config("error_budget").delay_seconds == 45
@@ -396,14 +412,16 @@ class TestDecisionEngineEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_DECISION_MIN_CHANGE_RATIO": "0.1",
         }):
-            from selfhealing.settings.decision_engine import reset_decision_engine_settings
             from selfhealing.core.decision_engine import DecisionEngine
-            
+            from selfhealing.settings.decision_engine import (
+                reset_decision_engine_settings,
+            )
+
             reset_decision_engine_settings()
-            
+
             mock_provider = mock.MagicMock()
             engine = DecisionEngine(config_provider=mock_provider)
-            
+
             # 더 큰 변경 비율 요구 (5% → 10%)
             assert engine.MIN_CHANGE_RATIO == 0.1
 
@@ -415,18 +433,18 @@ class TestDecisionEngineEnvOverride:
             "SELFHEALING_DECISION_CONFIDENCE_VALUE_VERY_LOW": "0.4",
         }):
             from selfhealing.settings.decision_engine import (
-                reset_decision_engine_settings,
                 get_decision_engine_settings,
+                reset_decision_engine_settings,
             )
-            
+
             reset_decision_engine_settings()
             settings = get_decision_engine_settings()
-            
+
             # 변경된 임계값 확인
             assert settings.confidence_samples_very_low == 10
             assert settings.confidence_samples_low == 30
             assert settings.confidence_value_very_low == 0.4
-            
+
             # 5 샘플: 변경 전에는 0.5 (5 <= x < 20), 변경 후에는 0.4 (x < 10)
             assert settings.get_sample_confidence(5) == 0.4
 
@@ -438,18 +456,18 @@ class TestDecisionEngineEnvOverride:
             "SELFHEALING_DECISION_STABILITY_FACTOR_UNSTABLE": "0.6",
         }):
             from selfhealing.settings.decision_engine import (
-                reset_decision_engine_settings,
                 get_decision_engine_settings,
+                reset_decision_engine_settings,
             )
-            
+
             reset_decision_engine_settings()
             settings = get_decision_engine_settings()
-            
+
             # 변경된 임계값 확인
             assert settings.stability_cv_high == 0.4
             assert settings.stability_cv_medium == 0.15
             assert settings.stability_factor_unstable == 0.6
-            
+
             # CV 0.45: 변경 전에는 0.85 (0.2 < x <= 0.5), 변경 후에는 0.6 (x > 0.4)
             assert settings.get_stability_factor(0.45) == 0.6
 
@@ -460,15 +478,19 @@ class TestMultipleCoreModulesEnvOverride:
     @pytest.fixture(autouse=True)
     def reset_all_settings(self):
         """테스트 전후 모든 싱글톤 초기화."""
-        from selfhealing.settings.runtime_feedback import reset_runtime_feedback_settings
+        from selfhealing.settings.apply_strategy import reset_apply_strategy_settings
         from selfhealing.settings.auto_rollback import reset_auto_rollback_settings
+        from selfhealing.settings.decision_engine import reset_decision_engine_settings
         from selfhealing.settings.jitter import reset_jitter_settings
+        from selfhealing.settings.resource_monitor import (
+            reset_resource_monitor_settings,
+        )
+        from selfhealing.settings.runtime_feedback import (
+            reset_runtime_feedback_settings,
+        )
         from selfhealing.settings.safety_bounds import reset_safety_bounds_settings
         from selfhealing.settings.state_cache import reset_state_cache_settings
-        from selfhealing.settings.resource_monitor import reset_resource_monitor_settings
-        from selfhealing.settings.apply_strategy import reset_apply_strategy_settings
-        from selfhealing.settings.decision_engine import reset_decision_engine_settings
-        
+
         reset_runtime_feedback_settings()
         reset_auto_rollback_settings()
         reset_jitter_settings()
@@ -507,31 +529,39 @@ class TestMultipleCoreModulesEnvOverride:
             # DecisionEngine
             "SELFHEALING_DECISION_MIN_CHANGE_RATIO": "0.08",
         }):
-            from selfhealing.settings.runtime_feedback import (
-                reset_runtime_feedback_settings, get_runtime_feedback_settings
+            from selfhealing.settings.apply_strategy import (
+                get_apply_strategy_settings,
+                reset_apply_strategy_settings,
             )
             from selfhealing.settings.auto_rollback import (
-                reset_auto_rollback_settings, get_auto_rollback_settings
-            )
-            from selfhealing.settings.jitter import (
-                reset_jitter_settings, get_jitter_settings
-            )
-            from selfhealing.settings.safety_bounds import (
-                reset_safety_bounds_settings, get_safety_bounds_settings
-            )
-            from selfhealing.settings.state_cache import (
-                reset_state_cache_settings, get_state_cache_settings
-            )
-            from selfhealing.settings.resource_monitor import (
-                reset_resource_monitor_settings, get_resource_monitor_settings
-            )
-            from selfhealing.settings.apply_strategy import (
-                reset_apply_strategy_settings, get_apply_strategy_settings
+                get_auto_rollback_settings,
+                reset_auto_rollback_settings,
             )
             from selfhealing.settings.decision_engine import (
-                reset_decision_engine_settings, get_decision_engine_settings
+                get_decision_engine_settings,
+                reset_decision_engine_settings,
             )
-            
+            from selfhealing.settings.jitter import (
+                get_jitter_settings,
+                reset_jitter_settings,
+            )
+            from selfhealing.settings.resource_monitor import (
+                get_resource_monitor_settings,
+                reset_resource_monitor_settings,
+            )
+            from selfhealing.settings.runtime_feedback import (
+                get_runtime_feedback_settings,
+                reset_runtime_feedback_settings,
+            )
+            from selfhealing.settings.safety_bounds import (
+                get_safety_bounds_settings,
+                reset_safety_bounds_settings,
+            )
+            from selfhealing.settings.state_cache import (
+                get_state_cache_settings,
+                reset_state_cache_settings,
+            )
+
             # 모든 싱글톤 리셋
             reset_runtime_feedback_settings()
             reset_auto_rollback_settings()
@@ -541,36 +571,36 @@ class TestMultipleCoreModulesEnvOverride:
             reset_resource_monitor_settings()
             reset_apply_strategy_settings()
             reset_decision_engine_settings()
-            
+
             # 각 모듈별 환경변수 반영 확인
             runtime = get_runtime_feedback_settings()
             assert runtime.max_consecutive_failures == 8
             # 다른 필드는 기본값 유지
             assert runtime.rollback_cooldown == 120
-            
+
             rollback = get_auto_rollback_settings()
             assert rollback.error_rate_major == 0.08
             assert rollback.error_rate_critical == 0.3  # 기본값
-            
+
             jitter = get_jitter_settings()
             assert jitter.error_budget_danger_threshold == 0.15
             assert jitter.error_budget_safe_threshold == 0.5  # 기본값
-            
+
             bounds = get_safety_bounds_settings()
             assert bounds.timeout_ms_min == 250
             assert bounds.timeout_ms_max == 30000  # 기본값
-            
+
             cache = get_state_cache_settings()
             assert cache.base_ttl == 8.0
             assert cache.jitter_range == 0.5  # 기본값
-            
+
             resource = get_resource_monitor_settings()
             assert resource.safety_margin == 0.20
-            
+
             strategy = get_apply_strategy_settings()
             assert strategy.circuit_breaker_delay == 45
             assert strategy.security_delay == 60  # 기본값
-            
+
             decision = get_decision_engine_settings()
             assert decision.min_change_ratio == 0.08
             assert decision.confidence_samples_very_low == 5  # 기본값
@@ -581,22 +611,24 @@ class TestMultipleCoreModulesEnvOverride:
         with mock.patch.dict(os.environ, {
             "SELFHEALING_RUNTIME_MAX_CONSECUTIVE_FAILURES": "15",
         }):
-            from selfhealing.settings.runtime_feedback import (
-                reset_runtime_feedback_settings, get_runtime_feedback_settings
-            )
             from selfhealing.settings.auto_rollback import (
-                reset_auto_rollback_settings, get_auto_rollback_settings
+                get_auto_rollback_settings,
+                reset_auto_rollback_settings,
             )
-            
+            from selfhealing.settings.runtime_feedback import (
+                get_runtime_feedback_settings,
+                reset_runtime_feedback_settings,
+            )
+
             reset_runtime_feedback_settings()
             reset_auto_rollback_settings()
-            
+
             runtime = get_runtime_feedback_settings()
             rollback = get_auto_rollback_settings()
-            
+
             # RuntimeFeedback만 변경됨
             assert runtime.max_consecutive_failures == 15
-            
+
             # AutoRollback은 기본값 유지
             assert rollback.error_rate_major == 0.1
             assert rollback.failures_alert == 3

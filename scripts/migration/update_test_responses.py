@@ -5,7 +5,6 @@ HTTP 200 OK → HTTP 202 Accepted로 변경
 응답 데이터 구조 변경
 """
 import re
-import sys
 
 def update_test_file(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:

@@ -21,8 +21,6 @@ django.setup()
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.api.django.admission_control import (
     AdmissionControlMiddleware,
 )

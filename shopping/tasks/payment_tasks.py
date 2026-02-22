@@ -178,7 +178,6 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
     Returns:
         처리 결과
     """
-    from ..models.user import User
 
     logger.info(f"결제 최종 처리 시작: payment_id={payment_id}")
 
@@ -205,7 +204,7 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
     # [CHAOS] Partial failure after PG success - simulate internal failure
     try:
         inject_partial_failure_after_pg(payment_id=payment_id, pg_response=toss_response)
-    except PartialFailureError as e:
+    except PartialFailureError:
         logger.error(f"[CHAOS] Partial failure injected in finalize: payment_id={payment_id}")
         # Trigger rollback
         rollback_payment_failure.delay(

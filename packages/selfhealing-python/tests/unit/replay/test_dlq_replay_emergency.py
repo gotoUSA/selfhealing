@@ -12,7 +12,6 @@ ReplayService의 안전 체크 동작 검증:
 - Celery 없이도 ReplayService 단독 사용 가능
 """
 
-import pytest
 from enum import Enum
 
 
@@ -31,7 +30,7 @@ class TestEmergencyLevelCheckLogic:
         """LEVEL_2에서 차단되는지 테스트."""
         level = MockEmergencyLevel.LEVEL_2
         is_blocked = level.value >= MockEmergencyLevel.LEVEL_2.value
-        
+
         assert is_blocked is True
         assert level.name == "LEVEL_2"
 
@@ -39,7 +38,7 @@ class TestEmergencyLevelCheckLogic:
         """LEVEL_3에서 차단되는지 테스트."""
         level = MockEmergencyLevel.LEVEL_3
         is_blocked = level.value >= MockEmergencyLevel.LEVEL_2.value
-        
+
         assert is_blocked is True
         assert level.name == "LEVEL_3"
 
@@ -47,7 +46,7 @@ class TestEmergencyLevelCheckLogic:
         """LEVEL_1에서 허용되는지 테스트."""
         level = MockEmergencyLevel.LEVEL_1
         is_blocked = level.value >= MockEmergencyLevel.LEVEL_2.value
-        
+
         assert is_blocked is False
         assert level.name == "LEVEL_1"
 
@@ -55,7 +54,7 @@ class TestEmergencyLevelCheckLogic:
         """NORMAL에서 허용되는지 테스트."""
         level = MockEmergencyLevel.NORMAL
         is_blocked = level.value >= MockEmergencyLevel.LEVEL_2.value
-        
+
         assert is_blocked is False
         assert level.name == "NORMAL"
 
@@ -67,18 +66,18 @@ class TestErrorBudgetCheckLogic:
         """에러 예산 부족 시 차단되는지 테스트."""
         budget_percent = 5.0
         threshold_percent = 20.0
-        
+
         is_blocked = budget_percent < threshold_percent
-        
+
         assert is_blocked is True
 
     def test_allowed_when_budget_sufficient(self):
         """에러 예산 충분 시 허용되는지 테스트."""
         budget_percent = 80.0
         threshold_percent = 20.0
-        
+
         is_blocked = budget_percent < threshold_percent
-        
+
         assert is_blocked is False
 
 
@@ -93,20 +92,20 @@ class TestFailSafeBehavior:
             is_blocked = True
         except ImportError:
             is_blocked = False  # 허용
-        
+
         assert is_blocked is False
 
     def test_exception_should_allow_operation(self):
         """예외 발생 시에도 작업이 허용되어야 함 (Fail-safe)."""
         def failing_check():
             raise RuntimeError("Backend unavailable")
-        
+
         try:
             failing_check()
             is_blocked = True
         except Exception:
             is_blocked = False  # Fail-safe: 허용
-        
+
         assert is_blocked is False
 
 
@@ -120,7 +119,7 @@ class TestReplayServiceSafetyChecks:
         순서: Kill Switch → Emergency Level → ErrorBudgetGate
         """
         check_order = ["kill_switch", "emergency_level", "error_budget_gate"]
-        
+
         assert check_order[0] == "kill_switch"
         assert check_order[1] == "emergency_level"
         assert check_order[2] == "error_budget_gate"
@@ -129,7 +128,7 @@ class TestReplayServiceSafetyChecks:
         """replay_batch도 동일한 안전 체크를 수행하는지 테스트."""
         batch_checks = ["kill_switch", "emergency_level", "error_budget_gate"]
         single_checks = ["kill_switch", "emergency_level", "error_budget_gate"]
-        
+
         assert batch_checks == single_checks
 
 
@@ -143,7 +142,7 @@ class TestServiceLayerArchitecture:
             "emergency_level": "ReplayService",
             "error_budget_gate": "ReplayService",
         }
-        
+
         for check, location in safety_checks_location.items():
             assert location == "ReplayService"
 
@@ -154,14 +153,14 @@ class TestServiceLayerArchitecture:
             "call_service_method",
             "convert_result_to_dict",
         ]
-        
+
         # 안전 체크는 Celery Task의 책임이 아님
         assert "safety_checks" not in celery_responsibilities
 
     def test_can_use_without_celery(self):
         """Celery 없이도 ReplayService를 사용할 수 있는지 테스트."""
         can_use_without_celery = True
-        
+
         assert can_use_without_celery is True
 
 
@@ -176,7 +175,7 @@ class TestKillSwitchPhilosophy:
         문제를 해결할 수 있어야 함.
         """
         kill_switch_checks_config = False
-        
+
         assert kill_switch_checks_config is False
 
 
@@ -187,22 +186,21 @@ class TestServiceFunctionsExist:
         """거버넌스 체크 함수들이 import 가능한지 테스트."""
         try:
             from selfhealing.services.governance_checks import (
-                check_all_governance,
                 GovernanceCheckResult,
+                check_all_governance,
             )
             imported = True
         except ImportError:
             imported = False
-        
+
         assert imported is True, "거버넌스 체크 함수들을 import할 수 있어야 함"
-    
+
     def test_replay_service_uses_governance_checks(self):
         """ReplayService가 governance_checks를 사용하는지 테스트."""
-        from selfhealing.services.replay_service import ReplayService
-        
+
         # ReplayService가 check_all_governance를 import하는지 확인
         import selfhealing.services.replay_service as rs_module
-        
+
         assert hasattr(rs_module, 'check_all_governance'), \
             "ReplayService 모듈이 check_all_governance를 사용해야 함"
 

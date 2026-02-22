@@ -22,12 +22,9 @@ UNIT_TEST_GUIDELINES.md 준수:
 from __future__ import annotations
 
 import warnings
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
-
 
 # =============================================================================
 # should_allow_with_fallback DeprecationWarning 계약 검증 (Contract)

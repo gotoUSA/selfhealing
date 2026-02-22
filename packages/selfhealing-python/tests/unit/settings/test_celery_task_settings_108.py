@@ -12,7 +12,6 @@ Celery 태스크 데코레이터의 하드코딩된 설정값을 Settings 기반
 import pytest
 from pydantic import ValidationError
 
-
 # =============================================================================
 # CleanupSettings Tests (확장된 Celery Task 재시도 설정)
 # =============================================================================
@@ -32,9 +31,9 @@ class TestCleanupSettingsCeleryTask:
     def test_default_archive_dlq_task_settings(self):
         """archive_old_dlq_entries_task 기본값 검증."""
         from selfhealing.settings.cleanup import CleanupSettings
-        
+
         settings = CleanupSettings()
-        
+
         # cleanup_tasks.py: max_retries=2, default_retry_delay=300
         assert settings.archive_dlq_max_retries == 2
         assert settings.archive_dlq_retry_delay == 300
@@ -42,9 +41,9 @@ class TestCleanupSettingsCeleryTask:
     def test_default_expired_config_task_settings(self):
         """cleanup_expired_config_task 기본값 검증."""
         from selfhealing.settings.cleanup import CleanupSettings
-        
+
         settings = CleanupSettings()
-        
+
         # cleanup_tasks.py: max_retries=2, default_retry_delay=300
         assert settings.expired_config_max_retries == 2
         assert settings.expired_config_retry_delay == 300
@@ -52,9 +51,9 @@ class TestCleanupSettingsCeleryTask:
     def test_default_approval_task_settings(self):
         """expire_approval_requests_task 기본값 검증."""
         from selfhealing.settings.cleanup import CleanupSettings
-        
+
         settings = CleanupSettings()
-        
+
         # cleanup_tasks.py: max_retries=2, default_retry_delay=300
         assert settings.approval_max_retries == 2
         assert settings.approval_retry_delay == 300
@@ -62,9 +61,9 @@ class TestCleanupSettingsCeleryTask:
     def test_default_purge_dlq_task_settings(self):
         """purge_archived_dlq_entries_task 기본값 검증 (고위험 작업)."""
         from selfhealing.settings.cleanup import CleanupSettings
-        
+
         settings = CleanupSettings()
-        
+
         # cleanup_tasks.py: max_retries=1, default_retry_delay=600
         assert settings.purge_dlq_max_retries == 1
         assert settings.purge_dlq_retry_delay == 600
@@ -72,13 +71,13 @@ class TestCleanupSettingsCeleryTask:
     def test_env_override_cleanup_task_settings(self, monkeypatch):
         """환경변수로 Cleanup 태스크 설정 오버라이드 검증."""
         from selfhealing.settings.cleanup import CleanupSettings
-        
+
         monkeypatch.setenv("SELFHEALING_CLEANUP_ARCHIVE_DLQ_MAX_RETRIES", "5")
         monkeypatch.setenv("SELFHEALING_CLEANUP_ARCHIVE_DLQ_RETRY_DELAY", "600")
         monkeypatch.setenv("SELFHEALING_CLEANUP_PURGE_DLQ_MAX_RETRIES", "2")
-        
+
         settings = CleanupSettings()
-        
+
         assert settings.archive_dlq_max_retries == 5
         assert settings.archive_dlq_retry_delay == 600
         assert settings.purge_dlq_max_retries == 2
@@ -86,11 +85,11 @@ class TestCleanupSettingsCeleryTask:
     def test_validation_purge_max_retries_limit(self):
         """purge_dlq_max_retries 최대값(3) 검증 - 고위험 작업."""
         from selfhealing.settings.cleanup import CleanupSettings
-        
+
         # 최대값 허용
         settings = CleanupSettings(purge_dlq_max_retries=3)
         assert settings.purge_dlq_max_retries == 3
-        
+
         # 최대값 초과 시 ValidationError
         with pytest.raises(ValidationError):
             CleanupSettings(purge_dlq_max_retries=4)
@@ -115,13 +114,13 @@ class TestDailyReportSettings:
     def test_default_values(self):
         """기본값이 daily_report.py의 Celery 데코레이터 값과 일치하는지 검증."""
         from selfhealing.settings.daily_report import DailyReportSettings
-        
+
         settings = DailyReportSettings()
-        
+
         # daily_report.py: max_retries=2, default_retry_delay=300
         assert settings.max_retries == 2
         assert settings.retry_delay == 300
-        
+
         # 기본 채널 및 시간
         assert settings.default_channels == ["slack"]
         assert settings.default_hour == 9
@@ -130,26 +129,26 @@ class TestDailyReportSettings:
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
         from selfhealing.settings.daily_report import DailyReportSettings
-        
+
         monkeypatch.setenv("SELFHEALING_DAILY_REPORT_MAX_RETRIES", "5")
         monkeypatch.setenv("SELFHEALING_DAILY_REPORT_RETRY_DELAY", "600")
-        
+
         settings = DailyReportSettings()
-        
+
         assert settings.max_retries == 5
         assert settings.retry_delay == 600
 
     def test_validation_max_retries_range(self):
         """max_retries 값 범위(0-10) 검증."""
         from selfhealing.settings.daily_report import DailyReportSettings
-        
+
         # 범위 내 값은 허용
         settings = DailyReportSettings(max_retries=0)
         assert settings.max_retries == 0
-        
+
         settings = DailyReportSettings(max_retries=10)
         assert settings.max_retries == 10
-        
+
         # 범위 초과 값은 ValidationError
         with pytest.raises(ValidationError):
             DailyReportSettings(max_retries=11)
@@ -158,12 +157,11 @@ class TestDailyReportSettings:
         """싱글톤 패턴 동작 검증."""
         from selfhealing.settings.daily_report import (
             get_daily_report_settings,
-            reset_daily_report_settings,
         )
-        
+
         settings1 = get_daily_report_settings()
         settings2 = get_daily_report_settings()
-        
+
         assert settings1 is settings2
 
 
@@ -186,9 +184,9 @@ class TestGovernanceSettingsCeleryTask:
     def test_default_expiry_check_task_settings(self):
         """check_emergency_mode_expiry_task 기본값 검증."""
         from selfhealing.settings.governance import GovernanceSettings
-        
+
         settings = GovernanceSettings()
-        
+
         # governance.py: max_retries=3, default_retry_delay=60
         assert settings.expiry_check_max_retries == 3
         assert settings.expiry_check_retry_delay == 60
@@ -196,12 +194,12 @@ class TestGovernanceSettingsCeleryTask:
     def test_env_override_governance_task_settings(self, monkeypatch):
         """환경변수로 Governance 태스크 설정 오버라이드 검증."""
         from selfhealing.settings.governance import GovernanceSettings
-        
+
         monkeypatch.setenv("SELFHEALING_GOVERNANCE_EXPIRY_CHECK_MAX_RETRIES", "5")
         monkeypatch.setenv("SELFHEALING_GOVERNANCE_EXPIRY_CHECK_RETRY_DELAY", "120")
-        
+
         settings = GovernanceSettings()
-        
+
         assert settings.expiry_check_max_retries == 5
         assert settings.expiry_check_retry_delay == 120
 
@@ -225,9 +223,9 @@ class TestApplyStrategySettingsCeleryTask:
     def test_default_pending_task_settings(self):
         """apply_pending_config_changes 태스크 기본값 검증."""
         from selfhealing.settings.apply_strategy import ApplyStrategySettings
-        
+
         settings = ApplyStrategySettings()
-        
+
         # config_apply.py: max_retries=3, default_retry_delay=10
         assert settings.pending_max_retries == 3
         assert settings.pending_retry_delay == 10
@@ -235,9 +233,9 @@ class TestApplyStrategySettingsCeleryTask:
     def test_default_graceful_task_settings(self):
         """apply_graceful_config_change 태스크 기본값 검증."""
         from selfhealing.settings.apply_strategy import ApplyStrategySettings
-        
+
         settings = ApplyStrategySettings()
-        
+
         # config_apply.py: max_retries=10, default_retry_delay=5
         assert settings.graceful_max_retries == 10
         assert settings.graceful_retry_delay == 5
@@ -245,22 +243,22 @@ class TestApplyStrategySettingsCeleryTask:
     def test_default_cleanup_max_age_hours(self):
         """cleanup_expired_config_changes 태스크 기본값 검증."""
         from selfhealing.settings.apply_strategy import ApplyStrategySettings
-        
+
         settings = ApplyStrategySettings()
-        
+
         # config_apply.py: max_age_hours=24
         assert settings.cleanup_max_age_hours == 24
 
     def test_env_override_apply_task_settings(self, monkeypatch):
         """환경변수로 Apply 태스크 설정 오버라이드 검증."""
         from selfhealing.settings.apply_strategy import ApplyStrategySettings
-        
+
         monkeypatch.setenv("SELFHEALING_APPLY_PENDING_MAX_RETRIES", "5")
         monkeypatch.setenv("SELFHEALING_APPLY_GRACEFUL_MAX_RETRIES", "15")
         monkeypatch.setenv("SELFHEALING_APPLY_CLEANUP_MAX_AGE_HOURS", "48")
-        
+
         settings = ApplyStrategySettings()
-        
+
         assert settings.pending_max_retries == 5
         assert settings.graceful_max_retries == 15
         assert settings.cleanup_max_age_hours == 48
@@ -285,9 +283,9 @@ class TestChaosSettingsCeleryTask:
     def test_default_experiment_task_settings(self):
         """run_scheduled_experiments_task 기본값 검증."""
         from selfhealing.settings.chaos import ChaosSettings
-        
+
         settings = ChaosSettings()
-        
+
         # chaos_scheduler.py: max_retries=0, soft_time_limit=300, time_limit=360
         assert settings.scheduler_experiment_max_retries == 0
         assert settings.scheduler_experiment_soft_time_limit == 300
@@ -296,9 +294,9 @@ class TestChaosSettingsCeleryTask:
     def test_default_report_task_settings(self):
         """generate_daily_resilience_report_task 기본값 검증."""
         from selfhealing.settings.chaos import ChaosSettings
-        
+
         settings = ChaosSettings()
-        
+
         # chaos_scheduler.py: max_retries=3, default_retry_delay=300
         assert settings.scheduler_report_max_retries == 3
         assert settings.scheduler_report_retry_delay == 300
@@ -306,9 +304,9 @@ class TestChaosSettingsCeleryTask:
     def test_default_cleanup_and_pending_task_settings(self):
         """cleanup_expired_approvals_task, check_pending_approvals_task 기본값 검증."""
         from selfhealing.settings.chaos import ChaosSettings
-        
+
         settings = ChaosSettings()
-        
+
         # chaos_scheduler.py: max_retries=1 for both
         assert settings.scheduler_cleanup_max_retries == 1
         assert settings.scheduler_pending_check_max_retries == 1
@@ -316,13 +314,13 @@ class TestChaosSettingsCeleryTask:
     def test_env_override_chaos_scheduler_settings(self, monkeypatch):
         """환경변수로 Chaos Scheduler 설정 오버라이드 검증."""
         from selfhealing.settings.chaos import ChaosSettings
-        
+
         monkeypatch.setenv("SELFHEALING_CHAOS_SCHEDULER_EXPERIMENT_MAX_RETRIES", "1")
         monkeypatch.setenv("SELFHEALING_CHAOS_SCHEDULER_EXPERIMENT_SOFT_TIME_LIMIT", "600")
         monkeypatch.setenv("SELFHEALING_CHAOS_SCHEDULER_REPORT_MAX_RETRIES", "5")
-        
+
         settings = ChaosSettings()
-        
+
         assert settings.scheduler_experiment_max_retries == 1
         assert settings.scheduler_experiment_soft_time_limit == 600
         assert settings.scheduler_report_max_retries == 5
@@ -330,11 +328,11 @@ class TestChaosSettingsCeleryTask:
     def test_validation_experiment_max_retries_limit(self):
         """scheduler_experiment_max_retries 최대값(3) 검증 - 안전상 낮게 제한."""
         from selfhealing.settings.chaos import ChaosSettings
-        
+
         # 최대값 허용
         settings = ChaosSettings(scheduler_experiment_max_retries=3)
         assert settings.scheduler_experiment_max_retries == 3
-        
+
         # 최대값 초과 시 ValidationError
         with pytest.raises(ValidationError):
             ChaosSettings(scheduler_experiment_max_retries=4)
@@ -351,9 +349,9 @@ class TestSettingsIntegration:
     def test_recovery_tasks_settings_integration(self):
         """RecoveryTasksSettings 값이 recovery_tasks.py에 적용되는지 검증."""
         from selfhealing.settings.recovery_tasks import get_recovery_tasks_settings
-        
+
         settings = get_recovery_tasks_settings()
-        
+
         # 설정값이 존재하고 유효한 범위인지 확인
         assert 0 <= settings.check_trigger_max_retries <= 10
         assert 5 <= settings.check_trigger_retry_delay <= 600
@@ -363,9 +361,9 @@ class TestSettingsIntegration:
     def test_cleanup_settings_integration(self):
         """CleanupSettings 값이 cleanup_tasks.py에 적용되는지 검증."""
         from selfhealing.settings.cleanup import get_cleanup_settings
-        
+
         settings = get_cleanup_settings()
-        
+
         # 설정값이 존재하고 유효한 범위인지 확인
         assert 0 <= settings.archive_dlq_max_retries <= 10
         assert 10 <= settings.archive_dlq_retry_delay <= 1800
@@ -373,9 +371,9 @@ class TestSettingsIntegration:
     def test_daily_report_settings_integration(self):
         """DailyReportSettings 값이 daily_report.py에 적용되는지 검증."""
         from selfhealing.settings.daily_report import get_daily_report_settings
-        
+
         settings = get_daily_report_settings()
-        
+
         # 설정값이 존재하고 유효한 범위인지 확인
         assert 0 <= settings.max_retries <= 10
         assert 30 <= settings.retry_delay <= 1800
@@ -383,9 +381,9 @@ class TestSettingsIntegration:
     def test_governance_settings_integration(self):
         """GovernanceSettings 값이 governance.py에 적용되는지 검증."""
         from selfhealing.settings.governance import get_governance_settings
-        
+
         settings = get_governance_settings()
-        
+
         # 설정값이 존재하고 유효한 범위인지 확인
         assert 0 <= settings.expiry_check_max_retries <= 10
         assert 10 <= settings.expiry_check_retry_delay <= 600
@@ -393,9 +391,9 @@ class TestSettingsIntegration:
     def test_apply_strategy_settings_integration(self):
         """ApplyStrategySettings 값이 config_apply.py에 적용되는지 검증."""
         from selfhealing.settings.apply_strategy import get_apply_strategy_settings
-        
+
         settings = get_apply_strategy_settings()
-        
+
         # 설정값이 존재하고 유효한 범위인지 확인
         assert 0 <= settings.pending_max_retries <= 10
         assert 1 <= settings.pending_retry_delay <= 300
@@ -404,9 +402,9 @@ class TestSettingsIntegration:
     def test_chaos_settings_integration(self):
         """ChaosSettings 값이 chaos_scheduler.py에 적용되는지 검증."""
         from selfhealing.settings.chaos import get_chaos_settings
-        
+
         settings = get_chaos_settings()
-        
+
         # 설정값이 존재하고 유효한 범위인지 확인
         assert 0 <= settings.scheduler_experiment_max_retries <= 3
         assert 60 <= settings.scheduler_experiment_soft_time_limit <= 1800

@@ -4,7 +4,7 @@ Circuit Breaker API Client.
 Circuit Breaker 제어 및 상태 조회 API.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from .base import BaseClient
 

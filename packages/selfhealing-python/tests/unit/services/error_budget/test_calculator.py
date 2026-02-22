@@ -7,9 +7,7 @@ Covers:
 - SLO integration
 """
 
-import pytest
-from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from datetime import timedelta
 
 
 class TestErrorBudgetCalculatorInit:
@@ -97,7 +95,7 @@ class TestCalculateBudgetStatus:
     def test_calculate_uses_slo_window(self):
         """Test calculation uses SLO window days."""
         from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
-        from selfhealing.slo import SLOConfig, SLO, SLI
+        from selfhealing.slo import SLI, SLO, SLOConfig
 
         slo_config = SLOConfig(slos=[SLO(name="availability", sli=SLI.AVAILABILITY, target=0.999, window_days=7)])
 
@@ -140,9 +138,8 @@ class TestCalculateBudgetStatus:
 
     def test_calculate_with_custom_time_window(self):
         """Test calculation with custom time window."""
-        from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
         from selfhealing.core.timezone import now
-        from datetime import timedelta
+        from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
 
         end_time = now()
         start_time = end_time - timedelta(days=7)
@@ -163,7 +160,7 @@ class TestBudgetCalculation:
     def test_budget_total_from_slo(self):
         """Test budget total calculated from SLO."""
         from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
-        from selfhealing.slo import SLOConfig, SLO, SLI
+        from selfhealing.slo import SLI, SLO, SLOConfig
 
         # 99.9% SLO over 30 days = 43.2 minutes of allowed downtime
         slo_config = SLOConfig(slos=[SLO(name="availability", sli=SLI.AVAILABILITY, target=0.999, window_days=30)])

@@ -34,7 +34,6 @@ import pytest
 # =============================================================================
 from tests.factories.constants import (
     RedisTestConfig,
-    CeleryTestConfig,
     DatabaseTestConfig,
 )
 

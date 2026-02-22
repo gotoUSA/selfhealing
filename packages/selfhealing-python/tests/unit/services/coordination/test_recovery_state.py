@@ -10,14 +10,14 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md
 """
 
+
 import pytest
-from datetime import datetime, timezone
 
 from selfhealing.services.coordination.enums import RecoveryStatus
 from selfhealing.services.coordination.recovery_state import (
-    RecoveryStepType,
-    RecoveryStep,
     RecoverySession,
+    RecoveryStep,
+    RecoveryStepType,
 )
 
 

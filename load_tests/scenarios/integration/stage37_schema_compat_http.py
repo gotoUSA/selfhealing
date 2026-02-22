@@ -36,7 +36,6 @@ import random
 import json
 import threading
 import traceback
-from datetime import datetime
 from decimal import Decimal
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field
@@ -243,7 +242,7 @@ class SchemaValidator:
                     errors.append(f"invalid_amount:negative:{amount}")
                     _metrics.data_corruption_detected += 1
             except Exception:
-                errors.append(f"type_mismatch:total_amount")
+                errors.append("type_mismatch:total_amount")
                 _metrics.record_schema_error("type_mismatch")
         
         # 상태 검증
@@ -300,7 +299,7 @@ class APIClient:
                 if self.token:
                     self.session.headers["Authorization"] = f"Bearer {self.token}"
                 return True
-        except Exception as e:
+        except Exception:
             _metrics.auth_errors += 1
         return False
     
@@ -328,7 +327,7 @@ class APIClient:
                 _metrics.record_request(False, elapsed)
                 return None, elapsed, response.status_code
                 
-        except Exception as e:
+        except Exception:
             elapsed = time.time() - start
             _metrics.record_request(False, elapsed)
             return None, elapsed, 0
@@ -357,7 +356,7 @@ class APIClient:
                 _metrics.record_request(False, elapsed)
                 return None, elapsed, response.status_code
                 
-        except Exception as e:
+        except Exception:
             elapsed = time.time() - start
             _metrics.record_request(False, elapsed)
             return None, elapsed, 0
@@ -818,22 +817,22 @@ def run_integration_tests():
     print(f"{STAGE_NAME} Final Report")
     print(f"{'='*60}")
     
-    print(f"\n📊 Test Results:")
+    print("\n📊 Test Results:")
     print(f"   Passed:  {results['passed']}/{results['total']}")
     print(f"   Failed:  {results['failed']}/{results['total']}")
     
-    print(f"\n📈 API Metrics:")
+    print("\n📈 API Metrics:")
     summary = _metrics.get_summary()
     for key, value in summary.items():
         print(f"   {key}: {value}")
     
     # Invariant 검증
-    print(f"\n✅ Invariant Verification:")
+    print("\n✅ Invariant Verification:")
     passed = True
     
     # data_corruption == 0
     if _metrics.data_corruption_detected == 0:
-        print(f"   ✅ PASS: data_corruption == 0")
+        print("   ✅ PASS: data_corruption == 0")
     else:
         print(f"   ❌ FAIL: data_corruption == 0 (got {_metrics.data_corruption_detected})")
         passed = False
@@ -855,7 +854,7 @@ def run_integration_tests():
     
     # schema_parse_errors == 0
     if _metrics.schema_parse_errors == 0:
-        print(f"   ✅ PASS: schema_parse_errors == 0")
+        print("   ✅ PASS: schema_parse_errors == 0")
     else:
         print(f"   ❌ FAIL: schema_parse_errors == 0 (got {_metrics.schema_parse_errors})")
         passed = False

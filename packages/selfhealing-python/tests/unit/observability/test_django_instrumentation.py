@@ -7,8 +7,6 @@ DjangoInstrumentor 통합 단위 테스트.
 import os
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.observability import (
     is_django_instrumented,
     reset_opentelemetry,
@@ -76,10 +74,9 @@ class TestInstrumentDjangoBehavior:
 
     def test_idempotent_returns_true_on_second_call(self):
         """이미 instrumented 상태에서 True를 반환한다."""
-        from selfhealing.observability import instrument_django
-
         # 강제 instrumented 상태로 설정
         import selfhealing.observability as obs_mod
+        from selfhealing.observability import instrument_django
 
         obs_mod._django_instrumented = True
         try:

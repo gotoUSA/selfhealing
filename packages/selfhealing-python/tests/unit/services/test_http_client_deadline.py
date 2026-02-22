@@ -17,7 +17,6 @@ import pytest
 from selfhealing.scaling.deadline_context import (
     DEADLINE_HEADER,
     _request_deadline,
-    clear_deadline,
     set_deadline,
 )
 from selfhealing.services.http_client import SelfHealingHttpClient

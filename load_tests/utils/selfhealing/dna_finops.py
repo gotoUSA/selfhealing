@@ -20,9 +20,8 @@ Phase 2 구현: 대기업 M&A Exit을 위한 CFO 정조준 기능
 from typing import Dict, List, Optional, Any, Tuple, Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime
 import threading
-import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -708,7 +707,7 @@ def main():
     # 컨트롤러 생성
     controller = FinOpsController(max_budget=args.budget)
     
-    print(f"\n💰 FinOps Simulation")
+    print("\n💰 FinOps Simulation")
     print(f"Budget: ${args.budget:.2f}")
     print(f"Simulating {args.simulate} recovery operations...\n")
     
@@ -726,7 +725,7 @@ def main():
             else:
                 print(f"  [{i+1}] {item_type.value}: SKIPPED (budget exceeded)")
                 break
-        except BudgetExceededError as e:
+        except BudgetExceededError:
             print(f"  [{i+1}] BUDGET EXCEEDED!")
             break
     

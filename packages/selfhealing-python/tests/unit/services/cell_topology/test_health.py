@@ -20,11 +20,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from selfhealing.services.cell_topology.health import (
-    CellHealthAggregator,
-    CellHealthSnapshot,
     _PROMETHEUS_MAX_CONSECUTIVE_FAILURES,
     _PROMETHEUS_RETRY_AFTER_SECONDS,
     _PROMETHEUS_TIMEOUT,
+    CellHealthAggregator,
+    CellHealthSnapshot,
     get_cell_health_aggregator,
     reset_cell_health_aggregator,
 )

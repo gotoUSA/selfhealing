@@ -9,9 +9,7 @@ HPAMetricsExporter 단위 테스트.
 - LEVEL_TO_INT 매핑
 """
 
-import threading
-import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 

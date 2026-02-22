@@ -28,13 +28,10 @@ import sys
 import time
 import random
 import threading
-import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Callable
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
 from enum import Enum
-from collections import deque
-import json
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -420,18 +417,18 @@ class CacheDeadProtectionSimulator:
         print("📊 CACHE DEAD PROTECTION TEST RESULTS")
         print("=" * 60)
         
-        print(f"\n📈 Request Statistics:")
+        print("\n📈 Request Statistics:")
         print(f"  Total Requests: {stats['total_requests']}")
         print(f"  Cache Hits: {stats['cache_hits']}")
         print(f"  Cache Misses: {stats['cache_misses']}")
         print(f"  Cache Errors: {stats['cache_errors']}")
         
-        print(f"\n🛡️  Protection Statistics:")
+        print("\n🛡️  Protection Statistics:")
         print(f"  DB Queries Allowed: {stats['db_queries_allowed']}")
         print(f"  DB Queries Rejected: {stats['db_queries_rejected']}")
         print(f"  Degraded Responses: {stats['degraded_responses']}")
         
-        print(f"\n🔄 Rate Limiter:")
+        print("\n🔄 Rate Limiter:")
         print(f"  Allowed: {stats['rate_limiter']['allowed']}")
         print(f"  Rejected: {stats['rate_limiter']['rejected']}")
         
@@ -450,7 +447,7 @@ class CacheDeadProtectionSimulator:
                 )
                 avg_db_rate = stats['db_queries_allowed'] / max(1, len(self.time_series))
                 
-                print(f"\n⏱️  Failure Period Analysis:")
+                print("\n⏱️  Failure Period Analysis:")
                 print(f"  Failure Duration: {failure_duration}s")
                 print(f"  Avg DB Query Rate: {avg_db_rate:.1f}/s")
         

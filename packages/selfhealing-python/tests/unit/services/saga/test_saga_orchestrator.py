@@ -28,8 +28,7 @@ Tests:
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -59,7 +58,6 @@ from selfhealing.services.saga.registry import (
     register_saga,
 )
 from selfhealing.services.saga.step import SagaStep
-
 
 # =============================================================================
 # 테스트 헬퍼: Mock Step 구현

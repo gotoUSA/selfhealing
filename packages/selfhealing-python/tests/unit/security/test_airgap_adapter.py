@@ -4,22 +4,19 @@ Air-Gap Adapter Unit Tests.
 Tests for the Air-Gap storage adapters.
 """
 
-import pytest
-from unittest.mock import MagicMock, patch
 import json
+from unittest.mock import MagicMock, patch
 
 from selfhealing.adapters.airgap.base import (
-    AirGapStorageAdapter,
-    BaseAirGapAdapter,
     AirGapKeys,
+    AirGapStorageAdapter,
 )
-from selfhealing.adapters.airgap.null_adapter import NullAirGapAdapter
 from selfhealing.adapters.airgap.factory import (
-    get_airgap_adapter,
     configure_airgap_adapter,
+    get_airgap_adapter,
     reset_airgap_adapter,
 )
-
+from selfhealing.adapters.airgap.null_adapter import NullAirGapAdapter
 
 # =============================================================================
 # NullAirGapAdapter Tests

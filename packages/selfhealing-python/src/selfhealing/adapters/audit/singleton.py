@@ -28,7 +28,7 @@ logger = structlog.get_logger()
 _default_adapter: AuditLogAdapter | None = None
 
 
-def get_audit_adapter() -> "AuditLogAdapter":
+def get_audit_adapter() -> AuditLogAdapter:
     """
     기본 AuditLogAdapter 인스턴스 반환.
 
@@ -90,7 +90,7 @@ def get_audit_adapter() -> "AuditLogAdapter":
     return _default_adapter
 
 
-def set_audit_adapter(adapter: "AuditLogAdapter") -> None:
+def set_audit_adapter(adapter: AuditLogAdapter) -> None:
     """
     기본 AuditLogAdapter 설정.
 

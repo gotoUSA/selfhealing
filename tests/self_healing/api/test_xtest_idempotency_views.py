@@ -30,7 +30,6 @@ from selfhealing.api.django.views.xtest.idempotency import (
     ClearKeysView,
     XTEST_SOURCE,
     XTEST_METADATA_KEY,
-    MAX_STATUS_RESULTS,
 )
 
 

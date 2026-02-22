@@ -4,8 +4,9 @@ RedisEventBus 다중 채널 지원 테스트.
 Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestEventChannel:
@@ -151,8 +152,8 @@ class TestRedisEventBusPublish:
         """이벤트 타입에 맞는 채널로 발행."""
         from selfhealing.services.event_bus import EventType, SelfHealingEvent
         from selfhealing.services.event_bus_redis import (
-            RedisEventBus,
             SELFHEALING_EVENT_CHANNELS,
+            RedisEventBus,
         )
 
         mock_redis = MagicMock()

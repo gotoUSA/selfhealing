@@ -13,8 +13,7 @@ Kubernetes HPA용 커스텀 메트릭을 Prometheus 형식으로 노출합니다
 from __future__ import annotations
 
 import threading
-import time
-from typing import Callable
+from collections.abc import Callable
 
 import structlog
 

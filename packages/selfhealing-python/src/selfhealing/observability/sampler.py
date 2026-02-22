@@ -7,8 +7,8 @@ Samples 100% during emergencies or SLA violations.
 
 from __future__ import annotations
 
-import random
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 import structlog
 
@@ -85,13 +85,13 @@ class EmergencyLevelAdaptiveSampler:
 
     def should_sample(
         self,
-        parent_context: "Context | None",
+        parent_context: Context | None,
         trace_id: int,
         name: str,
-        kind: "SpanKind | None" = None,
-        attributes: "Attributes | None" = None,
-        links: "Sequence[Link] | None" = None,
-    ) -> "SamplingResult":
+        kind: SpanKind | None = None,
+        attributes: Attributes | None = None,
+        links: Sequence[Link] | None = None,
+    ) -> SamplingResult:
         """
         Determine whether a span should be sampled.
 
@@ -216,13 +216,13 @@ class StaticRatioSampler:
 
     def should_sample(
         self,
-        parent_context: "Context | None",
+        parent_context: Context | None,
         trace_id: int,
         name: str,
-        kind: "SpanKind | None" = None,
-        attributes: "Attributes | None" = None,
-        links: "Sequence[Link] | None" = None,
-    ) -> "SamplingResult":
+        kind: SpanKind | None = None,
+        attributes: Attributes | None = None,
+        links: Sequence[Link] | None = None,
+    ) -> SamplingResult:
         """Determine whether to sample based on fixed ratio."""
         from opentelemetry.sdk.trace.sampling import Decision, SamplingResult
 

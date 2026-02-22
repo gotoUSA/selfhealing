@@ -55,8 +55,8 @@ class TestExponentialBackoffFromSettings:
                 "SELFHEALING_BACKOFF_EXPONENTIAL_MULTIPLIER": "3.0",
             },
         ):
-            from selfhealing.settings.backoff import reset_backoff_settings
             from selfhealing.core.backoff import ExponentialBackoff
+            from selfhealing.settings.backoff import reset_backoff_settings
 
             reset_backoff_settings()
             backoff = ExponentialBackoff.from_settings()
@@ -107,8 +107,8 @@ class TestLinearBackoffFromSettings:
                 "SELFHEALING_BACKOFF_LINEAR_INCREMENT": "2.5",
             },
         ):
-            from selfhealing.settings.backoff import reset_backoff_settings
             from selfhealing.core.backoff import LinearBackoff
+            from selfhealing.settings.backoff import reset_backoff_settings
 
             reset_backoff_settings()
             backoff = LinearBackoff.from_settings()
@@ -173,8 +173,8 @@ class TestRingBufferFromSettings:
                 "SELFHEALING_RING_BUFFER_CAPACITY": "5000",
             },
         ):
-            from selfhealing.settings.ring_buffer import reset_ring_buffer_settings
             from selfhealing.audit.ring_buffer import RingBuffer
+            from selfhealing.settings.ring_buffer import reset_ring_buffer_settings
 
             reset_ring_buffer_settings()
             buffer = RingBuffer.from_settings()
@@ -239,7 +239,9 @@ class TestGracefulDegradationFromSettings:
     @pytest.fixture(autouse=True)
     def reset_settings(self):
         """Reset settings before and after each test."""
-        from selfhealing.settings.graceful_degradation import reset_graceful_degradation_settings
+        from selfhealing.settings.graceful_degradation import (
+            reset_graceful_degradation_settings,
+        )
 
         reset_graceful_degradation_settings()
         yield
@@ -257,7 +259,9 @@ class TestGracefulDegradationFromSettings:
 
     def test_circuit_breaker_config_default_values(self):
         """HashChainCircuitBreakerConfig 기본값으로 인스턴스 생성."""
-        from selfhealing.audit.graceful_degradation.enums import HashChainCircuitBreakerConfig
+        from selfhealing.audit.graceful_degradation.enums import (
+            HashChainCircuitBreakerConfig,
+        )
 
         config = HashChainCircuitBreakerConfig.from_settings()
 
@@ -275,8 +279,10 @@ class TestGracefulDegradationFromSettings:
                 "SELFHEALING_GRACEFUL_DEGRADATION_MEMORY_MAX_ENTRIES": "5000",
             },
         ):
-            from selfhealing.settings.graceful_degradation import reset_graceful_degradation_settings
             from selfhealing.audit.graceful_degradation.enums import FallbackConfig
+            from selfhealing.settings.graceful_degradation import (
+                reset_graceful_degradation_settings,
+            )
 
             reset_graceful_degradation_settings()
             config = FallbackConfig.from_settings()
@@ -319,7 +325,9 @@ class TestCanaryWatchdogConfigFromSettings:
                 "SELFHEALING_CANARY_WATCHDOG_ENABLE_AUTO_ROLLBACK": "true",
             },
         ):
-            from selfhealing.settings.canary_watchdog import reset_canary_watchdog_settings
+            from selfhealing.settings.canary_watchdog import (
+                reset_canary_watchdog_settings,
+            )
             from selfhealing.tasks.canary_watchdog import CanaryWatchdogConfig
 
             reset_canary_watchdog_settings()
@@ -335,11 +343,18 @@ class TestFromSettingsPatternConsistency:
 
     def test_all_from_settings_return_correct_type(self):
         """모든 from_settings()가 올바른 타입을 반환하는지 검증."""
-        from selfhealing.core.backoff import ExponentialBackoff, LinearBackoff, ConstantBackoff
+        from selfhealing.audit.graceful_degradation.enums import (
+            FallbackConfig,
+            HashChainCircuitBreakerConfig,
+        )
         from selfhealing.audit.ring_buffer import RingBuffer
-        from selfhealing.utils.jitter import JitterConfig
-        from selfhealing.audit.graceful_degradation.enums import FallbackConfig, HashChainCircuitBreakerConfig
+        from selfhealing.core.backoff import (
+            ConstantBackoff,
+            ExponentialBackoff,
+            LinearBackoff,
+        )
         from selfhealing.tasks.canary_watchdog import CanaryWatchdogConfig
+        from selfhealing.utils.jitter import JitterConfig
 
         assert isinstance(ExponentialBackoff.from_settings(), ExponentialBackoff)
         assert isinstance(LinearBackoff.from_settings(), LinearBackoff)

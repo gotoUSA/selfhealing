@@ -14,8 +14,6 @@ import time
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.core.hedging.result_validator import (
     HedgingResultValidator,
     ResultMismatchRecord,

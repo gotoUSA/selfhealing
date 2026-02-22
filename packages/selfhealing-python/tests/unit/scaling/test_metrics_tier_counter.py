@@ -10,7 +10,7 @@ BackpressureMetrics Tier별 Drop 카운터 단위 테스트.
 import pytest
 
 from selfhealing.scaling.config import BackpressureSettings, reset_backpressure_settings
-from selfhealing.scaling.metrics import BackpressureMetrics, HAS_PROMETHEUS
+from selfhealing.scaling.metrics import HAS_PROMETHEUS, BackpressureMetrics
 
 if HAS_PROMETHEUS:
     from prometheus_client import REGISTRY

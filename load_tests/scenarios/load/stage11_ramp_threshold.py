@@ -51,9 +51,8 @@ import sys
 import time
 import random
 import json
-import threading
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -682,7 +681,7 @@ class ThresholdDiscoveryUser(HttpUser):
             
             with self.client.post(
                 f"/api/self-healing/block/{service}/",
-                json={"reason": f"EXTREME cascading failure test"},
+                json={"reason": "EXTREME cascading failure test"},
                 headers=self._get_headers(),
                 name=f"{STAGE_NAME} EXTREME block/{service}/",
                 catch_response=True,
@@ -1208,7 +1207,7 @@ class ThresholdDiscoveryUser(HttpUser):
                         current_level = data.get("level", "NORMAL")
                         
                         if current_level == "LEVEL_3":
-                            debug_log(f"🧟 System also triggered Emergency LEVEL_3")
+                            debug_log("🧟 System also triggered Emergency LEVEL_3")
                             
                             if SELFHEALING_AVAILABLE:
                                 AsyncHealingLogger.log_emergency_event(
@@ -1652,7 +1651,7 @@ def on_test_start(environment, **kwargs):
     print("\n" + "=" * 80)
     print(f"🔥 {STAGE_NAME} EXTREME Self-Healing Threshold Discovery Started")
     print("=" * 80)
-    print(f"\n📋 테스트 설정:")
+    print("\n📋 테스트 설정:")
 
     print(f"   - EXTREME Mode: {'✅ 활성화' if EXTREME_MODE else '❌ 비활성화'}")
     print(f"   - Failure Injection Rate: {FAILURE_INJECTION_RATE*100:.0f}%")
@@ -1755,32 +1754,32 @@ def on_test_stop(environment, **kwargs):
     # V2 Optimization Statistics
     if v2_stats:
         print("\n🚀 V2 최적화 모듈 통계:")
-        print(f"   📦 CBStateCache:")
+        print("   📦 CBStateCache:")
         cache_stats = v2_stats.get("cache_stats", {})
         print(f"      - 캐시 히트율: {cache_stats.get('hit_rate', 0)*100:.1f}%")
         print(f"      - 총 요청: {cache_stats.get('total_requests', 0)}")
         
-        print(f"   📝 AsyncHealingLogger:")
+        print("   📝 AsyncHealingLogger:")
         logger_stats = v2_stats.get("async_logger_stats", {})
         print(f"      - 총 이벤트: {logger_stats.get('events_logged', 0)}")
         print(f"      - 플러시된 이벤트: {logger_stats.get('events_flushed', 0)}")
         
-        print(f"   🎲 AdaptiveJitter:")
+        print("   🎲 AdaptiveJitter:")
         jitter_stats = v2_stats.get("jitter_stats", {})
         print(f"      - 평균 지터: {jitter_stats.get('avg_jitter_ms', 0):.1f}ms")
         print(f"      - Relaxed/Normal/Stressed: {jitter_stats.get('relaxed_count', 0)}/{jitter_stats.get('normal_count', 0)}/{jitter_stats.get('stressed_count', 0)}")
 
     # Recovery Latency Report
     recovery = _threshold_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
+    print("\n🔄 Recovery Latency Metrics:")
     if recovery["recovery_latency_seconds"]:
         print(f"   - Recovery latency: {recovery['recovery_latency_seconds']:.1f}s")
         if recovery["recovery_latency_seconds"] < 120:
-            print(f"   - SLA Status: ✓ Under 2min threshold")
+            print("   - SLA Status: ✓ Under 2min threshold")
         else:
-            print(f"   - SLA Status: ✗ Exceeded 2min threshold")
+            print("   - SLA Status: ✗ Exceeded 2min threshold")
     else:
-        print(f"   - No recovery event recorded (system may not have degraded)")
+        print("   - No recovery event recorded (system may not have degraded)")
 
     # Save report to file
     _save_results(environment, v2_stats)
@@ -1881,8 +1880,8 @@ def _generate_markdown_report(path: str, data: Dict, v2_stats: Optional[Dict] = 
     with open(path, "w", encoding="utf-8") as f:
         f.write("# Stage 11 EXTREME Threshold Discovery 테스트 결과 보고서\n\n")
         f.write(f"📅 **테스트 일시**: {data['timestamp'][:10]}\n")
-        f.write(f"🏷️ **버전**: EXTREME Self-Healing V2\n")
-        f.write(f"🎯 **테스트 목표**: 시스템 임계점 발견 및 Self-Healing 극한 테스트\n\n")
+        f.write("🏷️ **버전**: EXTREME Self-Healing V2\n")
+        f.write("🎯 **테스트 목표**: 시스템 임계점 발견 및 Self-Healing 극한 테스트\n\n")
         f.write("---\n\n")
         
         # Executive Summary
@@ -1999,7 +1998,7 @@ def _generate_markdown_report(path: str, data: Dict, v2_stats: Optional[Dict] = 
         f.write("|------|------|\n")
         cold_start_count = extreme.get("cold_start_thundering_herd", 0)
         f.write(f"| Thundering Herd 분산 | {cold_start_count}회 |\n")
-        f.write(f"| Cache Invalidation | 성공 |\n")
+        f.write("| Cache Invalidation | 성공 |\n")
         f.write(f"| 상태 | {'✅ PASS' if cold_start_count > 0 else '⚠️ 미실행'} |\n\n")
         f.write("> **검증 포인트**: CBStateCache.invalidate_all() 호출 후 100명 동시 접속 시 AdaptiveJitter가 요청을 분산\n\n")
         
@@ -2037,7 +2036,7 @@ def _generate_markdown_report(path: str, data: Dict, v2_stats: Optional[Dict] = 
         f.write("|------|------|\n")
         local_autonomy = extreme.get("command_outage_local_autonomy", 0)
         f.write(f"| 로컬 자치권 발동 | {local_autonomy}회 |\n")
-        f.write(f"| SafeDefaults 활성화 | ✅ |\n")
+        f.write("| SafeDefaults 활성화 | ✅ |\n")
         f.write(f"| 서비스 지속 | {'✅ 성공' if local_autonomy > 0 else '⚠️ 미검증'} |\n\n")
         f.write("> **검증 포인트**: SafeDefaults.enter_degraded_mode() 호출 후에도 핵심 기능 정상 동작\n\n")
         
@@ -2047,7 +2046,7 @@ def _generate_markdown_report(path: str, data: Dict, v2_stats: Optional[Dict] = 
         f.write("| 항목 | 결과 |\n")
         f.write("|------|------|\n")
         half_open = extreme.get("flapping_half_open_transitions", 0)
-        f.write(f"| Flapping 사이클 | 10회 |\n")
+        f.write("| Flapping 사이클 | 10회 |\n")
         f.write(f"| Half-Open 전환 | {half_open}회 |\n")
         f.write(f"| CB 안정화 | {'✅ 성공' if half_open > 0 else '⚠️ 미검증'} |\n\n")
         f.write("> **검증 포인트**: 10회 연속 block/reset 후 CB가 HALF_OPEN에서 CLOSED로 복구\n\n")
@@ -2059,7 +2058,7 @@ def _generate_markdown_report(path: str, data: Dict, v2_stats: Optional[Dict] = 
         f.write("|------|------|\n")
         degraded = extreme.get("brain_split_degraded_mode", 0)
         f.write(f"| Degraded Mode 진입 | {degraded}회 |\n")
-        f.write(f"| 로컬 기본값 사용 | ✅ |\n")
+        f.write("| 로컬 기본값 사용 | ✅ |\n")
         f.write(f"| 서비스 지속 | {'✅ 성공' if degraded > 0 else '⚠️ 미검증'} |\n\n")
         f.write("> **검증 포인트**: Redis 단절 시 SafeDefaults.get_all_defaults()로 로컬 기본값 사용\n\n")
         
@@ -2079,8 +2078,8 @@ def _generate_markdown_report(path: str, data: Dict, v2_stats: Optional[Dict] = 
         
         cb_triggers = extreme.get("cb_triggers", 0)
         cb_recoveries = extreme.get("cb_recoveries", 0)
-        f.write(f"| 이벤트 | 횟수 |\n")
-        f.write(f"|--------|------|\n")
+        f.write("| 이벤트 | 횟수 |\n")
+        f.write("|--------|------|\n")
         f.write(f"| CB OPEN 전환 | {cb_triggers}회 |\n")
         f.write(f"| CB 복구 (CLOSED) | {cb_recoveries}회 |\n\n")
         
@@ -2093,15 +2092,15 @@ def _generate_markdown_report(path: str, data: Dict, v2_stats: Optional[Dict] = 
         
         emergency_triggers = extreme.get("emergency_triggers", 0)
         emergency_releases = extreme.get("emergency_releases", 0)
-        f.write(f"| 이벤트 | 횟수 |\n")
-        f.write(f"|--------|------|\n")
+        f.write("| 이벤트 | 횟수 |\n")
+        f.write("|--------|------|\n")
         f.write(f"| Emergency 트리거 | {emergency_triggers}회 |\n")
         f.write(f"| Emergency 해제 | {emergency_releases}회 |\n\n")
         
         f.write("### DLQ (Dead Letter Queue)\n\n")
         dlq_items = extreme.get("dlq_items_created", 0)
-        f.write(f"| 항목 | 값 |\n")
-        f.write(f"|------|-----|\n")
+        f.write("| 항목 | 값 |\n")
+        f.write("|------|-----|\n")
         f.write(f"| 캡처된 실패 메시지 | {dlq_items}개 |\n")
         f.write(f"| 재처리 대기 | {dlq_items}개 |\n\n")
         

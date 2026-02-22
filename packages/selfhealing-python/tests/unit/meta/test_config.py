@@ -7,8 +7,6 @@ MetaWatchdogSettings 설정 관리 테스트.
 import os
 from unittest import mock
 
-import pytest
-
 from selfhealing.meta.config import (
     MetaWatchdogSettings,
     get_meta_watchdog_settings,

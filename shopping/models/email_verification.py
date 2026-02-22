@@ -12,7 +12,7 @@ from django.db import models
 from django.utils import timezone
 
 if TYPE_CHECKING:
-    from shopping.models.user import User
+    pass
 
 
 class EmailVerificationToken(models.Model):

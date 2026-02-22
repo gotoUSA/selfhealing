@@ -4,14 +4,13 @@ Test Mode Context 단위 테스트.
 TestModeContext의 ContextVar 전파, 합성 레이블, 동적 프리픽스 기능을 검증합니다.
 """
 
-import pytest
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from selfhealing.core.test_mode_context import (
     TestModeContext,
-    is_synthetic_context,
     get_synthetic_session_id,
+    is_synthetic_context,
     synthetic_context,
 )
 

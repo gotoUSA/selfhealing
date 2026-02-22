@@ -43,16 +43,11 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
 import uuid
-import hashlib
-import hmac
-import base64
-from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
-from collections import defaultdict, deque
+from collections import deque
 from dataclasses import dataclass, field
 
 # Ensure project root is in sys.path
@@ -64,8 +59,7 @@ if _project_root not in sys.path:
 
 from locust import HttpUser, task, between, tag, events, LoadTestShape
 
-from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
-from load_tests.metrics import setup_event_hooks
+from load_tests.utils import LoginHelper
 
 
 STAGE_NAME = "[Stage33-JWTCascade]"
@@ -615,11 +609,11 @@ def _update_phase():
         _jwt_stats.phase = phase
 
         if phase == "jwt_stampede":
-            print(f"\n🔴 Phase 2: JWT Expiry Stampede")
-            print(f"   - Simulating mass JWT expiration")
-            print(f"   - Testing refresh throttling")
+            print("\n🔴 Phase 2: JWT Expiry Stampede")
+            print("   - Simulating mass JWT expiration")
+            print("   - Testing refresh throttling")
             if EXCELLENCE_MODE:
-                print(f"   - 🎯 Excellence: Target Max < 200ms, Avg < 120ms")
+                print("   - 🎯 Excellence: Target Max < 200ms, Avg < 120ms")
 
             # Expire a batch of tokens
             with _token_lock:
@@ -629,11 +623,11 @@ def _update_phase():
                         _jwt_stats.jwt_tokens_expired += 1
 
         elif phase == "auth_fallback":
-            print(f"\n🟠 Phase 3: Auth Server Fallback")
+            print("\n🟠 Phase 3: Auth Server Fallback")
             print(f"   - JWT refresh requests: {_jwt_stats.jwt_refresh_requests}")
             print(f"   - Throttled: {_jwt_stats.jwt_refresh_throttled}")
             if EXCELLENCE_MODE:
-                print(f"   - 🎯 Excellence: Fallback < 300ms, Multiple events required")
+                print("   - 🎯 Excellence: Fallback < 300ms, Multiple events required")
             # Simulate multiple fallback events for Excellence testing
             _simulate_primary_failure()
             for i in range(4):  # Generate 4 more fallback events
@@ -647,35 +641,35 @@ def _update_phase():
             print(f"   - Fallback triggered: {_jwt_stats.fallback_triggered}")
             print(f"   - Secondary success: {_jwt_stats.secondary_auth_success}")
             if EXCELLENCE_MODE:
-                print(f"   - 🎯 Excellence: Throttle MUST occur!")
-                print(f"   - 🎯 Excellence: Priority > 95% success, Normal can drop")
+                print("   - 🎯 Excellence: Throttle MUST occur!")
+                print("   - 🎯 Excellence: Priority > 95% success, Normal can drop")
                 print(f"   - Target: 300+ users, {REAUTH_THROTTLE_LIMIT}/sec limit")
             _simulate_primary_recovery()
             with _stats_lock:
                 _jwt_stats.storm_start_time = time.time()
 
         elif phase == "queue_growth":
-            print(f"\n🔵 Phase 5: Replay Queue Growth")
+            print("\n🔵 Phase 5: Replay Queue Growth")
             print(f"   - Re-auth throttled: {_jwt_stats.reauth_requests_throttled}")
             print(f"   - Max rate achieved: {_jwt_stats.max_rate_achieved:.0f}/sec")
             if EXCELLENCE_MODE:
-                print(f"   - 🎯 Excellence: Queue overflow prevention must trigger")
+                print("   - 🎯 Excellence: Queue overflow prevention must trigger")
             # Storm ends here, recovery starts
             with _stats_lock:
                 _jwt_stats.recovery_start_time = time.time()
 
         elif phase == "recovery":
-            print(f"\n🟢 Phase 6: Recovery")
+            print("\n🟢 Phase 6: Recovery")
             print(f"   - Queue size before recovery: {_get_queue_size()}")
             print(f"   - Total throttled: {_jwt_stats.reauth_requests_throttled}")
             if EXCELLENCE_MODE:
-                print(f"   - 🎯 Excellence: Must recover within 5 seconds")
+                print("   - 🎯 Excellence: Must recover within 5 seconds")
             # Recovery is complete when we reach this phase (load dropped, throttle stopped)
             with _stats_lock:
                 _jwt_stats.recovery_complete_time = time.time()
 
         elif phase == "verification":
-            print(f"\n✅ Phase 7: Final Verification")
+            print("\n✅ Phase 7: Final Verification")
             # Mark recovery complete
             if _jwt_stats.recovery_start_time and not _jwt_stats.recovery_complete_time:
                 with _stats_lock:
@@ -699,7 +693,7 @@ def _perform_final_verification():
     # =========================================================================
     # SC-33-1: JWT Re-issue Response Time
     # =========================================================================
-    print(f"\n   [SC-33-1] JWT Expiry Stampede:")
+    print("\n   [SC-33-1] JWT Expiry Stampede:")
     if _jwt_stats.jwt_refresh_response_times_ms:
         avg_response = sum(_jwt_stats.jwt_refresh_response_times_ms) / len(_jwt_stats.jwt_refresh_response_times_ms)
         max_response = max(_jwt_stats.jwt_refresh_response_times_ms)
@@ -726,12 +720,12 @@ def _perform_final_verification():
         if EXCELLENCE_MODE:
             _jwt_stats.excellence["max_reissue_under_200ms"] = True
             _jwt_stats.excellence["avg_reissue_under_120ms"] = True
-        print(f"   - Re-issue response: ✓ (No refresh requests)")
+        print("   - Re-issue response: ✓ (No refresh requests)")
 
     # =========================================================================
     # SC-33-2: Auth Server Fallback
     # =========================================================================
-    print(f"\n   [SC-33-2] Auth Server Fallback:")
+    print("\n   [SC-33-2] Auth Server Fallback:")
     if _jwt_stats.fallback_time_ms:
         avg_fallback = sum(_jwt_stats.fallback_time_ms) / len(_jwt_stats.fallback_time_ms)
         max_fallback = max(_jwt_stats.fallback_time_ms)
@@ -759,12 +753,12 @@ def _perform_final_verification():
         if EXCELLENCE_MODE:
             _jwt_stats.excellence["fallback_under_300ms"] = True
             _jwt_stats.excellence["multiple_fallback_events"] = False  # No events = fail for excellence
-        print(f"   - Fallback time: ✓ (No fallback events)")
+        print("   - Fallback time: ✓ (No fallback events)")
 
     # =========================================================================
     # SC-33-3: Re-Auth Storm Throttling - CRITICAL
     # =========================================================================
-    print(f"\n   [SC-33-3] Re-Auth Storm Throttling:")
+    print("\n   [SC-33-3] Re-Auth Storm Throttling:")
     total_throttled = _jwt_stats.reauth_requests_throttled + _jwt_stats.jwt_refresh_throttled
 
     if EXCELLENCE_MODE:
@@ -799,9 +793,9 @@ def _perform_final_verification():
         print(f"     👑 Priority success: {priority_success}/{priority_total} ({priority_rate:.1f}%)")
 
         if not throttle_occurred:
-            print(f"\n   ⚠️  WARNING: Storm test FAILED to trigger throttle!")
-            print(f"      This means the load was insufficient to stress the system.")
-            print(f"      Consider: More users, faster spawn, shorter wait_time")
+            print("\n   ⚠️  WARNING: Storm test FAILED to trigger throttle!")
+            print("      This means the load was insufficient to stress the system.")
+            print("      Consider: More users, faster spawn, shorter wait_time")
 
     else:
         # Basic Gate: Just check rate stayed reasonable
@@ -814,7 +808,7 @@ def _perform_final_verification():
     # =========================================================================
     # SC-33-4: Replay Queue Management
     # =========================================================================
-    print(f"\n   [SC-33-4] Replay Queue Growth:")
+    print("\n   [SC-33-4] Replay Queue Growth:")
     max_queue = max(_jwt_stats.queue_size_samples) if _jwt_stats.queue_size_samples else 0
     current_queue = _get_queue_size()
 
@@ -842,7 +836,7 @@ def _perform_final_verification():
     # SC-33-5: Recovery (Excellence Only)
     # =========================================================================
     if EXCELLENCE_MODE:
-        print(f"\n   [SC-33-5] Recovery (Excellence):")
+        print("\n   [SC-33-5] Recovery (Excellence):")
         # Recovery is measured differently - we check if the system is stable now
         # rather than measuring time between phases (which is test configuration, not system behavior)
         current_queue = _get_queue_size()
@@ -874,9 +868,9 @@ def _perform_final_verification():
         print(f"   🏆 Excellence Gate: {'✅ PASSED' if excellence_passed else '❌ FAILED'}")
 
         if not _jwt_stats.excellence.get("throttle_occurred", False):
-            print(f"\n   ⚠️  CRITICAL: Storm test did not trigger throttle!")
-            print(f"      This is a TEST FAILURE, not a system failure.")
-            print(f"      The test must generate enough load to stress the system.")
+            print("\n   ⚠️  CRITICAL: Storm test did not trigger throttle!")
+            print("      This is a TEST FAILURE, not a system failure.")
+            print("      The test must generate enough load to stress the system.")
 
         all_passed = basic_passed and excellence_passed
         print(f"\n   Stage 33 Result: {'✅ EXCELLENCE ACHIEVED' if all_passed else '❌ NOT ACHIEVED'}")
@@ -1306,10 +1300,10 @@ def on_test_start(environment, **kwargs):
     _token_registry = {}
 
     print(f"\n{'='*60}")
-    print(f"🚀 Stage 33: JWT Cascade Extended")
+    print("🚀 Stage 33: JWT Cascade Extended")
     print(f"{'='*60}")
     print(f"Total Duration: {TOTAL_DURATION}s")
-    print(f"Phases:")
+    print("Phases:")
     print(f"  1. Baseline: {PHASE_1_BASELINE}s")
     print(f"  2. JWT Stampede: {PHASE_2_JWT_STAMPEDE}s")
     print(f"  3. Auth Fallback: {PHASE_3_AUTH_FALLBACK}s")
@@ -1323,24 +1317,24 @@ def on_test_start(environment, **kwargs):
 def on_test_stop(environment, **kwargs):
     """Test stop - print final report"""
     print(f"\n{'='*60}")
-    print(f"📊 Stage 33 Final Report")
+    print("📊 Stage 33 Final Report")
     print(f"{'='*60}")
     print(f"Total Requests: {_jwt_stats.total_requests}")
     print(f"  Successful: {_jwt_stats.successful_requests}")
     print(f"  Failed: {_jwt_stats.failed_requests}")
-    print(f"\nJWT Stampede:")
+    print("\nJWT Stampede:")
     print(f"  Tokens Issued: {_jwt_stats.jwt_tokens_issued}")
     print(f"  Refresh Success: {_jwt_stats.jwt_refresh_success}")
     print(f"  Refresh Throttled: {_jwt_stats.jwt_refresh_throttled}")
-    print(f"\nAuth Fallback:")
+    print("\nAuth Fallback:")
     print(f"  Primary Failures: {_jwt_stats.primary_auth_failures}")
     print(f"  Fallback Triggered: {_jwt_stats.fallback_triggered}")
     print(f"  Sessions Preserved: {_jwt_stats.sessions_preserved}")
-    print(f"\nRe-Auth Storm:")
+    print("\nRe-Auth Storm:")
     print(f"  Total Requests: {_jwt_stats.reauth_requests_total}")
     print(f"  Throttled: {_jwt_stats.reauth_requests_throttled}")
     print(f"  Priority Processed: {_jwt_stats.priority_requests_processed}")
-    print(f"\nQueue Management:")
+    print("\nQueue Management:")
     print(f"  Items Added: {_jwt_stats.queue_items_added}")
     print(f"  Items Processed: {_jwt_stats.queue_items_processed}")
     print(f"  Overflow Prevented: {_jwt_stats.queue_overflow_prevented}")

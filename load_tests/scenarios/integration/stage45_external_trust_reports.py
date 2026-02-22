@@ -18,17 +18,9 @@ Reference: Stage 45 Part 1
 
 from __future__ import annotations
 
-import copy
-import hashlib
-import json
 import logging
-import threading
-import time
-import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone as tz
-from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Set
+from datetime import datetime, timezone as tz
+from typing import Any, Dict, List, Optional
 
 import pytest
 
@@ -37,11 +29,6 @@ from load_tests.scenarios.stage45_external_trust_audit import (
     EventType,
     DecisionSource,
     AuditEvent,
-    PolicyVersion,
-    DecisionRecord,
-    OperatorAction,
-    Incident,
-    SLAMetrics,
     ImmutableAuditTrail,
     AuditablePolicyManager,
     AuditableDecisionRecorder,

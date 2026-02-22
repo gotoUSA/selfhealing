@@ -14,8 +14,8 @@ cell_id에 접근 가능하게 한다.
 from __future__ import annotations
 
 import contextvars
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 _current_cell_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("selfhealing_cell_id", default=None)
 

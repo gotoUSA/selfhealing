@@ -5,10 +5,10 @@ from django.urls import reverse
 import pytest
 from rest_framework import status
 
-from shopping.models.order import Order, OrderItem
+from shopping.models.order import OrderItem
 from shopping.models.point import PointHistory
 from shopping.models.product import Product
-from shopping.tests.factories import OrderFactory, OrderItemFactory, PointHistoryFactory, ProductFactory, UserFactory
+from shopping.tests.factories import PointHistoryFactory
 
 
 @pytest.mark.django_db

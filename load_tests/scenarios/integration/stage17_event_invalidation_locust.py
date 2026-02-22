@@ -47,10 +47,9 @@ import time
 import random
 import threading
 import uuid
-from datetime import datetime
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -208,18 +207,18 @@ class EventInvalidationStats:
 
                 if phase == "baseline":
                     print(f"\n📊 {STAGE_NAME} Phase 2: Baseline Reads")
-                    print(f"   - Establishing baseline read pattern")
+                    print("   - Establishing baseline read pattern")
                 elif phase == "invalidate_storm":
                     print(f"\n⚡ {STAGE_NAME} Phase 3: Invalidation Storm")
-                    print(f"   - High-frequency cache invalidations")
-                    print(f"   - Watch for stale reads after events")
+                    print("   - High-frequency cache invalidations")
+                    print("   - Watch for stale reads after events")
                 elif phase == "recovery":
                     print(f"\n🔄 {STAGE_NAME} Phase 4: Recovery")
-                    print(f"   - Reducing invalidation rate")
+                    print("   - Reducing invalidation rate")
                     print(f"   - Stale reads after event: {self.stale_reads_after_event}")
                 elif phase == "verify":
                     print(f"\n✅ {STAGE_NAME} Phase 5: Verification")
-                    print(f"   - Verifying consistency")
+                    print("   - Verifying consistency")
 
         return phase
 
@@ -877,12 +876,12 @@ def on_test_start(environment, **kwargs):
     print(f"\n{'='*70}")
     print(f"⚡ {STAGE_NAME} Event-based Cache Invalidation Test")
     print(f"{'='*70}")
-    print(f"\nPurpose: Test cache invalidation via events (not TTL)")
-    print(f"\nKEY DIFFERENCE FROM TTL-BASED:")
-    print(f"  - TTL-based: Cache expires passively after fixed time")
-    print(f"  - Event-based: Cache invalidated actively by events")
-    print(f"  - This tests event propagation latency and race conditions")
-    print(f"\nTest Phases:")
+    print("\nPurpose: Test cache invalidation via events (not TTL)")
+    print("\nKEY DIFFERENCE FROM TTL-BASED:")
+    print("  - TTL-based: Cache expires passively after fixed time")
+    print("  - Event-based: Cache invalidated actively by events")
+    print("  - This tests event propagation latency and race conditions")
+    print("\nTest Phases:")
     print(f"  Phase 1 ({PHASE_WARM}s): Warm - Cache population")
     print(f"  Phase 2 ({PHASE_BASELINE}s): Baseline - Normal reads")
     print(f"  Phase 3 ({PHASE_INVALIDATE_STORM}s): Storm - High invalidation rate")
@@ -910,30 +909,30 @@ def on_test_stop(environment, **kwargs):
     print(f"📊 {STAGE_NAME} Final Report")
     print(f"{'='*70}")
 
-    print(f"\n📖 Read Statistics:")
+    print("\n📖 Read Statistics:")
     print(f"   - Total reads: {summary['reads_total']}")
     print(f"   - Reads during invalidation: {summary['reads_during_invalidation']}")
     print(f"   - Fresh reads after event: {summary['fresh_reads_after_event']}")
     print(f"   - Stale reads after event: {summary['stale_reads_after_event']}")
     print(f"   - Stale rate: {summary['stale_rate']:.2%}")
 
-    print(f"\n⚡ Invalidation Statistics:")
+    print("\n⚡ Invalidation Statistics:")
     print(f"   - Total invalidation events: {summary['invalidation_count']}")
     print(f"   - Avg invalidation latency: {summary['invalidation_latency_avg_ms']:.1f}ms")
     print(f"   - P95 invalidation latency: {summary['invalidation_latency_p95_ms']:.1f}ms")
     print(f"   - Max invalidation latency: {summary['invalidation_latency_max_ms']:.1f}ms")
 
-    print(f"\n🔄 Propagation Statistics:")
+    print("\n🔄 Propagation Statistics:")
     print(f"   - Avg propagation latency: {summary['propagation_latency_avg_ms']:.1f}ms")
     print(f"   - Max propagation latency: {summary['propagation_latency_max_ms']:.1f}ms")
 
-    print(f"\n🔐 Idempotency:")
+    print("\n🔐 Idempotency:")
     print(f"   - Violations: {summary['idempotency_violations']}")
 
-    print(f"\n📈 Stability:")
+    print("\n📈 Stability:")
     print(f"   - Max consecutive errors: {summary['max_consecutive_errors']}")
 
-    print(f"\n⏱️ Read Latency by Phase:")
+    print("\n⏱️ Read Latency by Phase:")
     for phase, lat in summary.get("read_latency_by_phase", {}).items():
         print(f"   [{phase}]")
         print(f"     - Count: {lat['count']}")
@@ -943,7 +942,7 @@ def on_test_stop(environment, **kwargs):
 
     # Validation Results
     print(f"\n{'='*70}")
-    print(f"🔍 VALIDATION RESULTS")
+    print("🔍 VALIDATION RESULTS")
     print(f"{'='*70}")
 
     # 1. No stale data after invalidation

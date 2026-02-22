@@ -17,7 +17,7 @@ Tie-breaking 순서 (동일 타임스탬프 시):
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import structlog

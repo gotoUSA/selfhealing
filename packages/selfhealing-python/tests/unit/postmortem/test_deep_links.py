@@ -7,7 +7,6 @@ PostmortemDeepLinks 데이터클래스와 PostmortemDeepLinkBuilder 테스트입
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from unittest import mock
 
 import pytest

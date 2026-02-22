@@ -4,11 +4,9 @@ Leader Elector Prometheus 메트릭 테스트.
 
 import time
 
-import pytest
-
 from selfhealing.coordination.metrics import (
-    LeaderElectorMetrics,
     PROMETHEUS_AVAILABLE,
+    LeaderElectorMetrics,
 )
 
 

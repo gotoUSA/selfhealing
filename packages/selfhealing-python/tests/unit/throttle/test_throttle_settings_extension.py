@@ -9,8 +9,6 @@ ThrottleSettings 확장 필드 테스트.
 5. 헬퍼 메서드 (get_emergency_level_multipliers, get_recovery_steps)
 """
 
-import os
-import pytest
 
 
 class TestThrottleSettingsEmergencyFields:
@@ -18,7 +16,10 @@ class TestThrottleSettingsEmergencyFields:
 
     def test_default_emergency_level_multipliers(self):
         """기본 Emergency Level 배율 확인."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -31,7 +32,10 @@ class TestThrottleSettingsEmergencyFields:
 
     def test_get_emergency_level_multipliers_dict(self):
         """get_emergency_level_multipliers() 딕셔너리 반환 테스트."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -46,7 +50,10 @@ class TestThrottleSettingsEmergencyFields:
 
     def test_emergency_multipliers_from_env(self, monkeypatch):
         """환경변수로 Emergency 배율 설정 테스트."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -64,7 +71,10 @@ class TestThrottleSettingsCBFields:
 
     def test_default_cb_limit_percents(self):
         """기본 CB limit 비율 확인."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -75,7 +85,10 @@ class TestThrottleSettingsCBFields:
 
     def test_cb_limit_from_env(self, monkeypatch):
         """환경변수로 CB limit 비율 설정 테스트."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -93,7 +106,10 @@ class TestThrottleSettingsRecoveryDampeningFields:
 
     def test_default_recovery_dampening_settings(self):
         """기본 Recovery Dampening 설정 확인."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -107,7 +123,10 @@ class TestThrottleSettingsRecoveryDampeningFields:
 
     def test_get_recovery_steps_tuple(self):
         """get_recovery_steps() 튜플 반환 테스트."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -119,7 +138,10 @@ class TestThrottleSettingsRecoveryDampeningFields:
 
     def test_recovery_steps_from_env(self, monkeypatch):
         """환경변수로 Recovery 단계 설정 테스트."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -137,7 +159,10 @@ class TestThrottleSettingsSafeOpenFields:
 
     def test_default_safe_open_settings(self):
         """기본 Safe-Open 설정 확인."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -149,7 +174,10 @@ class TestThrottleSettingsSafeOpenFields:
 
     def test_safe_open_from_env(self, monkeypatch):
         """환경변수로 Safe-Open 설정 테스트."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -167,7 +195,10 @@ class TestThrottleSettingsEventIntegrationFields:
 
     def test_default_event_integration_settings(self):
         """기본 EventBus 연동 설정 확인."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -179,7 +210,10 @@ class TestThrottleSettingsEventIntegrationFields:
 
     def test_gradient_freeze_setting(self):
         """Gradient Freeze 설정 확인."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 
@@ -189,7 +223,10 @@ class TestThrottleSettingsEventIntegrationFields:
 
     def test_full_stop_setting(self):
         """Full Stop 설정 확인."""
-        from selfhealing.settings.throttle import ThrottleSettings, reset_throttle_settings
+        from selfhealing.settings.throttle import (
+            ThrottleSettings,
+            reset_throttle_settings,
+        )
 
         reset_throttle_settings()
 

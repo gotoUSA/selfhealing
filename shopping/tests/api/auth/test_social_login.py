@@ -19,7 +19,6 @@ E2E 테스트의 한계:
 """
 
 
-from django.contrib.sites.models import Site
 from django.utils import timezone
 
 import pytest

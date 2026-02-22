@@ -4,9 +4,8 @@ API View Settings 단위 테스트 - Postmortem 관련 설정.
 settings/api_view.py의 postmortem 관련 설정 테스트.
 """
 
-import pytest
-from unittest.mock import patch
 import os
+from unittest.mock import patch
 
 
 class TestApiViewSettingsPostmortem:
@@ -14,7 +13,10 @@ class TestApiViewSettingsPostmortem:
 
     def test_new_postmortem_settings_fields_exist(self):
         """새 postmortem 설정 필드가 존재하는지 확인."""
-        from selfhealing.settings.api_view import get_api_view_settings, reset_api_view_settings
+        from selfhealing.settings.api_view import (
+            get_api_view_settings,
+            reset_api_view_settings,
+        )
 
         reset_api_view_settings()
         settings = get_api_view_settings()
@@ -27,7 +29,10 @@ class TestApiViewSettingsPostmortem:
 
     def test_default_values(self):
         """기본값이 올바른지 확인."""
-        from selfhealing.settings.api_view import get_api_view_settings, reset_api_view_settings
+        from selfhealing.settings.api_view import (
+            get_api_view_settings,
+            reset_api_view_settings,
+        )
 
         reset_api_view_settings()
         settings = get_api_view_settings()
@@ -39,7 +44,10 @@ class TestApiViewSettingsPostmortem:
 
     def test_postmortem_notification_settings(self):
         """Post-mortem 알림 설정이 존재하는지 확인."""
-        from selfhealing.settings.api_view import get_api_view_settings, reset_api_view_settings
+        from selfhealing.settings.api_view import (
+            get_api_view_settings,
+            reset_api_view_settings,
+        )
 
         reset_api_view_settings()
         settings = get_api_view_settings()
@@ -55,7 +63,10 @@ class TestApiViewSettingsEnvVariables:
 
     def test_auto_postmortem_enabled_from_env(self):
         """환경 변수로 auto_postmortem_enabled 설정 가능한지 확인."""
-        from selfhealing.settings.api_view import ApiViewSettings, reset_api_view_settings
+        from selfhealing.settings.api_view import (
+            ApiViewSettings,
+            reset_api_view_settings,
+        )
 
         reset_api_view_settings()
 
@@ -65,7 +76,10 @@ class TestApiViewSettingsEnvVariables:
 
     def test_auto_postmortem_min_duration_from_env(self):
         """환경 변수로 auto_postmortem_min_duration 설정 가능한지 확인."""
-        from selfhealing.settings.api_view import ApiViewSettings, reset_api_view_settings
+        from selfhealing.settings.api_view import (
+            ApiViewSettings,
+            reset_api_view_settings,
+        )
 
         reset_api_view_settings()
 

@@ -10,9 +10,7 @@ RetryPolicy 순수 재시도 정책 단위 테스트.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from selfhealing.core.backoff import (
     BackoffStrategy,
@@ -23,15 +21,13 @@ from selfhealing.core.backoff import (
 from selfhealing.interfaces.resilience_policy import (
     PolicyContext,
     PolicyOutcome,
-    PolicyResult,
     ResiliencePolicy,
 )
 from selfhealing.services.retry_handler.models import RetryPolicyConfig
 from selfhealing.services.retry_handler.policy import (
-    RetryPolicy,
     _RATE_LIMIT_INDICATORS,
+    RetryPolicy,
 )
-
 
 # =============================================================================
 # RetryPolicy — 계약 검증

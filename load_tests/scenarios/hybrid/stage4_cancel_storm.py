@@ -35,7 +35,6 @@ Reference:
 import os
 import sys
 import uuid
-from datetime import datetime
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(os.path.dirname(_current_dir))
@@ -1291,56 +1290,56 @@ def on_test_stop(environment, **kwargs):
     cb_open = _healing_action_stats["cb_force_open"]
     cb_close = _healing_action_stats["cb_force_close"]
     
-    print(f"\n[CB] Circuit Breaker Actions:")
-    print(f"   [FORCE OPEN]")
+    print("\n[CB] Circuit Breaker Actions:")
+    print("   [FORCE OPEN]")
     print(f"      - 시도: {cb_open['attempts']}")
     print(f"      - 성공: {cb_open['success']}")
     print(f"      - 검증(실제 OPEN 확인): {cb_open['verified']}")
     
-    print(f"   [FORCE CLOSE]")
+    print("   [FORCE CLOSE]")
     print(f"      - 시도: {cb_close['attempts']}")
     print(f"      - 성공: {cb_close['success']}")
     print(f"      - 검증(실제 CLOSED 확인): {cb_close['verified']}")
     
-    print(f"   [CB에 의한 Cancel 차단]")
+    print("   [CB에 의한 Cancel 차단]")
     print(f"      - 차단된 요청 수: {_healing_action_stats['cancel_blocked_by_cb']}")
     
     # CB 고급 기능 테스트 결과
-    print(f"\n[CB-ADVANCED] Circuit Breaker Advanced Features:")
+    print("\n[CB-ADVANCED] Circuit Breaker Advanced Features:")
     
     cb_auto = _healing_action_stats["cb_auto_open"]
-    print(f"   [AUTO OPEN on Cancel Storm]")
+    print("   [AUTO OPEN on Cancel Storm]")
     print(f"      - 시도: {cb_auto['attempts']}")
     print(f"      - 성공: {cb_auto['success']}")
     print(f"      - 검증: {cb_auto['verified']}")
     
     rlc = _healing_action_stats["rate_limit_cascade"]
-    print(f"   [RATE LIMIT CASCADE]")
+    print("   [RATE LIMIT CASCADE]")
     print(f"      - 체크 횟수: {rlc['attempts']}")
     print(f"      - Cascade 감지: {rlc['detected']}")
     print(f"      - CB 자동 트리거: {rlc['cb_triggered']}")
     
     sddos = _healing_action_stats["self_ddos_protection"]
-    print(f"   [SELF-DDOS PROTECTION]")
+    print("   [SELF-DDOS PROTECTION]")
     print(f"      - 체크 횟수: {sddos['checks']}")
     print(f"      - 백오프 권고: {sddos['backoff_suggested']}")
     
     fb = _healing_action_stats["cb_fallback"]
-    print(f"   [FALLBACK STRATEGY]")
+    print("   [FALLBACK STRATEGY]")
     print(f"      - 체크 횟수: {fb['checks']}")
     print(f"      - Cache 사용: {fb['cache_used']}")
     print(f"      - DLQ 사용: {fb['dlq_used']}")
     print(f"      - Default 사용: {fb['default_used']}")
     
     ho = _healing_action_stats["half_open_transition"]
-    print(f"   [HALF-OPEN TRANSITION]")
+    print("   [HALF-OPEN TRANSITION]")
     print(f"      - 체크 횟수: {ho['attempts']}")
     print(f"      - 전환 감지: {ho['success']}")
     print(f"      - 자동 복구 감지: {_healing_action_stats['cb_auto_recovery']['detected']}")
     
     # DLQ 실제 동작
     dlq = _healing_action_stats["dlq_created"]
-    print(f"\n[DLQ] Dead Letter Queue Actions:")
+    print("\n[DLQ] Dead Letter Queue Actions:")
     print(f"   - Create Attempts: {dlq['attempts']}")
     print(f"   - Create Success: {dlq['success']}")
     print(f"   - Items Found: {_healing_action_stats['dlq_items_found']}")
@@ -1349,11 +1348,11 @@ def on_test_stop(environment, **kwargs):
     # Emergency Mode 실제 동작
     em_trigger = _healing_action_stats["emergency_trigger"]
     em_release = _healing_action_stats["emergency_release"]
-    print(f"\n[EMERGENCY] Emergency Mode Actions:")
-    print(f"   [TRIGGER]")
+    print("\n[EMERGENCY] Emergency Mode Actions:")
+    print("   [TRIGGER]")
     print(f"      - 시도: {em_trigger['attempts']}")
     print(f"      - 성공: {em_trigger['success']}")
-    print(f"   [RELEASE]")
+    print("   [RELEASE]")
     print(f"      - 시도: {em_release['attempts']}")
     print(f"      - 성공: {em_release['success']}")
     print(f"   [활성화 감지]: {_selfhealing_stats['emergency_mode']['active_detected']}")
@@ -1365,19 +1364,19 @@ def on_test_stop(environment, **kwargs):
     health = _selfhealing_stats["health_checks"]
     health_total = health["success"] + health["failure"]
     health_rate = (health["success"] / health_total * 100) if health_total > 0 else 0
-    print(f"\n   [HEALTH] Health Checks:")
+    print("\n   [HEALTH] Health Checks:")
     print(f"      - Total: {health_total}")
     print(f"      - Success: {health['success']}")
     print(f"      - Success Rate: {health_rate:.1f}%")
     
     cb = _selfhealing_stats["circuit_breaker"]
-    print(f"\n   [CB] Circuit Breaker Monitoring:")
+    print("\n   [CB] Circuit Breaker Monitoring:")
     print(f"      - Status Checks: {cb['status_checks']}")
     print(f"      - Pool Status Checks: {cb['pool_status_checks']}")
     print(f"      - Recovery Transitions: {cb['recovery_transitions']}")
     
     eb = _selfhealing_stats["error_budget"]
-    print(f"\n   [BUDGET] Error Budget:")
+    print("\n   [BUDGET] Error Budget:")
     print(f"      - Checks: {eb['checks']}")
     if eb["remaining_percent"]:
         avg_remaining = sum(eb["remaining_percent"]) / len(eb["remaining_percent"])
@@ -1392,7 +1391,7 @@ def on_test_stop(environment, **kwargs):
         p95_idx = int(len(sorted_latencies) * 0.95)
         p95_latency = sorted_latencies[p95_idx] if p95_idx < len(sorted_latencies) else max_latency
         
-        print(f"\n   [LATENCY] Health Check Latency:")
+        print("\n   [LATENCY] Health Check Latency:")
         print(f"      - Samples: {len(latencies)}")
         print(f"      - Avg: {avg_latency:.1f}ms")
         print(f"      - P95: {p95_latency:.1f}ms")
@@ -1413,7 +1412,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   ✅ [1/12] Confirm Success: {_cancel_stats['confirm_success']} payments")
     else:
-        print(f"   ❌ [1/12] Confirm Success: FAILED - No confirms")
+        print("   ❌ [1/12] Confirm Success: FAILED - No confirms")
     
     # 2. Cancel 성공
     cancel_ok = _cancel_stats["cancel_success"] > 0
@@ -1421,7 +1420,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   ✅ [2/12] Cancel Success: {_cancel_stats['cancel_success']} cancels")
     else:
-        print(f"   ❌ [2/12] Cancel Success: FAILED - No cancels")
+        print("   ❌ [2/12] Cancel Success: FAILED - No cancels")
     
     # 3. Cancel 성공률
     cancel_rate_ok = _cancel_stats["cancel_attempted"] > 0 and cancel_rate >= 30
@@ -1437,7 +1436,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   ✅ [4/12] CB Force OPEN: VERIFIED ({cb_open['verified']} confirmed)")
     else:
-        print(f"   ⚠️  [4/12] CB Force OPEN: NOT VERIFIED")
+        print("   ⚠️  [4/12] CB Force OPEN: NOT VERIFIED")
     
     # 5. CB Force CLOSE 동작
     cb_close_ok = cb_close['verified'] > 0
@@ -1445,7 +1444,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   ✅ [5/12] CB Force CLOSE: VERIFIED ({cb_close['verified']} confirmed)")
     else:
-        print(f"   ⚠️  [5/12] CB Force CLOSE: NOT VERIFIED")
+        print("   ⚠️  [5/12] CB Force CLOSE: NOT VERIFIED")
     
     # 6. CB 자동 OPEN (record_failure 기반)
     cb_auto_ok = cb_auto['verified'] > 0 or cb_auto['success'] > 0
@@ -1453,7 +1452,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   ✅ [6/12] CB Auto OPEN: {cb_auto['verified']} verified, {cb_auto['success']} triggered")
     else:
-        print(f"   ⚠️  [6/12] CB Auto OPEN: Not triggered")
+        print("   ⚠️  [6/12] CB Auto OPEN: Not triggered")
     
     # 7. Rate Limit Cascade Detection
     rlc_ok = rlc['detected'] > 0 or rlc['cb_triggered'] > 0 or rlc['attempts'] > 0
@@ -1462,9 +1461,9 @@ def on_test_stop(environment, **kwargs):
         if rlc['detected'] > 0:
             print(f"   ✅ [7/12] Rate Limit Cascade: {rlc['detected']} detected")
         else:
-            print(f"   ✅ [7/12] Rate Limit Cascade: System stable (no cascade)")
+            print("   ✅ [7/12] Rate Limit Cascade: System stable (no cascade)")
     else:
-        print(f"   ⚠️  [7/12] Rate Limit Cascade: Not checked")
+        print("   ⚠️  [7/12] Rate Limit Cascade: Not checked")
     
     # 8. Self-DDoS Protection
     sddos_ok = sddos['checks'] > 0
@@ -1473,7 +1472,7 @@ def on_test_stop(environment, **kwargs):
         backoff_info = f", {sddos['backoff_suggested']} backoff" if sddos['backoff_suggested'] > 0 else ""
         print(f"   ✅ [8/12] Self-DDoS Protection: {sddos['checks']} checks{backoff_info}")
     else:
-        print(f"   ⚠️  [8/12] Self-DDoS Protection: Not checked")
+        print("   ⚠️  [8/12] Self-DDoS Protection: Not checked")
     
     # 9. DLQ 생성
     dlq_ok = dlq['success'] > 0
@@ -1481,7 +1480,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   ✅ [9/12] DLQ Create: {dlq['success']} created")
     else:
-        print(f"   ⚠️  [9/12] DLQ Create: Not available")
+        print("   ⚠️  [9/12] DLQ Create: Not available")
     
     # 10. Emergency Mode
     em_ok = em_trigger['success'] > 0
@@ -1489,7 +1488,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   ✅ [10/12] Emergency Mode: {em_trigger['success']} triggered")
     else:
-        print(f"   ⚠️  [10/12] Emergency Mode: Not triggered")
+        print("   ⚠️  [10/12] Emergency Mode: Not triggered")
     
     # 11. Half-Open Transition
     ho_ok = ho['success'] > 0 or ho['attempts'] > 0
@@ -1498,9 +1497,9 @@ def on_test_stop(environment, **kwargs):
         if ho['success'] > 0:
             print(f"   ✅ [11/12] Half-Open Transition: {ho['success']} transitions")
         else:
-            print(f"   ✅ [11/12] Half-Open Transition: System stable")
+            print("   ✅ [11/12] Half-Open Transition: System stable")
     else:
-        print(f"   ⚠️  [11/12] Half-Open Transition: Not checked")
+        print("   ⚠️  [11/12] Half-Open Transition: Not checked")
     
     # 12. Health Check
     health_ok = health_total > 0
@@ -1508,7 +1507,7 @@ def on_test_stop(environment, **kwargs):
         passed_tests += 1
         print(f"   ✅ [12/12] Health Check: {health_total} checks ({health_rate:.1f}% success)")
     else:
-        print(f"   ⚠️  [12/12] Health Check: Not checked")
+        print("   ⚠️  [12/12] Health Check: Not checked")
     
     print(f"\n   *** FINAL RESULT: {passed_tests}/{total_tests} tests passed ***")
     
@@ -1536,7 +1535,7 @@ def on_test_stop(environment, **kwargs):
 
     collector = get_metrics_collector()
     summary = collector.get_summary()
-    print(f"\n[OVERALL]")
+    print("\n[OVERALL]")
     print(f"   - Total Requests: {summary['total_requests']}")
     print(f"   - Error Rate: {summary['overall_error_rate']}%")
     
@@ -1549,7 +1548,7 @@ def on_test_stop(environment, **kwargs):
     
     # Scale-up: Half-Open 전환 관찰
     ho_ext = _extended_stats["half_open_observations"]
-    print(f"\n[SCALE-UP] Half-Open 전환 관찰 테스트:")
+    print("\n[SCALE-UP] Half-Open 전환 관찰 테스트:")
     print(f"   - 총 체크 횟수: {ho_ext['checks']}")
     print(f"   - Half-Open 전환 감지: {ho_ext['transitions_detected']}")
     print(f"   - 자동 복구(CLOSED) 감지: {ho_ext['auto_recoveries']}")
@@ -1559,7 +1558,7 @@ def on_test_stop(environment, **kwargs):
     
     # Chaos Combination
     chaos = _extended_stats["chaos_combination"]
-    print(f"\n[CHAOS] Cancel Storm + DB 레이턴시 주입 테스트:")
+    print("\n[CHAOS] Cancel Storm + DB 레이턴시 주입 테스트:")
     print(f"   - Fault Injection 횟수: {chaos['fault_injections']}")
     print(f"   - DB 레이턴시 주입: {chaos['db_latency_injected']}")
     print(f"   - Rate Limit Cascade 감지: {chaos['rate_limit_cascade_detected']}")
@@ -1569,7 +1568,7 @@ def on_test_stop(environment, **kwargs):
     
     # Error Budget Exhaustion
     eb_ext = _extended_stats["error_budget_exhaustion"]
-    print(f"\n[ERROR-BUDGET] Error Budget 고갈 테스트:")
+    print("\n[ERROR-BUDGET] Error Budget 고갈 테스트:")
     print(f"   - 초기 예산: {eb_ext['initial_budget']}%")
     print(f"   - 최종 예산: {eb_ext['final_budget']}%")
     print(f"   - 강제 에러 주입: {eb_ext['force_errors_injected']}")
@@ -1597,9 +1596,9 @@ def on_test_stop(environment, **kwargs):
         if ho_ext['transitions_detected'] > 0:
             print(f"   ✅ [E1/3] Scale-up (Half-Open): {ho_ext['transitions_detected']} 전환 감지!")
         else:
-            print(f"   ✅ [E1/3] Scale-up (Half-Open): 시스템 안정 (OPEN 없음)")
+            print("   ✅ [E1/3] Scale-up (Half-Open): 시스템 안정 (OPEN 없음)")
     else:
-        print(f"   ⚠️  [E1/3] Scale-up (Half-Open): 테스트 미실행")
+        print("   ⚠️  [E1/3] Scale-up (Half-Open): 테스트 미실행")
     
     # 2. Chaos Combination
     chaos_ok = chaos['fault_injections'] > 0 or chaos['rate_limit_cascade_detected'] > 0
@@ -1610,9 +1609,9 @@ def on_test_stop(environment, **kwargs):
         elif chaos['rate_limit_cascade_detected'] > 0:
             print(f"   ✅ [E2/3] Chaos Combination: Rate Limit 감지 ({chaos['rate_limit_cascade_detected']}회)")
         else:
-            print(f"   ✅ [E2/3] Chaos Combination: 장애 주입 완료, 시스템 복원력 확인")
+            print("   ✅ [E2/3] Chaos Combination: 장애 주입 완료, 시스템 복원력 확인")
     else:
-        print(f"   ⚠️  [E2/3] Chaos Combination: 테스트 미실행")
+        print("   ⚠️  [E2/3] Chaos Combination: 테스트 미실행")
     
     # 3. Error Budget Exhaustion
     eb_ok = eb_ext['initial_budget'] is not None or eb_ext['force_errors_injected'] > 0
@@ -1622,11 +1621,11 @@ def on_test_stop(environment, **kwargs):
             if eb_ext['isolation_mode_maintained'] > 0:
                 print(f"   ✅ [E3/3] Error Budget: 고갈 시 격리 모드 유지 확인! ({eb_ext['isolation_mode_maintained']}회)")
             else:
-                print(f"   ⚠️  [E3/3] Error Budget: 고갈됐으나 격리 모드 미확인")
+                print("   ⚠️  [E3/3] Error Budget: 고갈됐으나 격리 모드 미확인")
         else:
             print(f"   ✅ [E3/3] Error Budget: 예산 유지 중 ({eb_ext['final_budget']}%)")
     else:
-        print(f"   ⚠️  [E3/3] Error Budget: 테스트 미실행")
+        print("   ⚠️  [E3/3] Error Budget: 테스트 미실행")
     
     print(f"\n   *** EXTENDED RESULT: {extended_passed}/{extended_total} tests passed ***")
     

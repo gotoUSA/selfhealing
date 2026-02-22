@@ -8,7 +8,6 @@ causation_chain, evidence_hash 필드가 올바르게 생성되는지 테스트�
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from unittest import mock
 
 import pytest
@@ -91,10 +90,10 @@ class TestEmergencyPostmortemDeepLinks:
     )
     def test_emergency_postmortem_deep_links_populated(self):
         """환경변수 설정 시 Emergency postmortem의 deep_links에 URL 생성됨."""
+        from selfhealing.services.event_bus import _generate_emergency_postmortem_data
         from selfhealing.services.postmortem.deep_links import (
             reset_postmortem_deep_link_builder,
         )
-        from selfhealing.services.event_bus import _generate_emergency_postmortem_data
 
         reset_postmortem_deep_link_builder()
 

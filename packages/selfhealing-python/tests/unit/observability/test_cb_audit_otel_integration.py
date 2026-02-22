@@ -9,8 +9,7 @@ Tests for:
 """
 
 import os
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestTriggeringRequestInfoOtelAutoFill:
@@ -179,9 +178,9 @@ class TestAuditLoggerTraceIdFull:
 
     def setup_method(self):
         """Reset state before each test."""
+        from selfhealing.audit.trace import clear_trace_id
         from selfhealing.observability import reset_opentelemetry
         from selfhealing.settings.observability import reset_otel_settings
-        from selfhealing.audit.trace import clear_trace_id
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -189,9 +188,9 @@ class TestAuditLoggerTraceIdFull:
 
     def teardown_method(self):
         """Clean up after each test."""
+        from selfhealing.audit.trace import clear_trace_id
         from selfhealing.observability import reset_opentelemetry
         from selfhealing.settings.observability import reset_otel_settings
-        from selfhealing.audit.trace import clear_trace_id
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -242,10 +241,10 @@ class TestCircuitBreakerTracingManagerOtel:
     def setup_method(self):
         """Reset state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
         from selfhealing.services.circuit_breaker.tracing import (
             CircuitBreakerTracingManager,
         )
+        from selfhealing.settings.observability import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -254,10 +253,10 @@ class TestCircuitBreakerTracingManagerOtel:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
         from selfhealing.services.circuit_breaker.tracing import (
             CircuitBreakerTracingManager,
         )
+        from selfhealing.settings.observability import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()

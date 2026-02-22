@@ -8,8 +8,7 @@ AdaptiveThrottle EventBus 연동 테스트.
 4. source="throttle" 명시 확인
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 
 class TestAdaptiveThrottleEventPublishing:

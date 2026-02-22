@@ -11,8 +11,6 @@ Post-mortem 생성 완료 시 알림 발송 테스트.
 5. 중복 알림 방지 (dedup_key) 확인
 """
 
-import pytest
-from datetime import datetime, timezone as tz
 from unittest.mock import MagicMock, patch
 
 
@@ -21,7 +19,10 @@ class TestPostmortemNotificationSettings:
 
     def test_default_settings_enabled(self):
         """기본 설정에서 notification_enabled가 True인지 확인."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
 
@@ -32,7 +33,10 @@ class TestPostmortemNotificationSettings:
 
     def test_settings_with_env_disabled(self, monkeypatch):
         """환경변수로 postmortem_notification 비활성화 테스트."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
 
@@ -479,8 +483,9 @@ class TestCircuitBreakerClosedPostmortemWithNotification:
 
     def test_send_postmortem_notification_function_signature(self):
         """_send_postmortem_notification 함수가 올바른 시그니처를 갖는지 확인."""
-        from selfhealing.services.event_bus import _send_postmortem_notification
         import inspect
+
+        from selfhealing.services.event_bus import _send_postmortem_notification
 
         sig = inspect.signature(_send_postmortem_notification)
         params = list(sig.parameters.keys())

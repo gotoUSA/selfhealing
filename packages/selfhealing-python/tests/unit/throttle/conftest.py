@@ -17,11 +17,7 @@ import pytest
 # =============================================================================
 # 소스 모듈에서 가져온 상수 (하드코딩 방지)
 # =============================================================================
-
 from selfhealing.services.throttle.redis_cooldown_store import RedisCooldownStore
-from selfhealing.services.throttle.notification_fallback_recorder import (
-    DEFAULT_FALLBACK_PATH,
-)
 
 # Redis Cooldown 상수
 KEY_PREFIX = RedisCooldownStore.KEY_PREFIX  # "selfhealing:notification:cooldown"

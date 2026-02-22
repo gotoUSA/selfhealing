@@ -11,14 +11,13 @@ RequestHandler 단위 테스트.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from selfhealing.adapters.ipc.exceptions import (
     IPCInvalidParamsError,
     IPCMethodNotFoundError,
-    IPCServiceUnavailableError,
 )
 from selfhealing.adapters.ipc.request_handler import (
     RequestHandler,

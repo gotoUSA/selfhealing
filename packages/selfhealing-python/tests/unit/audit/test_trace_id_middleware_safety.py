@@ -5,15 +5,13 @@ trace_id_middleware try/finally 동작 검증.
 검증: 뷰에서 예외 발생 시에도 clear_trace_id()가 호출되는지 확인.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from selfhealing.audit.trace import (
     _trace_id_var,
     clear_trace_id,
-    get_trace_id,
-    set_trace_id,
     trace_id_middleware,
 )
 

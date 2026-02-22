@@ -2,7 +2,6 @@
 
 import logging
 from decimal import Decimal
-from typing import Any
 
 from django.db import transaction
 from django.db.models import F

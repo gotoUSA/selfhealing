@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-import pytest
-
 
 class TestThrottleAuditExtendedEventTypes:
     """확장된 감사 이벤트 타입 상수 테스트."""
@@ -22,13 +20,13 @@ class TestThrottleAuditExtendedEventTypes:
     def test_extended_event_type_constants_defined(self):
         """확장된 이벤트 타입 상수들이 정의되어 있는지 확인."""
         from selfhealing.services.throttle.audit import (
-            AUDIT_THROTTLE_SLA_WARNING,
-            AUDIT_THROTTLE_SLA_CRITICAL,
+            AUDIT_THROTTLE_429_RESPONSE,
             AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
             AUDIT_THROTTLE_FULL_STOP_DEACTIVATED,
-            AUDIT_THROTTLE_429_RESPONSE,
-            AUDIT_THROTTLE_RECOVERY_STARTED,
             AUDIT_THROTTLE_RECOVERY_COMPLETED,
+            AUDIT_THROTTLE_RECOVERY_STARTED,
+            AUDIT_THROTTLE_SLA_CRITICAL,
+            AUDIT_THROTTLE_SLA_WARNING,
         )
 
         assert AUDIT_THROTTLE_SLA_WARNING == "throttle_sla_warning"
@@ -42,12 +40,12 @@ class TestThrottleAuditExtendedEventTypes:
     def test_cascade_event_actions_contains_critical_events(self):
         """CASCADE_EVENT_ACTIONS에 중요 이벤트가 포함되어 있는지 확인."""
         from selfhealing.services.throttle.audit import (
-            CASCADE_EVENT_ACTIONS,
-            AUDIT_THROTTLE_EMERGENCY_SYNC,
             AUDIT_THROTTLE_CB_SYNC,
-            AUDIT_THROTTLE_SLA_CRITICAL,
+            AUDIT_THROTTLE_EMERGENCY_SYNC,
             AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
             AUDIT_THROTTLE_FULL_STOP_DEACTIVATED,
+            AUDIT_THROTTLE_SLA_CRITICAL,
+            CASCADE_EVENT_ACTIONS,
         )
 
         assert AUDIT_THROTTLE_EMERGENCY_SYNC in CASCADE_EVENT_ACTIONS
@@ -73,10 +71,10 @@ class TestExtendedAuditSeverity:
         """CASCADE_EVENT에 CRITICAL severity가 할당되는지 확인."""
         from selfhealing.services.throttle.audit import (
             AUDIT_SEVERITY_MAP,
-            AuditSeverity,
-            AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
             AUDIT_THROTTLE_EMERGENCY_SYNC,
+            AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
             AUDIT_THROTTLE_SLA_CRITICAL,
+            AuditSeverity,
         )
 
         assert AUDIT_SEVERITY_MAP[AUDIT_THROTTLE_FULL_STOP_ACTIVATED] == AuditSeverity.CRITICAL
@@ -90,11 +88,11 @@ class TestExtendedGetSeverity:
     def test_critical_events_have_critical_severity(self):
         """중요 이벤트는 CRITICAL severity를 가지는지 확인."""
         from selfhealing.services.throttle.audit import (
-            _get_severity,
+            AUDIT_THROTTLE_EMERGENCY_SYNC,
             AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
             AUDIT_THROTTLE_FULL_STOP_DEACTIVATED,
-            AUDIT_THROTTLE_EMERGENCY_SYNC,
             AUDIT_THROTTLE_SLA_CRITICAL,
+            _get_severity,
         )
 
         assert _get_severity(AUDIT_THROTTLE_FULL_STOP_ACTIVATED) == "critical"
@@ -105,9 +103,9 @@ class TestExtendedGetSeverity:
     def test_override_severity_works(self):
         """severity 오버라이드 기능 확인."""
         from selfhealing.services.throttle.audit import (
-            _get_severity,
-            AuditSeverity,
             AUDIT_THROTTLE_LIMIT_ADJUSTED,
+            AuditSeverity,
+            _get_severity,
         )
 
         # 기본값은 debug
@@ -123,11 +121,11 @@ class TestExtendedSampling:
     def test_critical_events_never_sampled_out(self):
         """CRITICAL 이벤트는 샘플링되지 않는지 확인."""
         from selfhealing.services.throttle.audit import (
-            should_sample,
+            AUDIT_THROTTLE_EMERGENCY_SYNC,
             AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
             AUDIT_THROTTLE_FULL_STOP_DEACTIVATED,
-            AUDIT_THROTTLE_EMERGENCY_SYNC,
             AUDIT_THROTTLE_SLA_CRITICAL,
+            should_sample,
         )
 
         # CRITICAL 이벤트는 항상 True (100번 테스트)
@@ -140,9 +138,9 @@ class TestExtendedSampling:
     def test_warning_events_never_sampled_out(self):
         """WARNING 이벤트는 샘플링되지 않는지 확인."""
         from selfhealing.services.throttle.audit import (
-            should_sample,
-            AUDIT_THROTTLE_SLA_WARNING,
             AUDIT_THROTTLE_CB_SYNC,
+            AUDIT_THROTTLE_SLA_WARNING,
+            should_sample,
         )
 
         # WARNING 이벤트는 항상 True
@@ -153,11 +151,11 @@ class TestExtendedSampling:
     def test_is_critical_action_returns_correct_values(self):
         """_is_critical_action 함수가 올바른 값을 반환하는지 확인."""
         from selfhealing.services.throttle.audit import (
-            _is_critical_action,
+            AUDIT_THROTTLE_429_RESPONSE,
             AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
             AUDIT_THROTTLE_FULL_STOP_DEACTIVATED,
             AUDIT_THROTTLE_LIMIT_ADJUSTED,
-            AUDIT_THROTTLE_429_RESPONSE,
+            _is_critical_action,
         )
 
         assert _is_critical_action(AUDIT_THROTTLE_FULL_STOP_ACTIVATED) is True
@@ -205,14 +203,14 @@ class TestExtendedMapActionToTriggerType:
     def test_maps_new_actions(self):
         """새 액션이 트리거 타입으로 매핑되는지 확인."""
         from selfhealing.services.throttle.audit import (
-            _map_action_to_trigger_type,
-            AUDIT_THROTTLE_SLA_WARNING,
-            AUDIT_THROTTLE_SLA_CRITICAL,
+            AUDIT_THROTTLE_429_RESPONSE,
             AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
             AUDIT_THROTTLE_FULL_STOP_DEACTIVATED,
-            AUDIT_THROTTLE_429_RESPONSE,
-            AUDIT_THROTTLE_RECOVERY_STARTED,
             AUDIT_THROTTLE_RECOVERY_COMPLETED,
+            AUDIT_THROTTLE_RECOVERY_STARTED,
+            AUDIT_THROTTLE_SLA_CRITICAL,
+            AUDIT_THROTTLE_SLA_WARNING,
+            _map_action_to_trigger_type,
         )
 
         assert _map_action_to_trigger_type(AUDIT_THROTTLE_SLA_WARNING) == "THROTTLE_SLA_WARNING"
@@ -230,8 +228,8 @@ class TestExtendedBuildThrottleEffects:
     def test_builds_full_stop_activated_effect(self):
         """Full Stop 활성화 효과가 빌드되는지 확인."""
         from selfhealing.services.throttle.audit import (
-            _build_throttle_effects,
             AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
+            _build_throttle_effects,
         )
 
         audit_data = {
@@ -251,8 +249,8 @@ class TestExtendedBuildThrottleEffects:
     def test_builds_full_stop_deactivated_effect(self):
         """Full Stop 비활성화 효과가 빌드되는지 확인."""
         from selfhealing.services.throttle.audit import (
-            _build_throttle_effects,
             AUDIT_THROTTLE_FULL_STOP_DEACTIVATED,
+            _build_throttle_effects,
         )
 
         audit_data = {
@@ -270,8 +268,8 @@ class TestExtendedBuildThrottleEffects:
     def test_builds_sla_critical_effect(self):
         """SLA Critical 효과가 빌드되는지 확인."""
         from selfhealing.services.throttle.audit import (
-            _build_throttle_effects,
             AUDIT_THROTTLE_SLA_CRITICAL,
+            _build_throttle_effects,
         )
 
         audit_data = {
@@ -329,7 +327,9 @@ class TestExtendedConvenienceFunctions:
     @patch("selfhealing.services.throttle.audit._start_audit_worker")
     def test_record_throttle_full_stop_activated(self, mock_worker, mock_queue):
         """record_throttle_full_stop_activated 함수 테스트."""
-        from selfhealing.services.throttle.audit import record_throttle_full_stop_activated
+        from selfhealing.services.throttle.audit import (
+            record_throttle_full_stop_activated,
+        )
 
         record_throttle_full_stop_activated(
             previous_limit=100,
@@ -342,7 +342,9 @@ class TestExtendedConvenienceFunctions:
     @patch("selfhealing.services.throttle.audit._start_audit_worker")
     def test_record_throttle_full_stop_deactivated(self, mock_worker, mock_queue):
         """record_throttle_full_stop_deactivated 함수 테스트."""
-        from selfhealing.services.throttle.audit import record_throttle_full_stop_deactivated
+        from selfhealing.services.throttle.audit import (
+            record_throttle_full_stop_deactivated,
+        )
 
         record_throttle_full_stop_deactivated(new_limit=80)
 
@@ -366,7 +368,9 @@ class TestExtendedConvenienceFunctions:
     @patch("selfhealing.services.throttle.audit._start_audit_worker")
     def test_record_throttle_recovery_completed(self, mock_worker, mock_queue):
         """record_throttle_recovery_completed 함수 테스트."""
-        from selfhealing.services.throttle.audit import record_throttle_recovery_completed
+        from selfhealing.services.throttle.audit import (
+            record_throttle_recovery_completed,
+        )
 
         record_throttle_recovery_completed(final_limit=100)
 
@@ -433,8 +437,8 @@ class TestExtendedBuildAuditData:
     def test_includes_config_snapshot_for_cascade_events(self):
         """CASCADE_EVENT에 config_snapshot이 포함되는지 확인."""
         from selfhealing.services.throttle.audit import (
-            _build_audit_data,
             AUDIT_THROTTLE_FULL_STOP_ACTIVATED,
+            _build_audit_data,
             reset_event_chain,
         )
 

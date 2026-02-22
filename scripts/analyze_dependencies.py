@@ -8,7 +8,6 @@ Self-Healing 코드 의존성 분석 스크립트
 """
 
 import ast
-import os
 from pathlib import Path
 from collections import defaultdict
 import json
@@ -191,7 +190,7 @@ def is_internal_import(imp: str) -> bool:
     """selfhealing 내부 import인지 확인"""
     return (
         imp.startswith("selfhealing.")
-        or not "." in imp
+        or "." not in imp
         or imp.split(".")[0]
         in [
             "adapters",

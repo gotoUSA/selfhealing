@@ -37,17 +37,13 @@ Note: All tests use in-memory mock repositories - no DB dependency.
 
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from selfhealing.services import (
     DLQConfig,
-    DLQEntryResult,
     DLQService,
-    BatchReplayResult,
     ReplayResult,
-    ReplayService,
 )
-from selfhealing.services.replay_service import register_replay_handler, _replay_handlers
+from selfhealing.services.replay_service import _replay_handlers
 
 # Import FailedOperationData from conftest for type hints
 from tests.self_healing.integration.conftest import FailedOperationData
@@ -119,7 +115,6 @@ class TestDLQService:
         Purpose:
             Verify that store_failure returns failure when DLQ is disabled.
         """
-        from selfhealing.services import DLQService, DLQConfig
         service = DLQService(
             repository=failed_operation_repository,
             config=DLQConfig(enabled=False),

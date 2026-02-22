@@ -9,10 +9,7 @@ Tests for:
 5. RuntimeConfig integration
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, PropertyMock
-from dataclasses import asdict
-
+from unittest.mock import MagicMock, patch
 
 # =============================================================================
 # TrafficHealthStatus Tests
@@ -170,7 +167,7 @@ class TestTrafficAwareReplayTask:
         from selfhealing.tasks.traffic_aware_replay import TrafficAwareReplayTask
 
         task = TrafficAwareReplayTask()
-        
+
         with patch.object(task, "_get_replay_automation_config") as mock_config:
             mock_config.return_value = {"track3_enabled": False}
             result = task.run()
@@ -190,7 +187,7 @@ class TestTrafficAwareReplayTask:
 
         with patch.object(task, "_get_replay_automation_config") as mock_config:
             mock_config.return_value = {"track3_enabled": True, "track3_max_items": 30}
-            
+
             with patch(
                 "selfhealing.tasks.traffic_aware_replay.check_traffic_health"
             ) as mock_health:
@@ -215,14 +212,14 @@ class TestTrafficAwareReplayTask:
 
         with patch.object(task, "_get_replay_automation_config") as mock_config:
             mock_config.return_value = {"track3_enabled": True, "track3_max_items": 25}
-            
+
             with patch(
                 "selfhealing.tasks.traffic_aware_replay.check_traffic_health"
             ) as mock_health:
                 mock_health.return_value = TrafficHealthStatus.healthy(
                     checks={"circuit_breaker": True, "error_budget": True, "governance": True}
                 )
-                
+
                 with patch.object(task, "_execute_replay") as mock_replay:
                     mock_replay.return_value = {"total": 10, "success": 8, "failed": 2}
                     result = task.run()
@@ -244,12 +241,12 @@ class TestTrafficAwareReplayTask:
 
         with patch.object(task, "_get_replay_automation_config") as mock_config:
             mock_config.return_value = {"track3_enabled": True, "track3_max_items": 30}
-            
+
             with patch(
                 "selfhealing.tasks.traffic_aware_replay.check_traffic_health"
             ) as mock_health:
                 mock_health.return_value = TrafficHealthStatus.healthy(checks={})
-                
+
                 with patch.object(task, "_execute_replay") as mock_replay:
                     mock_replay.side_effect = RuntimeError("ReplayService failed")
                     result = task.run()
@@ -316,7 +313,9 @@ class TestBeatScheduleIntegration:
 
     def test_get_traffic_aware_beat_schedule(self):
         """get_traffic_aware_beat_schedule 함수 테스트."""
-        from selfhealing.tasks.traffic_aware_replay import get_traffic_aware_beat_schedule
+        from selfhealing.tasks.traffic_aware_replay import (
+            get_traffic_aware_beat_schedule,
+        )
 
         schedule = get_traffic_aware_beat_schedule()
 
@@ -326,7 +325,9 @@ class TestBeatScheduleIntegration:
 
     def test_included_in_main_beat_schedule(self):
         """메인 beat 스케줄에 포함되는지 확인."""
-        from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
+        from selfhealing.adapters.celery.beat_schedule import (
+            get_selfhealing_beat_schedule,
+        )
 
         schedule = get_selfhealing_beat_schedule(include_traffic_aware=True)
 
@@ -334,7 +335,9 @@ class TestBeatScheduleIntegration:
 
     def test_excluded_when_disabled(self):
         """비활성화 시 스케줄에서 제외되는지 확인."""
-        from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
+        from selfhealing.adapters.celery.beat_schedule import (
+            get_selfhealing_beat_schedule,
+        )
 
         schedule = get_selfhealing_beat_schedule(include_traffic_aware=False)
 
@@ -383,12 +386,10 @@ class TestModuleExports:
     def test_tasks_init_exports(self):
         """tasks/__init__.py에서 export되는지 확인."""
         from selfhealing.tasks import (
+            TRAFFIC_AWARE_TASKS,
+            TrafficAwareReplayTask,
             TrafficHealthStatus,
             check_traffic_health,
-            TrafficAwareReplayTask,
-            TRAFFIC_AWARE_TASKS,
-            register_traffic_aware_tasks_with_celery,
-            get_traffic_aware_beat_schedule,
         )
 
         # 모든 export가 정상적으로 import되면 통과

@@ -20,11 +20,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.services.http_client import (
-    SelfHealingHttpClient,
     _DEFAULT_INTERNAL_DNS_SUFFIXES,
+    SelfHealingHttpClient,
 )
 
 

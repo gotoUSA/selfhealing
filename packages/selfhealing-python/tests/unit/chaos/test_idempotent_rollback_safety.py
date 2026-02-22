@@ -11,18 +11,15 @@ Reference: docs/self_healing/CHAOS_SAFETY_IMPLEMENTATION_PLAN.md
 import threading
 import time
 from datetime import datetime
-from unittest.mock import MagicMock, patch, call
-
-import pytest
+from unittest.mock import patch
 
 from selfhealing.services.chaos.experiments import (
+    Error5xxExperiment,
     ExperimentConfig,
     ExperimentStatus,
     LatencyInjectionExperiment,
-    Error5xxExperiment,
     TimeoutExperiment,
 )
-
 
 # =============================================================================
 # Basic Idempotent Rollback Tests

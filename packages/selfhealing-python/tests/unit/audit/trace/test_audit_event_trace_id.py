@@ -9,8 +9,6 @@ AuditEvent TraceID 자동 포함 테스트.
 
 from unittest.mock import patch
 
-import pytest
-
 from selfhealing.audit.event_buffer import AuditEvent, AuditEventType
 
 

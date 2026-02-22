@@ -5,9 +5,7 @@ Tests for Async Healing Logger.
 import queue
 import threading
 import time
-from unittest.mock import Mock, patch, MagicMock
-
-import pytest
+from unittest.mock import Mock
 
 
 class TestEventSeverity:

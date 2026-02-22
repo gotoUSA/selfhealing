@@ -17,11 +17,11 @@ import logging
 import pytest
 
 from selfhealing.services.throttle.tier_mapping import (
+    _DEFAULT_CRITICALITY,
+    _DEFAULT_TIER,
     CRITICALITY_TO_TIER,
     TIER_TO_CRITICALITY,
     VALID_TIER_IDS,
-    _DEFAULT_CRITICALITY,
-    _DEFAULT_TIER,
     get_criticality_from_tier,
     get_tier_from_criticality,
 )
@@ -48,7 +48,6 @@ class TestCriticalityToTierMapping:
 
     def test_covers_all_service_config_valid_levels(self):
         """ServiceConfig.__post_init__()의 valid_levels와 키가 일치."""
-        from selfhealing.services.circuit_breaker.models import ServiceConfig
 
         # ServiceConfig.__post_init__에서 검증하는 valid_levels 기준
         valid_levels = {"critical", "high", "medium", "low"}

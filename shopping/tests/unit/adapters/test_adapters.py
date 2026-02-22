@@ -558,7 +558,6 @@ class TestCustomSocialAccountAdapterIntegration:
         """기존 SocialLogin 객체로 is_auto_signup_allowed 테스트"""
         from allauth.socialaccount.models import SocialAccount, SocialLogin
 
-        from shopping.models.user import User
         from shopping.tests.factories import SocialAppFactory, UserFactory
 
         # Arrange

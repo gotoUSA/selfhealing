@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from tests.unit.throttle.conftest import (
     NOTIFICATION_SOURCE,
     SVC_DEFAULT,
@@ -28,7 +26,6 @@ from tests.unit.throttle.conftest import (
     make_warning_event,
     make_warning_event_data,
 )
-
 
 # =============================================================================
 # _get_region_safe 테스트
@@ -112,7 +109,9 @@ class TestSubscribeSlaEvents:
                 ),
             },
         ):
-            from selfhealing.services.throttle.sla_notification import _subscribe_sla_events
+            from selfhealing.services.throttle.sla_notification import (
+                _subscribe_sla_events,
+            )
 
             _subscribe_sla_events()
             assert mock_bus.subscribe.call_count == 3
@@ -241,7 +240,9 @@ class TestCeleryFallbackToSync:
 
     def test_recovered_fallback_on_import_error(self):
         """Celery ImportError → Recovered 동기 fallback."""
-        from selfhealing.services.throttle.sla_notification import _handle_limit_recovered
+        from selfhealing.services.throttle.sla_notification import (
+            _handle_limit_recovered,
+        )
 
         with patch("selfhealing.services.throttle.sla_notification._send_limit_recovered_sync") as mock_sync:
             _handle_limit_recovered(make_recovered_event())
@@ -281,7 +282,9 @@ class TestSendSlaSyncFunctions:
 
     def test_warning_sync_calls_notify_sla(self):
         """_send_sla_warning_sync가 notify_sla 호출."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_warning_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -295,7 +298,9 @@ class TestSendSlaSyncFunctions:
 
     def test_warning_sync_service_dedup_key(self):
         """dedup_key가 서비스 단위: domain='throttle:{service_name}'."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_warning_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -311,7 +316,9 @@ class TestSendSlaSyncFunctions:
 
     def test_warning_sync_region_in_metadata(self):
         """리전 정보가 metadata에 포함."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_warning_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification._get_region_safe",
@@ -331,7 +338,9 @@ class TestSendSlaSyncFunctions:
 
     def test_warning_sync_priority_high(self):
         """Warning 동기 전송 시 priority='high'."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_warning_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -347,7 +356,9 @@ class TestSendSlaSyncFunctions:
 
     def test_critical_sync_calls_notify_sla(self):
         """_send_sla_critical_sync가 notify_sla 호출."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_critical_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_critical_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -361,7 +372,9 @@ class TestSendSlaSyncFunctions:
 
     def test_critical_sync_priority_critical(self):
         """Critical 동기 전송 시 priority='critical'."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_critical_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_critical_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -377,7 +390,9 @@ class TestSendSlaSyncFunctions:
 
     def test_critical_sync_requires_action_metadata(self):
         """Critical metadata에 requires_action=True 포함."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_critical_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_critical_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -393,7 +408,9 @@ class TestSendSlaSyncFunctions:
 
     def test_recovered_sync_calls_notify_sla(self):
         """_send_limit_recovered_sync가 notify_sla 호출."""
-        from selfhealing.services.throttle.sla_notification import _send_limit_recovered_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_limit_recovered_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -407,7 +424,9 @@ class TestSendSlaSyncFunctions:
 
     def test_recovered_sync_priority_medium(self):
         """Recovered 동기 전송 시 priority='medium'."""
-        from selfhealing.services.throttle.sla_notification import _send_limit_recovered_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_limit_recovered_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -423,7 +442,9 @@ class TestSendSlaSyncFunctions:
 
     def test_warning_sync_default_service_name(self):
         """service_name 미전달 시 'default' 사용."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_warning_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",
@@ -441,25 +462,33 @@ class TestSendSlaSyncFunctions:
 
     def test_warning_sync_handles_import_error(self):
         """UnifiedNotification 미사용 시 에러 없이 종료."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_warning_sync,
+        )
 
         _send_sla_warning_sync(make_warning_event_data())
 
     def test_critical_sync_handles_exception(self):
         """Critical 전송 예외 시 에러 없이 종료."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_critical_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_critical_sync,
+        )
 
         _send_sla_critical_sync(make_critical_event_data())
 
     def test_recovered_sync_handles_exception(self):
         """Recovered 전송 예외 시 에러 없이 종료."""
-        from selfhealing.services.throttle.sla_notification import _send_limit_recovered_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_limit_recovered_sync,
+        )
 
         _send_limit_recovered_sync(make_recovered_event_data())
 
     def test_warning_sync_source_is_adaptive_throttle(self):
         """source가 'adaptive_throttle'."""
-        from selfhealing.services.throttle.sla_notification import _send_sla_warning_sync
+        from selfhealing.services.throttle.sla_notification import (
+            _send_sla_warning_sync,
+        )
 
         with patch(
             "selfhealing.services.throttle.sla_notification.notify_sla",

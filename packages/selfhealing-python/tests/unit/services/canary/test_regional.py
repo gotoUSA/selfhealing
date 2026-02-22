@@ -6,13 +6,11 @@ Phase 2: RegionalInterlockBehavior, RegionalInterlockPolicy 단위 테스트.
 Reference: docs/self_healing/middleware_system/74_CANARY_SAFETY_INTERLOCK.md
 """
 
-import pytest
 
 from selfhealing.services.canary.regional import (
     RegionalInterlockBehavior,
     RegionalInterlockPolicy,
 )
-
 
 # =============================================================================
 # Test: RegionalInterlockBehavior
@@ -46,7 +44,7 @@ class TestRegionalInterlockPolicy:
     def test_default_policy_values(self):
         """기본 정책 값 확인."""
         policy = RegionalInterlockPolicy()
-        
+
         assert policy.default_behavior == RegionalInterlockBehavior.PAUSE_ALL
         assert policy.allow_isolated_rollback is False
         assert policy.require_manual_resume_after_regional_rollback is True
@@ -58,13 +56,13 @@ class TestRegionalInterlockPolicy:
             default_behavior=RegionalInterlockBehavior.CONTINUE_HEALTHY,
             allow_isolated_rollback=True,
         )
-        
+
         behavior = policy.get_behavior_for_situation(
             affected_regions=["seoul", "tokyo"],
             total_regions=["seoul", "tokyo"],
             is_region_isolated_deployment=True,
         )
-        
+
         assert behavior == RegionalInterlockBehavior.PAUSE_ALL
 
     def test_non_isolated_deployment_ignores_rollback_affected_only(self):
@@ -73,13 +71,13 @@ class TestRegionalInterlockPolicy:
             default_behavior=RegionalInterlockBehavior.ROLLBACK_AFFECTED_ONLY,
             allow_isolated_rollback=True,
         )
-        
+
         behavior = policy.get_behavior_for_situation(
             affected_regions=["seoul"],
             total_regions=["seoul", "tokyo"],
             is_region_isolated_deployment=False,  # 격리 배포 아님
         )
-        
+
         assert behavior == RegionalInterlockBehavior.PAUSE_ALL
 
     def test_too_many_affected_regions_returns_pause_all(self):
@@ -89,13 +87,13 @@ class TestRegionalInterlockPolicy:
             allow_isolated_rollback=True,
             max_affected_regions_for_isolated_rollback=1,
         )
-        
+
         behavior = policy.get_behavior_for_situation(
             affected_regions=["seoul", "tokyo"],  # 2개 영향
             total_regions=["seoul", "tokyo", "oregon"],
             is_region_isolated_deployment=True,
         )
-        
+
         assert behavior == RegionalInterlockBehavior.PAUSE_ALL
 
     def test_isolated_rollback_disabled_returns_pause_all(self):
@@ -104,13 +102,13 @@ class TestRegionalInterlockPolicy:
             default_behavior=RegionalInterlockBehavior.ROLLBACK_AFFECTED_ONLY,
             allow_isolated_rollback=False,  # 격리 롤백 비활성화
         )
-        
+
         behavior = policy.get_behavior_for_situation(
             affected_regions=["seoul"],
             total_regions=["seoul", "tokyo"],
             is_region_isolated_deployment=True,
         )
-        
+
         assert behavior == RegionalInterlockBehavior.PAUSE_ALL
 
     def test_hybrid_allowed_for_non_isolated(self):
@@ -118,13 +116,13 @@ class TestRegionalInterlockPolicy:
         policy = RegionalInterlockPolicy(
             default_behavior=RegionalInterlockBehavior.HYBRID,
         )
-        
+
         behavior = policy.get_behavior_for_situation(
             affected_regions=["seoul"],
             total_regions=["seoul", "tokyo"],
             is_region_isolated_deployment=False,
         )
-        
+
         assert behavior == RegionalInterlockBehavior.HYBRID
 
     def test_isolated_rollback_enabled_with_valid_conditions(self):
@@ -134,11 +132,11 @@ class TestRegionalInterlockPolicy:
             allow_isolated_rollback=True,
             max_affected_regions_for_isolated_rollback=2,
         )
-        
+
         behavior = policy.get_behavior_for_situation(
             affected_regions=["seoul"],
             total_regions=["seoul", "tokyo", "oregon"],
             is_region_isolated_deployment=True,
         )
-        
+
         assert behavior == RegionalInterlockBehavior.ROLLBACK_AFFECTED_ONLY

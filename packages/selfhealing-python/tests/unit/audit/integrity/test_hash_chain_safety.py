@@ -14,31 +14,25 @@ Refactored to use Factory Pattern (Phase 4):
 """
 
 import json
-import os
-import tempfile
 import threading
 import time
 from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from selfhealing.audit.hash_chain_safety import (
-    MonotonicTimer,
-    MonotonicTimestamp,
-    HashChainWAL,
-    HashChainSafetyWALEntry,
     AtomicMergeSwap,
-    ShardedDateLock,
+    HashChainSafetyManager,
+    HashChainWAL,
     IntegrityAuditTrail,
     IntegrityEventType,
-    HashChainSafetyManager,
+    MonotonicTimer,
+    MonotonicTimestamp,
+    ShardedDateLock,
 )
 
 # Factory Pattern imports
 from tests.factories import MockRedisClient
-
 
 # =============================================================================
 # Fixtures

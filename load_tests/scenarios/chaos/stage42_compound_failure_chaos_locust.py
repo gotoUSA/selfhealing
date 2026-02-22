@@ -105,7 +105,6 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from locust import HttpUser, task, between, tag, events
-from locust.runners import MasterRunner, WorkerRunner
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -468,7 +467,7 @@ class CompoundFailureController:
             "service_name": service_name,
             "action": "inject_failure",
             "environment": "chaos",
-            "reason": f"Stage42 Compound Chaos: Transient failure injection",
+            "reason": "Stage42 Compound Chaos: Transient failure injection",
             "ttl_minutes": ttl_minutes,
             "metadata": {
                 "failure_rate": failure_rate,
@@ -1211,7 +1210,7 @@ def on_test_start(environment, **kwargs):
     print("\n" + "=" * 80)
     print(f"🚀 {STAGE_NAME} Compound Failure Chaos Load Test Started")
     print("=" * 80)
-    print(f"📊 Test Configuration:")
+    print("📊 Test Configuration:")
     print(f"   - Services: {SERVICE_PAYMENT_GATEWAY}, {SERVICE_ORDER_PROCESSOR}")
     print(f"   -           {SERVICE_NOTIFICATION}, {SERVICE_INVENTORY}")
     print(f"   - Admin User: {ADMIN_USERNAME}")

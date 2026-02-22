@@ -9,35 +9,31 @@ Phase 1 예제 테스트:
 - 상수 클래스 동작
 """
 
-import pytest
 from datetime import datetime, timezone
 
+import pytest
+
+from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
 from tests.factories import (
+    DefaultValues,
     # Constants
     Domains,
-    Services,
     FailureTypes,
-    Status,
-    DefaultValues,
-    # Data Factory
-    TestDataFactory,
-    MockCircuitBreakerStateData,
     # Repositories
     InMemoryCircuitBreakerRepository,
-    InMemoryRateLimitTracker,
     InMemoryDLQRepository,
-    MockDLQEntry,
-    # Redis
-    MockRedisClient,
-    MockPipeline,
+    InMemoryRateLimitTracker,
     MockDistributedLock,
-    # Time helpers
-    mock_sleep,
+    MockRedisClient,
+    Services,
+    Status,
+    # Data Factory
+    TestDataFactory,
     get_fixed_datetime,
     make_datetime_range,
+    # Time helpers
+    mock_sleep,
 )
-from selfhealing.interfaces.repositories import CircuitBreakerStateEnum as CircuitState
-
 
 # =============================================================================
 # Constants Tests

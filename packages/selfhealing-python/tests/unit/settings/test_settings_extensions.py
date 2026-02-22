@@ -15,7 +15,6 @@ from unittest import mock
 
 import pytest
 
-
 # =============================================================================
 # ErrorBudgetPropagationSettings Extension Tests
 # =============================================================================
@@ -63,10 +62,10 @@ class TestErrorBudgetPropagationSettingsExtension:
     def test_extended_env_override(self):
         """확장된 필드들의 환경 변수 오버라이드 테스트."""
         from selfhealing.settings.error_budget_propagation import (
-            reset_error_budget_propagation_settings,
             get_error_budget_propagation_settings,
+            reset_error_budget_propagation_settings,
         )
-        
+
         with mock.patch.dict(os.environ, {
             "SELFHEALING_ERROR_BUDGET_PROPAGATION_MAX_CRISIS_MULTIPLIER_CAP": "15.0",
             "SELFHEALING_ERROR_BUDGET_PROPAGATION_REFUND_RATIO": "0.7",
@@ -130,8 +129,8 @@ class TestThrottleSettingsExtension:
     def test_extended_env_override(self):
         """확장된 필드들의 환경 변수 오버라이드 테스트."""
         from selfhealing.settings.throttle import (
-            reset_throttle_settings,
             get_throttle_settings,
+            reset_throttle_settings,
         )
 
         with mock.patch.dict(os.environ, {
@@ -176,8 +175,8 @@ class TestAntiFlappingSettingsExtension:
     def test_extended_env_override(self):
         """확장된 필드들의 환경 변수 오버라이드 테스트."""
         from selfhealing.settings.anti_flapping import (
-            reset_anti_flapping_settings,
             get_anti_flapping_settings,
+            reset_anti_flapping_settings,
         )
 
         with mock.patch.dict(os.environ, {
@@ -222,8 +221,8 @@ class TestGovernanceSettingsExtension:
     def test_extended_env_override(self):
         """확장된 필드들의 환경 변수 오버라이드 테스트."""
         from selfhealing.settings.governance import (
-            reset_governance_settings,
             get_governance_settings,
+            reset_governance_settings,
         )
 
         with mock.patch.dict(os.environ, {
@@ -266,8 +265,8 @@ class TestSamplingSettings:
     def test_env_override(self):
         """환경 변수 오버라이드 테스트."""
         from selfhealing.settings.sampling import (
-            reset_sampling_settings,
             get_sampling_settings,
+            reset_sampling_settings,
         )
 
         with mock.patch.dict(os.environ, {
@@ -287,10 +286,10 @@ class TestSamplingSettings:
     def test_singleton_pattern(self):
         """싱글톤 패턴 테스트."""
         from selfhealing.settings.sampling import get_sampling_settings
-        
+
         settings1 = get_sampling_settings()
         settings2 = get_sampling_settings()
-        
+
         assert settings1 is settings2
 
     def test_validation_sample_rate_bounds(self):
@@ -341,8 +340,8 @@ class TestSteadyStateSettings:
     def test_env_override(self):
         """환경 변수 오버라이드 테스트."""
         from selfhealing.settings.steady_state import (
-            reset_steady_state_settings,
             get_steady_state_settings,
+            reset_steady_state_settings,
         )
 
         with mock.patch.dict(os.environ, {

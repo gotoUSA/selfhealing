@@ -17,10 +17,8 @@ Endpoints:
 Reference: docs/self_healing/middleware_system/71_CANARY_CONFIG_ROLLOUT.md
 """
 
-import os
 import pytest
 from unittest.mock import Mock, patch
-from datetime import timedelta
 from selfhealing.utils.time import utc_now
 
 from rest_framework.test import APIRequestFactory

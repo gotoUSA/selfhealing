@@ -9,9 +9,8 @@ Tests for advanced chaos 기능:
 - Comprehensive snapshot
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 
 
 # =============================================================================
@@ -168,7 +167,6 @@ class TestComprehensiveSnapshot:
         timestamp = result["timestamp"]
         assert isinstance(timestamp, str)
         # Should be parseable
-        from datetime import datetime
         parsed = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
         assert parsed is not None
 
@@ -196,8 +194,7 @@ class TestDORA003AutoCheck:
     def test_check_resilience_testing_with_experiments(self, mock_get_scheduler):
         """Test DORA-003 passes when sufficient experiments exist."""
         from selfhealing.services.compliance.service import ComplianceService
-        from unittest.mock import MagicMock
-        from datetime import datetime, timedelta
+        from datetime import datetime
         
         # Reset singleton
         ComplianceService._instance = None
@@ -225,7 +222,6 @@ class TestDORA003AutoCheck:
     def test_check_resilience_testing_no_experiments(self, mock_get_scheduler):
         """Test DORA-003 fails when no experiments exist."""
         from selfhealing.services.compliance.service import ComplianceService
-        from unittest.mock import MagicMock
         
         # Reset singleton
         ComplianceService._instance = None
@@ -243,8 +239,7 @@ class TestDORA003AutoCheck:
     def test_check_resilience_testing_insufficient_experiments(self, mock_get_scheduler):
         """Test DORA-003 fails when insufficient experiments (< 4)."""
         from selfhealing.services.compliance.service import ComplianceService
-        from unittest.mock import MagicMock
-        from datetime import datetime, timedelta
+        from datetime import datetime
         
         # Reset singleton
         ComplianceService._instance = None
@@ -272,8 +267,7 @@ class TestDORA003AutoCheck:
     def test_check_resilience_testing_failed_experiments_count(self, mock_get_scheduler):
         """Test that failed experiments are also counted for DORA-003."""
         from selfhealing.services.compliance.service import ComplianceService
-        from unittest.mock import MagicMock
-        from datetime import datetime, timedelta
+        from datetime import datetime
         
         # Reset singleton
         ComplianceService._instance = None
@@ -376,7 +370,6 @@ class TestPhase6EmergencySnapshot:
         """Test emergency snapshot captures active state."""
         from selfhealing.services.chaos.experiments import LatencyInjectionExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
-        from unittest.mock import MagicMock
         
         # Mock emergency manager with active state
         mock_manager = MagicMock()
@@ -433,7 +426,6 @@ class TestPhase6TieringCBSnapshot:
         """Test tiering CB snapshot captures state correctly."""
         from selfhealing.services.chaos.experiments import LatencyInjectionExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
-        from unittest.mock import MagicMock
         
         mock_cb = MagicMock()
         mock_cb._state = "OPEN"
@@ -510,7 +502,6 @@ class TestPhase6TieringRegistrySnapshot:
         """Test tiering registry snapshot captures tier counts."""
         from selfhealing.services.chaos.experiments import LatencyInjectionExperiment
         from selfhealing.services.chaos.base import ExperimentConfig
-        from unittest.mock import MagicMock
         
         mock_tier1 = MagicMock()
         mock_tier1.id = "critical"

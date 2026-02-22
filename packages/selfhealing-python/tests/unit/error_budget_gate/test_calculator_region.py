@@ -5,12 +5,8 @@ calculate_budget_status()에 region 전달 시
 콜백에 전파되고 결과 ErrorBudgetStatus.region에 반영되는지 검증.
 """
 
-import pytest
-from datetime import datetime, timedelta
 
 from selfhealing.services.error_budget.calculator import ErrorBudgetCalculator
-from selfhealing.services.error_budget.models import ErrorBudgetStatus
-
 
 # =============================================================================
 # 동작 검증: region 파라미터 전달

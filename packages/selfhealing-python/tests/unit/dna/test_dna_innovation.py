@@ -4,20 +4,18 @@ DNA Innovation 모듈 테스트
 Auto-Suggestion Engine + Cross-Stage Learning 테스트
 """
 
-import pytest
-from datetime import datetime
 
+import pytest
 from load_tests.utils.selfhealing.dna_innovation import (
     AutoSuggestionEngine,
     CrossStageLearner,
+    CrossStageLearningReport,
     DNAEvolutionTracker,
     DNAInnovationManager,
-    Suggestion,
-    SuggestionType,
-    SuggestionPriority,
     StageProfile,
-    LearningPattern,
-    CrossStageLearningReport,
+    Suggestion,
+    SuggestionPriority,
+    SuggestionType,
 )
 
 

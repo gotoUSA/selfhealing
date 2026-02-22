@@ -7,7 +7,7 @@ SelfHealingHttpClient Baggage Pre-request Hook 단위 테스트.
 - Pre-request Baggage 동기화가 내부 URL에서 수행되는지
 """
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 

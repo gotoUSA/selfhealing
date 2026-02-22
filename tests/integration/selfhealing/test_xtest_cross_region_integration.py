@@ -35,10 +35,7 @@ django.setup()
 
 from selfhealing.services.namespace_emergency.atomic_query import (
     AtomicStateQuery,
-    ATOMIC_STATE_QUERY_SCRIPT,
 )
-from selfhealing.services.coordination.enums import EmergencyScope
-from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
 
 class TestAtomicStateQueryLuaScript:

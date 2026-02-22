@@ -8,14 +8,9 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-from selfhealing.services.backoff_calculator import BackoffConfig
 from selfhealing.services.retry_handler import (
-    RetryAction,
     RetryConfig,
     RetryHandler,
-    RetryResult,
 )
 
 

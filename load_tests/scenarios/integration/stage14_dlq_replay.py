@@ -63,10 +63,8 @@ import os
 import sys
 import time
 import json
-import random
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any
 
 # Ensure project root is in sys.path
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -167,13 +165,13 @@ def _update_phase():
         _dlq_stats["phase"] = phase
 
         if phase == "recovery_wait":
-            print(f"\n⏸️ Entering Recovery Wait Phase")
+            print("\n⏸️ Entering Recovery Wait Phase")
             print(f"   - Payments attempted: {_dlq_stats['payments_attempted']}")
             print(f"   - Payments failed: {_dlq_stats['payments_failed']}")
 
         elif phase == "replay_verification":
-            print(f"\n▶️ Entering Replay Verification Phase")
-            print(f"   - Triggering DLQ replay...")
+            print("\n▶️ Entering Replay Verification Phase")
+            print("   - Triggering DLQ replay...")
 
 
 # =============================================================================
@@ -309,7 +307,7 @@ class DLQReplayUser(HttpUser):
                         "note": "Full replay available via Django Admin only",
                     }
                     print(f"\n✅ DLQ Status Verified - Pending: {pending_count}")
-                    print(f"   ℹ️  Use Django Admin for DLQ replay operations")
+                    print("   ℹ️  Use Django Admin for DLQ replay operations")
                     response.success()
                 else:
                     response.failure(f"DLQ status check failed: {response.status_code}")
@@ -356,7 +354,7 @@ class DLQReplayUser(HttpUser):
                 catch_response=True,
             ) as response:
                 if response.status_code == 200:
-                    print(f"\n✅ Failure injection removed")
+                    print("\n✅ Failure injection removed")
         except Exception:
             pass
 
@@ -523,12 +521,12 @@ def on_test_stop(environment, **kwargs):
 
     # DLQ Status Verification
     if _dlq_stats["replay_triggered"]:
-        print(f"  - DLQ Status Verified: ✓")
+        print("  - DLQ Status Verified: ✓")
         if _dlq_stats["replay_result"]:
             print(f"  - DLQ Pending Count: {_dlq_stats['replay_result'].get('pending_count', 'N/A')}")
-        print(f"  - Note: Full DLQ replay available via Django Admin")
+        print("  - Note: Full DLQ replay available via Django Admin")
     else:
-        print(f"  - DLQ Status Verified: ✗")
+        print("  - DLQ Status Verified: ✗")
 
     # Overall data integrity (adjusted for current API capabilities)
     # Success criteria: DLQ items created + no duplicates + status API works
@@ -539,15 +537,15 @@ def on_test_stop(environment, **kwargs):
 
     # Recovery Latency Report
     recovery = _dlq_stats["recovery"]
-    print(f"\n🔄 Recovery Latency Metrics:")
+    print("\n🔄 Recovery Latency Metrics:")
     if recovery.get("dlq_recovery_latency_seconds"):
         print(f"   - DLQ Processing latency: {recovery['dlq_recovery_latency_seconds']:.1f}s")
         if recovery["dlq_recovery_latency_seconds"] < 60:
-            print(f"   - SLA Status: ✓ Under 1min threshold")
+            print("   - SLA Status: ✓ Under 1min threshold")
         else:
-            print(f"   - SLA Status: ✗ Exceeded 1min threshold")
+            print("   - SLA Status: ✗ Exceeded 1min threshold")
     else:
-        print(f"   - DLQ replay not performed or not timed")
+        print("   - DLQ replay not performed or not timed")
 
     # Save report
     report_path = os.path.join(_load_tests_dir, "reports", "stage14_dlq_replay_report.json")

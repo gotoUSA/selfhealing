@@ -11,17 +11,14 @@ Throttle EventBus 구독 핸들러 테스트.
 7. 순환 참조 방지 (source="throttle" 체크)
 """
 
-import pytest
-from datetime import datetime, timezone
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from selfhealing.services.event_bus import (
     EventType,
-    EventPriority,
     SelfHealingEvent,
-    _on_emergency_level_changed_throttle,
-    _on_circuit_breaker_opened_throttle,
     _on_circuit_breaker_closed_throttle,
+    _on_circuit_breaker_opened_throttle,
+    _on_emergency_level_changed_throttle,
     _on_error_budget_critical_throttle,
     _on_error_budget_recovered_throttle,
     _on_kill_switch_activated_throttle,
@@ -437,7 +434,10 @@ class TestHandlerRegistration:
 
     def test_throttle_handlers_registered_in_default_handlers(self):
         """register_default_handlers()에 Throttle 핸들러 등록 확인."""
-        from selfhealing.services.event_bus import get_event_bus, register_default_handlers
+        from selfhealing.services.event_bus import (
+            get_event_bus,
+            register_default_handlers,
+        )
 
         bus = get_event_bus()
         bus.reset()

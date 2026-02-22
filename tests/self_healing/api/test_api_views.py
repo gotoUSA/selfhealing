@@ -11,8 +11,6 @@ import django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 django.setup()
 
-import pytest
-from unittest.mock import patch, MagicMock
 
 from selfhealing.api.django.views.health import (
     SelfHealingHealthView,

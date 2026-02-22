@@ -4,7 +4,6 @@
 Gate 결과 캐싱 및 캐시 무효화 테스트.
 """
 
-import pytest
 from unittest.mock import patch
 
 

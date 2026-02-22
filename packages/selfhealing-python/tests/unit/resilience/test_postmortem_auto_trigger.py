@@ -10,9 +10,7 @@ CB CLOSED 이벤트 발생 시 자동 Post-mortem 리포트 생성 테스트.
 4. 저장된 인시던트 조회 확인
 """
 
-import pytest
-from datetime import datetime, timezone as tz
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import patch
 
 
 class TestAutoPostmortemSettings:
@@ -20,7 +18,10 @@ class TestAutoPostmortemSettings:
 
     def test_default_settings_disabled(self):
         """기본 설정에서 auto_postmortem_enabled가 False인지 확인."""
-        from selfhealing.settings.api_view import ApiViewSettings, reset_api_view_settings
+        from selfhealing.settings.api_view import (
+            ApiViewSettings,
+            reset_api_view_settings,
+        )
 
         reset_api_view_settings()
 
@@ -31,7 +32,10 @@ class TestAutoPostmortemSettings:
 
     def test_settings_with_env_enabled(self, monkeypatch):
         """환경변수로 auto_postmortem 활성화 테스트."""
-        from selfhealing.settings.api_view import ApiViewSettings, reset_api_view_settings
+        from selfhealing.settings.api_view import (
+            ApiViewSettings,
+            reset_api_view_settings,
+        )
 
         reset_api_view_settings()
 
@@ -66,9 +70,9 @@ class TestCircuitBreakerClosedPostmortemHandler:
     def test_handler_skips_when_disabled(self, monkeypatch):
         """auto_postmortem_enabled=False일 때 Post-mortem 생성 스킵 확인."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_closed_postmortem,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_closed_postmortem,
         )
         from selfhealing.settings.api_view import reset_api_view_settings
 
@@ -83,7 +87,6 @@ class TestCircuitBreakerClosedPostmortemHandler:
 
         # 비활성화 상태에서는 핸들러가 초기 Settings 확인 후 바로 return해야 함
         # 따라서 logger.debug 메시지로 확인 (ImportError 발생 안 함)
-        import logging
 
         with patch("selfhealing.services.event_bus.bus._cb_handlers.logger") as mock_logger:
             _on_circuit_breaker_closed_postmortem(event)
@@ -94,9 +97,9 @@ class TestCircuitBreakerClosedPostmortemHandler:
     def test_handler_generates_postmortem_when_enabled_with_full_mocking(self, monkeypatch):
         """auto_postmortem_enabled=True일 때 Celery task으로 Postmortem 생성이 위임되는지 확인."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_closed_postmortem,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_closed_postmortem,
         )
         from selfhealing.settings.postmortem import reset_postmortem_settings
 
@@ -127,9 +130,9 @@ class TestCircuitBreakerClosedPostmortemHandler:
     def test_handler_delegates_to_celery_when_duration_below_minimum(self, monkeypatch):
         """duration이 min_duration 미만일 때도 Celery task로 위임되는지 확인 (duration 체크는 task 내부에서 수행)."""
         from selfhealing.services.event_bus import (
-            _on_circuit_breaker_closed_postmortem,
-            SelfHealingEvent,
             EventType,
+            SelfHealingEvent,
+            _on_circuit_breaker_closed_postmortem,
         )
         from selfhealing.settings.postmortem import reset_postmortem_settings
 
@@ -170,10 +173,10 @@ class TestPostmortemHandlerRegistration:
     def test_postmortem_handler_registered_with_low_priority(self):
         """Postmortem 핸들러가 LOW 우선순위로 등록되는지 확인."""
         from selfhealing.services.event_bus import (
-            register_default_handlers,
-            EventType,
             EventPriority,
+            EventType,
             _on_circuit_breaker_closed_postmortem,
+            register_default_handlers,
         )
 
         register_default_handlers()
@@ -190,10 +193,10 @@ class TestPostmortemHandlerRegistration:
     def test_both_cb_closed_handlers_registered(self):
         """CB CLOSED에 replay 핸들러와 postmortem 핸들러 모두 등록되는지 확인."""
         from selfhealing.services.event_bus import (
-            register_default_handlers,
             EventType,
             _on_circuit_breaker_closed,
             _on_circuit_breaker_closed_postmortem,
+            register_default_handlers,
         )
 
         register_default_handlers()
@@ -222,10 +225,10 @@ class TestEventTriggeredPostmortem:
     def test_cb_closed_event_triggers_postmortem_handler(self, monkeypatch):
         """CB CLOSED 이벤트 발행 시 postmortem 핸들러가 호출되는지 확인."""
         from selfhealing.services.event_bus import (
-            register_default_handlers,
             EventType,
             SelfHealingEvent,
             _on_circuit_breaker_closed_postmortem,
+            register_default_handlers,
         )
         from selfhealing.settings.api_view import reset_api_view_settings
 

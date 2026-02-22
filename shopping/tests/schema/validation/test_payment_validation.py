@@ -22,10 +22,9 @@
 """
 
 import pytest
-from decimal import Decimal
 from rest_framework import status
 
-from ..conftest import assert_payment_schema, assert_list_response
+from ..conftest import assert_payment_schema
 
 
 # ==========================================

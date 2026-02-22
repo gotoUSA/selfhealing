@@ -2,11 +2,10 @@
 Tests for Metric Reliability.
 """
 
-import pytest
 
 from selfhealing.metrics.reliability import (
-    MetricReliability,
     METRIC_RELIABILITY_MAP,
+    MetricReliability,
     get_metric_reliability,
     get_reliability_description,
 )

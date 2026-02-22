@@ -9,8 +9,6 @@ from __future__ import annotations
 import os
 from unittest.mock import patch
 
-import pytest
-
 from selfhealing.adapters.kafka.config import (
     KafkaSettings,
     get_kafka_settings,

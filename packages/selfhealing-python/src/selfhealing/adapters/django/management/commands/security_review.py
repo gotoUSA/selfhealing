@@ -10,9 +10,7 @@ Usage:
 """
 
 import json
-import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError

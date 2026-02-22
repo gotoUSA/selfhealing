@@ -25,18 +25,15 @@ Stage 16 v6.0.0: HEALING PROOF - 완전한 자율 치유 시스템 검증
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
 import sys
 import time
 import threading
-import random
-import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum
 
@@ -692,7 +689,7 @@ class HealingProofV6Runner:
                 
                 # OPEN 상태에서 10초 후 try-recovery-transition API 호출
                 if state == "open" and i >= 10 and not recovery_triggered:
-                    logger.info(f"   🔄 Triggering recovery transition...")
+                    logger.info("   🔄 Triggering recovery transition...")
                     self._make_request(
                         "POST",
                         "/api/self-healing/xtest/try-recovery-transition/",
@@ -702,7 +699,7 @@ class HealingProofV6Runner:
                 
                 # HALF_OPEN 상태일 때 정상 요청을 보내서 CB 복구 유도
                 if state == "half_open":
-                    logger.info(f"   🔄 CB is HALF_OPEN, sending health probes...")
+                    logger.info("   🔄 CB is HALF_OPEN, sending health probes...")
                     for _ in range(3):  # 성공 임계값만큼 요청
                         self._make_request("GET", "/api/self-healing/health/")
             
@@ -1061,7 +1058,7 @@ def generate_markdown_report(report: Dict[str, Any]) -> str:
     md.append("|------|-----|")
     
     summary = report.get("executive_summary", {})
-    md.append(f"| **테스트 버전** | v6.0.0 (HEALING PROOF) |")
+    md.append("| **테스트 버전** | v6.0.0 (HEALING PROOF) |")
     md.append(f"| **테스트 일시** | {report.get('generated_at', 'N/A')} |")
     md.append(f"| **총 소요 시간** | {summary.get('total_duration_seconds', 0):.1f}초 |")
     md.append(f"| **전체 결과** | {summary.get('overall_result', 'N/A')} |")

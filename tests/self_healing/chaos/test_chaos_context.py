@@ -6,8 +6,8 @@ chaos experiments from actual failures in the DLQ.
 """
 
 import pytest
-from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
+from datetime import timedelta
+from unittest.mock import MagicMock
 
 from django.utils import timezone
 

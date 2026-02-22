@@ -9,9 +9,7 @@ Reference: docs/self_healing/middleware_system/24_CHAOS_INTEGRATION_PLAN.md §8.
 Total: 4 tests
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
-
+from unittest.mock import MagicMock, patch
 
 # =============================================================================
 # Notification Integration Tests (4 tests)

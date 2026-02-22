@@ -4,13 +4,11 @@ GateCheckResult 티어/리전 필드 테스트.
 GateCheckResult.tier_id, region 필드 존재 및 to_dict() 직렬화 동작 검증.
 """
 
-import pytest
 
 from selfhealing.services.error_budget_gate.config import (
     GateCheckResult,
     GateStatus,
 )
-
 
 # =============================================================================
 # 계약 검증: 필드 존재

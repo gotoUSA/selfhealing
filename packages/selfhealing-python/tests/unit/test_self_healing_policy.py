@@ -5,9 +5,7 @@ Tests for backoff calculator, retry handler policy logic,
 and idempotency key generation without database dependencies.
 """
 
-from decimal import Decimal
 
-import pytest
 
 from selfhealing.core import (
     BackoffCalculator,
@@ -17,14 +15,11 @@ from selfhealing.core import (
 from selfhealing.services import (
     IdempotencyDomain,
     IdempotencyKey,
-)
-from selfhealing.services import (
     RetryAction,
     RetryConfig,
     RetryHandler,
     RetryResult,
 )
-
 
 # =============================================================================
 # Backoff Calculator Unit Tests

@@ -25,7 +25,7 @@ import pytest
 # 이 파일의 모든 테스트는 DB 및 Celery 필요
 pytestmark = [pytest.mark.requires_db, pytest.mark.requires_celery]
 
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 from celery import states
 from kombu.exceptions import OperationalError
 

@@ -10,8 +10,6 @@ Region Health Monitor 테스트.
 from datetime import datetime, timezone
 from unittest import mock
 
-import pytest
-
 from selfhealing.multiregion.config import (
     MultiRegionSettings,
     RegionEndpoint,

@@ -4,7 +4,7 @@ Dashboard & Control API Client.
 대시보드, 시스템 제어, Pool Circuit Breaker 관련 API.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from .base import BaseClient
 

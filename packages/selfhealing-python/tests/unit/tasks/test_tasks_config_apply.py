@@ -2,9 +2,7 @@
 Tests for Config Apply Tasks.
 """
 
-from unittest.mock import Mock, patch, MagicMock
 
-import pytest
 
 
 class TestApplyPendingConfigChangesTask:
@@ -14,7 +12,7 @@ class TestApplyPendingConfigChangesTask:
         """Should delegate to ConfigApplyService."""
         # The task is decorated with @shared_task and uses internal imports
         # We document the expected behavior rather than testing implementation details
-        
+
         # Expected: Task calls get_config_apply_service() and service.apply_pending_changes()
         # The actual task binding happens at Celery registration time
         pass  # This test verifies architecture understanding
@@ -23,7 +21,7 @@ class TestApplyPendingConfigChangesTask:
         """Should handle blocked status from service."""
         # Service returns blocked when Emergency Mode is active
         blocked_result = {"status": "blocked", "reason": "Emergency Mode LEVEL_2+"}
-        
+
         # Verify the expected behavior
         assert blocked_result["status"] == "blocked"
         assert "reason" in blocked_result
@@ -45,7 +43,7 @@ class TestApplyGracefulConfigChangeTask:
     def test_retry_on_in_progress_operations(self):
         """Should retry when in-progress operations exist."""
         retry_result = {"status": "retry", "reason": "ops_in_progress"}
-        
+
         # Verify structure
         assert retry_result["status"] == "retry"
 
@@ -82,7 +80,7 @@ class TestConfigApplyTaskNames:
     def test_apply_pending_config_changes_task_name(self):
         """Should have correct task name."""
         expected_name = "selfhealing.apply_pending_config_changes"
-        
+
         try:
             from selfhealing.tasks.config_apply import apply_pending_config_changes
 
@@ -94,7 +92,7 @@ class TestConfigApplyTaskNames:
     def test_apply_graceful_config_change_task_name(self):
         """Should have correct task name."""
         expected_name = "selfhealing.apply_graceful_config_change"
-        
+
         try:
             from selfhealing.tasks.config_apply import apply_graceful_config_change
 
@@ -110,6 +108,7 @@ class TestThinTaskFatServiceArchitecture:
     def test_module_imports_service(self):
         """Should import from service layer."""
         import inspect
+
         from selfhealing.tasks import config_apply
 
         source = inspect.getsource(config_apply)
@@ -120,6 +119,7 @@ class TestThinTaskFatServiceArchitecture:
     def test_no_business_logic_in_tasks(self):
         """Tasks should delegate to service, not implement logic."""
         import inspect
+
         from selfhealing.tasks import config_apply
 
         source = inspect.getsource(config_apply)

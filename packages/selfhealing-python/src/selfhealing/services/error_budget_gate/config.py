@@ -18,10 +18,6 @@ from typing import Any
 from selfhealing.settings.error_budget_gate import (  # noqa: F401
     ErrorBudgetGateSettings as ErrorBudgetGateConfig,
 )
-from selfhealing.settings.error_budget_gate import (
-    get_error_budget_gate_settings,
-    reset_error_budget_gate_settings,
-)
 
 
 class GateStatus(str, Enum):

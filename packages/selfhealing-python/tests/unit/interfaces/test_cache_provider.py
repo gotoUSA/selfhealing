@@ -4,19 +4,19 @@ Unit tests for CacheProviderInterface.
 Tests the abstract interface contract and in-memory implementation.
 """
 
-import pytest
-import time
 import threading
+import time
 from datetime import timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from selfhealing.interfaces.cache_provider import (
-    CacheProviderInterface,
-    DistributedLock,
-)
+import pytest
+
 from selfhealing.adapters.cache.memory_adapter import (
     InMemoryCacheAdapter,
     InMemoryLock,  # Renamed from InMemoryDistributedLock
+)
+from selfhealing.interfaces.cache_provider import (
+    CacheProviderInterface,
+    DistributedLock,
 )
 
 

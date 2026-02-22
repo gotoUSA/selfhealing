@@ -33,9 +33,8 @@ import sys
 import time
 import random
 import threading
-import signal
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, Optional
 
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 _load_tests_dir = os.path.dirname(_current_dir)
@@ -44,7 +43,6 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from locust import HttpUser, task, between, tag, events
-from locust.runners import MasterRunner, LocalRunner
 
 
 STAGE_NAME = "[Stage27-GracefulShutdown]"
@@ -207,7 +205,7 @@ class FastRequestUser(HttpUser):
                     record_request("fast", False, elapsed)
                     record_request_end(False)
                     response.failure(f"Error: {response.status_code}")
-        except Exception as e:
+        except Exception:
             _shutdown_stats["errors"]["connection_refused"] += 1
             record_request_end(False)
     
@@ -241,7 +239,7 @@ class FastRequestUser(HttpUser):
                 else:
                     record_request("fast", False, elapsed)
                     record_request_end(False)
-        except Exception as e:
+        except Exception:
             _shutdown_stats["errors"]["connection_refused"] += 1
             record_request_end(False)
 
@@ -310,7 +308,7 @@ class MediumRequestUser(HttpUser):
                 else:
                     record_request("medium", False, elapsed)
                     record_request_end(False)
-        except Exception as e:
+        except Exception:
             _shutdown_stats["errors"]["connection_refused"] += 1
             record_request_end(False)
     
@@ -343,7 +341,7 @@ class MediumRequestUser(HttpUser):
                 else:
                     record_request("medium", False, elapsed)
                     record_request_end(False)
-        except Exception as e:
+        except Exception:
             _shutdown_stats["errors"]["connection_refused"] += 1
             record_request_end(False)
 
@@ -423,7 +421,7 @@ class SlowRequestUser(HttpUser):
                 else:
                     record_request("slow", False, elapsed)
                     record_request_end(False)
-        except Exception as e:
+        except Exception:
             _shutdown_stats["errors"]["connection_refused"] += 1
             record_request_end(False)
     
@@ -462,7 +460,7 @@ class SlowRequestUser(HttpUser):
                 else:
                     record_request("slow", False, elapsed)
                     record_request_end(False)
-        except Exception as e:
+        except Exception:
             _shutdown_stats["errors"]["connection_refused"] += 1
             record_request_end(False)
 
@@ -508,7 +506,7 @@ class ShutdownSimulator:
         _shutdown_stats["shutdown"]["signal_time"] = datetime.now()
         _shutdown_stats["in_flight"]["at_shutdown"] = _shutdown_stats["in_flight"]["current"]
         
-        print(f"\n🚨 SHUTDOWN SIGNAL SENT!")
+        print("\n🚨 SHUTDOWN SIGNAL SENT!")
         print(f"   진행 중인 요청: {_shutdown_stats['in_flight']['at_shutdown']}개")
         
         # Draining 단계
@@ -531,7 +529,7 @@ class ShutdownSimulator:
             _shutdown_stats["shutdown"]["requests_aborted"] = remaining
             print(f"\n⚠️ Forced shutdown! {remaining} requests aborted")
         else:
-            print(f"\n✅ Graceful shutdown complete! All requests drained.")
+            print("\n✅ Graceful shutdown complete! All requests drained.")
 
 
 # 전역 시뮬레이터
@@ -600,11 +598,11 @@ def on_test_stop(environment, **kwargs):
         avg_time = sum(times) / len(times) if times else 0
         print(f"  {req_type}: 성공={success}, 실패={failure}, 평균응답={avg_time:.2f}ms")
     
-    print(f"\n🔥 In-Flight 요청:")
+    print("\n🔥 In-Flight 요청:")
     print(f"  최대 동시 요청: {_shutdown_stats['in_flight']['max']}")
     print(f"  Shutdown 시점: {_shutdown_stats['in_flight']['at_shutdown']}")
     
-    print(f"\n🚨 Shutdown 정보:")
+    print("\n🚨 Shutdown 정보:")
     if _shutdown_stats["shutdown"]["signal_sent"]:
         print(f"  시그널 발송: {_shutdown_stats['shutdown']['signal_time']}")
         print(f"  강제 종료: {_shutdown_stats['shutdown']['forced_shutdown']}")
@@ -612,7 +610,7 @@ def on_test_stop(environment, **kwargs):
     else:
         print("  시그널 미발송 (테스트 시간 부족)")
     
-    print(f"\n❌ 에러 통계:")
+    print("\n❌ 에러 통계:")
     for error_type, count in _shutdown_stats["errors"].items():
         print(f"  {error_type}: {count}")
     

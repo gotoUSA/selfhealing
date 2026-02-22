@@ -9,10 +9,9 @@ Reference:
 - packages/selfhealing-python/src/selfhealing/audit/audit_adapter.py
 """
 
-import pytest
-from unittest.mock import MagicMock, patch, call
-from dataclasses import dataclass
+from unittest.mock import MagicMock, patch
 
+import pytest
 
 # =============================================================================
 # Fixtures
@@ -68,9 +67,8 @@ class TestCheckAllGovernanceAuditLogging:
     def test_audit_log_on_kill_switch_block(self, mock_audit_adapter, mock_system_disabled):
         """Kill Switch 차단 시 Audit Log 기록 확인."""
         from selfhealing.services.governance_checks import (
-            check_all_governance,
             BlockReason,
-            _get_audit_adapter,
+            check_all_governance,
         )
 
         with patch(
@@ -91,7 +89,7 @@ class TestCheckAllGovernanceAuditLogging:
             # Audit Log 호출 확인
             mock_audit_adapter.log_governance_blocked.assert_called_once()
             call_kwargs = mock_audit_adapter.log_governance_blocked.call_args[1]
-            
+
             assert call_kwargs["block_reason"] == "kill_switch"
             assert call_kwargs["operation_name"] == "test_chaos_injection"
             assert call_kwargs["service_name"] == "ChaosService"
@@ -99,8 +97,8 @@ class TestCheckAllGovernanceAuditLogging:
     def test_audit_log_on_emergency_block(self, mock_audit_adapter):
         """Emergency Mode 차단 시 Audit Log 기록 확인."""
         from selfhealing.services.governance_checks import (
-            check_all_governance,
             BlockReason,
+            check_all_governance,
         )
 
         with patch(
@@ -125,15 +123,15 @@ class TestCheckAllGovernanceAuditLogging:
 
             mock_audit_adapter.log_governance_blocked.assert_called_once()
             call_kwargs = mock_audit_adapter.log_governance_blocked.call_args[1]
-            
+
             assert call_kwargs["block_reason"] == "emergency_mode"
             assert call_kwargs["details"]["emergency_level"] == "CRITICAL"
 
     def test_audit_log_on_error_budget_block(self, mock_audit_adapter):
         """Error Budget 차단 시 Audit Log 기록 확인."""
         from selfhealing.services.governance_checks import (
-            check_all_governance,
             BlockReason,
+            check_all_governance,
         )
 
         with patch(
@@ -161,7 +159,7 @@ class TestCheckAllGovernanceAuditLogging:
 
             mock_audit_adapter.log_governance_blocked.assert_called_once()
             call_kwargs = mock_audit_adapter.log_governance_blocked.call_args[1]
-            
+
             assert call_kwargs["block_reason"] == "error_budget"
             assert call_kwargs["details"]["error_budget_percent"] == 5.0
             assert call_kwargs["details"]["threshold_percent"] == 10.0
@@ -326,7 +324,7 @@ class TestMixinAuditLogging:
             assert not result.allowed
             mock_audit_adapter.log_governance_blocked.assert_called_once()
             call_kwargs = mock_audit_adapter.log_governance_blocked.call_args[1]
-            
+
             assert call_kwargs["operation_name"] == "do_risky_thing"
             assert call_kwargs["service_name"] == "MyService"
 
@@ -458,7 +456,7 @@ class TestGovernanceAuditIntegration:
 
             assert not result["success"]
             assert result["reason"] == "kill_switch"
-            
+
             # Audit Log가 기록되었는지 확인
             mock_audit_adapter.log_governance_blocked.assert_called()
             call_kwargs = mock_audit_adapter.log_governance_blocked.call_args[1]
@@ -467,8 +465,8 @@ class TestGovernanceAuditIntegration:
     def test_chaos_service_emergency_block_audit(self, mock_audit_adapter):
         """Chaos 주입이 Emergency Mode로 차단될 때 Audit 기록."""
         from selfhealing.services.governance_checks import (
-            check_all_governance,
             BlockReason,
+            check_all_governance,
         )
 
         with patch(
@@ -489,10 +487,10 @@ class TestGovernanceAuditIntegration:
             )
 
             assert result.block_reason == BlockReason.EMERGENCY_MODE
-            
+
             mock_audit_adapter.log_governance_blocked.assert_called_once()
             call_kwargs = mock_audit_adapter.log_governance_blocked.call_args[1]
-            
+
             # "왜 이때 작업이 안 됐지?"에 답할 수 있는 정보가 있는지 확인
             assert call_kwargs["operation_name"] == "inject_chaos_experiment"
             assert call_kwargs["block_reason"] == "emergency_mode"

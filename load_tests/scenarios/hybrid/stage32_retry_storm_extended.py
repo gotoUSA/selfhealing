@@ -40,15 +40,14 @@ Reference:
 import os
 import sys
 import time
-import json
 import random
 import threading
 import uuid
 import gc
 import tracemalloc
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Set
-from collections import defaultdict, deque
+from datetime import datetime
+from typing import Dict, List, Optional, Set
+from collections import deque
 from dataclasses import dataclass, field
 from weakref import WeakSet
 
@@ -67,7 +66,7 @@ try:
     from load_tests.utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
     from load_tests.metrics import setup_event_hooks
 except ImportError:
-    from utils import LoginHelper, ProductHelper, CartHelper, PaymentHelper
+    from utils import LoginHelper
     from metrics import setup_event_hooks
 
 
@@ -416,7 +415,7 @@ def _start_memory_monitor():
                         # Monotonically increasing - possible leak
                         if not _storm_stats.memory_leak_detected:
                             _storm_stats.memory_leak_detected = True
-                            print(f"   ⚠️ Possible memory leak detected!")
+                            print("   ⚠️ Possible memory leak detected!")
 
                 time.sleep(MEMORY_SAMPLE_INTERVAL_S)
             except Exception:
@@ -500,25 +499,25 @@ def _update_phase():
         _storm_stats.phase = phase
 
         if phase == "memory_leak":
-            print(f"\n🧠 Phase 2: Memory Leak During Backoff Test")
-            print(f"   - Simulating 1000 concurrent retry operations")
-            print(f"   - Monitoring memory usage and GC behavior")
+            print("\n🧠 Phase 2: Memory Leak During Backoff Test")
+            print("   - Simulating 1000 concurrent retry operations")
+            print("   - Monitoring memory usage and GC behavior")
             _start_memory_monitor()
 
         elif phase == "dlq_explosion":
-            print(f"\n📥 Phase 3: DLQ Explosion Prevention Test")
+            print("\n📥 Phase 3: DLQ Explosion Prevention Test")
             print(f"   - Memory samples: {len(_storm_stats.memory_samples_mb)}")
             print(f"   - Peak memory: {_storm_stats.memory_peak_mb:.1f}MB")
-            print(f"   - Testing DLQ throttling at high failure rate")
+            print("   - Testing DLQ throttling at high failure rate")
 
         elif phase == "webhook_replay":
-            print(f"\n🔁 Phase 4: Webhook Replay Safety Test")
+            print("\n🔁 Phase 4: Webhook Replay Safety Test")
             print(f"   - DLQ items added: {_storm_stats.dlq_items_added}")
             print(f"   - DLQ throttle events: {_storm_stats.dlq_throttle_events}")
-            print(f"   - Testing idempotency of payment webhooks")
+            print("   - Testing idempotency of payment webhooks")
 
         elif phase == "clock_skew":
-            print(f"\n⏰ Phase 5: Retry + Clock Skew Compound Test")
+            print("\n⏰ Phase 5: Retry + Clock Skew Compound Test")
             print(f"   - Unique webhooks: {_storm_stats.webhooks_unique}")
             print(f"   - Duplicates prevented: {_storm_stats.webhooks_duplicate}")
             print(
@@ -528,7 +527,7 @@ def _update_phase():
             _set_clock_skew(SIMULATED_CLOCK_SKEW_SMALL_S)
 
         elif phase == "verification":
-            print(f"\n✅ Phase 6: Verification")
+            print("\n✅ Phase 6: Verification")
             print(f"   - Timestamp accepted: {_storm_stats.timestamp_accepted}")
             print(f"   - Timestamp rejected: {_storm_stats.timestamp_rejected}")
             _set_clock_skew(0)  # Reset clock
@@ -539,7 +538,7 @@ def _update_phase():
 def _perform_final_verification():
     """Perform final verification of retry storm handling with clear explanations"""
     print(f"\n{'='*70}")
-    print(f"📊 STAGE 32 FINAL VERIFICATION")
+    print("📊 STAGE 32 FINAL VERIFICATION")
     print(f"{'='*70}")
 
     # Force GC and get final memory stats
@@ -562,12 +561,12 @@ def _perform_final_verification():
     _storm_stats.verification["memory_peak_under_limit"] = (mem_passed, True, "")
 
     print(f"\n{'─'*70}")
-    print(f"🧠 CHECK 1: Memory Leak Prevention")
+    print("🧠 CHECK 1: Memory Leak Prevention")
     print(f"{'─'*70}")
     print(f"   Peak Memory: {_storm_stats.memory_peak_mb:.1f}MB (Limit: {MEMORY_PEAK_THRESHOLD_MB}MB)")
     print(f"   Result: {'✅ PASS' if mem_passed else '❌ FAIL - 메모리 누수 의심!'}")
     if mem_passed:
-        print(f"   💡 설명: Retry 객체가 경량으로 유지됨, 메모리 누수 없음")
+        print("   💡 설명: Retry 객체가 경량으로 유지됨, 메모리 누수 없음")
 
     # =========================================================================
     # CHECK 2: GC Collection Rate
@@ -576,14 +575,14 @@ def _perform_final_verification():
     _storm_stats.verification["gc_rate_above_threshold"] = (gc_passed, True, "")
 
     print(f"\n{'─'*70}")
-    print(f"♻️  CHECK 2: Garbage Collection Rate")
+    print("♻️  CHECK 2: Garbage Collection Rate")
     print(f"{'─'*70}")
     print(f"   Created: {created}, Collected: {collected}, Active: {active}")
     print(f"   GC Rate: {gc_rate:.1f}% (Threshold: {MEMORY_LEAK_THRESHOLD_PERCENT}%)")
     print(f"   Result: {'✅ PASS' if gc_passed else '❌ FAIL - GC 수거율 부족!'}")
     if gc_passed and active > 0:
         print(f"   💡 설명: Active={active}개는 테스트 종료 시점의 진행 중인 요청")
-        print(f"           → 정상 동작, 프로세스 종료 시 자동 정리됨")
+        print("           → 정상 동작, 프로세스 종료 시 자동 정리됨")
 
     # =========================================================================
     # CHECK 3: DLQ Throttle Effectiveness (핵심!)
@@ -595,13 +594,13 @@ def _perform_final_verification():
     _storm_stats.verification["dlq_throttle_effective"] = (throttle_works, True, "")
 
     print(f"\n{'─'*70}")
-    print(f"🚦 CHECK 3: DLQ Throttle Effectiveness")
+    print("🚦 CHECK 3: DLQ Throttle Effectiveness")
     print(f"{'─'*70}")
     print(f"   Throttle Events: {_storm_stats.dlq_throttle_events}")
     print(f"   Throttle Ratio: {throttle_ratio:.1f}%")
     print(f"   Result: {'✅ PASS' if throttle_works else '❌ FAIL - 스로틀 미작동!'}")
     if throttle_works:
-        print(f"   💡 설명: 의도적으로 한도(80/sec)를 낮게 설정하여 스로틀 동작을 검증")
+        print("   💡 설명: 의도적으로 한도(80/sec)를 낮게 설정하여 스로틀 동작을 검증")
         print(f"           → 스로틀이 {_storm_stats.dlq_throttle_events}회 발동 = 과부하 방어 정상 작동")
 
     # =========================================================================
@@ -616,7 +615,7 @@ def _perform_final_verification():
     _storm_stats.verification["dlq_processing_rate"] = (process_passed, True, "")
 
     print(f"\n{'─'*70}")
-    print(f"📤 CHECK 4: DLQ Processing Rate")
+    print("📤 CHECK 4: DLQ Processing Rate")
     print(f"{'─'*70}")
     print(f"   Added: {_storm_stats.dlq_items_added}, Processed: {_storm_stats.dlq_items_processed}")
     print(f"   Processing Rate: {dlq_process_rate:.1f}% (Threshold: {DLQ_PROCESS_RATE_MIN*100:.0f}%)")
@@ -629,14 +628,14 @@ def _perform_final_verification():
     _storm_stats.verification["duplicate_payments_zero"] = (dup_passed, True, "")
 
     print(f"\n{'─'*70}")
-    print(f"💳 CHECK 5: Duplicate Payment Prevention (Zero Tolerance)")
+    print("💳 CHECK 5: Duplicate Payment Prevention (Zero Tolerance)")
     print(f"{'─'*70}")
     print(f"   Duplicate Attempts: {_storm_stats.webhooks_duplicate}")
     print(f"   Prevented: {_storm_stats.duplicate_payments_prevented}")
     print(f"   Result: {'✅ PASS' if dup_passed else '❌ CRITICAL FAIL - 중복 결제 발생!'}")
     if dup_passed and _storm_stats.webhooks_duplicate > 0:
         print(f"   💡 설명: {_storm_stats.webhooks_duplicate}건의 중복 결제 시도를 100% 차단")
-        print(f"           → Idempotency Key 시스템 정상 작동")
+        print("           → Idempotency Key 시스템 정상 작동")
 
     # =========================================================================
     # CHECK 6: Clock Skew Handling
@@ -661,7 +660,7 @@ def _perform_final_verification():
     )
     print(f"   Result: {'✅ PASS' if clock_passed else '❌ FAIL - Clock Skew 처리 오류!'}")
     if clock_passed:
-        print(f"   💡 설명: 허용 범위 내 요청은 수락, 초과 요청은 거부 → 정상 작동")
+        print("   💡 설명: 허용 범위 내 요청은 수락, 초과 요청은 거부 → 정상 작동")
 
     # =========================================================================
     # FINAL SUMMARY
@@ -672,24 +671,24 @@ def _perform_final_verification():
     all_passed = passed_count == total_count
 
     print(f"\n{'='*70}")
-    print(f"🏁 STAGE 32 FINAL RESULT")
+    print("🏁 STAGE 32 FINAL RESULT")
     print(f"{'='*70}")
     print(f"   Score: {passed_count}/{total_count} checks passed")
     print()
 
     if all_passed:
-        print(f"   ✅✅✅ ALL TESTS PASSED ✅✅✅")
+        print("   ✅✅✅ ALL TESTS PASSED ✅✅✅")
         print()
-        print(f"   🎯 Retry Storm Extended 시나리오 모두 통과:")
-        print(f"      • 메모리 누수 방지 ✓")
-        print(f"      • DLQ 폭발 방지 (스로틀 정상 작동) ✓")
-        print(f"      • 중복 결제 100% 차단 ✓")
-        print(f"      • Clock Skew 처리 ✓")
+        print("   🎯 Retry Storm Extended 시나리오 모두 통과:")
+        print("      • 메모리 누수 방지 ✓")
+        print("      • DLQ 폭발 방지 (스로틀 정상 작동) ✓")
+        print("      • 중복 결제 100% 차단 ✓")
+        print("      • Clock Skew 처리 ✓")
     else:
         failed = [k for k, passed in results if not passed]
         print(f"   ❌ FAILED CHECKS: {', '.join(failed)}")
         print()
-        print(f"   ⚠️  위 실패 항목을 확인하세요.")
+        print("   ⚠️  위 실패 항목을 확인하세요.")
 
     print(f"{'='*70}")
 
@@ -1144,10 +1143,10 @@ class ClockSkewUser(HttpUser):
 def on_test_start(environment, **kwargs):
     """Initialize test"""
     print(f"\n{'='*60}")
-    print(f"  Stage 32: Retry Storm Extended Test")
+    print("  Stage 32: Retry Storm Extended Test")
     print(f"  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*60}")
-    print(f"\nTest Configuration:")
+    print("\nTest Configuration:")
     print(f"  - Phase 1 (Baseline): {PHASE_1_BASELINE}s")
     print(f"  - Phase 2 (Memory Leak): {PHASE_2_MEMORY_LEAK}s")
     print(f"  - Phase 3 (DLQ Explosion): {PHASE_3_DLQ_EXPLOSION}s")
@@ -1155,7 +1154,7 @@ def on_test_start(environment, **kwargs):
     print(f"  - Phase 5 (Clock Skew): {PHASE_5_CLOCK_SKEW}s")
     print(f"  - Phase 6 (Verification): {PHASE_6_VERIFICATION}s")
     print(f"  - Total Duration: {TOTAL_DURATION}s")
-    print(f"\nThresholds:")
+    print("\nThresholds:")
     print(f"  - Memory Peak: {MEMORY_PEAK_THRESHOLD_MB}MB")
     print(f"  - DLQ Max Rate: {DLQ_MAX_INPUT_RATE}/sec")
     print(f"  - Clock Skew Tolerance: ±{CLOCK_SKEW_TOLERANCE_S}s")
@@ -1174,35 +1173,35 @@ def on_test_stop(environment, **kwargs):
     _stop_memory_monitor()
 
     print(f"\n{'='*60}")
-    print(f"  Stage 32: Test Complete")
+    print("  Stage 32: Test Complete")
     print(f"{'='*60}")
 
-    print(f"\n📈 Overall Statistics:")
+    print("\n📈 Overall Statistics:")
     print(f"  - Total Requests: {_storm_stats.total_requests}")
     print(f"  - Successful: {_storm_stats.successful_requests}")
     print(f"  - Failed: {_storm_stats.failed_requests}")
 
     created, collected, active = RetryObject.get_stats()
-    print(f"\n🧠 Scenario 1 (Memory Leak):")
+    print("\n🧠 Scenario 1 (Memory Leak):")
     print(f"  - Retry Objects Created: {created}")
     print(f"  - Retry Objects Collected: {collected}")
     print(f"  - Active Objects: {active}")
     print(f"  - Memory Peak: {_storm_stats.memory_peak_mb:.1f}MB")
     print(f"  - Memory Leak Detected: {_storm_stats.memory_leak_detected}")
 
-    print(f"\n📥 Scenario 2 (DLQ Throttling):")
+    print("\n📥 Scenario 2 (DLQ Throttling):")
     print(f"  - DLQ Items Added: {_storm_stats.dlq_items_added}")
     print(f"  - DLQ Items Processed: {_storm_stats.dlq_items_processed}")
     print(f"  - DLQ Throttle Events: {_storm_stats.dlq_throttle_events}")
     print(f"  - DLQ Overflow Prevented: {_storm_stats.dlq_overflow_prevented}")
 
-    print(f"\n🔁 Scenario 3 (Webhook Replay):")
+    print("\n🔁 Scenario 3 (Webhook Replay):")
     print(f"  - Webhooks Received: {_storm_stats.webhooks_received}")
     print(f"  - Unique Webhooks: {_storm_stats.webhooks_unique}")
     print(f"  - Duplicate Webhooks: {_storm_stats.webhooks_duplicate}")
     print(f"  - Duplicates Prevented: {_storm_stats.duplicate_payments_prevented}")
 
-    print(f"\n⏰ Scenario 4 (Clock Skew):")
+    print("\n⏰ Scenario 4 (Clock Skew):")
     print(f"  - Timestamp Validations: {_storm_stats.timestamp_validations}")
     print(f"  - Accepted: {_storm_stats.timestamp_accepted}")
     print(f"  - Rejected: {_storm_stats.timestamp_rejected}")
@@ -1210,7 +1209,7 @@ def on_test_stop(environment, **kwargs):
     print(f"  - Exceeded Tolerance: {_storm_stats.clock_skew_exceeded}")
 
     # Verification summary
-    print(f"\n✅ Verification Summary:")
+    print("\n✅ Verification Summary:")
     for key, value in _storm_stats.verification.items():
         status = "✓" if value else "✗" if value is not None else "?"
         print(f"  - {key}: {status}")

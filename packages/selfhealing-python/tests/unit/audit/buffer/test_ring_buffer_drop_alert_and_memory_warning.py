@@ -10,10 +10,7 @@ RingBuffer 드랍률 알림 및 메모리 경고 테스트.
 import logging
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.audit.ring_buffer import (
-    BackpressureStrategy,
     RingBuffer,
     RingBufferStats,
 )
@@ -153,7 +150,6 @@ class TestRingBufferHighCapacityWarning:
     def test_high_capacity_logs_warning(self, caplog):
         """고용량 설정 시 경고 로그 출력."""
         # Use patch to capture logger.warning calls directly
-        from unittest.mock import patch
 
         with patch("selfhealing.audit.ring_buffer.logger") as mock_logger:
             buffer: RingBuffer[int] = RingBuffer(capacity=200000)

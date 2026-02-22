@@ -8,12 +8,10 @@ OpenTelemetry Collector와 Grafana Tempo 통합 테스트
 3. Tempo 헬스체크
 4. Trace 저장 및 조회 테스트
 """
-import json
 import os
 import time
 import uuid
 
-import pytest
 import requests
 
 

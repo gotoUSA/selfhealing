@@ -23,7 +23,7 @@ _registered_electors: list[LeaderElector] = []
 _handlers_installed = False
 
 
-def register_for_graceful_shutdown(elector: "LeaderElector") -> None:
+def register_for_graceful_shutdown(elector: LeaderElector) -> None:
     """
     LeaderElector를 Graceful Shutdown에 등록.
 
@@ -53,7 +53,7 @@ def register_for_graceful_shutdown(elector: "LeaderElector") -> None:
         _handlers_installed = True
 
 
-def unregister_from_graceful_shutdown(elector: "LeaderElector") -> None:
+def unregister_from_graceful_shutdown(elector: LeaderElector) -> None:
     """
     LeaderElector를 Graceful Shutdown에서 등록 해제.
 

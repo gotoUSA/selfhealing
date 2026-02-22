@@ -11,9 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.services.error_budget.backfill import (
@@ -23,7 +21,6 @@ from selfhealing.services.error_budget.backfill import (
     get_emergency_backfill_calculator,
     reset_backfill_calculator,
 )
-
 
 # =============================================================================
 # Mock Error Record

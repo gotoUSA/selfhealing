@@ -8,8 +8,6 @@ Uses lazy imports to avoid Prometheus registry conflicts.
 import time
 from unittest.mock import MagicMock, Mock
 
-import pytest
-
 
 class TestIntegrationScenarios:
     """통합 시나리오 테스트."""
@@ -21,7 +19,7 @@ class TestIntegrationScenarios:
             IntegratedAuditRecorder,
         )
         from selfhealing.audit.resilience import CircuitState
-        
+
         # 1. Setup
         flushed_events = []
 
@@ -73,10 +71,10 @@ class TestIntegrationScenarios:
     def test_multiple_observers(self):
         """다중 Observer 동시 동작."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AuditEventObserver,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = MagicMock()
         mock_recorder._circuit_breaker = MagicMock()
         mock_recorder._circuit_breaker.state = MagicMock()
@@ -107,10 +105,10 @@ class TestIntegrationScenarios:
     def test_observer_error_isolation(self):
         """Observer 에러 격리."""
         from selfhealing.audit.audit_integration import (
-            IntegratedAuditRecorder,
             AuditEventObserver,
+            IntegratedAuditRecorder,
         )
-        
+
         mock_recorder = MagicMock()
         mock_recorder._circuit_breaker = MagicMock()
         mock_recorder._circuit_breaker.state = MagicMock()

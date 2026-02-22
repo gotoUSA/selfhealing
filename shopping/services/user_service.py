@@ -19,7 +19,6 @@ from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest
     from shopping.models.user import User
 
 logger = logging.getLogger(__name__)

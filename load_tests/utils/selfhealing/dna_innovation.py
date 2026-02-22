@@ -10,10 +10,10 @@ DNA Innovation - Auto-Suggestion Engine + Cross-Stage Learning
 Phase 4 구현
 """
 
-from typing import Dict, List, Optional, Any, Set, Tuple
+from typing import Dict, List, Any
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import datetime
 from collections import defaultdict
 import json
 import statistics

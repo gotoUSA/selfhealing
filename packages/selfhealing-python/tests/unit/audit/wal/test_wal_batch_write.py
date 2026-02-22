@@ -13,21 +13,17 @@ WAL batch_write_entries() 테스트.
 
 from __future__ import annotations
 
-import os
-import tempfile
 import threading
 import time
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from selfhealing.audit.wal import (
-    WriteAheadLog,
     WALConfig,
-    WALEntry,
     WALError,
-    WALState,
+    WriteAheadLog,
 )
 
 

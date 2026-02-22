@@ -2,8 +2,8 @@
 Tests for Drift Detection Tasks.
 """
 
-from datetime import datetime, timezone, timedelta
-from unittest.mock import Mock, patch, MagicMock, PropertyMock
+from datetime import timedelta
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -151,6 +151,7 @@ class TestDriftDetectorCorePrinciple:
     def test_only_generates_warnings_no_auto_adjust(self):
         """Should only generate warnings, never auto-adjust."""
         import inspect
+
         from selfhealing.tasks import drift_detection
 
         source = inspect.getsource(drift_detection)
@@ -188,7 +189,6 @@ class TestDriftDetectionLogging:
     def test_logs_start_of_check(self):
         """Should log when drift check starts."""
         # Verify logging calls would be made
-        import logging
         from selfhealing.tasks.drift_detection import SLADriftDetector
 
         with patch("selfhealing.tasks.drift_detection.logger") as mock_logger:

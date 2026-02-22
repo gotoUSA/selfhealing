@@ -6,8 +6,9 @@ Django Admin 기본 클래스의 설정 및 메서드를 테스트합니다.
 """
 
 import os
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 
 # Django 설정 (테스트 환경에서 필요)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
@@ -17,7 +18,6 @@ import django
 django.setup()
 
 from selfhealing.adapters.django.admin import BaseDLQEntryAdmin
-
 
 # =============================================================================
 # Test Fixtures
@@ -34,6 +34,7 @@ def admin_class():
 def admin_instance():
     """BaseDLQEntryAdmin 인스턴스를 반환합니다."""
     from django.contrib.admin.sites import AdminSite
+
     from selfhealing.adapters.django.models import FailedOperation
 
     site = AdminSite()

@@ -12,17 +12,12 @@ DLQ 3단계 Fallback 체인 단위 테스트.
 """
 
 import json
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from selfhealing.services.dlq_models import DLQConfig
 from selfhealing.services.dlq.store_operations import (
-    DLQ_FALLBACK_PATH,
     StoreOperationsMixin,
 )
+from selfhealing.services.dlq_models import DLQConfig
 
 
 class MockDLQService(StoreOperationsMixin):
@@ -113,7 +108,7 @@ class TestJsonlFallback:
         assert result == str(fallback_path)
         assert fallback_path.exists()
 
-        with open(fallback_path, "r") as f:
+        with open(fallback_path) as f:
             saved = json.loads(f.readline())
 
         assert saved["pending_reconciliation"] is True

@@ -17,14 +17,10 @@ Test Cases:
 - OBS-008: All metrics -> tenant_id label present
 """
 
-from datetime import timedelta
-from decimal import Decimal
-from unittest.mock import patch, MagicMock
 import uuid
 
 import pytest
 
-from selfhealing.core import timezone
 
 
 @pytest.mark.tier2
@@ -461,7 +457,6 @@ class TestMetricsAggregation:
         Expected:
             - Percentiles calculable from histogram
         """
-        import statistics
 
         # Generate realistic latency distribution
         latencies = (

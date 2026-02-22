@@ -9,9 +9,8 @@ Covers:
 - CircuitBreakerFallbackResult
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
 from dataclasses import asdict
+from unittest.mock import MagicMock, patch
 
 
 class TestCircuitState:
@@ -170,7 +169,6 @@ class TestCircuitBreakerResult:
     def test_result_dataclass_fields(self):
         """Test result dataclass fields."""
         from selfhealing.services.circuit_breaker.config import CircuitBreakerResult
-        from dataclasses import asdict
 
         result = CircuitBreakerResult.succeeded(
             service_name="test_service",
@@ -190,7 +188,9 @@ class TestCircuitBreakerFallbackResult:
 
     def test_fallback_result_allow(self):
         """Test CircuitBreakerFallbackResult.allow() factory."""
-        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
+        from selfhealing.services.circuit_breaker.config import (
+            CircuitBreakerFallbackResult,
+        )
 
         result = CircuitBreakerFallbackResult.allow()
 
@@ -199,7 +199,9 @@ class TestCircuitBreakerFallbackResult:
 
     def test_fallback_result_block(self):
         """Test CircuitBreakerFallbackResult.block() factory."""
-        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
+        from selfhealing.services.circuit_breaker.config import (
+            CircuitBreakerFallbackResult,
+        )
 
         result = CircuitBreakerFallbackResult.block(message="Circuit breaker is open")
 
@@ -209,7 +211,9 @@ class TestCircuitBreakerFallbackResult:
 
     def test_fallback_result_from_cache(self):
         """Test CircuitBreakerFallbackResult.from_cache() factory."""
-        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
+        from selfhealing.services.circuit_breaker.config import (
+            CircuitBreakerFallbackResult,
+        )
 
         cached_data = {"data": "cached"}
         result = CircuitBreakerFallbackResult.from_cache(cached_data)
@@ -221,7 +225,9 @@ class TestCircuitBreakerFallbackResult:
 
     def test_fallback_result_to_dlq(self):
         """Test CircuitBreakerFallbackResult.to_dlq() factory."""
-        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
+        from selfhealing.services.circuit_breaker.config import (
+            CircuitBreakerFallbackResult,
+        )
 
         result = CircuitBreakerFallbackResult.to_dlq()
 
@@ -231,7 +237,9 @@ class TestCircuitBreakerFallbackResult:
 
     def test_fallback_result_default_response(self):
         """Test CircuitBreakerFallbackResult.default_response() factory."""
-        from selfhealing.services.circuit_breaker.config import CircuitBreakerFallbackResult
+        from selfhealing.services.circuit_breaker.config import (
+            CircuitBreakerFallbackResult,
+        )
 
         default_data = {"status": "unavailable"}
         result = CircuitBreakerFallbackResult.default_response(default_data)

@@ -20,7 +20,10 @@ class TestPostmortemSettingsDefaults:
 
     def test_default_history_limit(self):
         """history_limit 기본값은 100."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
@@ -29,7 +32,10 @@ class TestPostmortemSettingsDefaults:
 
     def test_default_auto_enabled(self):
         """auto_enabled 기본값은 False."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
@@ -38,7 +44,10 @@ class TestPostmortemSettingsDefaults:
 
     def test_default_auto_min_duration(self):
         """auto_min_duration 기본값은 30."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
@@ -47,7 +56,10 @@ class TestPostmortemSettingsDefaults:
 
     def test_default_notification_enabled(self):
         """notification_enabled 기본값은 True."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
@@ -56,7 +68,10 @@ class TestPostmortemSettingsDefaults:
 
     def test_default_notification_min_duration(self):
         """notification_min_duration 기본값은 60."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
@@ -65,7 +80,10 @@ class TestPostmortemSettingsDefaults:
 
     def test_default_incidents_default_limit(self):
         """incidents_default_limit 기본값은 10."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
@@ -78,7 +96,10 @@ class TestPostmortemSettingsEnvVariables:
 
     def test_load_history_limit_from_env(self):
         """SELFHEALING_POSTMORTEM_HISTORY_LIMIT 환경 변수 로딩."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_POSTMORTEM_HISTORY_LIMIT": "200"}):
@@ -87,7 +108,10 @@ class TestPostmortemSettingsEnvVariables:
 
     def test_load_auto_enabled_from_env(self):
         """SELFHEALING_POSTMORTEM_AUTO_ENABLED 환경 변수 로딩."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_POSTMORTEM_AUTO_ENABLED": "true"}):
@@ -96,7 +120,10 @@ class TestPostmortemSettingsEnvVariables:
 
     def test_load_auto_min_duration_from_env(self):
         """SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION 환경 변수 로딩."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION": "60"}):
@@ -105,7 +132,10 @@ class TestPostmortemSettingsEnvVariables:
 
     def test_load_notification_enabled_from_env(self):
         """SELFHEALING_POSTMORTEM_NOTIFICATION_ENABLED 환경 변수 로딩."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_POSTMORTEM_NOTIFICATION_ENABLED": "false"}):
@@ -114,7 +144,10 @@ class TestPostmortemSettingsEnvVariables:
 
     def test_load_incidents_default_limit_from_env(self):
         """SELFHEALING_POSTMORTEM_INCIDENTS_DEFAULT_LIMIT 환경 변수 로딩."""
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_POSTMORTEM_INCIDENTS_DEFAULT_LIMIT": "50"}):
@@ -128,7 +161,11 @@ class TestPostmortemSettingsValidation:
     def test_history_limit_min_value(self):
         """history_limit 최소값 검증 (50 이상)."""
         from pydantic import ValidationError
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_POSTMORTEM_HISTORY_LIMIT": "10"}):
@@ -138,7 +175,11 @@ class TestPostmortemSettingsValidation:
     def test_history_limit_max_value(self):
         """history_limit 최대값 검증 (500 이하)."""
         from pydantic import ValidationError
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_POSTMORTEM_HISTORY_LIMIT": "600"}):
@@ -148,7 +189,11 @@ class TestPostmortemSettingsValidation:
     def test_auto_min_duration_max_value(self):
         """auto_min_duration 최대값 검증 (3600 이하)."""
         from pydantic import ValidationError
-        from selfhealing.settings.postmortem import PostmortemSettings, reset_postmortem_settings
+
+        from selfhealing.settings.postmortem import (
+            PostmortemSettings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         with mock.patch.dict(os.environ, {"SELFHEALING_POSTMORTEM_AUTO_MIN_DURATION": "4000"}):
@@ -161,7 +206,10 @@ class TestPostmortemSettingsSingleton:
 
     def test_get_postmortem_settings_returns_same_instance(self):
         """get_postmortem_settings()가 동일 인스턴스 반환."""
-        from selfhealing.settings.postmortem import get_postmortem_settings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            get_postmortem_settings,
+            reset_postmortem_settings,
+        )
 
         reset_postmortem_settings()
         settings1 = get_postmortem_settings()
@@ -170,7 +218,10 @@ class TestPostmortemSettingsSingleton:
 
     def test_reset_postmortem_settings_clears_singleton(self):
         """reset_postmortem_settings()가 싱글톤 초기화."""
-        from selfhealing.settings.postmortem import get_postmortem_settings, reset_postmortem_settings
+        from selfhealing.settings.postmortem import (
+            get_postmortem_settings,
+            reset_postmortem_settings,
+        )
 
         settings1 = get_postmortem_settings()
         reset_postmortem_settings()

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from selfhealing.multiregion.config import (
     MultiRegionSettings,
     reset_multiregion_settings,
@@ -24,7 +22,6 @@ from selfhealing.multiregion.health_monitor import (
     RegionHealth,
     RegionHealthStatus,
 )
-
 
 # =============================================================================
 # _check_and_failover() 동작 검증
