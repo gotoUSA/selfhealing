@@ -79,8 +79,7 @@ class TestHttpClientTimeoutAdjustmentBehavior:
             mock_settings.return_value = settings
             return SelfHealingHttpClient()
 
-    @patch("selfhealing.services.http_client.req_lib", create=True)
-    def test_timeout_adjusted_to_deadline(self, mock_req_lib, client):
+    def test_timeout_adjusted_to_deadline(self, client):
         """deadline(2초) < default_timeout(30초) → timeout이 ~2초로 축소."""
         import requests as req_lib
 
@@ -98,8 +97,7 @@ class TestHttpClientTimeoutAdjustmentBehavior:
             assert timeout_used < 30.0
             assert timeout_used <= 2.1  # ~2초 + 작은 오차
 
-    @patch("selfhealing.services.http_client.req_lib", create=True)
-    def test_timeout_not_adjusted_when_no_deadline(self, mock_req_lib, client):
+    def test_timeout_not_adjusted_when_no_deadline(self, client):
         """deadline 미설정 → 기본 timeout 유지."""
         import requests as req_lib
 
@@ -111,8 +109,7 @@ class TestHttpClientTimeoutAdjustmentBehavior:
             timeout_used = call_kwargs.kwargs.get("timeout", call_kwargs[1].get("timeout"))
             assert timeout_used == client.default_timeout
 
-    @patch("selfhealing.services.http_client.req_lib", create=True)
-    def test_explicit_shorter_timeout_preserved(self, mock_req_lib, client):
+    def test_explicit_shorter_timeout_preserved(self, client):
         """명시적 timeout(1초) < deadline(30초) → 명시적 timeout 유지."""
         import requests as req_lib
 

@@ -180,7 +180,7 @@ class SelfHealingHttpClient:
             from selfhealing.scaling.deadline_context import get_remaining_ms
 
             remaining = get_remaining_ms()
-            if remaining is not None:
+            if remaining is not None and remaining > 0:
                 deadline_timeout = remaining / 1000.0  # ms → seconds
                 if timeout is None or deadline_timeout < timeout:
                     timeout = deadline_timeout
@@ -286,7 +286,7 @@ class SelfHealingHttpClient:
         """
         _is_chaos_request.set(is_chaos)
         if experiment_id:
-            logger.debug(f"[SelfHealingHttpClient] Chaos context set: {experiment_id}")
+            logger.debug("[SelfHealingHttpClient] Chaos context set: %s", experiment_id)
 
     @classmethod
     def clear_chaos_context(cls) -> None:

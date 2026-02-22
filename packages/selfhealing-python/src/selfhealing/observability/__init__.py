@@ -8,7 +8,6 @@ and compatibility layer with existing trace_id system.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 

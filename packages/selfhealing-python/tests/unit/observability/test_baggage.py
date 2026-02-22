@@ -24,14 +24,16 @@ class TestBaggageModuleContract:
         from selfhealing.observability.baggage import _CONTEXTVAR_BAGGAGE_MAP
 
         assert "cell_id" in _CONTEXTVAR_BAGGAGE_MAP
-        assert _CONTEXTVAR_BAGGAGE_MAP["cell_id"] == "selfhealing.context.cell_context:get_current_cell_id"
+        assert _CONTEXTVAR_BAGGAGE_MAP["cell_id"]["getter"] == "selfhealing.context.cell_context:get_current_cell_id"
+        assert _CONTEXTVAR_BAGGAGE_MAP["cell_id"]["contextvar"] == "selfhealing.context.cell_context:_current_cell_id"
 
     def test_contextvar_baggage_map_contains_domain(self):
         """domain ContextVar가 Baggage 매핑에 포함되어야 한다."""
         from selfhealing.observability.baggage import _CONTEXTVAR_BAGGAGE_MAP
 
         assert "domain" in _CONTEXTVAR_BAGGAGE_MAP
-        assert _CONTEXTVAR_BAGGAGE_MAP["domain"] == "selfhealing.decorators.domain_tag:get_current_domain"
+        assert _CONTEXTVAR_BAGGAGE_MAP["domain"]["getter"] == "selfhealing.decorators.domain_tag:get_current_domain"
+        assert _CONTEXTVAR_BAGGAGE_MAP["domain"]["contextvar"] == "selfhealing.decorators.domain_tag:_current_domain"
 
     def test_contextvar_baggage_map_has_exactly_two_entries(self):
         """현재 Baggage 매핑은 cell_id, domain 2개이다."""
@@ -76,26 +78,44 @@ class TestSetupBaggagePropagationBehavior:
         assert W3CBaggagePropagator in propagator_types
 
 
-class TestResolveGetterBehavior:
-    """_resolve_getter() 동작 검증."""
+class TestResolveImportBehavior:
+    """_resolve_import() 동작 검증."""
 
     def test_resolves_cell_id_getter(self):
-        """cell_context:get_current_cell_id 경로를 정상 resolve 한다."""
-        from selfhealing.observability.baggage import _resolve_getter
+        """셀 ID getter 경로를 정상 resolve 한다."""
+        from selfhealing.observability.baggage import _resolve_import
 
-        getter = _resolve_getter("selfhealing.context.cell_context:get_current_cell_id")
+        getter = _resolve_import("selfhealing.context.cell_context:get_current_cell_id")
         from selfhealing.context.cell_context import get_current_cell_id
 
         assert getter is get_current_cell_id
 
     def test_resolves_domain_getter(self):
-        """domain_tag:get_current_domain 경로를 정상 resolve 한다."""
-        from selfhealing.observability.baggage import _resolve_getter
+        """도메인 getter 경로를 정상 resolve 한다."""
+        from selfhealing.observability.baggage import _resolve_import
 
-        getter = _resolve_getter("selfhealing.decorators.domain_tag:get_current_domain")
+        getter = _resolve_import("selfhealing.decorators.domain_tag:get_current_domain")
         from selfhealing.decorators.domain_tag import get_current_domain
 
         assert getter is get_current_domain
+
+    def test_resolves_cell_id_contextvar(self):
+        """셀 ID ContextVar 경로를 정상 resolve 한다."""
+        from selfhealing.observability.baggage import _resolve_import
+
+        contextvar = _resolve_import("selfhealing.context.cell_context:_current_cell_id")
+        from selfhealing.context.cell_context import _current_cell_id
+
+        assert contextvar is _current_cell_id
+
+    def test_resolves_domain_contextvar(self):
+        """도메인 ContextVar 경로를 정상 resolve 한다."""
+        from selfhealing.observability.baggage import _resolve_import
+
+        contextvar = _resolve_import("selfhealing.decorators.domain_tag:_current_domain")
+        from selfhealing.decorators.domain_tag import _current_domain
+
+        assert contextvar is _current_domain
 
 
 class TestSyncContextvarsToBaggageBehavior:

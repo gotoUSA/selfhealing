@@ -10,7 +10,9 @@ traceparent + baggage 헤더가 함께 outgoing HTTP 요청에 전파된다.
 
 from __future__ import annotations
 
+import importlib
 import logging
+from functools import lru_cache
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -18,11 +20,18 @@ logger = logging.getLogger(__name__)
 # Baggage 키 접두사 — selfhealing 네임스페이스
 BAGGAGE_PREFIX = "selfhealing"
 
-# ContextVar getter 경로 매핑 (Baggage 키 → 모듈:함수)
+# ContextVar 매핑 — Baggage 키별 getter(읽기)와 contextvar(쓰기) 경로
+# 단일 소스로 관리하여 sync/restore 비대칭 방지
 # 지연 import로 순환 의존 방지
-_CONTEXTVAR_BAGGAGE_MAP: dict[str, str] = {
-    "cell_id": "selfhealing.context.cell_context:get_current_cell_id",
-    "domain": "selfhealing.decorators.domain_tag:get_current_domain",
+_CONTEXTVAR_BAGGAGE_MAP: dict[str, dict[str, str]] = {
+    "cell_id": {
+        "getter": "selfhealing.context.cell_context:get_current_cell_id",
+        "contextvar": "selfhealing.context.cell_context:_current_cell_id",
+    },
+    "domain": {
+        "getter": "selfhealing.decorators.domain_tag:get_current_domain",
+        "contextvar": "selfhealing.decorators.domain_tag:_current_domain",
+    },
 }
 
 
@@ -58,18 +67,20 @@ def setup_baggage_propagation() -> None:
         logger.warning("Failed to setup baggage propagation: %s", e)
 
 
-def _resolve_getter(getter_path: str) -> Any:
+@lru_cache(maxsize=None)
+def _resolve_import(path: str) -> Any:
     """
-    'module.path:function_name' 문자열에서 callable을 동적 import.
+    'module.path:attribute_name' 문자열에서 attribute를 동적 import하고 캐싱.
 
-    순환 의존 방지를 위해 매 호출 시 지연 import.
+    순환 의존 방지를 위해 최초 호출 시에만 지연 import 실행.
+    이후 호출은 lru_cache에서 즉시 반환.
     """
-    module_path, func_name = getter_path.rsplit(":", 1)
-    module = __import__(module_path, fromlist=[func_name])
-    return getattr(module, func_name)
+    module_path, attr_name = path.rsplit(":", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, attr_name)
 
 
-def sync_contextvars_to_baggage() -> object:
+def sync_contextvars_to_baggage() -> object | None:
     """
     현재 ContextVar 값을 OTel Baggage에 동기화.
 
@@ -77,16 +88,17 @@ def sync_contextvars_to_baggage() -> object:
     ContextVar 값이 None이면 해당 Baggage 항목은 설정하지 않는다.
 
     Returns:
-        OTel context token — 반드시 context.detach(token)으로 해제해야 함
+        OTel context token — 반드시 context.detach(token)으로 해제해야 함.
+        OTel 미설치 시 None.
     """
     try:
         from opentelemetry import baggage, context
 
         ctx = context.get_current()
 
-        for key, getter_path in _CONTEXTVAR_BAGGAGE_MAP.items():
+        for key, entry in _CONTEXTVAR_BAGGAGE_MAP.items():
             try:
-                getter = _resolve_getter(getter_path)
+                getter = _resolve_import(entry["getter"])
                 value = getter()
                 if value is not None:
                     ctx = baggage.set_baggage(f"{BAGGAGE_PREFIX}.{key}", str(value), context=ctx)
@@ -120,6 +132,9 @@ def restore_contextvars_from_baggage() -> None:
     """
     수신된 OTel Baggage에서 ContextVar 값 복원.
 
+    _CONTEXTVAR_BAGGAGE_MAP의 contextvar 경로를 사용하여
+    sync_contextvars_to_baggage()와 동일한 매핑에서 읽고 쓴다.
+
     DjangoInstrumentor가 baggage HTTP 헤더를 OTel Context에 적재한 후
     호출되어야 유효한 값을 읽을 수 있다.
 
@@ -130,16 +145,11 @@ def restore_contextvars_from_baggage() -> None:
     except ImportError:
         return
 
-    # cell_id 복원
-    cell_id = baggage.get_baggage(f"{BAGGAGE_PREFIX}.cell_id")
-    if cell_id:
-        from selfhealing.context.cell_context import _current_cell_id
-
-        _current_cell_id.set(cell_id)
-
-    # domain 복원
-    domain = baggage.get_baggage(f"{BAGGAGE_PREFIX}.domain")
-    if domain:
-        from selfhealing.decorators.domain_tag import _current_domain
-
-        _current_domain.set(domain)
+    for key, entry in _CONTEXTVAR_BAGGAGE_MAP.items():
+        value = baggage.get_baggage(f"{BAGGAGE_PREFIX}.{key}")
+        if value:
+            try:
+                contextvar = _resolve_import(entry["contextvar"])
+                contextvar.set(value)
+            except Exception:
+                logger.debug("Failed to restore ContextVar '%s' from baggage", key, exc_info=True)
