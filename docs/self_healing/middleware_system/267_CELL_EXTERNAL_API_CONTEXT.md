@@ -1,6 +1,6 @@
 # 267. Cell External API Context — Trust Boundary 제어 및 수신 검증
 
-> **Version**: 2.0.0
+> **Version**: 2.1.0
 > **Created**: 2026-02-22
 > **Updated**: 2026-02-22
 > **Status**: Done
@@ -147,7 +147,6 @@ def _execute_request(self, method: str, url: str, **kwargs: Any):
         return request_func(url, headers=headers, timeout=timeout, **kwargs)
     finally:
         if baggage_token is not None:
-            from selfhealing.observability.baggage import detach_baggage_token
             detach_baggage_token(baggage_token)
 ```
 
@@ -266,11 +265,18 @@ Kubernetes Pod CIDR은 이미 결정론적이므로 가장 실용적이다.
 
 from ipaddress import ip_address, ip_network  # 표준 라이브러리
 
+# CIDR 캐시 갱신 주기 (초)
+_TRUSTED_CIDRS_CACHE_TTL_SECONDS = 300.0
+
+# Topology Mismatch Counter 싱글톤 — 중복 등록 방지
+_topology_mismatch_counter = None
+
 class CellTaggingMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         self._tagger = None
         self._trusted_cidrs = None  # 지연 로딩
+        self._trusted_cidrs_loaded_at = 0.0  # TTL 기반 갱신
 
     def __call__(self, request):
         if not self._check_enabled():
@@ -346,11 +352,16 @@ class CellTaggingMiddleware:
             return False
 
     def _get_trusted_cidrs(self) -> list[str]:
-        """trusted_source_cidrs 지연 로딩."""
-        if self._trusted_cidrs is None:
+        """trusted_source_cidrs 지연 로딩 (TTL 기반 갱신)."""
+        now = time.monotonic()
+        if (
+            self._trusted_cidrs is None
+            or now - self._trusted_cidrs_loaded_at > _TRUSTED_CIDRS_CACHE_TTL_SECONDS
+        ):
             from selfhealing.settings.cell_topology import get_cell_topology_settings
             settings = get_cell_topology_settings()
             self._trusted_cidrs = settings.trusted_source_cidrs
+            self._trusted_cidrs_loaded_at = now
         return self._trusted_cidrs
 
     def _validate_cell_id(self, incoming_cell_id: str) -> str | None:
@@ -394,27 +405,26 @@ class CellTaggingMiddleware:
     @staticmethod
     def _record_topology_mismatch(incoming_cell_id: str, reason: str) -> None:
         """
-        Topology Mismatch Prometheus 카운터 기록.
+        Topology Mismatch Prometheus 카운터 기록 (모듈 싱글톤).
 
-        메트릭 패턴 참조: core/hedging/metrics.py L103-106
-            HEDGING_MISMATCH_TOTAL = Counter(
-                "selfhealing_hedging_mismatch_total",
-                "...",
-                ["mismatch_type"],
-            )
+        패턴 참조: metrics/drift_metrics.py _get_or_create_counter()
+        — 중복 등록 방지를 위해 REGISTRY 조회 후 생성
         """
+        global _topology_mismatch_counter
         try:
-            from prometheus_client import Counter
+            if _topology_mismatch_counter is None:
+                from selfhealing.metrics.drift_metrics import _get_or_create_counter
 
-            counter = Counter(
-                "selfhealing_cell_topology_mismatch_total",
-                "Cell topology mismatch between upstream and local registry",
-                ["incoming_cell_id", "reason"],
-            )
-            counter.labels(
-                incoming_cell_id=incoming_cell_id,
-                reason=reason,
-            ).inc()
+                _topology_mismatch_counter = _get_or_create_counter(
+                    "selfhealing_cell_topology_mismatch_total",
+                    "Cell topology mismatch between upstream and local registry",
+                    ["incoming_cell_id", "reason"],
+                )
+            if _topology_mismatch_counter is not None:
+                _topology_mismatch_counter.labels(
+                    incoming_cell_id=incoming_cell_id,
+                    reason=reason,
+                ).inc()
         except Exception:
             pass  # 메트릭 실패가 요청을 중단하지 않음
 ```
@@ -510,6 +520,14 @@ rate(selfhealing_cell_topology_mismatch_total[5m]) > 0
 | `api/django/cell/middleware.py` | `_accept_incoming_cell_id()`, `_is_trusted_source()`, `_validate_cell_id()` | 필수 | ~60줄 |
 | ~~`services/http_client.py` `_get_headers()`~~ | ~~X-Cell-Id 수동 주입~~ | ~~삭제~~ | 0줄 (불필요) |
 
+### 5.1 v2.1.0 리팩토링 — 리뷰 지적 반영
+
+| 파일 | 변경 | 근거 |
+|------|------|------|
+| `api/django/cell/middleware.py` | `_record_topology_mismatch()` — `Counter()` 직접 생성 → `_get_or_create_counter()` 모듈 싱글톤 | prometheus_client는 동일 이름 Counter를 2회 생성하면 `ValueError: Duplicated timeseries` 발생. `drift_metrics.py` 기존 패턴과 통일 |
+| `api/django/cell/middleware.py` | `_get_trusted_cidrs()` — 영구 캐시 → TTL 기반 갱신 (300초) | WSGI 프로세스 수명 동안 Settings 변경이 반영되지 않는 문제. `time.monotonic()` 기반 만료 |
+| `services/http_client.py` | `_execute_request()` finally 블록 — 중복 `from import` 제거 | if 분기에서 이미 import한 `detach_baggage_token`을 finally에서 재import. else 분기에서 `None` 할당 |
+
 **Settings 환경 변수 추가:**
 
 ```dotenv
@@ -560,5 +578,6 @@ MIDDLEWARE = [
 | 전파 수단 | OTel Baggage Only (X-Cell-Id 수동 주입 생략) | `baggage.py` L29-33 매핑 완성, `http_client.py` L193 동기화 동작 |
 | Trust Boundary | 인스턴스 플래그 + DNS Auto-discovery | `http_client.py` L109 `suppress_internal_spans` 기존 패턴 일관성 |
 | 위조 방지 | CIDR 기반 검증 | `tiering/models.py` L217-221 `ip_network` 패턴 재사용, `utils/network.py` 통합 IP 추출 |
-| Topology Mismatch | validate-and-fallback + 메트릭 | `registry.py` L153 `get_cell_info()` 활용, `hedging/metrics.py` L103 Counter 패턴 |
+| Topology Mismatch | validate-and-fallback + 메트릭 | `registry.py` L153 `get_cell_info()` 활용, `drift_metrics.py` `_get_or_create_counter()` 패턴으로 중복 등록 방지 |
+| CIDR 캐시 갱신 | TTL 기반 (300초) | WSGI 장수명 프로세스에서 Settings 변경 반영. `time.monotonic()` 사용 |
 | HMAC 서명 | 267 범위 아님 (선택적 보완) | `audit/masking.py` L164-167 패턴 존재하나, K8s Secret 배포 운영 부담 대비 CIDR로 충분 |

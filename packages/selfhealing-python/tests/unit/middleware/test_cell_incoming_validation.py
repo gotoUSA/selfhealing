@@ -157,6 +157,31 @@ class TestIsTrustedSourceBehavior:
         assert cidrs == ["10.0.0.0/8"]
         assert mw._trusted_cidrs == ["10.0.0.0/8"]  # 캐시됨
 
+    def test_trusted_cidrs_refreshed_after_ttl_expires(self):
+        """TTL 만료 후 trusted_source_cidrs가 Settings에서 재로딩된다."""
+        import time as time_mod
+
+        from selfhealing.api.django.cell.middleware import (
+            CellTaggingMiddleware,
+            _TRUSTED_CIDRS_CACHE_TTL_SECONDS,
+        )
+
+        mw = CellTaggingMiddleware(MagicMock())
+
+        with patch("selfhealing.settings.cell_topology.get_cell_topology_settings") as mock_settings:
+            # 1차 로딩
+            mock_settings.return_value = MagicMock(trusted_source_cidrs=["10.0.0.0/8"])
+            first = mw._get_trusted_cidrs()
+            assert first == ["10.0.0.0/8"]
+
+            # TTL 만료 시뮬레이션
+            mw._trusted_cidrs_loaded_at -= _TRUSTED_CIDRS_CACHE_TTL_SECONDS + 1
+
+            # 2차 로딩 — 변경된 Settings 반영
+            mock_settings.return_value = MagicMock(trusted_source_cidrs=["10.0.0.0/8", "172.16.0.0/12"])
+            refreshed = mw._get_trusted_cidrs()
+            assert refreshed == ["10.0.0.0/8", "172.16.0.0/12"]
+
 
 class TestValidateCellIdBehavior:
     """_validate_cell_id() Topology Mismatch 검증 동작."""
@@ -429,3 +454,56 @@ class TestCellTaggingMiddlewareIncomingIntegrationBehavior:
         mock_tagger.resolve_cell_id_from_request.assert_called_once()
         assert request.cell_id == "cell-2"
         assert response_headers["X-Cell-Id"] == "cell-2"
+
+
+class TestRecordTopologyMismatchBehavior:
+    """_record_topology_mismatch() 메트릭 기록 동작 검증."""
+
+    def test_counter_singleton_no_duplicate_registration(self):
+        """동일 카운터를 연속 호출해도 중복 등록 예외가 발생하지 않는다."""
+        import selfhealing.api.django.cell.middleware as mw_module
+
+        from selfhealing.api.django.cell.middleware import CellTaggingMiddleware
+
+        # 싱글톤 초기화
+        original = mw_module._topology_mismatch_counter
+        mw_module._topology_mismatch_counter = None
+
+        try:
+            with patch("selfhealing.metrics.drift_metrics._get_or_create_counter") as mock_create:
+                mock_counter = MagicMock()
+                mock_create.return_value = mock_counter
+
+                # 2회 연속 호출 — 중복 등록 없이 동작
+                CellTaggingMiddleware._record_topology_mismatch("cell-1", "cell_not_found")
+                CellTaggingMiddleware._record_topology_mismatch("cell-2", "cell_not_active")
+
+            # _get_or_create_counter는 1회만 호출 (싱글톤 캐시)
+            mock_create.assert_called_once()
+            assert mock_counter.labels.call_count == 2
+        finally:
+            mw_module._topology_mismatch_counter = original
+
+    def test_counter_labels_match_reason_strings(self):
+        """메트릭 라벨이 reason 문자열과 cell_id를 정확히 전달한다."""
+        import selfhealing.api.django.cell.middleware as mw_module
+
+        from selfhealing.api.django.cell.middleware import CellTaggingMiddleware
+
+        original = mw_module._topology_mismatch_counter
+        mw_module._topology_mismatch_counter = None
+
+        try:
+            with patch("selfhealing.metrics.drift_metrics._get_or_create_counter") as mock_create:
+                mock_counter = MagicMock()
+                mock_create.return_value = mock_counter
+
+                CellTaggingMiddleware._record_topology_mismatch("cell-99", "cell_not_found")
+
+            mock_counter.labels.assert_called_once_with(
+                incoming_cell_id="cell-99",
+                reason="cell_not_found",
+            )
+            mock_counter.labels.return_value.inc.assert_called_once()
+        finally:
+            mw_module._topology_mismatch_counter = original

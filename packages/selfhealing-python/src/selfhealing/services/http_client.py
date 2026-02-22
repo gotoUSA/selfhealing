@@ -209,6 +209,7 @@ class SelfHealingHttpClient:
 
             baggage_token = sync_contextvars_to_baggage()
         else:
+            detach_baggage_token = None
             baggage_token = None
 
         try:
@@ -219,8 +220,6 @@ class SelfHealingHttpClient:
             return request_func(url, headers=headers, timeout=timeout, **kwargs)
         finally:
             if baggage_token is not None:
-                from selfhealing.observability.baggage import detach_baggage_token
-
                 detach_baggage_token(baggage_token)
 
     def _should_propagate_context(self, url: str) -> bool:

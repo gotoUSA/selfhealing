@@ -26,12 +26,19 @@ MIDDLEWARE 설정:
 from __future__ import annotations
 
 import logging
+import time
 from ipaddress import ip_address, ip_network
 from typing import Any
 
 from django.http import HttpRequest, HttpResponse
 
 logger = logging.getLogger(__name__)
+
+# CIDR 캐시 갱신 주기 (초) — WSGI 프로세스 재시작 없이 Settings 변경을 반영
+_TRUSTED_CIDRS_CACHE_TTL_SECONDS = 300.0
+
+# Topology Mismatch Counter 싱글톤 — 중복 등록 방지
+_topology_mismatch_counter = None
 
 
 class CellTaggingMiddleware:
@@ -56,6 +63,7 @@ class CellTaggingMiddleware:
         self.get_response = get_response
         self._tagger = None
         self._trusted_cidrs: list[str] | None = None
+        self._trusted_cidrs_loaded_at: float = 0.0
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         if not self._check_enabled():
@@ -138,12 +146,14 @@ class CellTaggingMiddleware:
             return False
 
     def _get_trusted_cidrs(self) -> list[str]:
-        """trusted_source_cidrs 지연 로딩."""
-        if self._trusted_cidrs is None:
+        """trusted_source_cidrs 지연 로딩 (TTL 기반 갱신)."""
+        now = time.monotonic()
+        if self._trusted_cidrs is None or now - self._trusted_cidrs_loaded_at > _TRUSTED_CIDRS_CACHE_TTL_SECONDS:
             from selfhealing.settings.cell_topology import get_cell_topology_settings
 
             settings = get_cell_topology_settings()
             self._trusted_cidrs = settings.trusted_source_cidrs
+            self._trusted_cidrs_loaded_at = now
         return self._trusted_cidrs
 
     def _validate_cell_id(self, incoming_cell_id: str) -> str | None:
@@ -184,19 +194,22 @@ class CellTaggingMiddleware:
 
     @staticmethod
     def _record_topology_mismatch(incoming_cell_id: str, reason: str) -> None:
-        """Topology Mismatch Prometheus 카운터 기록."""
+        """Topology Mismatch Prometheus 카운터 기록 (모듈 싱글톤)."""
+        global _topology_mismatch_counter  # noqa: PLW0603
         try:
-            from prometheus_client import Counter
+            if _topology_mismatch_counter is None:
+                from selfhealing.metrics.drift_metrics import _get_or_create_counter
 
-            counter = Counter(
-                "selfhealing_cell_topology_mismatch_total",
-                "Cell topology mismatch between upstream and local registry",
-                ["incoming_cell_id", "reason"],
-            )
-            counter.labels(
-                incoming_cell_id=incoming_cell_id,
-                reason=reason,
-            ).inc()
+                _topology_mismatch_counter = _get_or_create_counter(
+                    "selfhealing_cell_topology_mismatch_total",
+                    "Cell topology mismatch between upstream and local registry",
+                    ["incoming_cell_id", "reason"],
+                )
+            if _topology_mismatch_counter is not None:
+                _topology_mismatch_counter.labels(
+                    incoming_cell_id=incoming_cell_id,
+                    reason=reason,
+                ).inc()
         except Exception:
             pass  # 메트릭 실패가 요청을 중단하지 않음
 
