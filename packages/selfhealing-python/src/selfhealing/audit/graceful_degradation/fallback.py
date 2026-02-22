@@ -328,14 +328,14 @@ class HashChainFallbackChain:
             # DiskBuffer 또는 메모리 버퍼에 저장
             if use_disk_buffer:
                 disk_buffer.put(entry.copy())
-            else:
-                # Fallback: 기존 메모리 버퍼 사용
-                self._memory_buffer.append(entry.copy())
-                if len(self._memory_buffer) > self._config.memory_max_entries:
-                    removed = self._memory_buffer.pop(0)
-                    logger.warning(
-                        f"[FallbackChain] Memory buffer full, dropped entry seq={removed.get('integrity', {}).get('sequence')}"
-                    )
+
+            # memory_buffer에도 보관 (get_degraded_entries / clear_memory_buffer 일관성)
+            self._memory_buffer.append(entry.copy())
+            if len(self._memory_buffer) > self._config.memory_max_entries:
+                removed = self._memory_buffer.pop(0)
+                logger.warning(
+                    f"[FallbackChain] Memory buffer full, dropped entry seq={removed.get('integrity', {}).get('sequence')}"
+                )
 
             return entry
 

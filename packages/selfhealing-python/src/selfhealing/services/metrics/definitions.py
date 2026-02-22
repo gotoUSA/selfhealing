@@ -98,13 +98,13 @@ human_review_queue_time = get_or_create_histogram(
 circuit_breaker_state = get_or_create_gauge(
     "circuit_breaker_state",
     "Circuit breaker state (0=closed, 1=open, 2=half-open)",
-    ["service"],
+    ["service", "cell_id"],
 )
 
 circuit_breaker_transitions = get_or_create_counter(
     "circuit_breaker_transitions_total",
     "Total circuit breaker state transitions",
-    ["service", "from_state", "to_state", "is_synthetic"],
+    ["service", "cell_id", "from_state", "to_state", "is_synthetic"],
 )
 
 circuit_breaker_open_duration = get_or_create_histogram(

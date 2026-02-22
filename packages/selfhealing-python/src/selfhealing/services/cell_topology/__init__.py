@@ -8,6 +8,11 @@ Cell은 논리적 동시성 풀이며, DB/Redis/캐시 클러스터를 공유합
 물리적 리전 분리는 multiregion/ 모듈이 담당합니다.
 """
 
+from selfhealing.services.cell_topology.cb_namespace import (
+    COMPOSITE_KEY_SEPARATOR,
+    make_cell_scoped_cb_name,
+    parse_composite_cb_name,
+)
 from selfhealing.services.cell_topology.health import (
     CellHealthAggregator,
     CellHealthSnapshot,
@@ -34,6 +39,7 @@ from selfhealing.services.cell_topology.registry import (
 
 __all__ = [
     "CELL_STATE_PRIORITY",
+    "COMPOSITE_KEY_SEPARATOR",
     "CellEvacuationPolicy",
     "CellHealthAggregator",
     "CellHealthSnapshot",
@@ -44,6 +50,8 @@ __all__ = [
     "get_cell_evacuation_policy",
     "get_cell_health_aggregator",
     "get_cell_registry",
+    "make_cell_scoped_cb_name",
+    "parse_composite_cb_name",
     "reset_cell_evacuation_policy",
     "reset_cell_health_aggregator",
     "reset_cell_registry",

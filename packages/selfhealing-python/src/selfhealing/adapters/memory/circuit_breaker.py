@@ -16,6 +16,7 @@ import logging
 import threading
 from collections import deque
 from datetime import datetime, timedelta
+from typing import Any
 
 from selfhealing.adapters.memory.base import _now
 
@@ -467,6 +468,19 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 self._clear_window(service_name)
                 return True
             return False
+
+    def delete_state(self, service_name: str) -> bool:
+        """Delete circuit breaker state (alias for delete)."""
+        return self.delete(service_name)
+
+    def update_metadata(self, service_name: str, metadata: dict[str, Any]) -> bool:
+        """RLock 내에서 metadata 필드만 교체. 다른 필드 무영향."""
+        with self._lock:
+            state = self._storage.get(service_name)
+            if state is None:
+                return False
+            state.metadata = metadata
+            return True
 
     def clear(self) -> None:
         """Clear all entries (for testing)."""

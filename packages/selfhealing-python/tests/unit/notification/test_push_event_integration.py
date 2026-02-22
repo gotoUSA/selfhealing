@@ -26,22 +26,22 @@ class TestDLQServicePushEvents:
             Verify store_failure calls on_item_created event handler.
         """
         from selfhealing.services.dlq_service import DLQService, DLQConfig
-        
+
         # Arrange
         mock_repo = MagicMock()
         mock_repo.create.return_value = MagicMock(id=123)
-        
+
         # Use config with enabled=True
         config = DLQConfig(enabled=True)
         service = DLQService(config=config, repository=mock_repo)
-        
+
         # Act
         result = service.store_failure(
             domain="payment",
             failure_type="PG_TIMEOUT",
             error_message="Connection timeout",
         )
-        
+
         # Assert
         assert result.success is True
         mock_on_item_created.assert_called_once_with("payment", "PG_TIMEOUT")
@@ -52,7 +52,7 @@ class TestDLQServicePushEvents:
             Verify resolve_entry calls on_item_resolved event handler.
         """
         from selfhealing.metrics.event_handlers import DLQMetricEventHandler
-        
+
         # Verify the handler has expected methods
         assert hasattr(DLQMetricEventHandler, "on_item_resolved")
         assert callable(getattr(DLQMetricEventHandler, "on_item_resolved"))
@@ -64,21 +64,21 @@ class TestDLQServicePushEvents:
             Verify store_failure correctly calls event handler.
         """
         from selfhealing.services.dlq_service import DLQService, DLQConfig
-        
+
         # Arrange
         mock_repo = MagicMock()
         mock_repo.create.return_value = MagicMock(id=456)
-        
+
         # Use config with enabled=True
         config = DLQConfig(enabled=True)
         service = DLQService(config=config, repository=mock_repo)
-        
+
         # Act - should work normally
         result = service.store_failure(
             domain="point",
             failure_type="BALANCE_ERROR",
         )
-        
+
         # Assert - operation succeeded
         assert result.success is True
         mock_on_item_created.assert_called_once()
@@ -100,20 +100,20 @@ class TestCircuitBreakerPushEvents:
             Verify force_open calls on_state_changed event handler.
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
-        
+
         # Arrange
         mock_repo = MagicMock()
         mock_repo.atomic_force_open.return_value = (True, "closed", "open")
-        
+
         service = CircuitBreakerService(repository=mock_repo)
         service._repository = mock_repo
-        
+
         # Act
         result = service.force_open(
             service_name="toss_payment",
             reason="Maintenance",
         )
-        
+
         # Assert
         assert result.success is True
         mock_on_state_changed.assert_called_once_with(
@@ -130,20 +130,20 @@ class TestCircuitBreakerPushEvents:
             Verify force_close calls on_state_changed event handler.
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
-        
+
         # Arrange
         mock_repo = MagicMock()
         mock_repo.atomic_force_close.return_value = (True, "open", "closed")
-        
+
         service = CircuitBreakerService(repository=mock_repo)
         service._repository = mock_repo
-        
+
         # Act
         result = service.force_close(
             service_name="toss_payment",
             reason="Service recovered",
         )
-        
+
         # Assert
         assert result.success is True
         mock_on_state_changed.assert_called_once_with(
@@ -160,20 +160,20 @@ class TestCircuitBreakerPushEvents:
             Verify no event is emitted when state doesn't change.
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
-        
+
         # Arrange - already open
         mock_repo = MagicMock()
         mock_repo.atomic_force_open.return_value = (True, "open", "open")
-        
+
         service = CircuitBreakerService(repository=mock_repo)
         service._repository = mock_repo
-        
+
         # Act
         result = service.force_open(
             service_name="toss_payment",
             reason="Already open",
         )
-        
+
         # Assert - no event because state unchanged
         assert result.success is True
         mock_on_state_changed.assert_not_called()
@@ -185,20 +185,20 @@ class TestCircuitBreakerPushEvents:
             Verify reset calls on_state_changed when state actually changes.
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
-        
+
         # Arrange
         mock_repo = MagicMock()
         mock_repo.atomic_reset.return_value = (True, "open", "closed")
-        
+
         service = CircuitBreakerService(repository=mock_repo)
         service._repository = mock_repo
-        
+
         # Act
         result = service.reset(
             service_name="toss_payment",
             reason="Reset after maintenance",
         )
-        
+
         # Assert
         assert result.success is True
         mock_on_state_changed.assert_called_once_with(
@@ -215,31 +215,31 @@ class TestCircuitBreakerPushEvents:
         """
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
         from selfhealing.services.circuit_breaker.config import CircuitBreakerConfig
-        
+
         # Arrange - minimum_calls=1 to allow testing with fewer calls
         config = CircuitBreakerConfig(
             enabled=True,
             failure_threshold=3,
             minimum_calls=1,  # Allow trigger with low call count
         )
-        
+
         mock_state = MagicMock()
         mock_state.manually_controlled = False
         mock_state.failure_count = 3  # At threshold
         mock_state.success_count = 0
         mock_state.state = "closed"
         mock_state.service_name = "toss_payment"
-        
+
         mock_repo = MagicMock()
         mock_repo.get_or_create.return_value = mock_state
         mock_repo.record_failure.return_value = mock_state
-        
+
         service = CircuitBreakerService(config=config, repository=mock_repo)
         service._repository = mock_repo
-        
+
         # Act
         service.record_failure("toss_payment")
-        
+
         # Assert
         mock_on_state_changed.assert_called_once_with(
             service="toss_payment",
@@ -263,18 +263,18 @@ class TestSafeGaugeIntegration:
         """
         from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock
-        
+
         # Arrange
         mock_gauge = MagicMock()
         mock_child = MagicMock()
         mock_gauge.labels.return_value = mock_child
-        
+
         safe_gauge = SafeGauge(mock_gauge)
-        
+
         # Act - try to decrement from 0
         child = safe_gauge.labels(domain="payment")
         child.dec()  # Should not go negative
-        
+
         # Assert - shadow value should be 0 (clamped)
         assert child.get_shadow_value() == 0.0
 
@@ -285,20 +285,20 @@ class TestSafeGaugeIntegration:
         """
         from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock
-        
+
         # Arrange
         mock_gauge = MagicMock()
         mock_child = MagicMock()
         mock_gauge.labels.return_value = mock_child
-        
+
         safe_gauge = SafeGauge(mock_gauge)
         child = safe_gauge.labels(domain="payment")
-        
+
         # Act
         child.inc()  # 1
         child.inc()  # 2
         child.dec()  # 1
-        
+
         # Assert
         assert child.get_shadow_value() == 1.0
 
@@ -309,18 +309,18 @@ class TestSafeGaugeIntegration:
         """
         from selfhealing.metrics.safe_gauge import SafeGauge
         from unittest.mock import MagicMock
-        
+
         # Arrange
         mock_gauge = MagicMock()
         mock_child = MagicMock()
         mock_gauge.labels.return_value = mock_child
-        
+
         safe_gauge = SafeGauge(mock_gauge)
         child = safe_gauge.labels(domain="payment")
-        
+
         # Act - try to set negative value
         child.set(-5)
-        
+
         # Assert - should be clamped to 0
         assert child.get_shadow_value() == 0.0
 
@@ -341,19 +341,19 @@ class TestDLQMetricEventHandler:
             Verify on_item_created increments the pending gauge.
         """
         from selfhealing.metrics.event_handlers import DLQMetricEventHandler
-        
+
         # Arrange
         mock_metrics = MagicMock()
         mock_get_metrics.return_value = mock_metrics
-        
+
         mock_safe_gauge = MagicMock()
         mock_gauge_child = MagicMock()
         mock_safe_gauge.labels.return_value = mock_gauge_child
         mock_get_gauge.return_value = mock_safe_gauge
-        
+
         # Act
         DLQMetricEventHandler.on_item_created("payment", "PG_TIMEOUT")
-        
+
         # Assert
         mock_metrics.record_dlq_item_created.assert_called_once_with("payment", "PG_TIMEOUT")
         mock_gauge_child.inc.assert_called_once()
@@ -366,19 +366,19 @@ class TestDLQMetricEventHandler:
             Verify on_item_resolved decrements the pending gauge.
         """
         from selfhealing.metrics.event_handlers import DLQMetricEventHandler
-        
+
         # Arrange
         mock_metrics = MagicMock()
         mock_get_metrics.return_value = mock_metrics
-        
+
         mock_safe_gauge = MagicMock()
         mock_gauge_child = MagicMock()
         mock_safe_gauge.labels.return_value = mock_gauge_child
         mock_get_gauge.return_value = mock_safe_gauge
-        
+
         # Act
         DLQMetricEventHandler.on_item_resolved("payment", "auto_replay", 120.5)
-        
+
         # Assert
         mock_gauge_child.dec.assert_called_once()
 
@@ -393,22 +393,26 @@ class TestCircuitBreakerEventHandler:
             Verify on_state_changed updates the circuit breaker state gauge.
         """
         from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
-        
+
         # Arrange
         mock_metrics = MagicMock()
         mock_get_metrics.return_value = mock_metrics
-        
+
         # Act
         CircuitBreakerEventHandler.on_state_changed(
             service="toss_payment",
             from_state="closed",
             to_state="open",
         )
-        
+
         # Assert
-        mock_metrics.circuit_breaker_state.labels.assert_called_with(service_name="toss_payment")
+        mock_metrics.circuit_breaker_state.labels.assert_called_with(
+            service_name="toss_payment",
+            cell_id="",
+        )
         mock_metrics.circuit_breaker_transitions.labels.assert_called_with(
             service_name="toss_payment",
+            cell_id="",
             from_state="closed",
             to_state="open",
         )
@@ -420,13 +424,13 @@ class TestCircuitBreakerEventHandler:
             Verify on_failure increments the failure counter.
         """
         from selfhealing.metrics.event_handlers import CircuitBreakerEventHandler
-        
+
         # Arrange
         mock_metrics = MagicMock()
         mock_get_metrics.return_value = mock_metrics
-        
+
         # Act
         CircuitBreakerEventHandler.on_failure("toss_payment")
-        
+
         # Assert
         mock_metrics.circuit_breaker_failures.labels.assert_called_with(service_name="toss_payment")

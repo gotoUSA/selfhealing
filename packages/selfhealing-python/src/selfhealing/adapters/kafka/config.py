@@ -165,6 +165,7 @@ class KafkaSettings(BaseSettings):
         "env_prefix": "SELFHEALING_KAFKA_",
         "env_file": ".env",
         "env_file_encoding": "utf-8",
+        "extra": "ignore",
     }
 
     # =========================================================================

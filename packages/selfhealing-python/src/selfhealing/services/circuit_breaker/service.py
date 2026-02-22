@@ -452,6 +452,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 "manually_controlled": s.manually_controlled,
                 "controlled_by_id": s.controlled_by_id,
                 "control_reason": s.control_reason,
+                "metadata": s.metadata,
             }
             for s in states
         ]
@@ -932,3 +933,71 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 new_state=state.state,
                 message=f"Circuit breaker for '{service_name}' switched to auto mode",
             )
+
+    # =========================================================================
+    # Ring Resize Reconciliation — 고아 CB 정리
+    # =========================================================================
+
+    def reconcile_cb_cell_mapping(self) -> dict[str, Any]:
+        """
+        Ring Resize 후 CB-Cell 매핑 정합성 보정.
+
+        1. 모든 CB를 순회하여 Composite Key에서 cell_id 추출
+        2. 현재 Hash Ring 기준으로 올바른 cell_id 비교
+        3. 불일치 시: 고아 CB 아카이브 + 삭제 (상태 전이 없음)
+        4. 신규 Cell의 CB는 get_or_create()에 의해 Lazy 생성
+
+        Returns:
+            ``{"archived": [...], "errors": [...]}``
+        """
+        from selfhealing.services.cell_topology import get_cell_registry
+        from selfhealing.services.cell_topology.cb_namespace import (
+            parse_composite_cb_name,
+        )
+
+        registry = get_cell_registry()
+        result: dict[str, Any] = {"archived": [], "errors": []}
+
+        try:
+            all_states = self.repository.get_all_states()
+
+            for state in all_states:
+                base_name, old_cell_id = parse_composite_cb_name(state.service_name)
+                if not old_cell_id:
+                    continue  # 레거시 단일 키 — 건너뜀
+
+                # 현재 Hash Ring 기준 올바른 Cell
+                current_cell_id = registry.get_cell_for_key(base_name)
+
+                if old_cell_id != current_cell_id:
+                    # 고아 CB — 아카이브 후 삭제 (상태 복사 절대 금지)
+                    try:
+                        self._archive_orphan_cb(state)
+                        self.repository.delete_state(state.service_name)
+                        result["archived"].append(state.service_name)
+                    except Exception as e:
+                        result["errors"].append(
+                            {
+                                "service_name": state.service_name,
+                                "error": str(e),
+                            }
+                        )
+
+        except Exception as e:
+            logger.error(f"[CB Reconciliation] Failed: {e}")
+            result["errors"].append({"error": str(e)})
+
+        return result
+
+    def _archive_orphan_cb(self, state: "CircuitBreakerStateData") -> None:
+        """고아 CB를 히스토리에 기록 후 삭제 준비."""
+        try:
+            if hasattr(self.repository, "_record_history"):
+                self.repository._record_history(
+                    state.service_name,
+                    state.state,
+                    now(),
+                    note=f"ring_resize_eviction|old_state={state.state}",
+                )
+        except Exception as e:
+            logger.debug(f"[CB Reconciliation] History recording failed " f"for {state.service_name}: {e}")

@@ -202,6 +202,9 @@ class CircuitBreakerStateData:
     # Half-Open Tracking
     half_open_request_count: int = 0
 
+    # Extensible Metadata
+    metadata: dict[str, Any] = field(default_factory=dict)
+
     # Lifecycle
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -592,9 +595,7 @@ class CircuitBreakerStateRepository(ABC):
         ...
 
     @abstractmethod
-    def get_by_service_name(
-        self, service_name: str
-    ) -> CircuitBreakerStateData | None:
+    def get_by_service_name(self, service_name: str) -> CircuitBreakerStateData | None:
         """Get circuit breaker state by service name"""
         ...
 
@@ -633,9 +634,7 @@ class CircuitBreakerStateRepository(ABC):
         ...
 
     @abstractmethod
-    def clear_manual_control(
-        self, service_name: str, preserve_reason: bool = False
-    ) -> bool:
+    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
         """Clear manual control from a circuit breaker
 
         Args:
@@ -658,6 +657,32 @@ class CircuitBreakerStateRepository(ABC):
     def reset(self, service_name: str) -> bool:
         """Reset circuit breaker to initial closed state"""
         ...
+
+    def update_metadata(
+        self,
+        service_name: str,
+        metadata: dict[str, Any],
+    ) -> bool:
+        """
+        CB 메타데이터 필드만 원자적으로 업데이트 (상태 변경 없음).
+
+        각 구현체에서 반드시 오버라이드하여 원자적 핀포인트 업데이트를 수행해야 한다:
+        - Redis: HSET 단일 필드 (다른 Hash 필드에 영향 없음)
+        - InMemory: RLock 내에서 metadata 필드만 교체
+        - Django ORM: update(metadata=...) 쿼리
+
+        Args:
+            service_name: 서비스 이름
+            metadata: 업데이트할 메타데이터
+
+        Returns:
+            성공 여부
+        """
+        state = self.get_by_service_name(service_name)
+        if state is None:
+            return False
+        state.metadata = metadata
+        return self.update_state(service_name, state.state)
 
     # =========================================================================
     # Atomic Operations for Concurrency Safety

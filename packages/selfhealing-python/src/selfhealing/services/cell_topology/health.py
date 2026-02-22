@@ -410,18 +410,36 @@ class CellHealthAggregator:
 
     def _get_cb_open_ratio(self, cell_id: str) -> float:
         """
-        CB OPEN 전환 이벤트 기반 Cell CB OPEN 비율 조회.
+        Composite Key 기반 Cell CB OPEN 비율 조회.
 
-        비율 = 현재 OPEN CB 수 / OPEN 전환 누적 횟수.
-        시간 경과에 따라 분모가 증가하여 비율이 감쇠됩니다.
-
-        CB 자동 전환(record_failure→OPEN, record_success→CLOSED) 감지.
-        수동 제어(force_open/force_close)는 콜백 미호출이므로 감지 불가.
+        CB의 service_name에서 cell_id를 직접 파싱하므로:
+        - assigned_services TTL에 의존하지 않음 (레이스 컨디션 해소)
+        - 수동 제어(force_open/force_close)도 감지 가능
+        - metadata 경합 없음 (각 Cell이 물리적으로 분리된 CB 보유)
         """
-        with self._lock:
-            total = self._cb_open_transition_counts.get(cell_id, 0)
-            open_count = self._cb_open_counts.get(cell_id, 0)
+        try:
+            from selfhealing.services.circuit_breaker import (
+                get_circuit_breaker_service,
+            )
+            from selfhealing.services.cell_topology.cb_namespace import (
+                parse_composite_cb_name,
+            )
+
+            cb_service = get_circuit_breaker_service()
+            all_states = cb_service.get_all_states()
+
+            open_count = 0
+            total = 0
+            for state in all_states:
+                _, state_cell_id = parse_composite_cb_name(state.get("service_name", ""))
+                if state_cell_id == cell_id:
+                    total += 1
+                    if state.get("state") == "open":
+                        open_count += 1
+
             return (open_count / total) if total > 0 else 0.0
+        except Exception:
+            return 0.0
 
     def register_cb_callbacks(self) -> None:
         """

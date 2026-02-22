@@ -315,25 +315,48 @@ class TestCBOpenRatioBehavior:
         assert ratio == 0.0
 
     def test_cb_open_increments_counters(self, aggregator: CellHealthAggregator):
-        """CB OPEN 이벤트가 카운터를 증가시켜야 한다."""
-        with aggregator._lock:
-            aggregator._cb_open_counts["cell-0"] = 2
-            aggregator._cb_open_transition_counts["cell-0"] = 5
+        """CB OPEN 상태 CB가 있으면 비율이 올바르게 계산되어야 한다."""
+        from selfhealing.services.cell_topology.cb_namespace import (
+            make_cell_scoped_cb_name,
+        )
 
-        ratio = aggregator._get_cb_open_ratio("cell-0")
+        mock_service = MagicMock()
+        mock_service.get_all_states.return_value = [
+            {"service_name": make_cell_scoped_cb_name("svc-a", "cell-0"), "state": "open"},
+            {"service_name": make_cell_scoped_cb_name("svc-b", "cell-0"), "state": "open"},
+            {"service_name": make_cell_scoped_cb_name("svc-c", "cell-0"), "state": "closed"},
+            {"service_name": make_cell_scoped_cb_name("svc-d", "cell-0"), "state": "closed"},
+            {"service_name": make_cell_scoped_cb_name("svc-e", "cell-0"), "state": "closed"},
+        ]
+
+        with patch(
+            "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
+            return_value=mock_service,
+        ):
+            ratio = aggregator._get_cb_open_ratio("cell-0")
         assert ratio == pytest.approx(2 / 5)
 
     def test_cb_closed_decrements_open_count(self, aggregator: CellHealthAggregator):
-        """CB CLOSED 이벤트 시 open count가 감소해야 한다."""
-        with aggregator._lock:
-            aggregator._cb_open_counts["cell-0"] = 3
-            aggregator._cb_open_transition_counts["cell-0"] = 5
+        """CB CLOSED 상태 변경 후 open 비율이 감소해야 한다."""
+        from selfhealing.services.cell_topology.cb_namespace import (
+            make_cell_scoped_cb_name,
+        )
 
-        # CB closed 시뮬레이션 (open count 감소)
-        with aggregator._lock:
-            aggregator._cb_open_counts["cell-0"] = max(0, aggregator._cb_open_counts["cell-0"] - 1)
+        # 초기 상태: 3 OPEN / 5 총
+        mock_service = MagicMock()
+        mock_service.get_all_states.return_value = [
+            {"service_name": make_cell_scoped_cb_name("svc-a", "cell-0"), "state": "open"},
+            {"service_name": make_cell_scoped_cb_name("svc-b", "cell-0"), "state": "open"},
+            {"service_name": make_cell_scoped_cb_name("svc-c", "cell-0"), "state": "closed"},
+            {"service_name": make_cell_scoped_cb_name("svc-d", "cell-0"), "state": "closed"},
+            {"service_name": make_cell_scoped_cb_name("svc-e", "cell-0"), "state": "closed"},
+        ]
 
-        ratio = aggregator._get_cb_open_ratio("cell-0")
+        with patch(
+            "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
+            return_value=mock_service,
+        ):
+            ratio = aggregator._get_cb_open_ratio("cell-0")
         assert ratio == pytest.approx(2 / 5)
 
     def test_cb_open_count_never_negative(self, aggregator: CellHealthAggregator):

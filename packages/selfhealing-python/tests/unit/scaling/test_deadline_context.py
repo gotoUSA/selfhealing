@@ -99,8 +99,8 @@ class TestDeadlineContextBehavior:
         set_deadline(2000.0)
         remaining = get_remaining_ms()
         assert remaining is not None
-        # 2000ms - 50ms(buffer) = 1950ms, 실행 시간 고려하여 넉넉한 범위 허용
-        assert 1900.0 < remaining <= 1950.0
+        # 2000ms - 50ms(buffer) = 1950ms, float round-trip 오차 + 실행 시간 허용
+        assert 1900.0 < remaining <= 1951.0
 
     def test_no_deadline_returns_none(self):
         """deadline 미설정 시 None 반환."""
@@ -132,7 +132,8 @@ class TestDeadlineContextBehavior:
         remaining = get_remaining_ms()
         assert remaining is not None
         expected_max = 2000.0 - DEFAULT_NETWORK_LATENCY_BUFFER_MS
-        assert remaining <= expected_max
+        # float round-trip 오차(나누기→더하기→빼기→곱하기)로 ~1e-8ms 초과 가능
+        assert remaining <= expected_max + 1.0
 
 
 class TestNetworkCongestionDetectionBehavior:

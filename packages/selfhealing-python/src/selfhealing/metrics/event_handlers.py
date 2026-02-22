@@ -189,9 +189,7 @@ class DLQMetricEventHandler:
                 safe_gauge.labels(domain=domain).dec()
 
             # Histogram: 복구 시간 기록 (100% 정확)
-            if duration_seconds is not None and hasattr(
-                metrics, "recovery_time_seconds"
-            ):
+            if duration_seconds is not None and hasattr(metrics, "recovery_time_seconds"):
                 metrics.recovery_time_seconds.labels(
                     domain=domain,
                     resolution_type=resolution_type,
@@ -250,8 +248,7 @@ class DLQMetricEventHandler:
 
             _log_event(
                 "get_dlq_log_level",
-                f"[EventHandler] DLQ retry failed: domain={domain}, "
-                f"type={failure_type}, attempts={attempt_count}",
+                f"[EventHandler] DLQ retry failed: domain={domain}, " f"type={failure_type}, attempts={attempt_count}",
                 event_type="dlq.retry_failed",
                 domain=domain,
                 failure_type=failure_type,
@@ -315,9 +312,10 @@ class CircuitBreakerEventHandler:
         Circuit Breaker 상태 변경 시 호출.
 
         CB 상태 변경은 시스템 불안정 신호이므로 WARNING 레벨로 로깅됩니다.
+        Composite Key(``service::cell_id``)를 분리하여 메트릭 Label에 반영합니다.
 
         Args:
-            service: 서비스 이름
+            service: 서비스 이름 (Composite Key 포함 가능)
             from_state: 이전 상태
             to_state: 새 상태
         """
@@ -325,32 +323,41 @@ class CircuitBreakerEventHandler:
         if metrics is None:
             return
 
+        # Composite Key 분리 — 메트릭 발행 경계에서만 수행
+        from selfhealing.services.cell_topology.cb_namespace import (
+            parse_composite_cb_name,
+        )
+
+        base_service, cell_id = parse_composite_cb_name(service)
+
         try:
             # Gauge: 현재 상태 설정
             state_value = CircuitBreakerEventHandler.STATE_VALUES.get(to_state, 0)
             if hasattr(metrics, "circuit_breaker_state"):
-                metrics.circuit_breaker_state.labels(service_name=service).set(
-                    state_value
-                )
+                metrics.circuit_breaker_state.labels(
+                    service_name=base_service,
+                    cell_id=cell_id,
+                ).set(state_value)
 
             # Counter: 상태 전환 카운트
             if hasattr(metrics, "circuit_breaker_transitions"):
                 metrics.circuit_breaker_transitions.labels(
-                    service_name=service,
+                    service_name=base_service,
+                    cell_id=cell_id,
                     from_state=from_state,
                     to_state=to_state,
                 ).inc()
 
             # Counter: open 상태로 전환 시 trip 카운트
             if to_state == "open" and hasattr(metrics, "circuit_breaker_trips"):
-                metrics.circuit_breaker_trips.labels(service_name=service).inc()
+                metrics.circuit_breaker_trips.labels(service_name=base_service).inc()
 
             _log_event(
                 "get_cb_log_level",
-                f"[EventHandler] CB state changed: service={service}, "
-                f"{from_state} -> {to_state}",
+                f"[EventHandler] CB state changed: service={base_service}, " f"cell_id={cell_id}, {from_state} -> {to_state}",
                 event_type="circuit_breaker.state_changed",
-                service=service,
+                service=base_service,
+                cell_id=cell_id,
                 from_state=from_state,
                 to_state=to_state,
             )
@@ -453,8 +460,7 @@ class ReplayEventHandler:
 
             _log_event(
                 "get_replay_log_level",
-                f"[EventHandler] Replay completed: domain={domain}, "
-                f"success={success}, duration={duration_seconds}s",
+                f"[EventHandler] Replay completed: domain={domain}, " f"success={success}, duration={duration_seconds}s",
                 event_type="replay.completed",
                 domain=domain,
                 success=success,
