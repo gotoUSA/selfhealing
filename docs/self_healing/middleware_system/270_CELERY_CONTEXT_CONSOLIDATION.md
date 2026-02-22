@@ -1,6 +1,6 @@
 # 270. Celery Context Consolidation — 태스크 컨텍스트 추출 유틸리티 통합
 
-> **Version**: 2.0.0
+> **Version**: 2.1.0
 > **Created**: 2026-02-22
 > **Updated**: 2026-02-22
 > **Status**: Done
@@ -1033,3 +1033,36 @@ cell_id 같은 라우팅/격리 컨텍스트 누락 시 크로스-테넌트 오�
 | `context/celery_propagation.py` | Causation 발행 측 코드 (유지) |
 | `core/hedging/exceptions.py` | `NonRetryableHedgingError` — `SelfHealingContextError` 패턴 선례 (R5) |
 | `services/retry_handler/models.py` | `non_retryable_exceptions` 인프라 (R5 연동) |
+
+---
+
+## 8. v2.1 구현 후 리뷰 결함 수정 (2026-02-22)
+
+### 8.1 수정된 결함
+
+| ID | 심각도 | 결함 | 수정 내용 |
+|----|--------|------|----------|
+| M1 | **높음** | `myproject/celery.py`에서 `setup_selfhealing_signals()` 호출 시 `app` 파라미터를 전달하지 않아 `dont_autoretry_for` 등록이 완전히 비활성화 상태 | `setup_selfhealing_signals(app=app, ...)` 로 수정. R5 Fail-Fast 정책의 핵심 안전장치가 실제 프로덕션에서 작동하도록 복구 |
+| P4 | **높음** | `on_task_prerun`에서 `SelfHealingContextError`가 `except Exception`에 삼켜지지 않는지 검증하는 회귀 테스트 부재 | `TestOnTaskPrerunFailFastBehavior` 3개 테스트 추가: strict mode 전파, non-strict 정상 동작, mock inject 전파 검증 |
+
+### 8.2 수정하지 않은 항목 (근거)
+
+| ID | 심각도 | 항목 | 미수정 근거 |
+|----|--------|------|------------|
+| P2 | 낮음 | `CONTEXT_CRITICALITY` dict 선언만 되고 정책 분기에 미사용 | 266 이후 동적 정책 조회에 사용할 확장 포인트로 의도된 선언. 현재 2개 분류(cell_id→CRITICAL, trace_id→OPTIONAL)만 존재하여 dict 기반 분기보다 명시적 if/elif가 더 가독성 높음 |
+| P3 | 낮음 | `baggage_tokens` cleanup이 `pass` placeholder | 266 구현 의존 (`# 266 구현 시 활성화`로 명시). 현재 baggage_tokens에 값이 추가되는 경로 자체가 없으므로 dead code 아님 |
+| M2 | 중간 | trace_id / celery_context 토큰을 `TaskContextTokens`에 미추적 (R2 원칙 불일치) | `set_trace_id()`가 `_thread_local` 이중 저장을 하므로 `.reset(token)` 방식으로는 thread-local 측 정리 불가. `clear_trace_id()` (`.set(None)` + thread-local 초기화)가 Celery 비중첩 컨텍스트에서 올바른 정리 방법. 토큰 추적은 중첩 컨텍스트(미들웨어 체인 등)에서만 의미 있으며, Celery 태스크는 항상 최상위 컨텍스트에서 실행 |
+| M3 | 낮음 | `_is_strict_context_enabled()` 글로벌 캐싱으로 런타임 변경 불가 | 환경변수 기반 설정의 표준 패턴. `_reset_strict_cell_context_cache()` 테스트 유틸리티 제공 중. 워커 재시작 시 반영되므로 Celery 운영 모델과 부합 |
+| M5 | 낮음 | `_resolve_cell_id` / `_resolve_domain` 구조 중복 | 2개 함수만 존재하며 각각 독립 진화 가능. 공통 추출은 3개 이상일 때 수행 (YAGNI) |
+
+### 8.3 테스트 현황
+
+```
+$ pytest tests/unit/context/test_celery_context_utils.py --no-cov
+62 passed in 0.70s  (기존 59 + 신규 3)
+```
+
+신규 테스트:
+- `test_prerun_propagates_selfhealing_context_error`: strict mode + cell_id 없음 → on_task_prerun에서 SelfHealingContextError 전파
+- `test_prerun_does_not_raise_without_strict_mode`: non-strict mode에서 정상 동작
+- `test_prerun_does_not_swallow_context_error_as_generic_exception`: mock inject로 except Exception 삼킴 방지 검증

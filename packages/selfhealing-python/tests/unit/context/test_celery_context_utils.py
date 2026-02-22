@@ -567,3 +567,104 @@ class TestDeprecatedReExportsBehavior:
 
         with pytest.warns(DeprecationWarning, match="celery_context_utils"):
             deprecated_cleanup(mock_task)
+
+
+# =============================================================================
+# 회귀 검증: signal handler 레벨 SelfHealingContextError 전파 (P4)
+# =============================================================================
+
+
+class TestOnTaskPrerunFailFastBehavior:
+    """on_task_prerun에서 SelfHealingContextError가 except Exception에 삼켜지지 않는지 검증.
+
+    2bf03ba0 커밋에서 except SelfHealingContextError: raise 를 추가했는데,
+    이 핸들러가 제거되면 except Exception 블록이 예외를 삼켜서
+    cell_id 없이 태스크가 실행되는 보안 문제가 발생한다.
+    """
+
+    def test_prerun_propagates_selfhealing_context_error(self):
+        """strict mode에서 cell_id 없으면 on_task_prerun이 SelfHealingContextError를 전파."""
+        from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+        mock_sender = MagicMock()
+        mock_sender.name = "test_failfast_task"
+        mock_sender.request = MagicMock()
+        mock_sender.request.retries = 0
+        mock_sender.request.headers = {}
+        mock_sender.request.get = MagicMock(return_value=None)  # cell_id 없음
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            with patch.dict(os.environ, {"SELFHEALING_STRICT_CELL_CONTEXT": "true"}):
+                _reset_strict_cell_context_cache()
+                with pytest.raises(SelfHealingContextError) as exc_info:
+                    on_task_prerun(
+                        sender=mock_sender,
+                        task_id="failfast-task-1",
+                        task=None,
+                        args=(),
+                        kwargs={},
+                    )
+
+                assert exc_info.value.context_name == "cell_id"
+                assert exc_info.value.task_name == "test_failfast_task"
+
+    def test_prerun_does_not_raise_without_strict_mode(self):
+        """strict mode 비활성화 시 cell_id 없어도 예외 미발생."""
+        from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+        mock_sender = MagicMock()
+        mock_sender.name = "test_normal_task"
+        mock_sender.request = MagicMock()
+        mock_sender.request.retries = 0
+        mock_sender.request.headers = {}
+        mock_sender.request.get = MagicMock(return_value=None)
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            with patch.dict(os.environ, {"SELFHEALING_STRICT_CELL_CONTEXT": "false"}):
+                _reset_strict_cell_context_cache()
+                # 예외 없이 정상 완료되어야 한다
+                on_task_prerun(
+                    sender=mock_sender,
+                    task_id="normal-task-1",
+                    task=None,
+                    args=(),
+                    kwargs={},
+                )
+
+    def test_prerun_does_not_swallow_context_error_as_generic_exception(self):
+        """SelfHealingContextError가 except Exception 블록에 삼켜지지 않음을 확인.
+
+        restore_all_task_context()가 SelfHealingContextError를 raise하면
+        signal handler의 except Exception이 아닌 except SelfHealingContextError가
+        먼저 잡아서 re-raise해야 한다.
+        """
+        from selfhealing.adapters.celery.signal_hooks import on_task_prerun
+
+        mock_sender = MagicMock()
+        mock_sender.name = "test_not_swallowed"
+
+        expected_error = SelfHealingContextError("cell_id", "test_not_swallowed", "forced")
+
+        with patch("selfhealing.adapters.celery.signal_hooks._config") as mock_config:
+            mock_config.enabled = True
+            mock_config.excluded_tasks = set()
+
+            with patch(
+                "selfhealing.context.celery_context_utils.restore_all_task_context",
+                side_effect=expected_error,
+            ):
+                with pytest.raises(SelfHealingContextError) as exc_info:
+                    on_task_prerun(
+                        sender=mock_sender,
+                        task_id="swallow-test-1",
+                        task=None,
+                        args=(),
+                        kwargs={},
+                    )
+                assert exc_info.value is expected_error

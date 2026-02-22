@@ -44,6 +44,7 @@ try:
     from selfhealing.adapters.celery import setup_selfhealing_signals
 
     setup_selfhealing_signals(
+        app=app,
         enabled=True,
         cb_enabled=True,
         dlq_enabled=True,
