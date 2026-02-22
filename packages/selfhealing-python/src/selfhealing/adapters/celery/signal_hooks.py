@@ -538,12 +538,19 @@ def on_task_prerun(
         return
 
     try:
-        from selfhealing.context.celery_context_utils import restore_all_task_context
+        from selfhealing.context.celery_context_utils import (
+            SelfHealingContextError,
+            restore_all_task_context,
+        )
 
         restore_all_task_context(sender, task_id, task_name, kwargs)
 
         logger.debug(f"[SelfHealing Signal] Task prerun: {task_name}, task_id={task_id}")
 
+    except SelfHealingContextError:
+        # R5: CRITICAL 컨텍스트 복원 실패 → Fail-Fast. 재시도 차단은
+        # setup_selfhealing_signals()의 dont_autoretry_for로 보장.
+        raise
     except Exception as e:
         # Never let signal handler crash affect task execution
         logger.error(f"[SelfHealing Signal] Error in prerun handler: {e}")
