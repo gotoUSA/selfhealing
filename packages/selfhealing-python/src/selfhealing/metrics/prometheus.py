@@ -799,8 +799,22 @@ def record_circuit_breaker_state_change(
     from_state: str,
     to_state: str,
 ) -> None:
-    """Record a circuit breaker state transition."""
-    get_metrics().record_circuit_breaker_state_change(service_name, from_state, to_state)
+    """Record a circuit breaker state transition.
+
+    Composite Key(``service::cell_id``)가 전달되면 자동 분리하여
+    ``cell_id`` 라벨을 올바르게 설정한다.
+    """
+    from selfhealing.services.cell_topology.cb_namespace import (
+        parse_composite_cb_name,
+    )
+
+    base_service, cell_id = parse_composite_cb_name(service_name)
+    get_metrics().record_circuit_breaker_state_change(
+        base_service,
+        from_state,
+        to_state,
+        cell_id=cell_id,
+    )
 
 
 def record_circuit_breaker_open_duration(service_name: str, duration_seconds: float) -> None:

@@ -359,18 +359,6 @@ class TestCBOpenRatioBehavior:
             ratio = aggregator._get_cb_open_ratio("cell-0")
         assert ratio == pytest.approx(2 / 5)
 
-    def test_cb_open_count_never_negative(self, aggregator: CellHealthAggregator):
-        """CB open count는 0 미만으로 내려가지 않아야 한다."""
-        with aggregator._lock:
-            aggregator._cb_open_counts["cell-0"] = 0
-            aggregator._cb_open_transition_counts["cell-0"] = 3
-
-        # CB closed 한번 더 (open=0 상태에서)
-        with aggregator._lock:
-            aggregator._cb_open_counts["cell-0"] = max(0, aggregator._cb_open_counts["cell-0"] - 1)
-
-        assert aggregator._cb_open_counts["cell-0"] == 0
-
 
 class TestBulkheadUtilizationBehavior:
     """Bulkhead Utilization 동작 검증."""

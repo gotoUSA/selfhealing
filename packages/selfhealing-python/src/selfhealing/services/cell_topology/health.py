@@ -114,10 +114,6 @@ class CellHealthAggregator:
         # Health Score 스무딩 — Raw Score에 EWMA 적용
         self._health_ewma: dict[str, EWMAForecaster] = {}
 
-        # CB OPEN 전환 이벤트 기반 카운터
-        self._cb_open_counts: dict[str, int] = {}  # 현재 OPEN 상태 CB 수
-        self._cb_open_transition_counts: dict[str, int] = {}  # OPEN 전환 누적 횟수
-
         # Leader Handoff 감지
         self._leader_since: float | None = None
 
@@ -438,48 +434,13 @@ class CellHealthAggregator:
                         open_count += 1
 
             return (open_count / total) if total > 0 else 0.0
-        except Exception:
-            return 0.0
-
-    def register_cb_callbacks(self) -> None:
-        """
-        CircuitBreakerService 상태 변경 콜백 등록.
-
-        register_state_change_callback() 공개 API를 사용하여
-        OPEN/CLOSED 전환 이벤트를 구독합니다.
-
-        콜백은 동기 실행이므로 내부 로직을
-        최대한 가볍게(dict increment만) 유지합니다.
-        """
-        try:
-            from selfhealing.services.circuit_breaker import (
-                get_circuit_breaker_service,
-            )
-            from selfhealing.services.cell_topology import get_cell_registry
-
-            cb_service = get_circuit_breaker_service()
-            registry = get_cell_registry()
-
-            def _on_cb_opened(service_name: str, old_state: str, new_state: str) -> None:
-                cell_id = registry.get_cell_for_key(service_name)
-                with self._lock:
-                    self._cb_open_counts[cell_id] = self._cb_open_counts.get(cell_id, 0) + 1
-                    self._cb_open_transition_counts[cell_id] = self._cb_open_transition_counts.get(cell_id, 0) + 1
-
-            def _on_cb_closed(service_name: str, old_state: str, new_state: str) -> None:
-                cell_id = registry.get_cell_for_key(service_name)
-                with self._lock:
-                    self._cb_open_counts[cell_id] = max(0, self._cb_open_counts.get(cell_id, 0) - 1)
-
-            cb_service.register_state_change_callback("open", _on_cb_opened)
-            cb_service.register_state_change_callback("closed", _on_cb_closed)
-
-            logger.info("[CellHealthAggregator] CB state change callbacks registered")
         except Exception as e:
             logger.warning(
-                "[CellHealthAggregator] CB callback registration failed: %s",
+                "[CellHealthAggregator] CB open ratio query failed for %s: %s",
+                cell_id,
                 e,
             )
+            return 0.0
 
     # =========================================================================
     # Snapshot 조회
@@ -600,8 +561,6 @@ def setup_cell_health_scheduler() -> None:
     from selfhealing.coordination.scheduler import get_leader_scheduler
 
     aggregator = get_cell_health_aggregator()
-    aggregator.register_cb_callbacks()
-
     scheduler = get_leader_scheduler("cell-health-aggregator")
 
     # 리더 전환 이벤트 감지 — warmup 컨텍스트 기록

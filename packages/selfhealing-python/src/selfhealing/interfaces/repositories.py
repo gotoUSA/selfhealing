@@ -658,6 +658,20 @@ class CircuitBreakerStateRepository(ABC):
         """Reset circuit breaker to initial closed state"""
         ...
 
+    @abstractmethod
+    def delete_state(self, service_name: str) -> bool:
+        """Delete circuit breaker state entirely.
+
+        Used by reconciliation jobs to remove orphaned CB entries.
+
+        Args:
+            service_name: Service identifier (may be Composite Key)
+
+        Returns:
+            True if deleted, False if not found
+        """
+        ...
+
     def update_metadata(
         self,
         service_name: str,

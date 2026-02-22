@@ -479,7 +479,7 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             state = self._storage.get(service_name)
             if state is None:
                 return False
-            state.metadata = metadata
+            state.metadata = dict(metadata)
             return True
 
     def clear(self) -> None:

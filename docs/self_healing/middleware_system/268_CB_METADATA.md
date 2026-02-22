@@ -884,14 +884,46 @@ Lua 스크립트 재생 전략이 정의되지 않았다 (§2.6.3).
 | `services/metrics/recorders.py` | `record_circuit_breaker_state_change()` Composite Key 파싱 | 수정 | ❌ 내부 구현만 |
 | `services/metrics/updaters.py` | `update_circuit_breaker_gauges()` Composite Key 파싱 | 수정 | ❌ 내부 구현만 |
 | `metrics/reconciler.py` | `sync()` CB 상태 동기화 시 Composite Key 파싱 | 수정 | ❌ 내부 구현만 |
-| `services/cell_topology/health.py` | `_get_cb_open_ratio()` Phase 2 전환 | 수정 | ❌ 내부 구현만 |
+| `services/cell_topology/health.py` | `_get_cb_open_ratio()` Phase 2 전환 + 데드 코드(`register_cb_callbacks`) 삭제 + 예외 로깅 추가 | 수정 | ❌ 내부 구현만 |
 | `services/circuit_breaker/service.py` | `reconcile_cb_cell_mapping()` 신규 | 수정 | ❌ 신규 메서드 |
+| `interfaces/repositories.py` | `delete_state()` ABC 계약 추가 | 수정 | ⚠️ 새 어댑터는 구현 필수 |
+| `adapters/memory/circuit_breaker.py` | `update_metadata()` 방어적 복사 (`dict(metadata)`) | 수정 | ❌ |
+| `metrics/prometheus.py` | 모듈 레벨 편의 함수에 Composite Key 파싱 추가 | 수정 | ❌ 내부 구현만 |
 
 **기존 모든 코드 하위 호환** — `metadata` 필드는 `default_factory=dict`, Composite Key는 `parse_composite_cb_name()`이 구분자 없는 레거시 키를 `("name", "")`로 처리.
 
 ---
 
-## 7. 관련 문서
+## 7. 구현 후 리팩토링 이력
+
+> **Date**: 2026-02-22 | **Trigger**: 코드 리뷰
+
+### 7.1 수행한 리팩토링 (5건)
+
+| # | 대상 파일 | 변경 내용 | 근거 |
+|---|-----------|-----------|------|
+| 1 | `interfaces/repositories.py` | `delete_state()` 를 `@abstractmethod`로 ABC에 추가 | `reconcile_cb_cell_mapping()`이 `self.repository.delete_state()`를 호출하지만 ABC 계약에 없어, 새 어댑터 구현 시 `AttributeError` 발생 가능 |
+| 2 | `services/cell_topology/health.py` | `_get_cb_open_ratio()` 의 bare `except Exception` → `except Exception as e` + `logger.warning()` 추가 | 동일 클래스의 `_get_bulkhead_utilization()`은 예외 시 warning 로그를 남기는데, `_get_cb_open_ratio()`만 무조건 `return 0.0`으로 삼키고 있어 디버깅 불가 |
+| 3 | `services/cell_topology/health.py` | `register_cb_callbacks()` 메서드, `_cb_open_counts`/`_cb_open_transition_counts` 필드, `setup_cell_health_scheduler()`의 호출부 삭제 | Composite Key 기반 `_get_cb_open_ratio()`(§2.4)가 CB 상태를 직접 조회하므로, 콜백 기반 카운터는 write-only 데드 코드가 됨 |
+| 4 | `adapters/memory/circuit_breaker.py` | `update_metadata()` 내 `state.metadata = metadata` → `state.metadata = dict(metadata)` | `RLock` 내에서 외부 dict 참조를 그대로 저장하면, 호출자가 Lock 밖에서 원본 dict를 변경 시 상태 불일치 발생 |
+| 5 | `metrics/prometheus.py` | 모듈 레벨 `record_circuit_breaker_state_change()` 에 Composite Key 파싱 추가 | 클래스 메서드 `SelfHealingMetrics.record_circuit_breaker_state_change()`는 `cell_id` 파라미터를 지원하지만, 모듈 레벨 편의 함수가 `service_name`을 raw로 전달하여 Composite Key가 라벨에 누출 |
+
+### 7.2 수행하지 않은 항목 (3건)
+
+| # | 항목 | 미수행 사유 |
+|---|------|-------------|
+| 1 | `update_metadata()` ABC 강제화 (`@abstractmethod`) | 현재 ABC에 안전한 기본 구현(`return False`)이 있어 하위 호환을 보장. 모든 현재 어댑터(InMemory, Redis)가 이미 오버라이드하고 있으므로 실질적 누락 위험 없음. abstract로 변경 시 서드파티 어댑터의 breaking change가 됨 |
+| 2 | `_get_cb_open_ratio()` O(C×N) 성능 최적화 | 현재 규모(Cell < 30, CB < 100)에서 매 10초마다 1회 호출이므로 성능 병목이 아님. 캐싱 전략은 별도 설계 문서가 필요한 수준이며, 조기 최적화에 해당 |
+| 3 | Label 이름 이중 시스템 (`service` vs `service_name`) 통합 | 268 범위 밖의 기존 설계 부채. 통합하려면 Grafana 대시보드/알림 룰 전체 마이그레이션이 수반되므로 별도 이슈로 분리 필요 |
+
+### 7.3 테스트 영향
+
+- `test_health.py`: `test_cb_open_count_never_negative` 삭제 (삭제된 `_cb_open_counts` 필드 참조)
+- 전체 268 관련 테스트 **112건 통과** (test_health 62 + test_cb_metadata 14 + test_cb_reconciliation 6 + test_cb_namespace 11 + test_cell_health_cb_open_ratio 7 + test_cb_event_handler_composite_key 4 + test_metric_synthetic_label 8)
+
+---
+
+## 8. 관련 문서
 
 | 문서 | 관계 |
 |------|------|
