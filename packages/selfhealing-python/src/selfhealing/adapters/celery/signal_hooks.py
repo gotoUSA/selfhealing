@@ -454,147 +454,50 @@ def on_before_task_publish(
 # =============================================================================
 
 
-# Causation 컨텍스트 token 저장용 (task.request 속성)
+# Causation 컨텍스트 token 저장용 (하위 호환 — celery_context_utils로 이관됨)
 _CAUSATION_TOKEN_ATTR = "_selfhealing_causation_token"
 
 
 def _setup_causation_context(sender: Any, task_id: str, task_name: str) -> None:
-    """
-    Celery Task 시작 시 Causation Context 자동 복원 또는 시스템 Cascade 생성.
+    """Deprecated: Use celery_context_utils._setup_causation_context instead."""
+    import warnings
 
-    task.request.headers에서 causation 정보를 추출하여 CausationContext를 설정합니다.
-    헤더가 없는 경우 (Celery Beat, 독립 실행 등) 시스템 Cascade를 자동 생성합니다.
-    """
-    try:
-        import uuid
-        from datetime import datetime, timezone
+    warnings.warn(
+        "_setup_causation_context has moved to " "selfhealing.context.celery_context_utils._setup_causation_context",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from selfhealing.context.celery_context_utils import _setup_causation_context as _impl
 
-        from selfhealing.context.causation_context import (
-            CELERY_HEADER_CASCADE_ID,
-            CELERY_HEADER_CHAIN_DEPTH,
-            CELERY_HEADER_NAMESPACE,
-            CELERY_HEADER_PARENT_EVENT,
-            CausationContext,
-            CausationInfo,
-            _current_causation,
-        )
-
-        request = sender.request if sender else None
-        if not request:
-            return
-
-        headers = getattr(request, "headers", None) or {}
-
-        # Causation 헤더 추출
-        cascade_id = headers.get(CELERY_HEADER_CASCADE_ID)
-
-        if cascade_id:
-            # 헤더에서 복원 (API 요청에서 전파된 경우)
-            info = CausationInfo(
-                cascade_id=cascade_id,
-                parent_event_id=headers.get(CELERY_HEADER_PARENT_EVENT, ""),
-                chain_depth=int(headers.get(CELERY_HEADER_CHAIN_DEPTH, "0")) + 1,
-                namespace=headers.get(CELERY_HEADER_NAMESPACE, "global"),
-                metadata={
-                    "restored_from": "celery_signal",
-                    "restored_at": datetime.now(timezone.utc).isoformat(),
-                    "task_id": task_id,
-                    "task_name": task_name,
-                },
-            )
-            logger.debug(
-                f"[SelfHealing Signal] Causation context restored: "
-                f"cascade={cascade_id}, depth={info.chain_depth}, task={task_name}"
-            )
-        else:
-            # 헤더 없음 - 시스템 Cascade 자동 생성 (Celery Beat, 독립 실행 등)
-            source = _detect_causation_source(task_name)
-            system_event_id = f"SYSTEM_ROOT_{source}_{uuid.uuid4().hex[:8]}"
-            new_cascade_id = f"cascade-{uuid.uuid4().hex[:12]}"
-
-            info = CausationInfo(
-                cascade_id=new_cascade_id,
-                parent_event_id=system_event_id,
-                chain_depth=0,
-                namespace="global",
-                metadata={
-                    "system_source": source,
-                    "auto_generated": True,
-                    "task_id": task_id,
-                    "task_name": task_name,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-            logger.debug(
-                f"[SelfHealing Signal] System causation context created: "
-                f"source={source}, cascade={new_cascade_id}, task={task_name}"
-            )
-
-        # ContextVar에 설정 (token 저장)
-        token = _current_causation.set(info)
-
-        # token을 task.request에 저장 (postrun에서 정리용)
-        setattr(request, _CAUSATION_TOKEN_ATTR, token)
-
-    except ImportError:
-        # causation_context 모듈 없음 - 생략
-        pass
-    except Exception as e:
-        logger.debug(f"[SelfHealing Signal] Causation setup failed: {e}")
+    return _impl(sender, task_id, task_name)
 
 
 def _detect_causation_source(task_name: str) -> str:
-    """
-    Task 이름에서 causation source 유형 추론.
+    """Deprecated: Use celery_context_utils._detect_causation_source instead."""
+    import warnings
 
-    Returns:
-        source 문자열 (celery_beat, management_cmd, scheduler, worker)
-    """
-    task_name_lower = task_name.lower()
+    warnings.warn(
+        "_detect_causation_source has moved to " "selfhealing.context.celery_context_utils._detect_causation_source",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from selfhealing.context.celery_context_utils import _detect_causation_source as _impl
 
-    # 스케줄러 관련 패턴
-    if any(pattern in task_name_lower for pattern in ["beat", "schedule", "periodic"]):
-        return "celery_beat"
-
-    # 관리 명령 관련 패턴
-    if any(pattern in task_name_lower for pattern in ["manage", "command", "admin"]):
-        return "management_cmd"
-
-    # 크론/스케줄러 패턴
-    if any(pattern in task_name_lower for pattern in ["cron", "cleanup", "expire"]):
-        return "scheduler"
-
-    # 기본값
-    return "worker"
+    return _impl(task_name)
 
 
 def _cleanup_causation_context(sender: Any) -> None:
-    """
-    Celery Task 종료 시 Causation Context 정리.
+    """Deprecated: Use celery_context_utils._cleanup_causation_context instead."""
+    import warnings
 
-    Worker 재사용 시 이전 Task의 causation 컨텍스트 잔존 방지.
+    warnings.warn(
+        "_cleanup_causation_context has moved to " "selfhealing.context.celery_context_utils._cleanup_causation_context",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from selfhealing.context.celery_context_utils import _cleanup_causation_context as _impl
 
-    Code reference:
-        audit/trace.py#L333-340 (clear_celery_context 패턴)
-    """
-    try:
-        from selfhealing.context.causation_context import _current_causation
-
-        request = sender.request if sender else None
-        if not request:
-            return
-
-        token = getattr(request, _CAUSATION_TOKEN_ATTR, None)
-
-        if token:
-            _current_causation.reset(token)
-            delattr(request, _CAUSATION_TOKEN_ATTR)
-            logger.debug("[SelfHealing Signal] Causation context cleaned up")
-
-    except ImportError:
-        pass
-    except Exception as e:
-        logger.debug(f"[SelfHealing Signal] Causation cleanup failed: {e}")
+    return _impl(sender)
 
 
 # =============================================================================
@@ -635,41 +538,11 @@ def on_task_prerun(
         return
 
     try:
-        from selfhealing.audit.trace import (
-            generate_celery_trace_id,
-            set_trace_id,
-        )
+        from selfhealing.context.celery_context_utils import restore_all_task_context
 
-        # HTTP에서 전파된 trace_info 확인
-        trace_info = kwargs.get("trace_info") if kwargs else None
+        restore_all_task_context(sender, task_id, task_name, kwargs)
 
-        if trace_info and trace_info.get("trace_id"):
-            # HTTP 요청에서 전파된 trace_id 사용
-            trace_id = trace_info["trace_id"]
-            set_trace_id(trace_id)
-        else:
-            # Celery Task ID 기반 trace_id 생성
-            trace_id = generate_celery_trace_id(task_id)
-            set_trace_id(trace_id)
-
-        # 재시도 횟수 추출
-        request = sender.request if sender else None
-        retries = getattr(request, "retries", 0) if request else 0
-
-        # Celery 컨텍스트 설정 (trace_id는 이미 위에서 설정됨)
-        from selfhealing.audit.trace import _celery_context_var
-
-        context = {
-            "task_id": task_id,
-            "task_name": task_name,
-            "retries": retries,
-        }
-        _celery_context_var.set(context)
-
-        # Phase 6: Causation Context 자동 복원
-        _setup_causation_context(sender, task_id, task_name)
-
-        logger.debug(f"[SelfHealing Signal] Task prerun: {task_name}, " f"task_id={task_id}, trace_id={trace_id}")
+        logger.debug(f"[SelfHealing Signal] Task prerun: {task_name}, task_id={task_id}")
 
     except Exception as e:
         # Never let signal handler crash affect task execution
@@ -701,14 +574,11 @@ def on_task_postrun(
         return
 
     try:
-        from selfhealing.audit.trace import clear_celery_context
+        from selfhealing.context.celery_context_utils import cleanup_all_task_context
 
-        clear_celery_context()
+        cleanup_all_task_context(sender)
 
-        # Phase 6: Causation Context 정리
-        _cleanup_causation_context(sender)
-
-        logger.debug(f"[SelfHealing Signal] Task postrun: {task_name}, " f"task_id={task_id}, state={state}")
+        logger.debug(f"[SelfHealing Signal] Task postrun: {task_name}, task_id={task_id}, state={state}")
 
     except Exception as e:
         logger.error(f"[SelfHealing Signal] Error in postrun handler: {e}")
@@ -1052,6 +922,7 @@ def _capture_forensic_context(
 
 
 def setup_selfhealing_signals(
+    app=None,
     enabled: bool | None = None,
     cb_enabled: bool | None = None,
     dlq_enabled: bool | None = None,
@@ -1067,6 +938,8 @@ def setup_selfhealing_signals(
     Call this once during application initialization.
 
     Args:
+        app: Celery application instance (optional). When provided, registers
+            SelfHealingContextError in dont_autoretry_for to prevent infinite retries.
         enabled: Master switch for all hooks (default: True)
         cb_enabled: Enable circuit breaker recording
         dlq_enabled: Enable DLQ storage
@@ -1117,6 +990,19 @@ def setup_selfhealing_signals(
         _config.excluded_tasks.update(excluded_tasks)
     if task_domain_mapping:
         _config.task_domain_mapping.update(task_domain_mapping)
+
+    # CRITICAL 컨텍스트 복원 실패 시 재시도 방지: dont_autoretry_for 등록
+    try:
+        from selfhealing.context.celery_context_utils import SelfHealingContextError
+
+        # Celery app이 제공된 경우 base task 클래스에 등록
+        if app is not None:
+            base_task = app.Task
+            existing = getattr(base_task, "dont_autoretry_for", ()) or ()
+            if SelfHealingContextError not in existing:
+                base_task.dont_autoretry_for = (*existing, SelfHealingContextError)
+    except Exception as e:
+        logger.debug(f"[SelfHealing] Failed to register dont_autoretry_for: {e}")
 
     # Signals are connected via decorators, just mark as connected
     _signals_connected = True

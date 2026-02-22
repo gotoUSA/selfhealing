@@ -268,7 +268,7 @@ class TestSetupCausationContext:
 
     def test_setup_from_headers(self):
         """헤더에서 causation 복원."""
-        from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
+        from selfhealing.context.celery_context_utils import _setup_causation_context
 
         # Mock sender with request containing headers
         mock_request = MagicMock()
@@ -297,7 +297,7 @@ class TestSetupCausationContext:
 
     def test_setup_creates_system_cascade_when_no_headers(self):
         """헤더 없으면 시스템 Cascade 자동 생성."""
-        from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
+        from selfhealing.context.celery_context_utils import _setup_causation_context
 
         mock_request = MagicMock()
         mock_request.headers = {}
@@ -324,7 +324,7 @@ class TestDetectCausationSource:
 
     def test_detect_celery_beat(self):
         """beat 관련 태스크명 감지."""
-        from selfhealing.adapters.celery.signal_hooks import _detect_causation_source
+        from selfhealing.context.celery_context_utils import _detect_causation_source
 
         assert _detect_causation_source("celery.beat.check") == "celery_beat"
         assert _detect_causation_source("schedule_daily_task") == "celery_beat"
@@ -332,7 +332,7 @@ class TestDetectCausationSource:
 
     def test_detect_management_cmd(self):
         """management 관련 태스크명 감지."""
-        from selfhealing.adapters.celery.signal_hooks import _detect_causation_source
+        from selfhealing.context.celery_context_utils import _detect_causation_source
 
         assert _detect_causation_source("manage_users") == "management_cmd"
         assert _detect_causation_source("run_command_task") == "management_cmd"
@@ -340,7 +340,7 @@ class TestDetectCausationSource:
 
     def test_detect_scheduler(self):
         """스케줄러 관련 태스크명 감지."""
-        from selfhealing.adapters.celery.signal_hooks import _detect_causation_source
+        from selfhealing.context.celery_context_utils import _detect_causation_source
 
         assert _detect_causation_source("cron_daily_report") == "scheduler"
         assert _detect_causation_source("cleanup_old_data") == "scheduler"
@@ -348,7 +348,7 @@ class TestDetectCausationSource:
 
     def test_detect_worker_default(self):
         """기본값은 worker."""
-        from selfhealing.adapters.celery.signal_hooks import _detect_causation_source
+        from selfhealing.context.celery_context_utils import _detect_causation_source
 
         assert _detect_causation_source("process_order") == "worker"
         assert _detect_causation_source("send_email") == "worker"

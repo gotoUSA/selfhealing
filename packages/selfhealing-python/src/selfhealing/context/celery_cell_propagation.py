@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from celery.signals import before_task_publish, task_postrun, task_prerun
+from celery.signals import before_task_publish
 
 logger = logging.getLogger(__name__)
 
@@ -111,32 +111,5 @@ def add_cell_id_to_task(
         pass  # 태깅 실패 시 무시 — 기존 동작 유지 (Fail-Open)
 
 
-@task_prerun.connect
-def extract_cell_id_on_prerun(task=None, **kwargs) -> None:
-    """
-    태스크 실행 전 cell_id를 ContextVar에 설정.
-
-    signal_hooks.py의 _setup_causation_context()와 동일 패턴.
-    """
-    try:
-        if task and hasattr(task.request, "get"):
-            cell_id = task.request.get("cell_id")
-            if cell_id:
-                from selfhealing.context.cell_context import _current_cell_id
-
-                task._cell_id_token = _current_cell_id.set(cell_id)
-    except Exception:
-        pass
-
-
-@task_postrun.connect
-def clear_cell_id_on_postrun(task=None, **kwargs) -> None:
-    """태스크 종료 후 ContextVar 정리."""
-    try:
-        token = getattr(task, "_cell_id_token", None)
-        if token:
-            from selfhealing.context.cell_context import _current_cell_id
-
-            _current_cell_id.reset(token)
-    except Exception:
-        pass
+# extract_cell_id_on_prerun / clear_cell_id_on_postrun은
+# context/celery_context_utils.py의 restore_all_task_context / cleanup_all_task_context로 통합되었다.

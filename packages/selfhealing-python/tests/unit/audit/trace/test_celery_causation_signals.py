@@ -52,7 +52,7 @@ class TestSetupCausationContext:
 
     def test_setup_with_valid_headers(self):
         """유효한 헤더로 컨텍스트 설정."""
-        from selfhealing.adapters.celery.signal_hooks import (
+        from selfhealing.context.celery_context_utils import (
             _setup_causation_context,
             _CAUSATION_TOKEN_ATTR,
         )
@@ -82,7 +82,7 @@ class TestSetupCausationContext:
 
     def test_setup_without_cascade_header_creates_system_cascade(self):
         """cascade_id 헤더 없으면 SYSTEM_ROOT cascade 자동 생성."""
-        from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
+        from selfhealing.context.celery_context_utils import _setup_causation_context
 
         mock_sender = MagicMock()
         mock_sender.request = MagicMock()
@@ -99,7 +99,7 @@ class TestSetupCausationContext:
 
     def test_setup_without_request(self):
         """request 없으면 예외 없이 처리, 컨텍스트 설정 안함."""
-        from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
+        from selfhealing.context.celery_context_utils import _setup_causation_context
 
         mock_sender = MagicMock()
         mock_sender.request = None
@@ -113,7 +113,7 @@ class TestSetupCausationContext:
 
     def test_metadata_includes_task_info(self):
         """메타데이터에 태스크 정보 포함."""
-        from selfhealing.adapters.celery.signal_hooks import _setup_causation_context
+        from selfhealing.context.celery_context_utils import _setup_causation_context
 
         mock_sender = MagicMock()
         mock_sender.request = MagicMock()
@@ -155,7 +155,7 @@ class TestCleanupCausationContext:
 
     def test_cleanup_removes_context(self):
         """정리 후 컨텍스트 제거됨."""
-        from selfhealing.adapters.celery.signal_hooks import (
+        from selfhealing.context.celery_context_utils import (
             _setup_causation_context,
             _cleanup_causation_context,
         )
@@ -181,7 +181,7 @@ class TestCleanupCausationContext:
 
     def test_cleanup_without_token(self):
         """token 없어도 예외 없이 처리."""
-        from selfhealing.adapters.celery.signal_hooks import _cleanup_causation_context
+        from selfhealing.context.celery_context_utils import _cleanup_causation_context
 
         mock_sender = MagicMock()
         mock_sender.request = MagicMock()
@@ -192,7 +192,7 @@ class TestCleanupCausationContext:
 
     def test_cleanup_without_request(self):
         """request 없어도 예외 없이 처리."""
-        from selfhealing.adapters.celery.signal_hooks import _cleanup_causation_context
+        from selfhealing.context.celery_context_utils import _cleanup_causation_context
 
         mock_sender = MagicMock()
         mock_sender.request = None
@@ -361,7 +361,7 @@ class TestCausationSignalIntegration:
 
     def test_full_celery_task_lifecycle(self):
         """전체 Celery 태스크 라이프사이클 시뮬레이션."""
-        from selfhealing.adapters.celery.signal_hooks import (
+        from selfhealing.context.celery_context_utils import (
             _setup_causation_context,
             _cleanup_causation_context,
         )
