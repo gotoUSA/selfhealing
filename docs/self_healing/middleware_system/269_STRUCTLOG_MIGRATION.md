@@ -281,7 +281,7 @@ structlog를 stdlib `logging`의 **wrapper로** 설정하여, 기존 stdlib 기�
 │  2. structlog.stdlib.add_log_level                    │
 │  3. structlog.stdlib.add_logger_name                  │
 │  4. structlog.processors.TimeStamper(fmt="iso")       │
-│  5. add_otel_trace_context  (커스텀)                   │
+│  5. _inject_otel_trace_context  (커스텀)               │
 │  6. structlog.processors.StackInfoRenderer()          │
 │  7. structlog.processors.format_exc_info              │
 │  8. Renderer (JSON / Console — 환경별)                 │
@@ -328,10 +328,13 @@ structlog를 stdlib logging wrapper로 설정하여:
 from __future__ import annotations
 
 import logging
-import logging.config
 import sys
+import threading
+from typing import Any
 
 import structlog
+
+_otel_injection_in_progress = threading.local()
 
 
 def configure_structlog() -> None:
@@ -352,7 +355,7 @@ def configure_structlog() -> None:
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),
-        _add_otel_trace_context,
+        _inject_otel_trace_context,
         structlog.processors.StackInfoRenderer(),
         structlog.processors.format_exc_info,
     ]
@@ -381,17 +384,28 @@ def configure_structlog() -> None:
     handler.setFormatter(formatter)
 
     root_logger = logging.getLogger()
-    root_logger.handlers.clear()
+    root_logger.handlers = [
+        h
+        for h in root_logger.handlers
+        if not isinstance(
+            getattr(h, "formatter", None),
+            structlog.stdlib.ProcessorFormatter,
+        )
+    ]
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.DEBUG)
 
 
-def _add_otel_trace_context(
-    logger: logging.Logger,
+def _inject_otel_trace_context(
+    logger: Any,
     method_name: str,
-    event_dict: dict,
-) -> dict:
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
     """OTEL trace context를 로그에 자동 주입하는 프로세서."""
+    if getattr(_otel_injection_in_progress, "active", False):
+        return event_dict
+
+    _otel_injection_in_progress.active = True
     try:
         from selfhealing.observability import (
             get_current_span_id_from_otel,
@@ -407,6 +421,8 @@ def _add_otel_trace_context(
             event_dict["span_id"] = span_id
     except ImportError:
         pass
+    finally:
+        _otel_injection_in_progress.active = False
 
     return event_dict
 ```
