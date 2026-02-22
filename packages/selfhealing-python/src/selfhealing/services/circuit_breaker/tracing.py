@@ -14,13 +14,13 @@ CB 상태 변화 시 해당 상태 변화를 유발한 '마지막 요청'의 tra
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -510,7 +510,11 @@ class CircuitBreakerTracingManager:
         # 마지막 실패 요청 정보 저장
         self._triggering_requests[service_id] = info
 
-        logger.debug(f"[CBTracing] Recorded failure trace for {service_id}: " f"trace_id={info.trace_id}")
+        logger.debug(
+            "cb_tracing.recorded_failure_trace",
+            service_id=service_id,
+            info=info.trace_id,
+        )
 
         return info
 
@@ -611,7 +615,10 @@ class CircuitBreakerTracingManager:
                     request=request,
                 )
             except Exception as e:
-                logger.warning(f"[CBTracing] Audit log failed: {e}")
+                logger.warning(
+                    "cb_tracing.audit_log_failed",
+                    error=e,
+                )
                 return None
 
     def create_otel_span(
@@ -640,7 +647,7 @@ class CircuitBreakerTracingManager:
             return None
 
         if not _is_otel_enabled():
-            logger.debug("[CBTracing] OTEL not enabled. " "Use trace_url_template for Jaeger/Zipkin links.")
+            logger.debug("cb_tracing.otel_enabled_use_links")
             return None
 
         try:
@@ -672,7 +679,10 @@ class CircuitBreakerTracingManager:
         except ImportError:
             return None
         except Exception as e:
-            logger.warning("[CBTracing] Failed to create OTEL span: %s", e)
+            logger.warning(
+                "cb_tracing.failed_create_otel_span",
+                error=e,
+            )
             return None
 
 

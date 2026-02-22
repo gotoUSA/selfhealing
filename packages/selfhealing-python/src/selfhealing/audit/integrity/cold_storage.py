@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import gzip
 import json
-import logging
+import structlog
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -35,7 +35,7 @@ from typing import Any, Protocol
 
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_archive_threshold_days() -> int:
@@ -145,11 +145,18 @@ class LocalFileColdStorage:
             with open(checksum_path, "w") as f:
                 f.write(checksum)
 
-            logger.info(f"[ColdStorage] Archived to {archive_path}")
+            logger.info(
+                "cold_storage.archived",
+                archive_path=archive_path,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[ColdStorage] Write failed for {key}: {e}")
+            logger.error(
+                "cold_storage.write_failed",
+                key=key,
+                error=e,
+            )
             return False
 
     def read(self, key: str) -> bytes | None:
@@ -168,7 +175,11 @@ class LocalFileColdStorage:
                 return f.read()
 
         except Exception as e:
-            logger.error(f"[ColdStorage] Read failed for {key}: {e}")
+            logger.error(
+                "cold_storage.read_failed",
+                key=key,
+                error=e,
+            )
             return None
 
     def exists(self, key: str) -> bool:
@@ -345,11 +356,17 @@ class AnchorColdStorage:
                         decoded["_ttl_days"] = ttl / 86400
                         expiring.append(decoded)
 
-            logger.info(f"[ColdStorage] Found {len(expiring)} expiring anchors")
+            logger.info(
+                "cold_storage.found_expiring_anchors",
+                count=len(expiring),
+            )
             return expiring
 
         except Exception as e:
-            logger.error(f"[ColdStorage] Error finding expiring anchors: {e}")
+            logger.error(
+                "cold_storage.error_finding_expiring_anchors",
+                error=e,
+            )
             return []
 
     def archive_anchor(self, anchor_data: dict[str, Any]) -> bool:
@@ -390,12 +407,18 @@ class AnchorColdStorage:
             success = self._cold_backend.write(key, data)
 
             if success:
-                logger.info(f"[ColdStorage] Archived anchor for {date_str}")
+                logger.info(
+                    "cold_storage.archived_anchor",
+                    date_str=date_str,
+                )
 
             return success
 
         except Exception as e:
-            logger.error(f"[ColdStorage] Archive failed: {e}")
+            logger.error(
+                "cold_storage.archive_failed",
+                error=e,
+            )
             return False
 
     def archive_expiring_anchors(self) -> ArchiveResult:
@@ -445,7 +468,10 @@ class AnchorColdStorage:
                 },
             )
         except (ImportError, AttributeError):
-            logger.info(f"[ColdStorage] Archive result: {result}")
+            logger.info(
+                "cold_storage.archive_result",
+                result=result,
+            )
 
     def retrieve_archived_anchor(
         self,
@@ -482,7 +508,11 @@ class AnchorColdStorage:
             return None
 
         except Exception as e:
-            logger.error(f"[ColdStorage] Retrieval failed for {date_str}: {e}")
+            logger.error(
+                "cold_storage.retrieval_failed",
+                date_str=date_str,
+                error=e,
+            )
             return None
 
     def get_archived_months(self) -> list[str]:

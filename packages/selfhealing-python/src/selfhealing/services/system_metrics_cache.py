@@ -11,14 +11,14 @@ threading.Timer + daemon=True 패턴.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass(frozen=True)
@@ -103,7 +103,7 @@ class SystemMetricsCache:
             if self._timer:
                 self._timer.cancel()
                 self._timer = None
-            logger.info("[SystemMetricsCache] Stopped")
+            logger.info("system_metrics_cache.stopped")
 
     def is_running(self) -> bool:
         """캐시 워커 실행 여부."""
@@ -197,7 +197,10 @@ class SystemMetricsCache:
             self._last_refresh = time.monotonic()
 
         except Exception as e:
-            logger.warning(f"[SystemMetricsCache] Refresh failed: {e}")
+            logger.warning(
+                "system_metrics_cache.refresh_failed",
+                error=e,
+            )
 
         # 다음 갱신 스케줄링
         self._schedule_refresh()

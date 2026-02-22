@@ -17,7 +17,7 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.core.cluster_identity import ClusterIdentity
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ConfigScope(str, Enum):
@@ -140,7 +140,10 @@ class GlobalConfigPropagator:
 
                     self._identity = get_cluster_identity(skip_validation=True)
                 except Exception as e:
-                    logger.warning(f"[GlobalConfigPropagator] Failed to get cluster identity: {e}")
+                    logger.warning(
+                        "global_config_propagator.failed_get_cluster_identity",
+                        error=e,
+                    )
 
             # Redis 클라이언트 초기화
             if self._redis is None:
@@ -153,7 +156,10 @@ class GlobalConfigPropagator:
                     provider = TieredRedisProvider()
                     self._redis = provider.get_redis(RedisScope.GLOBAL)
                 except Exception as e:
-                    logger.warning(f"[GlobalConfigPropagator] Failed to initialize Redis: {e}")
+                    logger.warning(
+                        "global_config_propagator.failed_initialize_redis",
+                        error=e,
+                    )
 
             self._initialized = True
 
@@ -174,13 +180,13 @@ class GlobalConfigPropagator:
             from selfhealing.core.cluster_identity import is_quarantine_mode
 
             if is_quarantine_mode():
-                logger.warning("[GlobalConfigPropagator] Quarantine Mode active, " "skipping cross-cluster propagation")
+                logger.warning("global_config_propagator.quarantine_mode_active_skipping")
                 return False
         except ImportError:
             pass
 
         if not self._redis:
-            logger.warning("[GlobalConfigPropagator] Redis not available, skipping propagation")
+            logger.warning("global_config_propagator.redis_available_skipping_propagation")
             return False
 
         try:
@@ -192,7 +198,7 @@ class GlobalConfigPropagator:
                 channel = self.REGIONAL_CONFIG_CHANNEL_TEMPLATE.format(region=region)
             else:
                 # LOCAL은 전파 불필요
-                logger.debug("[GlobalConfigPropagator] LOCAL scope, skipping propagation")
+                logger.debug("global_config_propagator.local_scope_skipping_propagation")
                 return True
 
             # 전파
@@ -206,7 +212,10 @@ class GlobalConfigPropagator:
             return True
 
         except Exception as e:
-            logger.error(f"[GlobalConfigPropagator] Propagation failed: {e}")
+            logger.error(
+                "global_config_propagator.propagation_failed",
+                error=e,
+            )
             return False
 
     def subscribe(self, config_type: str, handler: Callable[[GlobalConfigChange], None]) -> None:
@@ -221,7 +230,10 @@ class GlobalConfigPropagator:
             if config_type not in self._handlers:
                 self._handlers[config_type] = []
             self._handlers[config_type].append(handler)
-            logger.debug(f"[GlobalConfigPropagator] Subscribed handler for {config_type}")
+            logger.debug(
+                "global_config_propagator.subscribed_handler",
+                config_type=config_type,
+            )
 
     def unsubscribe(self, config_type: str, handler: Callable[[GlobalConfigChange], None]) -> None:
         """
@@ -248,7 +260,7 @@ class GlobalConfigPropagator:
         self._ensure_initialized()
 
         if not self._redis:
-            logger.warning("[GlobalConfigPropagator] Redis not available, cannot start listener")
+            logger.warning("global_config_propagator.redis_available_cannot_start")
             return
 
         with self._lock:
@@ -274,7 +286,10 @@ class GlobalConfigPropagator:
                 name="GlobalConfigPropagatorListener",
             )
             self._listener_thread.start()
-            logger.info(f"[GlobalConfigPropagator] Listener started on channels: {channels}")
+            logger.info(
+                "global_config_propagator.listener_started_channels",
+                channels=channels,
+            )
 
     def stop_listener(self) -> None:
         """Redis Pub/Sub 리스너 중지."""
@@ -287,7 +302,7 @@ class GlobalConfigPropagator:
                 except Exception:
                     pass
                 self._pubsub = None
-            logger.info("[GlobalConfigPropagator] Listener stopped")
+            logger.info("global_config_propagator.listener_stopped")
 
     def _listen_loop(self) -> None:
         """Redis 메시지 수신 루프."""
@@ -298,7 +313,10 @@ class GlobalConfigPropagator:
                     self._handle_message(message["data"])
             except Exception as e:
                 if self._running:
-                    logger.error(f"[GlobalConfigPropagator] Listen error: {e}")
+                    logger.error(
+                        "global_config_propagator.listen_error",
+                        error=e,
+                    )
 
     def _handle_message(self, data: str) -> None:
         """Redis 메시지 처리."""
@@ -307,7 +325,7 @@ class GlobalConfigPropagator:
 
             # 자기 자신이 보낸 메시지는 무시
             if self._identity and change.source_cluster == self._identity.cluster_id:
-                logger.debug("[GlobalConfigPropagator] Ignoring own message")
+                logger.debug("global_config_propagator.ignoring_own_message")
                 return
 
             # 핸들러 호출
@@ -316,7 +334,10 @@ class GlobalConfigPropagator:
                 try:
                     handler(change)
                 except Exception as e:
-                    logger.error(f"[GlobalConfigPropagator] Handler error: {e}")
+                    logger.error(
+                        "global_config_propagator.handler_error",
+                        error=e,
+                    )
 
             logger.info(
                 f"[GlobalConfigPropagator] Received config change: {change.config_type}.{change.config_key} "
@@ -324,7 +345,10 @@ class GlobalConfigPropagator:
             )
 
         except Exception as e:
-            logger.error(f"[GlobalConfigPropagator] Message parsing failed: {e}")
+            logger.error(
+                "global_config_propagator.message_parsing_failed",
+                error=e,
+            )
 
 
 # =============================================================================

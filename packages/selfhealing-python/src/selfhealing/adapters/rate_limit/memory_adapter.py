@@ -18,7 +18,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 
@@ -28,7 +28,7 @@ from selfhealing.interfaces.rate_limit_storage import (
     RateLimitStorageType,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class InMemoryRateLimitStorage(RateLimitStorageInterface):
@@ -177,7 +177,10 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
                 self._data[key]["consecutive_429s"] = 0
                 self._data[key]["last_updated"] = time.time()
 
-            logger.debug(f"[InMemoryRateLimitStorage] Reset 429 counter for '{key}'")
+            logger.debug(
+                "in_memory_rate_limit_storage.reset_counter",
+                key=key,
+            )
 
     def clear(self, key: str) -> None:
         """Clear all rate limit state for a key."""
@@ -185,10 +188,13 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
             if key in self._data:
                 del self._data[key]
 
-            logger.debug(f"[InMemoryRateLimitStorage] Cleared state for '{key}'")
+            logger.debug(
+                "in_memory_rate_limit_storage.cleared_state",
+                key=key,
+            )
 
     def clear_all(self) -> None:
         """Clear all rate limit state (for testing)."""
         with self._lock:
             self._data.clear()
-            logger.debug("[InMemoryRateLimitStorage] Cleared all state")
+            logger.debug("in_memory_rate_limit_storage.cleared_all_state")

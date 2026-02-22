@@ -19,7 +19,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -28,7 +28,7 @@ from typing import Any
 
 from selfhealing.settings import DistributedLockSettings, get_layered_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RecoveryLockError(Exception):

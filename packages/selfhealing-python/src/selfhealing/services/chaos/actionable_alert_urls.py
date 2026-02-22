@@ -11,12 +11,12 @@ Chaos 알림에 포함될 Admin Deep Link를 생성합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

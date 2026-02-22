@@ -20,7 +20,7 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -30,7 +30,7 @@ from selfhealing.services.audit import log_region_isolation_audit
 if TYPE_CHECKING:
     from selfhealing.core.cluster_identity import ClusterIdentity
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -124,7 +124,10 @@ class RegionalIsolationGate:
 
                 self._identity = get_cluster_identity(skip_validation=True)
             except Exception as e:
-                logger.warning(f"[RegionalIsolationGate] Failed to get cluster identity: {e}")
+                logger.warning(
+                    "regional_isolation_gate.failed_get_cluster_identity",
+                    error=e,
+                )
 
         # Redis 클라이언트 초기화
         if self._redis is None:
@@ -137,7 +140,10 @@ class RegionalIsolationGate:
                 provider = TieredRedisProvider()
                 self._redis = provider.get_redis(RedisScope.GLOBAL)
             except Exception as e:
-                logger.warning(f"[RegionalIsolationGate] Failed to initialize Redis: {e}")
+                logger.warning(
+                    "regional_isolation_gate.failed_initialize_redis",
+                    error=e,
+                )
 
         self._initialized = True
 
@@ -161,7 +167,7 @@ class RegionalIsolationGate:
         self._ensure_initialized()
 
         if not self._redis:
-            logger.warning("[RegionalIsolationGate] Redis not available")
+            logger.warning("regional_isolation_gate.redis_available")
             return False
 
         try:
@@ -208,7 +214,11 @@ class RegionalIsolationGate:
             return True
 
         except Exception as e:
-            logger.error(f"[RegionalIsolationGate] Failed to isolate region {region}: {e}")
+            logger.error(
+                "regional_isolation_gate.failed_isolate_region",
+                region=region,
+                error=e,
+            )
 
             # === Audit 기록: 리전 격리 실패 ===
             log_region_isolation_audit(
@@ -251,7 +261,10 @@ class RegionalIsolationGate:
             return False, None
 
         except Exception as e:
-            logger.error(f"[RegionalIsolationGate] Failed to check isolation status: {e}")
+            logger.error(
+                "regional_isolation_gate.failed_check_isolation_status",
+                error=e,
+            )
             return False, None
 
     def get_isolation_info(self, region: str) -> IsolationInfo | None:
@@ -281,7 +294,10 @@ class RegionalIsolationGate:
             return None
 
         except Exception as e:
-            logger.error(f"[RegionalIsolationGate] Failed to get isolation info: {e}")
+            logger.error(
+                "regional_isolation_gate.failed_get_isolation_info",
+                error=e,
+            )
             return None
 
     def restore_region(self, region: str) -> bool:
@@ -321,7 +337,10 @@ class RegionalIsolationGate:
                 )
                 self._publish_event("restored", restore_info)
 
-                logger.info(f"[RegionalIsolationGate] Region RESTORED: {region}")
+                logger.info(
+                    "regional_isolation_gate.region_restored",
+                    region=region,
+                )
 
                 # === Audit 기록: 리전 복원 (85_AUDIT_INTEGRATION Phase 1) ===
                 log_region_isolation_audit(
@@ -341,7 +360,11 @@ class RegionalIsolationGate:
             return False
 
         except Exception as e:
-            logger.error(f"[RegionalIsolationGate] Failed to restore region {region}: {e}")
+            logger.error(
+                "regional_isolation_gate.failed_restore_region",
+                region=region,
+                error=e,
+            )
 
             # === Audit 기록: 리전 복원 실패 ===
             log_region_isolation_audit(
@@ -385,7 +408,10 @@ class RegionalIsolationGate:
             return result
 
         except Exception as e:
-            logger.error(f"[RegionalIsolationGate] Failed to list isolated regions: {e}")
+            logger.error(
+                "regional_isolation_gate.failed_list_isolated_regions",
+                error=e,
+            )
             return {}
 
     def _publish_event(self, event_type: str, info: IsolationInfo) -> None:
@@ -401,7 +427,10 @@ class RegionalIsolationGate:
             }
             self._redis.publish(self.ISOLATION_EVENT_CHANNEL, json.dumps(event))
         except Exception as e:
-            logger.error(f"[RegionalIsolationGate] Failed to publish event: {e}")
+            logger.error(
+                "regional_isolation_gate.failed_publish_event",
+                error=e,
+            )
 
     def is_current_region_isolated(self) -> tuple[bool, str | None]:
         """

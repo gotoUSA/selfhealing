@@ -18,7 +18,7 @@ Regional Scope:
 - 리전 불일치 시 403 Forbidden 반환
 """
 
-import logging
+import structlog
 import os
 import re
 import threading
@@ -41,7 +41,7 @@ from selfhealing.services.audit.xtest_audit import (
     log_xtest_operation_audit,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -137,7 +137,10 @@ class XTestModeMixin:
             identity = get_cluster_identity(skip_validation=True)
             return identity.region
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to get cluster identity: {e}")
+            logger.warning(
+                "test_mode_failed_get",
+                error=e,
+            )
             return None
 
     def is_global_scope_endpoint(self, request: Request) -> bool:
@@ -222,7 +225,10 @@ class XTestModeMixin:
                 )
 
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to record regional metrics: {e}")
+            logger.warning(
+                "test_mode_failed_record",
+                error=e,
+            )
 
     def check_regional_scope(self, request: Request) -> tuple[bool, Response | None]:
         """
@@ -257,7 +263,7 @@ class XTestModeMixin:
                 )
                 return True, None
 
-            logger.warning("[X-Test-Mode] SELFHEALING_NAMESPACE_REGION not set. " "GLOBAL scope API denied for safety.")
+            logger.warning("test_mode_set_global")
             return False, Response(
                 {
                     "status": "error",
@@ -311,7 +317,11 @@ class XTestModeMixin:
             )
 
         self._record_regional_scope_metrics(request, current_region, target_region, "allowed")
-        logger.debug(f"[X-Test-Mode] Regional scope check passed: " f"region={current_region}, path={request.path}")
+        logger.debug(
+            "test_mode_regional_scope",
+            current_region=current_region,
+            request=request.path,
+        )
         return True, None
 
     def check_resource_constraints(self, request: Request) -> Response | None:
@@ -353,10 +363,13 @@ class XTestModeMixin:
             return None
 
         except ImportError:
-            logger.debug("[X-Test-Mode] ResourceGuard not available, skipping check")
+            logger.debug("test_mode_resourceguard_available")
             return None
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Resource check failed with error: {e}")
+            logger.warning(
+                "test_mode_resource_check",
+                error=e,
+            )
             # 체크 실패 시 보수적으로 허용 (가용성 우선)
             return None
 
@@ -380,7 +393,11 @@ class XTestModeMixin:
         # 2. Chaos 모드 기본 검증
         allowed, reason = self.is_chaos_allowed(request)
         if not allowed:
-            logger.warning(f"[X-Test-Mode] Denied: {reason} (user: {request.user})")
+            logger.warning(
+                "test_mode_denied_user",
+                reason=reason,
+                request=request.user,
+            )
             return Response(
                 {
                     "status": "error",
@@ -430,12 +447,18 @@ class XTestModeMixin:
             if not existing:
                 # 새 세션 생성
                 session_manager.create_session(session_id=session_id, user=user)
-                logger.debug(f"[X-Test-Mode] Created new session: {session_id}")
+                logger.debug(
+                    "test_mode_created_new",
+                    session_id=session_id,
+                )
 
         except ImportError:
-            logger.debug("[X-Test-Mode] Session manager not available")
+            logger.debug("test_mode_session_manager")
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to ensure session: {e}")
+            logger.warning(
+                "test_mode_failed_ensure",
+                error=e,
+            )
 
         return session_id
 
@@ -481,10 +504,13 @@ class XTestModeMixin:
             return success
 
         except ImportError:
-            logger.debug("[X-Test-Mode] Session manager not available")
+            logger.debug("test_mode_session_manager")
             return False
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to register artifact: {e}")
+            logger.warning(
+                "test_mode_failed_register",
+                error=e,
+            )
             return False
 
     def enter_synthetic_context(self, request: Request) -> None:
@@ -500,7 +526,10 @@ class XTestModeMixin:
         """
         session_id = self.ensure_xtest_session(request)
         TestModeContext.enter_synthetic_mode(session_id=session_id)
-        logger.debug(f"[X-Test-Mode] Synthetic context entered: session={session_id}")
+        logger.debug(
+            "test_mode_synthetic_context",
+            session_id=session_id,
+        )
 
     def exit_synthetic_context(self) -> None:
         """
@@ -509,7 +538,7 @@ class XTestModeMixin:
         X-Test 요청 처리 완료 시 호출하여 TestModeContext를 비활성화합니다.
         """
         TestModeContext.exit_synthetic_mode()
-        logger.debug("[X-Test-Mode] Synthetic context exited")
+        logger.debug("test_mode_synthetic_context")
 
     def get_xtest_user(self, request: Request) -> str:
         """X-Test 사용자 추출."""
@@ -706,7 +735,10 @@ def collect_system_snapshot() -> dict[str, Any]:
 
         return snapshot
     except Exception as e:
-        logger.warning(f"[X-Test-Mode] Snapshot collection failed: {e}")
+        logger.warning(
+            "test_mode_snapshot_collection",
+            error=e,
+        )
         return {"timestamp": timezone.now().isoformat(), "error": str(e)}
 
 
@@ -736,7 +768,10 @@ def add_healing_event(event: dict[str, Any]) -> None:
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"[X-Test-Mode] Redis event save failed: {e}")
+        logger.debug(
+            "test_mode_redis_event",
+            error=e,
+        )
 
     # In-Memory에도 저장 (빠른 조회용 캐시)
     with _healing_events_lock:
@@ -768,7 +803,10 @@ def get_healing_events(limit: int = 50, use_redis: bool = True) -> list[dict[str
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[X-Test-Mode] Redis event query failed: {e}")
+            logger.debug(
+                "test_mode_redis_event",
+                error=e,
+            )
 
     # In-Memory fallback
     with _healing_events_lock:
@@ -795,7 +833,10 @@ def get_healing_events_count(use_redis: bool = True) -> int:
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[X-Test-Mode] Redis event count failed: {e}")
+            logger.debug(
+                "test_mode_redis_event",
+                error=e,
+            )
 
     # In-Memory fallback
     with _healing_events_lock:
@@ -819,7 +860,10 @@ def clear_healing_events() -> int:
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"[X-Test-Mode] Redis event clear failed: {e}")
+        logger.debug(
+            "test_mode_redis_event",
+            error=e,
+        )
 
     # In-Memory 초기화
     with _healing_events_lock:

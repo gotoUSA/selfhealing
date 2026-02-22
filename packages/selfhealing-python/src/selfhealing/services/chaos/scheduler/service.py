@@ -6,7 +6,7 @@ Celery Beat-based scheduler for autonomous chaos experiments.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import uuid
 from datetime import datetime, timedelta
@@ -22,7 +22,7 @@ from .models import (
     ScheduleType,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ChaosSchedulerService:
@@ -95,7 +95,11 @@ class ChaosSchedulerService:
             for key, value in kwargs.items():
                 if hasattr(self._config, key):
                     setattr(self._config, key, value)
-                    logger.info(f"[ChaosScheduler] Updated config.{key} = {value}")
+                    logger.info(
+                        "chaos_scheduler.updated_config",
+                        key=key,
+                        value=value,
+                    )
 
             self._persist_config()
             return self._config
@@ -108,7 +112,10 @@ class ChaosSchedulerService:
             manager = get_runtime_config_manager()
             manager.update_chaos_config(scheduler_config=self._config.to_dict())
         except Exception as e:
-            logger.warning(f"[ChaosScheduler] Could not persist config: {e}")
+            logger.warning(
+                "chaos_scheduler.persist_config",
+                error=e,
+            )
 
     def _load_config(self) -> None:
         """Load configuration from storage."""
@@ -124,7 +131,10 @@ class ChaosSchedulerService:
                     if hasattr(self._config, key):
                         setattr(self._config, key, value)
         except Exception as e:
-            logger.warning(f"[ChaosScheduler] Could not load config: {e}")
+            logger.warning(
+                "chaos_scheduler.load_config",
+                error=e,
+            )
 
     # =========================================================================
     # Schedule CRUD
@@ -306,7 +316,10 @@ class ChaosSchedulerService:
 
             self._persist_schedules()
 
-            logger.info(f"[ChaosScheduler] Updated schedule {schedule_id}")
+            logger.info(
+                "chaos_scheduler.updated_schedule",
+                schedule_id=schedule_id,
+            )
             return schedule
 
     def delete_schedule(self, schedule_id: str) -> bool:
@@ -323,7 +336,10 @@ class ChaosSchedulerService:
             if schedule_id in self._schedules:
                 del self._schedules[schedule_id]
                 self._persist_schedules()
-                logger.info(f"[ChaosScheduler] Deleted schedule {schedule_id}")
+                logger.info(
+                    "chaos_scheduler.deleted_schedule",
+                    schedule_id=schedule_id,
+                )
                 return True
             return False
 
@@ -487,10 +503,13 @@ class ChaosSchedulerService:
             return None
 
         except ImportError:
-            logger.debug("[ChaosScheduler] IdempotencyService not available")
+            logger.debug("chaos_scheduler.idempotencyservice_available")
             return None
         except Exception as e:
-            logger.warning(f"[ChaosScheduler] Idempotency check failed: {e}")
+            logger.warning(
+                "chaos_scheduler.idempotency_check_failed",
+                error=e,
+            )
             return None
 
     def _mark_idempotency_processed(self, schedule: ScheduledExperiment) -> None:
@@ -516,7 +535,10 @@ class ChaosSchedulerService:
             service.mark_as_processed(idempotency_key)
 
         except Exception as e:
-            logger.warning(f"[ChaosScheduler] Failed to mark idempotency: {e}")
+            logger.warning(
+                "chaos_scheduler.failed_mark_idempotency",
+                error=e,
+            )
 
     def _check_error_budget_gate(
         self, schedule_id: str, experiment_id: str, started_at
@@ -672,7 +694,11 @@ class ChaosSchedulerService:
             )
 
         except Exception as e:
-            logger.exception(f"[ChaosScheduler] Error executing {schedule_id}: {e}")
+            logger.exception(
+                "chaos_scheduler.error_executing",
+                schedule_id=schedule_id,
+                error=e,
+            )
             return self._create_error_result(
                 schedule_id, experiment_id, str(e), started_at
             )
@@ -867,7 +893,11 @@ class ChaosSchedulerService:
         Returns:
             True if kill signal sent
         """
-        logger.warning(f"[ChaosScheduler] Kill requested for {experiment_id}: {reason}")
+        logger.warning(
+            "chaos_scheduler.kill_requested",
+            experiment_id=experiment_id,
+            reason=reason,
+        )
 
         # Record audit
         self._record_audit(
@@ -889,7 +919,10 @@ class ChaosSchedulerService:
             )
             return True
         except Exception as e:
-            logger.error(f"[ChaosScheduler] Could not set kill flag: {e}")
+            logger.error(
+                "chaos_scheduler.set_kill_flag",
+                error=e,
+            )
             return False
 
     def kill_all(self, reason: str = "") -> int:
@@ -1078,7 +1111,10 @@ class ChaosSchedulerService:
             data = {sid: s.to_dict() for sid, s in self._schedules.items()}
             backend.set("chaos:schedules", data)
         except Exception as e:
-            logger.warning(f"[ChaosScheduler] Could not persist schedules: {e}")
+            logger.warning(
+                "chaos_scheduler.persist_schedules",
+                error=e,
+            )
 
     def _load_schedules(self) -> None:
         """Load schedules from storage."""
@@ -1093,7 +1129,10 @@ class ChaosSchedulerService:
                     sid: ScheduledExperiment.from_dict(s) for sid, s in data.items()
                 }
         except Exception as e:
-            logger.warning(f"[ChaosScheduler] Could not load schedules: {e}")
+            logger.warning(
+                "chaos_scheduler.load_schedules",
+                error=e,
+            )
 
     def _record_audit(self, event_type: str, data: dict[str, Any]) -> None:
         """Record audit event."""

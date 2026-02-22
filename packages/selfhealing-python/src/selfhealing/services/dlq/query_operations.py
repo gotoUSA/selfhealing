@@ -6,7 +6,7 @@ Provides methods for querying DLQ entries.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
@@ -14,7 +14,7 @@ from selfhealing.core.timezone import now
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import FailedOperationData
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class QueryOperationsMixin:

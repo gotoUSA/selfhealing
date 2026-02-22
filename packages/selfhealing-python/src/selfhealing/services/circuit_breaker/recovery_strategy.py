@@ -11,7 +11,7 @@ immediate vs canary 전략을 지원합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass
 from typing import Any
@@ -34,7 +34,7 @@ from selfhealing.services.circuit_breaker.stale_cache_integration import (
     get_canary_stale_cache_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -376,7 +376,10 @@ class RecoveryStrategySelector:
                 )
             else:
                 # Immediate 전략 - 즉시 100% 허용
-                logger.info(f"[RecoveryStrategy] {service_id}: Using immediate recovery")
+                logger.info(
+                    "recovery_strategy.using_immediate_recovery",
+                    service_id=service_id,
+                )
 
             self._active_recoveries[service_id] = selection.strategy_type
             return selection
@@ -401,7 +404,11 @@ class RecoveryStrategySelector:
             if strategy_type == "canary":
                 self._canary_manager.stop_canary_recovery(service_id, reason)
 
-            logger.info(f"[RecoveryStrategy] {service_id}: Stopped recovery, reason={reason}")
+            logger.info(
+                "recovery_strategy.stopped_recovery",
+                service_id=service_id,
+                reason=reason,
+            )
             return True
 
     def is_in_recovery(self, service_id: str) -> bool:
@@ -511,7 +518,10 @@ class RecoveryStrategySelector:
         if result and result.completed:
             with self._state_lock:
                 self._active_recoveries.pop(service_id, None)
-            logger.info(f"[RecoveryStrategy] {service_id}: Recovery completed")
+            logger.info(
+                "recovery_strategy.recovery_completed",
+                service_id=service_id,
+            )
 
         return result
 
@@ -537,7 +547,10 @@ class RecoveryStrategySelector:
         if result and result.failed:
             with self._state_lock:
                 self._active_recoveries.pop(service_id, None)
-            logger.warning(f"[RecoveryStrategy] {service_id}: Recovery failed")
+            logger.warning(
+                "watchdog.recovery_failed",
+                service_id=service_id,
+            )
 
         return result
 
@@ -585,7 +598,7 @@ class RecoveryStrategySelector:
         """모든 상태 초기화."""
         with self._state_lock:
             self._active_recoveries.clear()
-        logger.info("[RecoveryStrategy] All states reset")
+        logger.info("recovery_strategy.all_states_reset")
 
 
 # =============================================================================

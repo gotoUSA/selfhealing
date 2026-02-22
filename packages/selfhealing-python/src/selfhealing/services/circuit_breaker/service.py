@@ -18,7 +18,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any, Callable
 
 from selfhealing.core.timezone import now
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
         CircuitBreakerStateRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
@@ -114,7 +114,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             callback: 콜백 함수 (service_name, old_state, new_state) -> None
         """
         if state not in self._state_change_callbacks:
-            logger.warning(f"[CircuitBreaker] Invalid state for callback: {state}")
+            logger.warning(
+                "circuit_breaker.invalid_callback_state",
+                state=state,
+            )
             return
 
         if callback not in self._state_change_callbacks[state]:
@@ -168,7 +171,11 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             try:
                 callback(service_name, old_state, new_state)
             except Exception as e:
-                logger.error(f"[CircuitBreaker] Sync callback failed for '{new_state}': {e}")
+                logger.error(
+                    "circuit_breaker.sync_callback_failed",
+                    new_state=new_state,
+                    error=e,
+                )
 
     @property
     def repository(self) -> CircuitBreakerStateRepository:
@@ -255,7 +262,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                             reason=f"auto_recovery: recovery_timeout ({self.config.recovery_timeout}s) elapsed",
                         )
                     except Exception as e:
-                        logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+                        logger.debug(
+                            "circuit_breaker.audit_log_failed",
+                            error=e,
+                        )
 
                     # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
                     self._invoke_state_change_callbacks(
@@ -282,7 +292,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                             source="circuit_breaker_service",
                         )
                     except Exception as e:
-                        logger.debug(f"[CircuitBreaker] Event publish failed: {e}")
+                        logger.debug(
+                            "circuit_breaker.event_publish_failed",
+                            error=e,
+                        )
 
                     return True
             return False
@@ -345,7 +358,11 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             # Try to get cached data
             cached_data = self._get_cached_data(cache_key)
             if cached_data is not None:
-                logger.info(f"[CircuitBreaker] Serving stale cache for '{service_name}' " f"(key: {cache_key})")
+                logger.info(
+                    "circuit_breaker.stale_cache_served",
+                    service_name=service_name,
+                    cache_key=cache_key,
+                )
                 return CircuitBreakerFallbackResult.from_cache(
                     data=cached_data,
                     message=f"Circuit open for {service_name}, serving cached data",
@@ -355,13 +372,19 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             # Queue to DLQ for later retry
             success = self._enqueue_to_dlq(service_name, request_data)
             if success:
-                logger.info(f"[CircuitBreaker] Queued request to DLQ for '{service_name}'")
+                logger.info(
+                    "circuit_breaker.request_queued_to_dlq",
+                    service_name=service_name,
+                )
                 return CircuitBreakerFallbackResult.to_dlq(
                     message=f"Circuit open for {service_name}, request queued for retry"
                 )
 
         if strategy == "default_response" and default_response is not None:
-            logger.info(f"[CircuitBreaker] Returning default response for '{service_name}'")
+            logger.info(
+                "circuit_breaker.default_response_returned",
+                service_name=service_name,
+            )
             return CircuitBreakerFallbackResult.default_response(
                 data=default_response,
                 message=f"Circuit open for {service_name}, using default response",
@@ -385,7 +408,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
             return cache.get(cache_key)
         except Exception as e:
-            logger.debug(f"[CircuitBreaker] Cache lookup failed: {e}")
+            logger.debug(
+                "circuit_breaker.cache_lookup_failed",
+                error=e,
+            )
             return None
 
     def _enqueue_to_dlq(
@@ -414,7 +440,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             )
             return True
         except Exception as e:
-            logger.error(f"[CircuitBreaker] Failed to enqueue to DLQ: {e}")
+            logger.error(
+                "circuit_breaker.failed_enqueue_dlq",
+                error=e,
+            )
             return False
 
     def get_total_calls(self, service_name: str) -> int:
@@ -479,7 +508,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         # Skip if manually controlled
         if state.manually_controlled:
-            logger.debug(f"[CircuitBreaker] Skipping failure recording for '{service_name}': " "manually controlled")
+            logger.debug(
+                "circuit_breaker.skipping_failure_recording_manually",
+                service_name=service_name,
+            )
             return
 
         # Use repository to record failure (handles atomic update)
@@ -700,9 +732,16 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             )
 
             # Log detailed snapshot separately for debugging
-            logger.info(f"[CircuitBreaker] AUTO_OPEN audit logged | service={service_name} | " f"snapshot={snapshot}")
+            logger.info(
+                "circuit_breaker.audit_logged",
+                service_name=service_name,
+                snapshot=snapshot,
+            )
         except Exception as e:
-            logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+            logger.debug(
+                "circuit_breaker.audit_log_failed",
+                error=e,
+            )
 
     def _apply_burn_rate_multiplier(self, service_name: str) -> None:
         """
@@ -720,7 +759,11 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             multiplier = self.config.cb_open_burn_rate_multiplier
 
             # Record accelerated burn event
-            logger.warning(f"[CircuitBreaker] Applying burn rate multiplier {multiplier}x " f"for '{service_name}' (CB OPEN)")
+            logger.warning(
+                "circuit_breaker.applying_burn_rate_multiplier",
+                multiplier=multiplier,
+                service_name=service_name,
+            )
 
             # Emit event for burn rate acceleration
             try:
@@ -740,7 +783,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 pass  # Event bus not available
 
         except Exception as e:
-            logger.debug(f"[CircuitBreaker] Burn rate multiplier failed: {e}")
+            logger.debug(
+                "circuit_breaker.burn_rate_multiplier_failed",
+                error=e,
+            )
 
     def record_success(self, service_name: str) -> None:
         """
@@ -759,7 +805,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         # Skip if manually controlled
         if state.manually_controlled:
-            logger.debug(f"[CircuitBreaker] Skipping success recording for '{service_name}': " "manually controlled")
+            logger.debug(
+                "circuit_breaker.skipping_success_recording_manually",
+                service_name=service_name,
+            )
             return
 
         circuit_closed = False
@@ -810,7 +859,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                     reason=f"auto_recovery: success_threshold ({self.config.success_threshold}) reached",
                 )
             except Exception as e:
-                logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+                logger.debug(
+                    "circuit_breaker.audit_log_failed",
+                    error=e,
+                )
             # Push 이벤트 - CB 상태 변경 메트릭 기록
             try:
                 from selfhealing.metrics.event_handlers import (
@@ -925,7 +977,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         else:  # auto
             # 수동 제어 해제 — 상태/카운터는 유지하고 수동 제어 플래그만 해제
             self.repository.clear_manual_control(service_name, preserve_reason=True)
-            logger.info(f"[CircuitBreaker] '{service_name}' switched to auto mode")
+            logger.info(
+                "circuit_breaker.switched_auto_mode",
+                service_name=service_name,
+            )
             return CircuitBreakerResult(
                 success=True,
                 service_name=service_name,
@@ -984,7 +1039,10 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                         )
 
         except Exception as e:
-            logger.error(f"[CB Reconciliation] Failed: {e}")
+            logger.error(
+                "cb_reconciliation_failed",
+                error=e,
+            )
             result["errors"].append({"error": str(e)})
 
         return result
@@ -1000,4 +1058,8 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                     note=f"ring_resize_eviction|old_state={state.state}",
                 )
         except Exception as e:
-            logger.debug(f"[CB Reconciliation] History recording failed " f"for {state.service_name}: {e}")
+            logger.debug(
+                "cb_reconciliation_history_recording",
+                state=state.service_name,
+                error=e,
+            )

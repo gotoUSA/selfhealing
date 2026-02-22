@@ -15,7 +15,7 @@ Audit:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -23,7 +23,7 @@ from selfhealing.services.audit import (
     log_system_control_audit,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -91,7 +91,10 @@ class CleanupService:
             dlq_service = get_dlq_service()
             count = dlq_service.archive_old_entries(older_than_days=older_than_days)
 
-            logger.info(f"[CleanupService] Archived {count} DLQ entries")
+            logger.info(
+                "cleanup_service.archived_dlq_entries",
+                count=count,
+            )
 
             # === Audit 기록: DLQ 아카이브 ===
             log_system_control_audit(
@@ -146,7 +149,10 @@ class CleanupService:
             pending_service = get_pending_config_service()
             count = pending_service.cleanup_expired(max_age_hours=older_than_hours)
 
-            logger.info(f"[CleanupService] Cleaned up {count} expired configs")
+            logger.info(
+                "cleanup_service.cleaned_up_expired_configs",
+                count=count,
+            )
 
             # === Audit 기록: 만료된 Pending Config 정리 ===
             log_system_control_audit(
@@ -202,7 +208,10 @@ class CleanupService:
             manager = get_runtime_config_manager()
             count = manager.expire_old_requests()
 
-            logger.info(f"[CleanupService] Expired {count} approval requests")
+            logger.info(
+                "cleanup_service.expired_approval_requests",
+                count=count,
+            )
 
             return CleanupResult(
                 success=True,

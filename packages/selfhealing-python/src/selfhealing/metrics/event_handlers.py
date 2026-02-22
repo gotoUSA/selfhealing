@@ -10,13 +10,13 @@ Key Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.metrics.safe_gauge import SafeGauge
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Lazy imports to avoid circular dependencies
 _metrics_instance = None
@@ -33,7 +33,7 @@ def _get_metrics():
 
             _metrics_instance = get_metrics()
         except ImportError:
-            logger.warning("[EventHandler] Metrics not available")
+            logger.warning("event_handler.metrics_available")
             return None
     return _metrics_instance
 
@@ -97,7 +97,7 @@ def _get_safe_pending_gauge() -> SafeGauge | None:
             _safe_gauge_cache["dlq_pending"] = safe_gauge
             return safe_gauge
     except ImportError:
-        logger.warning("[EventHandler] SafeGauge not available, using raw gauge")
+        logger.warning("event_handler.safegauge_available_using_raw")
 
     return None
 
@@ -157,7 +157,10 @@ class DLQMetricEventHandler:
                 failure_type=failure_type,
             )
         except Exception as e:
-            logger.warning(f"[EventHandler] Failed to record DLQ creation: {e}")
+            logger.warning(
+                "event_handler.failed_record_dlq_creation",
+                error=e,
+            )
 
     @staticmethod
     def on_item_resolved(
@@ -212,7 +215,10 @@ class DLQMetricEventHandler:
                 duration_seconds=duration_seconds,
             )
         except Exception as e:
-            logger.warning(f"[EventHandler] Failed to record DLQ resolution: {e}")
+            logger.warning(
+                "event_handler.failed_record_dlq_resolution",
+                error=e,
+            )
 
     @staticmethod
     def on_item_failed(
@@ -255,7 +261,10 @@ class DLQMetricEventHandler:
                 attempt_count=attempt_count,
             )
         except Exception as e:
-            logger.warning(f"[EventHandler] Failed to record DLQ failure: {e}")
+            logger.warning(
+                "event_handler.failed_record_dlq_failure",
+                error=e,
+            )
 
     @staticmethod
     def on_sla_breach(domain: str) -> None:
@@ -283,7 +292,10 @@ class DLQMetricEventHandler:
                 domain=domain,
             )
         except Exception as e:
-            logger.warning(f"[EventHandler] Failed to record SLA breach: {e}")
+            logger.warning(
+                "event_handler.failed_record_sla_breach",
+                error=e,
+            )
 
 
 class CircuitBreakerEventHandler:
@@ -362,7 +374,10 @@ class CircuitBreakerEventHandler:
                 to_state=to_state,
             )
         except Exception as e:
-            logger.warning(f"[EventHandler] Failed to record CB state change: {e}")
+            logger.warning(
+                "event_handler.failed_record_cb_state",
+                error=e,
+            )
 
     @staticmethod
     def on_failure(service: str) -> None:
@@ -387,7 +402,10 @@ class CircuitBreakerEventHandler:
                 service=service,
             )
         except Exception as e:
-            logger.warning(f"[EventHandler] Failed to record CB failure: {e}")
+            logger.warning(
+                "event_handler.failed_record_cb_failure",
+                error=e,
+            )
 
 
 class ReplayEventHandler:
@@ -425,7 +443,10 @@ class ReplayEventHandler:
                 replay_type=replay_type,
             )
         except Exception as e:
-            logger.warning(f"[EventHandler] Failed to record replay start: {e}")
+            logger.warning(
+                "event_handler.failed_record_replay_start",
+                error=e,
+            )
 
     @staticmethod
     def on_replay_completed(
@@ -467,7 +488,10 @@ class ReplayEventHandler:
                 duration_seconds=duration_seconds,
             )
         except Exception as e:
-            logger.warning(f"[EventHandler] Failed to record replay completion: {e}")
+            logger.warning(
+                "event_handler.failed_record_replay_completion",
+                error=e,
+            )
 
 
 def reset_event_handler_cache() -> None:

@@ -23,7 +23,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import socket
 import sys
 import time
@@ -37,7 +37,7 @@ from selfhealing.adapters.ipc.protocol.json_rpc import (
     SidecarMethods,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -119,10 +119,16 @@ class UDSClient:
             self._socket.settimeout(self._timeout)
             self._socket.connect(self._socket_path)
             self._connected = True
-            logger.info(f"[UDSClient] Connected to {self._socket_path}")
+            logger.info(
+                "uds_client.connected",
+                self=self._socket_path,
+            )
             return True
         except Exception as e:
-            logger.warning(f"[UDSClient] Connection failed: {e}")
+            logger.warning(
+                "uds_client.connection_failed",
+                error=e,
+            )
             self._socket = None
             self._connected = False
             return False
@@ -136,7 +142,7 @@ class UDSClient:
                 pass
             self._socket = None
         self._connected = False
-        logger.debug("[UDSClient] Closed")
+        logger.debug("uds_client.closed")
 
     def is_connected(self) -> bool:
         """연결 상태 확인."""
@@ -259,7 +265,10 @@ class UDSClient:
             )
         except UDSClientError as e:
             if self._fail_open:
-                logger.warning(f"[UDSClient] Fail-open: {e}")
+                logger.warning(
+                    "uds_client.fail_open",
+                    error=e,
+                )
                 return {"allowed": True, "state": "unknown", "fail_open": True}
             raise
 
@@ -288,7 +297,10 @@ class UDSClient:
             )
         except UDSClientError as e:
             if self._fail_open:
-                logger.warning(f"[UDSClient] Fail-open batch: {e}")
+                logger.warning(
+                    "uds_client.fail_open_batch",
+                    error=e,
+                )
                 return {name: {"allowed": True, "state": "unknown", "fail_open": True} for name in service_names}
             raise
 

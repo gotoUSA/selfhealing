@@ -19,7 +19,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.services.governance_checks import (
@@ -34,7 +34,7 @@ from .models import (
     PendingApprovalCheckResult,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -108,7 +108,10 @@ class ChaosExecutionService(GovernanceCheckMixin):
         if not governance_result.allowed:
             result.governance_blocked = True
             result.governance_block_reason = governance_result.block_message
-            logger.warning(f"[ChaosExecutionService] Experiments blocked by governance: " f"{governance_result.block_message}")
+            logger.warning(
+                "chaos_execution_service.experiments_blocked_governance",
+                governance_result=governance_result.block_message,
+            )
             return result
 
         try:
@@ -123,10 +126,13 @@ class ChaosExecutionService(GovernanceCheckMixin):
             result.checked = len(due_experiments)
 
             if not due_experiments:
-                logger.debug("[ChaosExecutionService] No experiments due for execution")
+                logger.debug("chaos_execution_service.no_experiments_due_execution")
                 return result
 
-            logger.info(f"[ChaosExecutionService] Found {len(due_experiments)} due experiments")
+            logger.info(
+                "chaos_execution_service.found_due_experiments",
+                count=len(due_experiments),
+            )
 
             # 3. 각 실험 처리
             for experiment in due_experiments:
@@ -153,7 +159,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
             )
 
         except Exception as e:
-            logger.exception("[ChaosExecutionService] Error in run_scheduled_experiments")
+            logger.exception("chaos_execution_service.error")
             result.errors.append({"error": str(e)})
 
         return result
@@ -170,7 +176,10 @@ class ChaosExecutionService(GovernanceCheckMixin):
 
             # Kill Switch 체크
             if scheduler.is_kill_switch_active():
-                logger.warning(f"[ChaosExecutionService] Kill switch active, skipping {exp_id}")
+                logger.warning(
+                    "chaos_execution_service.kill_switch_active_skipping",
+                    exp_id=exp_id,
+                )
                 return {
                     "id": exp_id,
                     "status": "blocked",
@@ -185,7 +194,11 @@ class ChaosExecutionService(GovernanceCheckMixin):
             )
 
             if not safety_result.is_safe:
-                logger.warning(f"[ChaosExecutionService] Safety check failed for {exp_id}: " f"{safety_result.block_reasons}")
+                logger.warning(
+                    "chaos_execution_service.safety_check_failed",
+                    exp_id=exp_id,
+                    safety_result=safety_result.block_reasons,
+                )
                 scheduler.skip_experiment(
                     exp_id,
                     reason=f"Safety check failed: {safety_result.block_reasons}",
@@ -198,7 +211,10 @@ class ChaosExecutionService(GovernanceCheckMixin):
 
             # 승인 필요 여부 체크
             if experiment.requires_approval and not experiment.is_approved:
-                logger.info(f"[ChaosExecutionService] Experiment {exp_id} awaiting approval")
+                logger.info(
+                    "chaos_execution_service.experiment_awaiting_approval",
+                    exp_id=exp_id,
+                )
                 return {
                     "id": exp_id,
                     "status": "pending_approval",
@@ -208,7 +224,10 @@ class ChaosExecutionService(GovernanceCheckMixin):
             exec_result = scheduler.execute_experiment(exp_id)
 
             if exec_result.success:
-                logger.info(f"[ChaosExecutionService] Executed experiment {exp_id}")
+                logger.info(
+                    "chaos_execution_service.executed_experiment",
+                    exp_id=exp_id,
+                )
                 return {
                     "id": exp_id,
                     "status": "executed",
@@ -216,7 +235,10 @@ class ChaosExecutionService(GovernanceCheckMixin):
                 }
             else:
                 error_msg = str(exec_result.error) if hasattr(exec_result, "error") else "Unknown error"
-                logger.error(f"[ChaosExecutionService] Failed to execute {exp_id}")
+                logger.error(
+                    "chaos_execution_service.failed_execute",
+                    exp_id=exp_id,
+                )
                 return {
                     "id": exp_id,
                     "status": "error",
@@ -224,7 +246,10 @@ class ChaosExecutionService(GovernanceCheckMixin):
                 }
 
         except Exception as e:
-            logger.exception(f"[ChaosExecutionService] Error executing {experiment.id}")
+            logger.exception(
+                "chaos_execution_service.error_executing",
+                experiment=experiment.id,
+            )
             return {
                 "id": experiment.id,
                 "status": "error",
@@ -246,7 +271,11 @@ class ChaosExecutionService(GovernanceCheckMixin):
             generator = get_report_generator()
             report = generator.generate_daily_report()
 
-            logger.info(f"[ChaosExecutionService] Daily report generated: {report.report_id}, " f"grade={report.grade}")
+            logger.info(
+                "chaos_execution_service.daily_report_generated",
+                report=report.report_id,
+                report_1=report.grade,
+            )
 
             return DailyReportResult(
                 success=True,
@@ -261,7 +290,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
             )
 
         except Exception as e:
-            logger.exception("[ChaosExecutionService] Error generating daily report")
+            logger.exception("chaos_execution_service.error_generating_daily_report")
             return DailyReportResult(success=False, error=str(e))
 
     def cleanup_expired_approvals(self) -> ApprovalCleanupResult:
@@ -290,10 +319,13 @@ class ChaosExecutionService(GovernanceCheckMixin):
 
             total = result.schedule_expired + result.blast_radius_expired
             if total > 0:
-                logger.info(f"[ChaosExecutionService] Expired {total} pending approvals")
+                logger.info(
+                    "chaos_execution_service.expired_pending_approvals",
+                    total=total,
+                )
 
         except Exception as e:
-            logger.exception("[ChaosExecutionService] Error cleaning up approvals")
+            logger.exception("chaos_execution_service.error_cleaning_up_approvals")
             result.errors.append(str(e))
 
         return result
@@ -325,7 +357,10 @@ class ChaosExecutionService(GovernanceCheckMixin):
             total_pending = result.pending_schedules + result.pending_blast_radius
 
             if total_pending > 0:
-                logger.info(f"[ChaosExecutionService] {total_pending} experiments pending approval")
+                logger.info(
+                    "chaos_execution_service.experiments_pending_approval",
+                    total_pending=total_pending,
+                )
 
                 # 알림 발송 시도
                 try:
@@ -344,7 +379,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
                     result.notification_status = "not_configured"
 
         except Exception as e:
-            logger.exception("[ChaosExecutionService] Error checking pending approvals")
+            logger.exception("chaos_execution_service.error_checking_pending_approvals")
             result.error = str(e)
 
         return result

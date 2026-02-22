@@ -14,7 +14,7 @@ Key Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -223,7 +223,7 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
 
         if not hasattr(request, "session"):
             # No session available, can't check
-            logger.warning("[Reauth] No session available for reauthentication check")
+            logger.warning("reauth.no_session_available_reauthentication")
             return False
 
         now = datetime.now(timezone.utc)
@@ -311,7 +311,10 @@ def get_reauthentication_provider() -> ReauthenticationProvider:
         else:
             _provider_instance = NoOpReauthenticationProvider()
     except Exception as e:
-        logger.warning(f"[Reauth] Failed to load provider, using no-op: {e}")
+        logger.warning(
+            "reauth.failed_load_provider_using",
+            error=e,
+        )
         _provider_instance = NoOpReauthenticationProvider()
 
     return _provider_instance
@@ -394,7 +397,10 @@ def requires_reauthentication(
                     return provider.get_reauthentication_response(request, config)
             except Exception as e:
                 # FAIL-SECURE: On error checking reauth, deny access
-                logger.error(f"[Reauth] Error checking reauthentication: {e}")
+                logger.error(
+                    "reauth.error_checking_reauthentication",
+                    error=e,
+                )
                 from django.http import JsonResponse
 
                 return JsonResponse(
@@ -457,7 +463,10 @@ class RequiresReauthenticationPermission:
 
         except Exception as e:
             # FAIL-SECURE: On error, deny access
-            logger.error(f"[Reauth] Permission check error: {e}")
+            logger.error(
+                "reauth.permission_check_error",
+                error=e,
+            )
             return False
 
 

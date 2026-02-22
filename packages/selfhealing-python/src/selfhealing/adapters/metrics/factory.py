@@ -6,7 +6,7 @@ Creates the appropriate metric source adapter based on configuration.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from typing import TYPE_CHECKING
 
@@ -18,7 +18,7 @@ from selfhealing.adapters.metrics.base import (
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Singleton adapter instance
@@ -51,7 +51,7 @@ def get_metric_adapter() -> MetricSourceAdapter:
     else:
         # null or unknown type
         _adapter_instance = NullMetricSourceAdapter()
-        logger.info("[MetricAdapter] Using NullMetricSourceAdapter (no-op)")
+        logger.info("metric_adapter.using_nullmetricsourceadapter_no_op")
 
     _adapter_configured = True
     return _adapter_instance
@@ -80,7 +80,10 @@ def configure_adapter(adapter: MetricSourceAdapter) -> None:
 
     _adapter_instance = adapter
     _adapter_configured = True
-    logger.info(f"[MetricAdapter] Configured: {type(adapter).__name__}")
+    logger.info(
+        "metric_adapter.configured",
+        value=type(adapter).__name__,
+    )
 
 
 def reset_adapter() -> None:
@@ -106,7 +109,10 @@ def _create_redis_adapter() -> MetricSourceAdapter:
         # Test connection
         client.ping()
 
-        logger.info(f"[MetricAdapter] Redis adapter connected: {redis_url}")
+        logger.info(
+            "metric_adapter.redis_adapter_connected",
+            redis_url=redis_url,
+        )
         return RedisMetricSourceAdapter(redis_client=client, prefix=prefix)
 
     except ImportError:
@@ -137,7 +143,10 @@ def _create_django_adapter() -> MetricSourceAdapter:
         return DjangoMetricSourceAdapter()
 
     except ImportError as e:
-        logger.warning(f"[MetricAdapter] Django not available: {e}")
+        logger.warning(
+            "metric_adapter.django_available",
+            error=e,
+        )
         return NullMetricSourceAdapter()
 
 

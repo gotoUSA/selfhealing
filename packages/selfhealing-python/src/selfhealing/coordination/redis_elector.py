@@ -8,7 +8,7 @@ Fencing Token, 리전 우선순위, Self-Fencing, 비동기 콜백 지원.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -28,7 +28,7 @@ from selfhealing.coordination.config import (
 if TYPE_CHECKING:
     from selfhealing.coordination.metrics import LeaderElectorMetrics
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RedisLeaderElector(LeaderElector):
@@ -250,7 +250,10 @@ class RedisLeaderElector(LeaderElector):
                 is_self=(data["node_id"] == self._node_id),
             )
         except Exception as e:
-            logger.error(f"[LeaderElector] 리더 정보 조회 실패: {e}")
+            logger.error(
+                "leader_elector.리더_정보_조회_실패",
+                error=e,
+            )
             return None
 
     def _try_acquire(self) -> bool:
@@ -283,7 +286,10 @@ class RedisLeaderElector(LeaderElector):
                 return True
             return False
         except Exception as e:
-            logger.error(f"[LeaderElector] 리더 획득 실패: {e}")
+            logger.error(
+                "leader_elector.리더_획득_실패",
+                error=e,
+            )
             return False
 
     def _renew_lease(self) -> bool:
@@ -308,7 +314,10 @@ class RedisLeaderElector(LeaderElector):
                 return True
             return False
         except Exception as e:
-            logger.error(f"[LeaderElector] Lease 갱신 실패: {e}")
+            logger.error(
+                "leader_elector.lease_갱신_실패",
+                error=e,
+            )
             metrics = self._get_metrics()
             if metrics:
                 metrics.record_renew_error(type(e).__name__)
@@ -326,16 +335,26 @@ class RedisLeaderElector(LeaderElector):
                 keys=[self._leader_key],
                 args=[self._node_id],
             )
-            logger.info(f"[LeaderElector] 리더십 반납 완료 (resource={self._resource_name})")
+            logger.info(
+                "leader_elector.리더십_반납_완료",
+                self=self._resource_name,
+            )
         except Exception as e:
-            logger.error(f"[LeaderElector] 리더십 반납 실패: {e}")
+            logger.error(
+                "leader_elector.리더십_반납_실패",
+                error=e,
+            )
 
     def _safe_callback(self, callback: Callable[[], None], callback_type: str) -> None:
         """안전한 콜백 실행 (예외 격리)."""
         try:
             callback()
         except Exception as e:
-            logger.error(f"[LeaderElector] {callback_type} 콜백 오류: {e}")
+            logger.error(
+                "leader_elector.콜백_오류",
+                callback_type=callback_type,
+                error=e,
+            )
 
     def _become_leader(self) -> None:
         """리더 됨 (비동기 콜백 실행)."""
@@ -344,7 +363,10 @@ class RedisLeaderElector(LeaderElector):
                 return
             self._state = LeadershipState.LEADER
 
-        logger.info(f"[LeaderElector] 리더가 되었습니다 (resource={self._resource_name})")
+        logger.info(
+            "leader_elector.리더가_되었습니다",
+            self=self._resource_name,
+        )
 
         # 메트릭 업데이트
         metrics = self._get_metrics()
@@ -367,7 +389,11 @@ class RedisLeaderElector(LeaderElector):
                 return
             self._state = LeadershipState.FOLLOWER
 
-        logger.info(f"[LeaderElector] 리더십을 잃었습니다 " f"(resource={self._resource_name}, reason={reason})")
+        logger.info(
+            "leader_elector.리더십을_잃었습니다",
+            self=self._resource_name,
+            reason=reason,
+        )
 
         # 메트릭 업데이트
         metrics = self._get_metrics()
@@ -418,7 +444,10 @@ class RedisLeaderElector(LeaderElector):
                 },
             )
         except (ImportError, Exception) as e:
-            logger.debug(f"[LeaderElector] Audit 기록 실패: {e}")
+            logger.debug(
+                "leader_elector.audit_기록_실패",
+                error=e,
+            )
 
     def _run_loop(self) -> None:
         """리더 선출 메인 루프."""
@@ -440,7 +469,9 @@ class RedisLeaderElector(LeaderElector):
 
                         # Self-Fencing: 즉시 리더십 포기
                         if self._settings.self_fencing_enabled:
-                            logger.warning(f"[LeaderElector] Lease 갱신 실패, 리더십 포기 " f"(self_fencing_enabled=True)")
+                            logger.warning(
+                                "leader_elector.lease_갱신_실패_리더십",
+                            )
                             self._lose_leader(reason="self_fencing")
                             consecutive_failures = 0
                         elif (
@@ -476,7 +507,10 @@ class RedisLeaderElector(LeaderElector):
                         break
 
             except Exception as e:
-                logger.error(f"[LeaderElector] 선출 루프 오류: {e}")
+                logger.error(
+                    "leader_elector.선출_루프_오류",
+                    error=e,
+                )
                 self._stop_event.wait(self._settings.retry_interval_seconds)
                 if self._stop_event.is_set():
                     break
@@ -484,7 +518,10 @@ class RedisLeaderElector(LeaderElector):
     def start(self) -> None:
         """리더 선출 프로세스 시작."""
         if not self._settings.enabled:
-            logger.info(f"[LeaderElector] 비활성화됨 (resource={self._resource_name})")
+            logger.info(
+                "leader_elector.비활성화됨",
+                self=self._resource_name,
+            )
             return
 
         if self._running:
@@ -501,7 +538,10 @@ class RedisLeaderElector(LeaderElector):
             daemon=True,
         )
         self._worker.start()
-        logger.info(f"[LeaderElector] 시작됨 (resource={self._resource_name})")
+        logger.info(
+            "leader_elector.시작됨",
+            self=self._resource_name,
+        )
 
     def stop(self) -> None:
         """리더 선출 프로세스 중지."""
@@ -517,7 +557,10 @@ class RedisLeaderElector(LeaderElector):
         if was_leader:
             self._release_leadership()
             # _lose_leader는 _state를 확인하므로 직접 콜백 실행
-            logger.info(f"[LeaderElector] 리더십을 잃었습니다 " f"(resource={self._resource_name}, reason=shutdown)")
+            logger.info(
+                "leader_elector.리더십을_잃었습니다",
+                self=self._resource_name,
+            )
 
             # 메트릭 업데이트
             metrics = self._get_metrics()
@@ -545,7 +588,10 @@ class RedisLeaderElector(LeaderElector):
         with self._lock:
             self._state = LeadershipState.STOPPED
 
-        logger.info(f"[LeaderElector] 중지됨 (resource={self._resource_name})")
+        logger.info(
+            "leader_elector.중지됨",
+            self=self._resource_name,
+        )
 
     def on_become_leader(self, callback: Callable[[], None]) -> Callable[[], None]:
         """리더가 되었을 때 콜백 등록 (데코레이터)."""

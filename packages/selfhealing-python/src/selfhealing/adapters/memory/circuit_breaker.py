@@ -12,7 +12,7 @@ Note: This module has been refactored for better maintainability:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections import deque
 from datetime import datetime, timedelta
@@ -41,7 +41,7 @@ from selfhealing.interfaces.repositories import (
     CircuitBreakerStateRepository,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):

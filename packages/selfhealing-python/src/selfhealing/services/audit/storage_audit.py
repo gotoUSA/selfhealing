@@ -18,7 +18,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.services.audit.base import (
@@ -27,7 +27,7 @@ from selfhealing.services.audit.base import (
     _write_to_wal,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # ============================================================
@@ -281,7 +281,10 @@ def log_config_apply_audit(
                 target_id=pending_id or config_key,
             )
         except Exception as e:
-            logger.debug(f"[ConfigApplyAudit] Adapter record failed: {e}")
+            logger.debug(
+                "config_apply_audit.adapter_record_failed",
+                error=e,
+            )
 
     log_func = logger.info if success else logger.warning
     log_func(
@@ -362,7 +365,10 @@ def log_chaos_scheduler_audit(
                 target_id=experiment_id,
             )
         except Exception as e:
-            logger.debug(f"[ChaosSchedulerAudit] Adapter record failed: {e}")
+            logger.debug(
+                "chaos_scheduler_audit.adapter_record_failed",
+                error=e,
+            )
 
     log_func = logger.info if success else logger.warning
     log_func(
@@ -441,7 +447,10 @@ def log_governance_task_audit(
                 domain="governance",
             )
         except Exception as e:
-            logger.debug(f"[GovernanceTaskAudit] Adapter record failed: {e}")
+            logger.debug(
+                "governance_task_audit.adapter_record_failed",
+                error=e,
+            )
 
     log_func = logger.info if success else logger.warning
     level_str = f"L{emergency_level}" if emergency_level is not None else "N/A"
@@ -508,7 +517,10 @@ def log_traffic_aware_replay_audit(
                 domain=domain or "dlq",
             )
         except Exception as e:
-            logger.debug(f"[TrafficAwareReplayAudit] Adapter record failed: {e}")
+            logger.debug(
+                "traffic_aware_replay_audit.adapter_record_failed",
+                error=e,
+            )
 
     log_func = logger.info if status == "completed" else logger.warning
     log_func(
@@ -570,7 +582,10 @@ def log_drift_detection_audit(
                 domain="drift_detection",
             )
         except Exception as e:
-            logger.debug(f"[DriftDetectionAudit] Adapter record failed: {e}")
+            logger.debug(
+                "drift_detection_audit.adapter_record_failed",
+                error=e,
+            )
 
     log_func = logger.info if success else logger.warning
     drift_str = "DRIFT_DETECTED" if drift_detected else "NO_DRIFT"

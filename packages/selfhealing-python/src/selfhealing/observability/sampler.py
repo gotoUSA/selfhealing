@@ -7,7 +7,7 @@ Samples 100% during emergencies or SLA violations.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 from typing import TYPE_CHECKING, Sequence
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from opentelemetry.trace import Link, SpanKind
     from opentelemetry.util.types import Attributes
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Sampling ratios per emergency level
@@ -185,7 +185,7 @@ class EmergencyLevelAdaptiveSampler:
         Next span will be sampled at 100%.
         """
         self._force_sample_next = True
-        logger.debug("SLA violation marked - forcing next span sampling")
+        logger.debug("sla_violation_marked_forcing")
 
     def mark_throttle_response(self) -> None:
         """
@@ -194,7 +194,7 @@ class EmergencyLevelAdaptiveSampler:
         Next span will be sampled at 100%.
         """
         self._force_sample_next = True
-        logger.debug("Throttle (429) response marked - forcing next span sampling")
+        logger.debug("throttle_response_marked_forcing")
 
 
 class StaticRatioSampler:

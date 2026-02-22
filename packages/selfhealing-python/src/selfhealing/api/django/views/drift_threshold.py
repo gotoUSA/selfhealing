@@ -10,7 +10,7 @@ Endpoints:
 - POST /api/self-healing/config/drift-thresholds/reset/ - Reset to defaults
 """
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -22,7 +22,7 @@ from rest_framework.views import APIView
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.services.runtime_config import get_runtime_config_manager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_threshold_percent_display(config: dict[str, Any]) -> dict[str, str]:
@@ -109,7 +109,11 @@ class DriftThresholdConfigView(APIView):
         )
 
         # Audit 로깅
-        logger.info(f"[DriftThresholdAPI] Config updated by {actor_id}: " f"fields={list(update_fields.keys())}")
+        logger.info(
+            "drift_threshold_api.config_updated",
+            actor_id=actor_id,
+            value=list(update_fields.keys()),
+        )
 
         return Response(
             {
@@ -145,7 +149,10 @@ class DriftThresholdResetView(APIView):
         default_config = manager.reset_drift_threshold_config(changed_by=actor_id)
 
         # Audit 로깅
-        logger.info(f"[DriftThresholdAPI] Config reset by {actor_id}")
+        logger.info(
+            "drift_threshold_api.config_reset",
+            actor_id=actor_id,
+        )
 
         return Response(
             {

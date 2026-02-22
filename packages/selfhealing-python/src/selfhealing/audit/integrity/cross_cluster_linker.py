@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_local_anchor_ttl_days() -> int:
@@ -178,7 +178,10 @@ class CrossClusterAuditLinker:
 
                 self._identity = get_cluster_identity(skip_validation=True)
             except Exception as e:
-                logger.warning(f"[CrossClusterAuditLinker] Failed to get cluster identity: {e}")
+                logger.warning(
+                    "cross_cluster_audit_linker.failed_get_cluster_identity",
+                    error=e,
+                )
 
         # Redis 클라이언트 초기화
         if self._local_redis is None:
@@ -193,7 +196,10 @@ class CrossClusterAuditLinker:
                 if self._global_redis is None:
                     self._global_redis = provider.get_redis(RedisScope.GLOBAL)
             except Exception as e:
-                logger.warning(f"[CrossClusterAuditLinker] Failed to initialize Redis: {e}")
+                logger.warning(
+                    "cross_cluster_audit_linker.failed_initialize_redis",
+                    error=e,
+                )
 
         self._initialized = True
 
@@ -213,7 +219,7 @@ class CrossClusterAuditLinker:
             target_date = (datetime.now(timezone.utc) - timedelta(days=1)).date()
 
         if not self._local_redis:
-            logger.warning("[CrossClusterAuditLinker] Local Redis not available")
+            logger.warning("cross_cluster_audit_linker.local_redis_available")
             return None
 
         try:
@@ -222,7 +228,7 @@ class CrossClusterAuditLinker:
             state = self._local_redis.hgetall(state_key)
 
             if not state:
-                logger.warning("[CrossClusterAuditLinker] No hash chain state found")
+                logger.warning("cross_cluster_audit_linker.no_hash_chain_state")
                 return None
 
             # bytes to str conversion if needed
@@ -259,7 +265,10 @@ class CrossClusterAuditLinker:
             return anchor
 
         except Exception as e:
-            logger.error(f"[CrossClusterAuditLinker] Failed to create local anchor: {e}")
+            logger.error(
+                "cross_cluster_audit_linker.failed_create_local_anchor",
+                error=e,
+            )
             return None
 
     def get_local_anchor(self, target_date: date) -> ClusterDailyAnchor | None:
@@ -286,7 +295,10 @@ class CrossClusterAuditLinker:
                 return ClusterDailyAnchor.from_dict(json.loads(data))
             return None
         except Exception as e:
-            logger.error(f"[CrossClusterAuditLinker] Failed to get local anchor: {e}")
+            logger.error(
+                "cross_cluster_audit_linker.failed_get_local_anchor",
+                error=e,
+            )
             return None
 
     def submit_to_global(self, anchor: ClusterDailyAnchor) -> bool:
@@ -302,7 +314,7 @@ class CrossClusterAuditLinker:
         self._ensure_initialized()
 
         if not self._global_redis:
-            logger.warning("[CrossClusterAuditLinker] Global Redis not available")
+            logger.warning("cross_cluster_audit_linker.global_redis_available")
             return False
 
         try:
@@ -320,7 +332,10 @@ class CrossClusterAuditLinker:
 
                 # 중복 체크
                 if any(ca.cluster_id == anchor.cluster_id for ca in cluster_anchors):
-                    logger.info(f"[CrossClusterAuditLinker] Anchor already submitted " f"for {anchor.cluster_id}")
+                    logger.info(
+                        "cross_cluster_audit_linker.anchor_already_submitted",
+                        anchor=anchor.cluster_id,
+                    )
                     return True
                 cluster_anchors.append(anchor)
             else:
@@ -351,7 +366,10 @@ class CrossClusterAuditLinker:
             return True
 
         except Exception as e:
-            logger.error(f"[CrossClusterAuditLinker] Failed to submit to global: {e}")
+            logger.error(
+                "cross_cluster_audit_linker.failed_submit_global",
+                error=e,
+            )
             return False
 
     def get_global_anchor(self, target_date: date) -> GlobalDailyAnchor | None:
@@ -378,7 +396,10 @@ class CrossClusterAuditLinker:
                 return GlobalDailyAnchor.from_dict(json.loads(data))
             return None
         except Exception as e:
-            logger.error(f"[CrossClusterAuditLinker] Failed to get global anchor: {e}")
+            logger.error(
+                "cross_cluster_audit_linker.failed_get_global_anchor",
+                error=e,
+            )
             return None
 
     def verify_global_integrity(self, target_date: date) -> dict[str, Any]:
@@ -443,7 +464,10 @@ class CrossClusterAuditLinker:
             dates = self._global_redis.zrevrange(self.GLOBAL_ANCHOR_LIST_KEY, 0, limit - 1)
             return [d.decode() if isinstance(d, bytes) else d for d in dates]
         except Exception as e:
-            logger.error(f"[CrossClusterAuditLinker] Failed to list global anchors: {e}")
+            logger.error(
+                "cross_cluster_audit_linker.failed_list_global_anchors",
+                error=e,
+            )
             return []
 
 

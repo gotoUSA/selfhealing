@@ -4,7 +4,7 @@ Chaos Engineering Schedule Views.
 API views for scheduled experiment management.
 """
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.permissions import BasePermission
@@ -18,7 +18,7 @@ from selfhealing.api.django.serializers.chaos import (
     ScheduledExperimentSerializer,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ScheduleListView(APIView):
@@ -86,7 +86,11 @@ class ScheduleListView(APIView):
             **data,
         )
 
-        logger.info(f"[ChaosAPI] Schedule created: {schedule.id} by {request.user}")
+        logger.info(
+            "chaos_api.schedule_created",
+            schedule=schedule.id,
+            request=request.user,
+        )
 
         return Response(
             {
@@ -144,7 +148,11 @@ class ScheduleDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        logger.info(f"[ChaosAPI] Schedule updated: {schedule_id} by {request.user}")
+        logger.info(
+            "chaos_api.schedule_updated",
+            schedule_id=schedule_id,
+            request=request.user,
+        )
 
         return Response(
             {
@@ -166,7 +174,11 @@ class ScheduleDetailView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        logger.info(f"[ChaosAPI] Schedule deleted: {schedule_id} by {request.user}")
+        logger.info(
+            "chaos_api.schedule_deleted",
+            schedule_id=schedule_id,
+            request=request.user,
+        )
 
         return Response(
             {"status": "success", "message": "Schedule deleted"},
@@ -213,7 +225,12 @@ class ScheduleApprovalView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        logger.info(f"[ChaosAPI] Schedule {action}: {schedule_id} by {request.user}")
+        logger.info(
+            "chaos_api.schedule",
+            action=action,
+            schedule_id=schedule_id,
+            request=request.user,
+        )
 
         return Response(
             {

@@ -16,12 +16,12 @@ Environment Variables:
     SELFHEALING_NAMESPACE_EMERGENCY_MAX_BUFFER_SIZE=1000
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class NamespaceEmergencySettings(BaseSettings):

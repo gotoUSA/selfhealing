@@ -22,7 +22,7 @@ Usage:
 from __future__ import annotations
 
 import contextvars
-import logging
+import structlog
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from contextlib import contextmanager
@@ -39,7 +39,7 @@ from selfhealing.resilience.bulkhead.exceptions import (
     BulkheadTimeoutError,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 

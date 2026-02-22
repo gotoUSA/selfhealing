@@ -4,7 +4,7 @@ Pre-computed Cache Service - Multi-Tier Cache Access with Drift Detection.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -20,7 +20,7 @@ from .constants import (
 from .l1_cache import _l1_cache
 from .l2_cache import _l2_cache
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -131,7 +131,11 @@ def get_cached_response(
         return data
 
     except Exception as e:
-        logger.error(f"[PrecomputedCache] Compute failed for {cache_key}: {e}")
+        logger.error(
+            "precomputed_cache.compute_failed",
+            cache_key=cache_key,
+            error=e,
+        )
         return {
             "status": "error",
             "error": str(e),
@@ -189,7 +193,11 @@ def check_l1_l2_drift(cache_key: str) -> dict[str, Any] | None:
             consistency = 1.0 - (drift_count / total) if total > 0 else 1.0
             update_cache_consistency(cache_key, consistency)
 
-            logger.warning(f"[PrecomputedCache] Drift detected for {cache_key}: " f"L1 != L2 (drift_count={drift_count})")
+            logger.warning(
+                "precomputed_cache.drift_detected",
+                cache_key=cache_key,
+                drift_count=drift_count,
+            )
 
             return {
                 "cache_key": cache_key,
@@ -207,6 +215,10 @@ def check_l1_l2_drift(cache_key: str) -> dict[str, Any] | None:
             update_cache_consistency(cache_key, consistency)
 
     except Exception as e:
-        logger.debug(f"[PrecomputedCache] Drift check failed for {cache_key}: {e}")
+        logger.debug(
+            "precomputed_cache.drift_check_failed",
+            cache_key=cache_key,
+            error=e,
+        )
 
     return None

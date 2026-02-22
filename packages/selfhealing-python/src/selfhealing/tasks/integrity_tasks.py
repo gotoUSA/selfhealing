@@ -13,12 +13,12 @@ Functions:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -66,7 +66,7 @@ def verify_hash_chain_integrity(
         # Redis 분산 락 — 멀티 프로세스 중복 실행 방지
         redis_client = get_redis_client()
         if redis_client is None:
-            logger.warning("[BackgroundIntegrityVerifier] Redis unavailable, skip")
+            logger.warning("background_integrity_verifier.redis_unavailable_skip")
             return {"valid": True, "skipped": True, "reason": "redis_unavailable"}
 
         lock = RedisDistributedLock(
@@ -77,7 +77,7 @@ def verify_hash_chain_integrity(
         )
 
         if not lock.acquire(blocking=True):
-            logger.info("[BackgroundIntegrityVerifier] Another verify task running, skip")
+            logger.info("background_integrity_verifier.another_verify_task_running")
             return {"valid": True, "skipped": True, "reason": "lock_contention"}
 
         try:
@@ -137,7 +137,10 @@ def _get_entries_since_last_anchor(namespace: str) -> list[dict]:
         events = auditor.get_recent_events(namespace, limit=100000)
         return [e.to_dict() if hasattr(e, "to_dict") else e for e in events]
     except Exception as e:
-        logger.warning(f"[BackgroundIntegrityVerifier] Entry load failed: {e}")
+        logger.warning(
+            "background_integrity_verifier.entry_load_failed",
+            error=e,
+        )
         return []
 
 
@@ -181,11 +184,20 @@ def _verify_with_retry(
         is_valid, error_msg = verifier.verify_chain(entries)
         if is_valid:
             if attempt > 1:
-                logger.info(f"[BackgroundIntegrityVerifier] Verification succeeded " f"on retry {attempt}/{max_retries}")
+                logger.info(
+                    "background_integrity_verifier.verification_succeeded_retry",
+                    attempt=attempt,
+                    max_retries=max_retries,
+                )
             return True, None
 
         last_error = error_msg
-        logger.warning(f"[BackgroundIntegrityVerifier] Attempt {attempt}/{max_retries} " f"failed: {error_msg}")
+        logger.warning(
+            "background_integrity_verifier.attempt_failed",
+            attempt=attempt,
+            max_retries=max_retries,
+            error_msg=error_msg,
+        )
 
     # 모든 재시도 실패 → 실제 위반으로 확정
     logger.critical(
@@ -212,9 +224,16 @@ def _alert_integrity_violation(namespace: str, result: dict) -> None:
             error_message="Hash chain integrity violation detected during background verification",
         )
     except Exception as e:
-        logger.error(f"[BackgroundIntegrityVerifier] Audit write failed: {e}")
+        logger.error(
+            "background_integrity_verifier.audit_write_failed",
+            error=e,
+        )
 
-    logger.critical(f"[INTEGRITY_VIOLATION] namespace={namespace}, " f"errors={result.get('errors', [])}")
+    logger.critical(
+        "integrity_violation.event",
+        namespace=namespace,
+        result=result.get('errors', []),
+    )
 
 
 # =============================================================================

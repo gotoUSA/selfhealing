@@ -7,9 +7,9 @@ Error Rate Provider for Load Shedding.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ErrorRateProvider:

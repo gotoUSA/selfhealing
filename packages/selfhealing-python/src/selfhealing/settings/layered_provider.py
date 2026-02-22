@@ -10,13 +10,13 @@ Layered Configuration Provider.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from contextvars import ContextVar
 from typing import Any, TypeVar
 
 from pydantic_settings import BaseSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T", bound=BaseSettings)
 
@@ -71,7 +71,7 @@ def clear_request_overrides() -> None:
     Django 미들웨어의 process_response에서 호출하여 정리합니다.
     """
     _request_overrides.set({})
-    logger.debug("[LayeredProvider] Request overrides cleared")
+    logger.debug("layered_provider.request_overrides_cleared")
 
 
 def get_all_request_overrides() -> dict[str, dict[str, Any]]:
@@ -139,10 +139,16 @@ def get_layered_settings(
                 if key in valid_fields:
                     base_dict[key] = value
 
-            logger.debug(f"[LayeredProvider] Merged runtime config for {config_type}")
+            logger.debug(
+                "layered_provider.merged_runtime_config",
+                config_type=config_type,
+            )
         except Exception as e:
             # Graceful fallback - RuntimeConfigManager 없어도 동작
-            logger.debug(f"[LayeredProvider] Runtime config not available: {e}")
+            logger.debug(
+                "layered_provider.runtime_config_available",
+                error=e,
+            )
 
     # Level 4: Request-scoped override
     if include_request:

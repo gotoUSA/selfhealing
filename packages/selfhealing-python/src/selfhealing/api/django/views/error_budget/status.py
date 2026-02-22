@@ -19,7 +19,7 @@ V3 Optimization:
 - Target: P95 < 20ms for /error-budget/status/
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework.request import Request
@@ -32,7 +32,7 @@ from selfhealing.services.error_budget_service import (
     get_failsafe_status_response,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ErrorBudgetStatusView(APIView):
@@ -225,7 +225,10 @@ class ErrorBudgetExhaustView(APIView):
         service = get_error_budget_service()
         result = service.simulate_budget_exhaustion(target_remaining_percent=target)
 
-        logger.warning(f"[ErrorBudgetAPI] Budget exhaustion simulated: target={target}%")
+        logger.warning(
+            "error_budget_api.budget_exhaustion_simulated",
+            target=target,
+        )
 
         return Response(
             {
@@ -253,7 +256,7 @@ class ErrorBudgetResetSimulationView(APIView):
         service = get_error_budget_service()
         result = service.reset_simulated_stats()
 
-        logger.info("[ErrorBudgetAPI] Simulation stats reset")
+        logger.info("error_budget_api.simulation_stats_reset")
 
         return Response(
             {

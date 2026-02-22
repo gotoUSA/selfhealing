@@ -13,14 +13,14 @@ Fail-Open 원칙: ErrorBudgetGate import/호출 실패 시 통과 허용.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.interfaces.resilience_policy import (
     GuardResult,
     PolicyContext,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ErrorBudgetGuard:
@@ -68,8 +68,11 @@ class ErrorBudgetGuard:
                     },
                 )
         except ImportError:
-            logger.debug("ErrorBudgetGate not available (fail-open)")
+            logger.debug("errorbudgetgate_available_fail_open")
         except Exception as e:
-            logger.warning("ErrorBudgetGuard check failed (fail-open): %s", e)
+            logger.warning(
+                "errorbudgetguard_check_failed_fail",
+                error=e,
+            )
 
         return GuardResult(allowed=True)

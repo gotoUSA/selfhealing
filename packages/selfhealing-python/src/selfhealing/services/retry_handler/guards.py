@@ -7,12 +7,12 @@ Guard.check()가 allowed=False를 반환하면 Policy 실행을 차단한다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.interfaces.resilience_policy import GuardResult, PolicyContext
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class KillSwitchGuard:
@@ -42,7 +42,10 @@ class KillSwitchGuard:
                 )
         except Exception as e:
             # Fail-Open: SystemControlManager 로드 실패 시 통과
-            logger.debug("[KillSwitchGuard] SystemControlManager not available: %s", e)
+            logger.debug(
+                "kill_switch_guard.systemcontrolmanager_available",
+                error=e,
+            )
             return GuardResult(allowed=True)
 
 
@@ -96,5 +99,8 @@ class ErrorBudgetGuard:
             return GuardResult(allowed=True)
         except Exception as e:
             # Fail-Open: 게이트 체크 실패 시 통과
-            logger.warning("[ErrorBudgetGuard] Gate check failed: %s", e)
+            logger.warning(
+                "error_budget_guard.gate_check_failed",
+                error=e,
+            )
             return GuardResult(allowed=True)

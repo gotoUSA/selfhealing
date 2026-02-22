@@ -16,12 +16,12 @@ Environment Variables:
     SELFHEALING_CANARY_DEFAULT_EXPIRY_HOURS=24
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CanarySettings(BaseSettings):
@@ -111,7 +111,10 @@ class CanarySettings(BaseSettings):
     def validate_lock_timeout(cls, v: int) -> int:
         """lock_timeout이 너무 길면 경고."""
         if v > 60:
-            logger.warning(f"[CanarySettings] High lock_timeout_minutes={v}, " "consider using <= 60 for responsiveness")
+            logger.warning(
+                "canary_settings.high_consider_using_responsiveness",
+                v=v,
+            )
         return v
 
 

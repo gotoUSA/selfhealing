@@ -43,7 +43,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import threading
 import urllib.error
@@ -59,7 +59,7 @@ from selfhealing.audit.self_audit import SelfAuditEvent, self_audit
 if TYPE_CHECKING:
     from selfhealing.settings.audit_watchdog import AuditWatchdogSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditWatchdogStatus(str, Enum):
@@ -230,7 +230,7 @@ class AuditWatchdog:
         """Watchdog 시작."""
         with self._lock:
             if self._state != AuditWatchdogStatus.STOPPED:
-                logger.warning("Watchdog already running")
+                logger.warning("watchdog_already_running")
                 return
 
             self._state = AuditWatchdogStatus.RUNNING
@@ -252,7 +252,10 @@ class AuditWatchdog:
                     "targets": len(self._config.targets),
                 },
             )
-            logger.info(f"Audit Watchdog started (interval={self._config.heartbeat_interval_seconds}s)")
+            logger.info(
+                "audit_watchdog_started",
+                self=self._config.heartbeat_interval_seconds,
+            )
 
     def stop(self, timeout: float = 5.0) -> None:
         """Watchdog 중지."""
@@ -271,7 +274,7 @@ class AuditWatchdog:
             "Audit Watchdog stopped",
             details=self.get_stats().__dict__,
         )
-        logger.info("Audit Watchdog stopped")
+        logger.info("audit_watchdog_stopped")
 
     def pet(self) -> None:
         """
@@ -307,7 +310,10 @@ class AuditWatchdog:
             try:
                 self._send_heartbeat()
             except Exception as e:
-                logger.exception(f"Heartbeat loop error: {e}")
+                logger.exception(
+                    "heartbeat_loop_error",
+                    error=e,
+                )
 
             # interval 동안 대기 (stop_event로 중단 가능)
             self._stop_event.wait(timeout=self._config.heartbeat_interval_seconds)
@@ -329,7 +335,11 @@ class AuditWatchdog:
                 except Exception as e:
                     success = False
                     failure_reason = f"{target.name}: {str(e)}"
-                    logger.warning(f"Heartbeat to {target.name} failed: {e}")
+                    logger.warning(
+                        "heartbeat_failed",
+                        target=target.name,
+                        error=e,
+                    )
 
                     if self._config.on_heartbeat_failure:
                         try:
@@ -344,7 +354,10 @@ class AuditWatchdog:
                 except Exception as e:
                     success = False
                     failure_reason = f"local_file: {str(e)}"
-                    logger.warning(f"Local heartbeat failed: {e}")
+                    logger.warning(
+                        "local_heartbeat_failed",
+                        error=e,
+                    )
 
             # 3. 결과 처리
             now = datetime.now(timezone.utc)

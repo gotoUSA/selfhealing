@@ -7,7 +7,7 @@ Contains:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ from selfhealing.audit.integrity.local_manager import HashChainManager
 from selfhealing.audit.integrity.protocol import HashChainManagerProtocol
 from selfhealing.audit.integrity.redis_manager import RedisHashChainManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def create_hash_chain_manager(

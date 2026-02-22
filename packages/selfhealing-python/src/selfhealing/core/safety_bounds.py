@@ -16,13 +16,13 @@ Safety Bounds - 자율 조정 안전 한계
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from threading import RLock
 
 from selfhealing.settings.safety_bounds import get_safety_bounds_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -144,7 +144,10 @@ class SafetyBounds:
             for param, config in custom_bounds.items():
                 self.update_bounds(param, config)
 
-        logger.info(f"[SafetyBounds] Initialized with {len(self.bounds)} parameters")
+        logger.info(
+            "safety_bounds.initialized_parameters",
+            count=len(self.bounds),
+        )
 
     def is_within_bounds(
         self,
@@ -168,19 +171,35 @@ class SafetyBounds:
 
             if bound is None:
                 if self.strict_mode:
-                    logger.warning(f"[SafetyBounds] Unknown parameter rejected: {parameter}")
+                    logger.warning(
+                        "safety_bounds.unknown_parameter_rejected",
+                        parameter=parameter,
+                    )
                     return False
                 else:
-                    logger.debug(f"[SafetyBounds] Unknown parameter allowed (non-strict): {parameter}")
+                    logger.debug(
+                        "safety_bounds.unknown_parameter_allowed_non",
+                        parameter=parameter,
+                    )
                     return True
 
             # 범위 검증
             if new_value < bound.min_value:
-                logger.warning(f"[SafetyBounds] {parameter}={new_value} below minimum {bound.min_value}")
+                logger.warning(
+                    "safety_bounds.below_minimum",
+                    parameter=parameter,
+                    new_value=new_value,
+                    bound=bound.min_value,
+                )
                 return False
 
             if new_value > bound.max_value:
-                logger.warning(f"[SafetyBounds] {parameter}={new_value} above maximum {bound.max_value}")
+                logger.warning(
+                    "safety_bounds.above_maximum",
+                    parameter=parameter,
+                    new_value=new_value,
+                    bound=bound.max_value,
+                )
                 return False
 
             # 변경폭 검증
@@ -257,7 +276,10 @@ class SafetyBounds:
                 )
 
                 if not new_bound.validate():
-                    logger.error(f"[SafetyBounds] Invalid bound config for {parameter}")
+                    logger.error(
+                        "safety_bounds.invalid_bound_config",
+                        parameter=parameter,
+                    )
                     return False
 
                 self.bounds[parameter] = new_bound
@@ -268,7 +290,10 @@ class SafetyBounds:
                 )
                 return True
             except Exception as e:
-                logger.error(f"[SafetyBounds] Failed to update bounds: {e}")
+                logger.error(
+                    "safety_bounds.failed_update_bounds",
+                    error=e,
+                )
                 return False
 
     def remove_bounds(self, parameter: str) -> bool:
@@ -276,7 +301,10 @@ class SafetyBounds:
         with self._lock:
             if parameter in self.bounds:
                 del self.bounds[parameter]
-                logger.info(f"[SafetyBounds] Removed bounds for {parameter}")
+                logger.info(
+                    "safety_bounds.removed_bounds",
+                    parameter=parameter,
+                )
                 return True
             return False
 
@@ -328,7 +356,7 @@ class SafetyBounds:
                 )
                 for k, v in default_bounds.items()
             }
-            logger.info("[SafetyBounds] Reset to defaults")
+            logger.info("safety_bounds.reset_defaults")
 
 
 __all__ = [

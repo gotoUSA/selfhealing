@@ -6,7 +6,7 @@ Prevents slow/failing external services from blocking the main application.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -17,7 +17,7 @@ from typing import Any
 # str, Enum 으로 통일하여 JSON 직렬화 호환
 from selfhealing.audit.graceful_degradation.enums import CircuitState  # noqa: F401
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -157,19 +157,30 @@ class CircuitBreaker:
         elif new_state == CircuitState.HALF_OPEN:
             self._state.success_count = 0
 
-        logger.warning(f"[CircuitBreaker:{self.name}] State transition: {old_state.value} -> {new_state.value}")
+        logger.warning(
+            "circuitbreaker_state_transition",
+            self=self.name,
+            old_state=old_state.value,
+            new_state=new_state.value,
+        )
 
     def reset(self) -> None:
         """Manually reset circuit breaker to closed state."""
         with self._lock:
             self._transition_to(CircuitState.CLOSED)
-            logger.info(f"[CircuitBreaker:{self.name}] Manually reset")
+            logger.info(
+                "circuitbreaker_manually_reset",
+                self=self.name,
+            )
 
     def force_open(self) -> None:
         """Manually open circuit breaker."""
         with self._lock:
             self._transition_to(CircuitState.OPEN)
-            logger.warning(f"[CircuitBreaker:{self.name}] Manually opened")
+            logger.warning(
+                "circuitbreaker_manually_opened",
+                self=self.name,
+            )
 
     def get_stats(self) -> dict[str, Any]:
         """Get circuit breaker statistics."""

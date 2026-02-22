@@ -15,7 +15,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
@@ -25,7 +25,7 @@ from selfhealing.services.error_budget.constants import (
     MAX_CRISIS_MULTIPLIER_CAP,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # SSOT: error_budget.constants 에서 가져옴 (backward compat re-export)

@@ -6,13 +6,13 @@ Provides methods for loading data from L2 storage.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 
 from selfhealing.adapters.memory.base import _now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class L2LoadMixin:

@@ -19,13 +19,13 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
 from selfhealing.services.governance.checks import GovernanceCheckMixin
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -115,7 +115,10 @@ class GovernanceService(GovernanceCheckMixin):
             manager = get_runtime_config_manager()
             return manager.get_config("governance") or {}
         except Exception as e:
-            logger.warning(f"[GovernanceService] Could not load config: {e}")
+            logger.warning(
+                "governance_service.load_config",
+                error=e,
+            )
             return self._get_default_config()
 
     def _get_default_config(self) -> dict[str, Any]:
@@ -162,7 +165,7 @@ class GovernanceService(GovernanceCheckMixin):
         )
 
         if not status["is_active"]:
-            logger.debug("[GovernanceService] Emergency mode is not active, skipping")
+            logger.debug("governance_service.emergency_mode_active_skipping")
             return result
 
         logger.info(
@@ -173,7 +176,7 @@ class GovernanceService(GovernanceCheckMixin):
 
         # Action 1: Auto-restore (highest priority - 8시간)
         if status.get("should_auto_restore", False):
-            logger.warning("[GovernanceService] Emergency mode expired, auto-restoring")
+            logger.warning("governance_service.emergency_mode_expired_auto")
             restore_result = tracker.auto_restore_to_normal()
             result.actions_taken.append(
                 {
@@ -191,7 +194,7 @@ class GovernanceService(GovernanceCheckMixin):
 
         # Action 2: Final warning (6시간)
         if status.get("should_final_warn", False):
-            logger.warning("[GovernanceService] Final warning: 2 hours until auto-restore")
+            logger.warning("governance_service.final_warning_hours_until")
             tracker.mark_final_warning_sent()
             result.actions_taken.append(
                 {
@@ -208,7 +211,10 @@ class GovernanceService(GovernanceCheckMixin):
 
         # Action 3: Warning (4시간)
         if status.get("should_warn", False):
-            logger.warning(f"[GovernanceService] Warning: {result.hours_elapsed:.1f} hours in emergency mode")
+            logger.warning(
+                "governance_service.warning_hours_emergency_mode",
+                result=result.hours_elapsed,
+            )
             tracker.mark_warning_sent()
             result.actions_taken.append(
                 {
@@ -259,7 +265,12 @@ class GovernanceService(GovernanceCheckMixin):
                 activated_by=actor,
             )
 
-            logger.warning(f"[GovernanceService] Emergency mode activated: " f"level={level}, reason={reason}, actor={actor}")
+            logger.warning(
+                "governance_service.emergency_mode_activated",
+                level=level,
+                reason=reason,
+                actor=actor,
+            )
 
             # 알림 발송
             self._send_notification(
@@ -276,7 +287,10 @@ class GovernanceService(GovernanceCheckMixin):
             }
 
         except Exception as e:
-            logger.error(f"[GovernanceService] Failed to activate emergency: {e}")
+            logger.error(
+                "governance_service.failed_activate_emergency",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -306,7 +320,11 @@ class GovernanceService(GovernanceCheckMixin):
                 deactivated_by=actor,
             )
 
-            logger.info(f"[GovernanceService] Emergency mode deactivated: " f"actor={actor}, reason={reason}")
+            logger.info(
+                "governance_service.emergency_mode_deactivated",
+                actor=actor,
+                reason=reason,
+            )
 
             # 알림 발송
             self._send_notification(
@@ -322,7 +340,10 @@ class GovernanceService(GovernanceCheckMixin):
             }
 
         except Exception as e:
-            logger.error(f"[GovernanceService] Failed to deactivate emergency: {e}")
+            logger.error(
+                "governance_service.failed_deactivate_emergency",
+                error=e,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -374,7 +395,12 @@ class GovernanceService(GovernanceCheckMixin):
         try:
             channels = self._config.get("notify_channels", ["slack", "email"])
 
-            logger.info(f"[GovernanceService] Notification: " f"event={event_type}, title={title}, channels={channels}")
+            logger.info(
+                "governance_service.notification",
+                event_type=event_type,
+                title=title,
+                channels=channels,
+            )
 
             # TODO: 실제 알림 서비스 연동
             # from selfhealing.services.notification import send_notification
@@ -388,7 +414,10 @@ class GovernanceService(GovernanceCheckMixin):
             return GovernanceNotificationResult(sent=True, channels=channels)
 
         except Exception as e:
-            logger.error(f"[GovernanceService] Failed to send notification: {e}")
+            logger.error(
+                "governance_service.failed_send_notification",
+                error=e,
+            )
             return GovernanceNotificationResult(sent=False, error=str(e))
 
 

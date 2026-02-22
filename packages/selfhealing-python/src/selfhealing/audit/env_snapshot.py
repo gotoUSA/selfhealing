@@ -26,13 +26,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+import structlog
 import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Self-Healing 관련 환경변수 prefix
 TRACKED_PREFIXES: list[str] = [
@@ -151,7 +151,7 @@ def log_env_snapshot_to_audit() -> bool:
     metric_recorded, metric_count = _get_metrics()
 
     if snapshot["count"] == 0:
-        logger.debug("[EnvAudit] No tracked environment variables found")
+        logger.debug("env_audit.no_tracked_environment_variables")
         _snapshot_recorded = True
         if metric_recorded:
             metric_recorded.set(1)
@@ -173,7 +173,7 @@ def log_env_snapshot_to_audit() -> bool:
         return True
 
     # Primary failed - activate L1 fallback
-    logger.warning("[EnvAudit] Primary logging failed, activating L1 fallback")
+    logger.warning("env_audit.primary_logging_failed_activating")
     fallback_success = _log_to_fallback(snapshot)
 
     # Always emit critical log with hash (for syslog/stdout capture)
@@ -215,10 +215,16 @@ def _log_to_audit_service(snapshot: dict[str, Any]) -> bool:
         )
         return bool(success)
     except ImportError as e:
-        logger.debug(f"[EnvAudit] Audit module not available: {e}")
+        logger.debug(
+            "env_audit.audit_module_available",
+            error=e,
+        )
         return False
     except Exception as e:
-        logger.warning(f"[EnvAudit] Primary audit failed: {e}")
+        logger.warning(
+            "env_audit.primary_audit_failed",
+            error=e,
+        )
         return False
 
 
@@ -254,7 +260,10 @@ def _log_to_fallback(snapshot: dict[str, Any]) -> bool:
         )
         return True
     except Exception as e:
-        logger.error(f"[EnvAudit] Fallback logging also failed: {e}")
+        logger.error(
+            "env_audit.fallback_logging_also_failed",
+            error=e,
+        )
         return False
 
 

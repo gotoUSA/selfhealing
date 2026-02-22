@@ -14,7 +14,7 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections import deque
 from dataclasses import dataclass, field
@@ -23,7 +23,7 @@ from typing import Any
 
 from selfhealing.services.config.propagator import PropagationTier
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

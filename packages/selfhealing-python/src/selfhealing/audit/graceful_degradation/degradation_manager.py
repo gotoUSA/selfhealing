@@ -8,7 +8,7 @@ provides unified status, and triggers recovery when possible.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import threading
 from collections.abc import Callable
@@ -21,7 +21,7 @@ from .fallback import HashChainFallbackChain
 from .marker import DegradedEntryMarker
 from .wal_recovery import HashChainWALRecovery
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HashChainDegradationManager:
@@ -181,7 +181,10 @@ class HashChainDegradationManager:
             self._redis.ltrim(key, 0, 99)
 
         except Exception as e:
-            logger.debug(f"[HashChainDegradation] Failed to record: {e}")
+            logger.debug(
+                "hash_chain_degradation.failed_record",
+                error=e,
+            )
 
     def on_redis_failure(self, error: Exception | None = None) -> None:
         """
@@ -218,7 +221,10 @@ class HashChainDegradationManager:
                 # Attempt WAL recovery if available
                 if self._wal_recovery:
                     wal_result = self._wal_recovery.recover_on_startup()
-                    logger.info(f"[HashChainDegradation] WAL recovery: {wal_result}")
+                    logger.info(
+                        "hash_chain_degradation.wal_recovery",
+                        wal_result=wal_result,
+                    )
 
                 # Reset failure count on successful recovery
                 self._failure_count = 0
@@ -227,7 +233,10 @@ class HashChainDegradationManager:
                 self.set_level(DegradationLevel.NORMAL, "redis_recovered")
 
             except Exception as e:
-                logger.error(f"[HashChainDegradation] Recovery failed: {e}")
+                logger.error(
+                    "watchdog.recovery_failed",
+                    error=e,
+                )
                 # Stay in degraded mode
 
     def on_filesystem_failure(self) -> None:

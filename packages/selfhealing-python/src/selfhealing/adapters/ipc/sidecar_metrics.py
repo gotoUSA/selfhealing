@@ -28,12 +28,12 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from contextlib import contextmanager
 from typing import Any, Generator
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Prometheus 클라이언트 가용성 확인
 try:
@@ -65,7 +65,7 @@ class SidecarMetrics:
         self._initialized = False
 
         if not PROMETHEUS_AVAILABLE:
-            logger.debug("[SidecarMetrics] prometheus_client not available, metrics disabled")
+            logger.debug("sidecar_metrics.available_metrics_disabled")
             return
 
         # =====================================================================
@@ -198,7 +198,7 @@ class SidecarMetrics:
         )
 
         self._initialized = True
-        logger.debug("[SidecarMetrics] Initialized")
+        logger.debug("sidecar_metrics.initialized")
 
     # =========================================================================
     # 연결 메트릭 업데이트

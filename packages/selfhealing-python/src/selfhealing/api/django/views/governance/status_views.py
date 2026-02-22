@@ -10,7 +10,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from rest_framework import status
@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.services.governance_api_service import get_governance_api_service
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class MetricStatusView(APIView):

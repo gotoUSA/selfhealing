@@ -6,12 +6,12 @@ Handles SMS-specific notification sending.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from .models import NotificationConfig, ChannelDeliveryResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SMSHandlerMixin:
@@ -40,7 +40,11 @@ class SMSHandlerMixin:
             )
 
         if self.config.dry_run:
-            logger.info(f"[DRY RUN] SMS to {recipients}: {message['title']}")
+            logger.info(
+                "dry_run_sms",
+                recipients=recipients,
+                message=message['title'],
+            )
             return ChannelDeliveryResult(
                 channel="sms",
                 success=True,
@@ -74,7 +78,10 @@ class SMSHandlerMixin:
             )
 
         except Exception as e:
-            logger.error(f"[Security Notification] SMS error: {e}")
+            logger.error(
+                "security_notification_sms_error",
+                error=e,
+            )
             return ChannelDeliveryResult(
                 channel="sms",
                 success=False,
@@ -86,7 +93,11 @@ class SMSHandlerMixin:
     ) -> ChannelDeliveryResult:
         """Send SMS alert notification."""
         if self.config.dry_run:
-            logger.info(f"[DRY RUN] SMS alert to {recipients}: {message['title']}")
+            logger.info(
+                "dry_run_sms_alert",
+                recipients=recipients,
+                message=message['title'],
+            )
             return ChannelDeliveryResult(
                 channel="sms",
                 success=True,
@@ -94,7 +105,10 @@ class SMSHandlerMixin:
             )
 
         sms_body = f"[{message['severity']}] {message['title'][:50]}: {message['description'][:100]}"
-        logger.info(f"[Security Notification] SMS alert would send: {sms_body}")
+        logger.info(
+            "security_notification_sms_alert",
+            sms_body=sms_body,
+        )
         return ChannelDeliveryResult(
             channel="sms",
             success=True,

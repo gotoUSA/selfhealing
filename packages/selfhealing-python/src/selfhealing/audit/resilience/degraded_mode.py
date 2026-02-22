@@ -6,7 +6,7 @@ Manages degraded mode operation when primary backends fail.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone
 from typing import Any
@@ -15,7 +15,7 @@ from .circuit_breaker import CircuitBreakerRegistry
 from .metrics import AuditMetrics
 from .syslog_fallback import SyslogFallback
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DegradedModeManager:
@@ -72,7 +72,10 @@ class DegradedModeManager:
 
                 self._metrics.set_degraded_mode(True)
 
-                logger.warning(f"[DegradedMode] ENTERED degraded mode: {reason}")
+                logger.warning(
+                    "degraded_mode.entered_degraded_mode",
+                    reason=reason,
+                )
 
                 # Log to syslog
                 self._syslog.log_critical(

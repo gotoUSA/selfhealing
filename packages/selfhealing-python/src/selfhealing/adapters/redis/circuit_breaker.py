@@ -8,7 +8,7 @@ Provides zero data loss guarantees through WAL-First protocol.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -21,7 +21,7 @@ from selfhealing.interfaces.repositories import (
 if TYPE_CHECKING:
     from selfhealing.adapters.resilient.backend import ResilientStorageBackend
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
@@ -309,7 +309,10 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             return results
 
         except Exception as e:
-            logger.error(f"[RedisCBRepo] get_all_states error: {e}")
+            logger.error(
+                "redis_cb_repo.error",
+                error=e,
+            )
             return self._get_all_from_memory()
 
     def _get_all_from_memory(self) -> list[CircuitBreakerStateData]:

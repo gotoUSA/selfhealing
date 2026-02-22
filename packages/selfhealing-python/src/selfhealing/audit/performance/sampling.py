@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+import structlog
 import random
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.settings.sampling import SamplingSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

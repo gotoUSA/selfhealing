@@ -8,7 +8,7 @@ Hedging Executor - 병렬 실행 및 첫 응답 선택 (동기).
 from __future__ import annotations
 
 import contextvars
-import logging
+import structlog
 import threading
 import time
 from concurrent.futures import (
@@ -33,7 +33,7 @@ from selfhealing.core.hedging.exceptions import (
 from selfhealing.core.hedging.latency_tracker import HedgingLatencyTracker
 from selfhealing.core.hedging.result import HedgingResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -234,7 +234,11 @@ class HedgingExecutor:
 
         except Exception as e:
             # Primary가 delay 내에 실패함 → Secondary 추가
-            logger.debug(f"[Hedging] Primary '{primary.name}' failed within delay: {e}")
+            logger.debug(
+                "hedging.primary_failed_within_delay",
+                primary=primary.name,
+                error=e,
+            )
             for candidate in candidates[1:]:
                 future = self._submit_with_context(executor, candidate.fn)
                 future_to_candidate[future] = candidate
@@ -258,7 +262,11 @@ class HedgingExecutor:
                 # 기존 delay를 P50 기반으로 대체
                 original_delay = self._config.delay
                 self._config.delay = adaptive_delay
-                logger.debug(f"[Hedging] ADAPTIVE delay: {original_delay}s -> " f"{adaptive_delay}s (P50)")
+                logger.debug(
+                    "hedging.adaptive_delay",
+                    original_delay=original_delay,
+                    adaptive_delay=adaptive_delay,
+                )
 
         return self._execute_delayed(candidates)
 
@@ -311,7 +319,11 @@ class HedgingExecutor:
 
         except Exception as e:
             error_msg = f"{candidate.name}: {e}"
-            logger.warning(f"[Hedging] {candidate.name} failed: {e}")
+            logger.warning(
+                "hedging.failed",
+                candidate=candidate.name,
+                error=e,
+            )
 
             if self._is_non_retryable(e):
                 return None, False, succeeded, failed + 1, primary_latency_ms, f"non_retryable:{error_msg}"

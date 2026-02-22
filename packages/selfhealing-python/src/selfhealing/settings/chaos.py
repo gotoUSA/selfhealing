@@ -22,12 +22,12 @@ Environment Variables:
     SELFHEALING_CHAOS_SCHEDULER_PENDING_CHECK_MAX_RETRIES=1
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ChaosSettings(BaseSettings):
@@ -203,7 +203,10 @@ class ChaosSettings(BaseSettings):
     def validate_safety_limits(cls, v: float) -> float:
         """Warn if safety limits are set high."""
         if v > 0.3:
-            logger.warning(f"[SafeDefault] High chaos limit={v}, " "consider using <= 0.3 (30%) for safety")
+            logger.warning(
+                "safe_default.high_chaos_consider_using",
+                v=v,
+            )
         return v
 
 

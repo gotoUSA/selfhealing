@@ -17,14 +17,14 @@ Thin Task, Fat Service 원칙:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 from selfhealing.services.audit.xtest_audit import log_xtest_cleanup_audit
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # X-Test-Mode 데이터 식별자
@@ -99,7 +99,7 @@ class XTestCleanupService:
 
                 self._redis = get_redis_client()
             except ImportError:
-                logger.warning("[XTestCleanup] Redis adapter not available")
+                logger.warning("x_test_cleanup.redis_adapter_available")
                 self._redis = None
         return self._redis
 
@@ -128,10 +128,13 @@ class XTestCleanupService:
             expired_sessions = self.session_manager.get_expired_sessions()
 
             if not expired_sessions:
-                logger.debug("[XTestCleanup] No expired sessions found")
+                logger.debug("x_test_cleanup.no_expired_sessions_found")
                 return result
 
-            logger.info(f"[XTestCleanup] Found {len(expired_sessions)} expired sessions")
+            logger.info(
+                "x_test_cleanup.found_expired_sessions",
+                count=len(expired_sessions),
+            )
 
             for session in expired_sessions:
                 try:
@@ -143,11 +146,17 @@ class XTestCleanupService:
                     result.sessions_cleaned += 1
                     result.cleaned_session_ids.append(session.session_id)
 
-                    logger.info(f"[XTestCleanup] Cleaned session: {session.session_id}")
+                    logger.info(
+                        "x_test_cleanup.cleaned_session",
+                        session=session.session_id,
+                    )
 
                 except Exception as e:
                     error_msg = f"Failed to clean session {session.session_id}: {e}"
-                    logger.error(f"[XTestCleanup] {error_msg}")
+                    logger.error(
+                        "x_test_cleanup.event",
+                        error_msg=error_msg,
+                    )
                     result.errors.append(error_msg)
 
             # 전역 X-Test 아티팩트 정리 (세션과 무관한 항목들)
@@ -231,14 +240,24 @@ class XTestCleanupService:
                     try:
                         cb_service.reset_circuit(service_name)
                         restored_count += 1
-                        logger.debug(f"[XTestCleanup] Restored CB: {service_name}")
+                        logger.debug(
+                            "x_test_cleanup.restored_cb",
+                            service_name=service_name,
+                        )
                     except Exception as e:
-                        logger.warning(f"[XTestCleanup] Failed to restore CB {service_name}: {e}")
+                        logger.warning(
+                            "x_test_cleanup.failed_restore_cb",
+                            service_name=service_name,
+                            error=e,
+                        )
 
         except ImportError:
-            logger.debug("[XTestCleanup] Circuit Breaker service not available")
+            logger.debug("x_test_cleanup.circuit_breaker_service_available")
         except Exception as e:
-            logger.error(f"[XTestCleanup] CB restore failed: {e}")
+            logger.error(
+                "x_test_cleanup.cb_restore_failed",
+                error=e,
+            )
 
         return restored_count
 
@@ -273,12 +292,18 @@ class XTestCleanupService:
                         pass
 
             if purged_count > 0:
-                logger.info(f"[XTestCleanup] Purged {purged_count} DLQ entries")
+                logger.info(
+                    "x_test_cleanup.purged_dlq_entries",
+                    purged_count=purged_count,
+                )
 
         except ImportError:
-            logger.debug("[XTestCleanup] DLQ service not available")
+            logger.debug("x_test_cleanup.dlq_service_available")
         except Exception as e:
-            logger.error(f"[XTestCleanup] DLQ purge failed: {e}")
+            logger.error(
+                "x_test_cleanup.dlq_purge_failed",
+                error=e,
+            )
 
         return purged_count
 
@@ -308,10 +333,16 @@ class XTestCleanupService:
             if keys:
                 self.redis.delete(*keys)
                 cleared_count = len(keys)
-                logger.info(f"[XTestCleanup] Cleared {cleared_count} idempotency keys")
+                logger.info(
+                    "x_test_cleanup.cleared_idempotency_keys",
+                    cleared_count=cleared_count,
+                )
 
         except Exception as e:
-            logger.error(f"[XTestCleanup] Idempotency clear failed: {e}")
+            logger.error(
+                "x_test_cleanup.idempotency_clear_failed",
+                error=e,
+            )
 
         return cleared_count
 
@@ -341,10 +372,16 @@ class XTestCleanupService:
             if keys:
                 self.redis.delete(*keys)
                 reset_count = len(keys)
-                logger.info(f"[XTestCleanup] Reset {reset_count} rate limit counters")
+                logger.info(
+                    "x_test_cleanup.reset_rate_limit_counters",
+                    reset_count=reset_count,
+                )
 
         except Exception as e:
-            logger.error(f"[XTestCleanup] Rate limit reset failed: {e}")
+            logger.error(
+                "x_test_cleanup.rate_limit_reset_failed",
+                error=e,
+            )
 
         return reset_count
 
@@ -364,12 +401,18 @@ class XTestCleanupService:
 
             cleared_count = clear_scenario_results()
             if cleared_count > 0:
-                logger.info(f"[XTestCleanup] Cleared {cleared_count} scenario results")
+                logger.info(
+                    "x_test_cleanup.cleared_scenario_results",
+                    cleared_count=cleared_count,
+                )
 
         except ImportError:
-            logger.debug("[XTestCleanup] Scenario module not available")
+            logger.debug("x_test_cleanup.scenario_module_available")
         except Exception as e:
-            logger.error(f"[XTestCleanup] Scenario clear failed: {e}")
+            logger.error(
+                "x_test_cleanup.scenario_clear_failed",
+                error=e,
+            )
 
         return cleared_count
 
@@ -402,7 +445,10 @@ class XTestCleanupService:
                 stats["pending_rate_limit_resets"] = len(rate_limit_keys) if rate_limit_keys else 0
 
         except Exception as e:
-            logger.error(f"[XTestCleanup] Stats collection failed: {e}")
+            logger.error(
+                "x_test_cleanup.stats_collection_failed",
+                error=e,
+            )
 
         return stats
 

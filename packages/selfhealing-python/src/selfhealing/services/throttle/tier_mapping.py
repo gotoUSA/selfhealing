@@ -14,9 +14,9 @@ AdaptiveThrottle tier_id 유효값:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # ServiceConfig.criticality → AdaptiveThrottle tier_id
 # "high"는 critical tier로 보호 (models.py valid_levels에 포함)
@@ -53,7 +53,11 @@ def get_tier_from_criticality(criticality: str) -> str:
     """
     tier = CRITICALITY_TO_TIER.get(criticality.lower(), _DEFAULT_TIER)
     if criticality.lower() not in CRITICALITY_TO_TIER:
-        logger.warning(f"[TierMapping] Unknown criticality '{criticality}', " f"falling back to '{_DEFAULT_TIER}'")
+        logger.warning(
+            "tier_mapping.unknown_criticality_falling_back",
+            criticality=criticality,
+            _DEFAULT_TIER=_DEFAULT_TIER,
+        )
     return tier
 
 
@@ -69,5 +73,9 @@ def get_criticality_from_tier(tier_id: str) -> str:
     """
     criticality = TIER_TO_CRITICALITY.get(tier_id.lower(), _DEFAULT_CRITICALITY)
     if tier_id.lower() not in TIER_TO_CRITICALITY:
-        logger.warning(f"[TierMapping] Unknown tier_id '{tier_id}', " f"falling back to '{_DEFAULT_CRITICALITY}'")
+        logger.warning(
+            "tier_mapping.unknown_falling_back",
+            tier_id=tier_id,
+            _DEFAULT_CRITICALITY=_DEFAULT_CRITICALITY,
+        )
     return criticality

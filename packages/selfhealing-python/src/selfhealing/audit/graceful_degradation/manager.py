@@ -11,7 +11,7 @@ Provides coordinated access to all Phase 4 graceful degradation components:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from pathlib import Path
 from typing import Any
@@ -23,7 +23,7 @@ from .fallback import HashChainFallbackChain
 from .marker import DegradedEntryMarker
 from .wal_recovery import HashChainWALRecovery
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HashChainGracefulDegradationManager:
@@ -131,7 +131,7 @@ class HashChainGracefulDegradationManager:
             )
 
             self._initialized = True
-            logger.info("[GracefulDegradation] Initialized all Phase 4 components")
+            logger.info("graceful_degradation.initialized_all_phase_components")
 
     def recover_on_startup(self) -> dict[str, Any]:
         """
@@ -161,12 +161,18 @@ class HashChainGracefulDegradationManager:
                     self._degraded_marker.get_unreconciled_count()
                 )
 
-            logger.info(f"[GracefulDegradation] Startup recovery: {result}")
+            logger.info(
+                "graceful_degradation.startup_recovery",
+                result=result,
+            )
 
         except Exception as e:
             result["status"] = "failed"
             result["error"] = str(e)
-            logger.error(f"[GracefulDegradation] Startup recovery failed: {e}")
+            logger.error(
+                "graceful_degradation.startup_recovery_failed",
+                error=e,
+            )
 
         return result
 

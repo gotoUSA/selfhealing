@@ -19,7 +19,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -33,7 +33,7 @@ from selfhealing.services.chaos.resilience_expectation import (
     ResilienceValidationResult,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -137,10 +137,13 @@ class DefaultCircuitBreakerStatusProvider:
 
             return get_cb_status(service_name)
         except ImportError:
-            logger.debug("[ResilienceValidator] CB service not available")
+            logger.debug("watchdog.cb_service_unavailable")
             return {"state": "unknown", "service": service_name}
         except Exception as e:
-            logger.warning(f"[ResilienceValidator] Failed to get CB status: {e}")
+            logger.warning(
+                "resilience_validator.failed_get_cb_status",
+                error=e,
+            )
             return {"state": "unknown", "service": service_name, "error": str(e)}
 
 
@@ -197,7 +200,10 @@ class DefaultEmergencyModeProvider:
         except ImportError:
             return 0
         except Exception as e:
-            logger.warning(f"[ResilienceValidator] Failed to get emergency level: {e}")
+            logger.warning(
+                "resilience_validator.failed_get_emergency_level",
+                error=e,
+            )
             return 0
 
     def is_active(self) -> bool:
@@ -347,7 +353,10 @@ class ResilienceValidator:
             if passed:
                 result["detected_at"] = now().isoformat()
                 result["elapsed_seconds"] = (now() - experiment_start).total_seconds()
-                logger.info(f"[ResilienceValidator] ✅ {assertion.description}: PASSED")
+                logger.info(
+                    "resilience_validator.passed",
+                    assertion=assertion.description,
+                )
             else:
                 logger.warning(
                     f"[ResilienceValidator] ❌ {assertion.description}: FAILED "
@@ -356,7 +365,10 @@ class ResilienceValidator:
 
         except Exception as e:
             result["error"] = str(e)
-            logger.error(f"[ResilienceValidator] Validation error: {e}")
+            logger.error(
+                "resilience_validator.validation_error",
+                error=e,
+            )
 
         return result
 

@@ -18,14 +18,14 @@ Configuration:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import threading
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Generic, TypeVar
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -88,7 +88,10 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
         self._directory.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._recover_orphan_tmp_files()
-        logger.info(f"[StateBackend] File backend initialized: {self._directory}")
+        logger.info(
+            "state_backend.file_backend_initialized",
+            self=self._directory,
+        )
 
     def _recover_orphan_tmp_files(self) -> None:
         """
@@ -104,13 +107,24 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                 if not json_path.exists():
                     # .json missing → .tmp has the latest data, recover it
                     tmp_path.replace(json_path)
-                    logger.info(f"[StateBackend] Recovered orphan tmp: {tmp_path.name} → {json_path.name}")
+                    logger.info(
+                        "state_backend.recovered_orphan_tmp",
+                        tmp_path=tmp_path.name,
+                        json_path=json_path.name,
+                    )
                 else:
                     # .json exists → .tmp is stale, remove it
                     tmp_path.unlink()
-                    logger.debug(f"[StateBackend] Removed stale tmp: {tmp_path.name}")
+                    logger.debug(
+                        "state_backend.removed_stale_tmp",
+                        tmp_path=tmp_path.name,
+                    )
             except Exception as e:
-                logger.warning(f"[StateBackend] Failed to recover {tmp_path.name}: {e}")
+                logger.warning(
+                    "state_backend.failed_recover",
+                    tmp_path=tmp_path.name,
+                    error=e,
+                )
 
     def _get_file_path(self, key: str) -> Path:
         # Sanitize key for filename
@@ -129,13 +143,24 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                 if tmp_path.exists():
                     try:
                         tmp_path.replace(file_path)
-                        logger.info(f"[StateBackend] Recovered orphan tmp on read: {tmp_path.name}")
+                        logger.info(
+                            "state_backend.recovered_orphan_tmp_read",
+                            tmp_path=tmp_path.name,
+                        )
                         with open(file_path, encoding="utf-8") as f:
                             return json.load(f)
                     except Exception as recover_err:
-                        logger.warning(f"[StateBackend] Failed to recover tmp for {key}: {recover_err}")
+                        logger.warning(
+                            "state_backend.failed_recover_tmp",
+                            key=key,
+                            recover_err=recover_err,
+                        )
             except Exception as e:
-                logger.warning(f"[StateBackend] Error reading {key}: {e}")
+                logger.warning(
+                    "state_backend.error_reading",
+                    key=key,
+                    error=e,
+                )
         return default
 
     def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
@@ -148,7 +173,11 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                     json.dump(value, f, indent=2, default=str)
                 temp_file.replace(file_path)
             except Exception as e:
-                logger.error(f"[StateBackend] Error writing {key}: {e}")
+                logger.error(
+                    "state_backend.error_writing",
+                    key=key,
+                    error=e,
+                )
                 # Clean up orphan .tmp to avoid stale data on next read
                 try:
                     if temp_file.exists():
@@ -178,7 +207,11 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                         with open(file_path, encoding="utf-8") as f:
                             result[key] = json.load(f)
                     except Exception as e:
-                        logger.warning(f"[StateBackend] Error reading {key}: {e}")
+                        logger.warning(
+                            "state_backend.error_reading",
+                            key=key,
+                            error=e,
+                        )
         return result
 
 
@@ -219,12 +252,18 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             self._client = redis.from_url(self._redis_url, decode_responses=True)
             # Test connection
             self._client.ping()
-            logger.info(f"[StateBackend] Redis backend connected: {self._redis_url}")
+            logger.info(
+                "state_backend.redis_backend_connected",
+                self=self._redis_url,
+            )
         except ImportError:
-            logger.error("[StateBackend] redis package not installed. Run: pip install redis")
+            logger.error("state_backend.redis_package_installed_run")
             raise
         except Exception as e:
-            logger.error(f"[StateBackend] Redis connection failed: {e}")
+            logger.error(
+                "state_backend.redis_connection_failed",
+                error=e,
+            )
             raise
 
     def _make_key(self, key: str) -> str:
@@ -236,7 +275,11 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             if data:
                 return json.loads(data)
         except Exception as e:
-            logger.warning(f"[StateBackend] Redis get error for {key}: {e}")
+            logger.warning(
+                "state_backend.redis_get_error",
+                key=key,
+                error=e,
+            )
         return default
 
     def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
@@ -247,21 +290,33 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             else:
                 self._client.set(self._make_key(key), data)
         except Exception as e:
-            logger.error(f"[StateBackend] Redis set error for {key}: {e}")
+            logger.error(
+                "state_backend.redis_set_error",
+                key=key,
+                error=e,
+            )
             raise
 
     def delete(self, key: str) -> bool:
         try:
             return self._client.delete(self._make_key(key)) > 0
         except Exception as e:
-            logger.error(f"[StateBackend] Redis delete error for {key}: {e}")
+            logger.error(
+                "state_backend.redis_delete_error",
+                key=key,
+                error=e,
+            )
             return False
 
     def exists(self, key: str) -> bool:
         try:
             return self._client.exists(self._make_key(key)) > 0
         except Exception as e:
-            logger.warning(f"[StateBackend] Redis exists error for {key}: {e}")
+            logger.warning(
+                "state_backend.redis_exists_error",
+                key=key,
+                error=e,
+            )
             return False
 
     # 보안2: scan_iter 최대 키 수 제한 (DoS 방지)
@@ -291,7 +346,10 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             count = 0
             for key in self._client.scan_iter(match=full_pattern, count=100):
                 if count >= limit:
-                    logger.warning(f"[StateBackend] get_all reached max_keys limit ({limit}), " f"results may be incomplete")
+                    logger.warning(
+                        "state_backend.reached_limit_results_incomplete",
+                        limit=limit,
+                    )
                     break
                 short_key = key.replace(self._key_prefix, "")
                 data = self._client.get(key)
@@ -299,7 +357,10 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
                     result[short_key] = json.loads(data)
                     count += 1
         except Exception as e:
-            logger.error(f"[StateBackend] Redis scan error: {e}")
+            logger.error(
+                "state_backend.redis_scan_error",
+                error=e,
+            )
         return result
 
 
@@ -314,7 +375,7 @@ class MemoryStateBackend(StateBackend[dict[str, Any]]):
     def __init__(self):
         self._store: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
-        logger.info("[StateBackend] Memory backend initialized (testing only)")
+        logger.info("state_backend.memory_backend_initialized_testing")
 
     def get(self, key: str, default: dict[str, Any] | None = None) -> dict[str, Any] | None:
         with self._lock:

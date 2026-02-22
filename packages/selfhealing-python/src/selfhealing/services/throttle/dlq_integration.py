@@ -12,13 +12,13 @@ CB CLOSE 시 자동으로 replay하는 기능을 제공합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -81,7 +81,7 @@ class ThrottleDLQIntegration:
 
                 self._dlq_service = get_dlq_service()
             except ImportError:
-                logger.warning("[ThrottleDLQ] DLQ service not available")
+                logger.warning("throttle_dlq.dlq_service_available")
         return self._dlq_service
 
     def store_denied_request(
@@ -116,7 +116,7 @@ class ThrottleDLQIntegration:
 
         dlq_service = self._get_dlq_service()
         if dlq_service is None:
-            logger.debug("[ThrottleDLQ] DLQ service unavailable, skipping storage")
+            logger.debug("throttle_dlq.dlq_service_unavailable_skipping")
             return None
 
         try:
@@ -153,11 +153,17 @@ class ThrottleDLQIntegration:
                 )
                 return denied_request
             else:
-                logger.warning(f"[ThrottleDLQ] Failed to store: {result.message}")
+                logger.warning(
+                    "throttle_dlq.failed_store",
+                    result=result.message,
+                )
                 return None
 
         except Exception as e:
-            logger.error(f"[ThrottleDLQ] Store failed: {e}")
+            logger.error(
+                "throttle_dlq.store_failed",
+                error=e,
+            )
             return None
 
     def replay_denied_requests(
@@ -213,7 +219,10 @@ class ThrottleDLQIntegration:
             }
 
         except Exception as e:
-            logger.error(f"[ThrottleDLQ] Replay failed: {e}")
+            logger.error(
+                "throttle_dlq.replay_failed",
+                error=e,
+            )
             return {"error": str(e)}
 
     def on_circuit_breaker_closed(self, service_name: str) -> dict[str, Any]:
@@ -228,7 +237,10 @@ class ThrottleDLQIntegration:
         Returns:
             replay 결과
         """
-        logger.info(f"[ThrottleDLQ] CB CLOSED for '{service_name}', " f"triggering replay")
+        logger.info(
+            "throttle_dlq.cb_closed_triggering_replay",
+            service_name=service_name,
+        )
         return self.replay_denied_requests(service_name=service_name)
 
     def get_pending_count(self, service_name: str) -> int:

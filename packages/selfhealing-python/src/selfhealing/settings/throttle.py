@@ -16,12 +16,12 @@ Reference:
 - docs/self_healing/middleware_system/91_CONFIG_INVENTORY.md §7.1
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ThrottleSettings(BaseSettings):
@@ -369,7 +369,10 @@ class ThrottleSettings(BaseSettings):
         """max_limit이 min_limit보다 커야 함."""
         # 다른 필드 접근이 어려우므로 기본값과 비교
         if v < 10:  # min_limit 기본값
-            logger.warning(f"[SafeDefault] max_limit={v} is very low, may cause issues")
+            logger.warning(
+                "safe_default.very_low_cause_issues",
+                v=v,
+            )
         return v
 
     @field_validator("sla_critical_ms")
@@ -378,7 +381,10 @@ class ThrottleSettings(BaseSettings):
         """sla_critical_ms가 sla_warning_ms보다 커야 함."""
         # 기본값 200과 비교
         if v < 200:
-            logger.warning(f"[SafeDefault] sla_critical_ms={v} is lower than typical warning threshold")
+            logger.warning(
+                "safe_default.lower_than_typical_warning",
+                v=v,
+            )
         return v
 
     def get_emergency_level_multipliers(self) -> dict[int, float]:

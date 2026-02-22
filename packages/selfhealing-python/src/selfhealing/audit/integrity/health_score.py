@@ -15,7 +15,7 @@ Purpose:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
@@ -24,7 +24,7 @@ from typing import Any
 
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_healthy_threshold() -> float:
@@ -214,10 +214,10 @@ class IntegrityHealthScore:
             )
 
             self._prometheus_initialized = True
-            logger.debug("[HealthScore] Prometheus metrics initialized")
+            logger.debug("health_score.prometheus_metrics_initialized")
 
         except ImportError:
-            logger.debug("[HealthScore] prometheus_client not available")
+            logger.debug("health_score.available")
             self._prometheus_initialized = True  # Don't retry
 
     def record_recovery(
@@ -391,7 +391,10 @@ class IntegrityHealthScore:
             return result
 
         except Exception as e:
-            logger.warning(f"[HealthScore] Failed to get chain state: {e}")
+            logger.warning(
+                "health_score.failed_get_chain_state",
+                error=e,
+            )
             return {"sequence": 0}
 
     def _update_prometheus_metrics(self) -> None:
@@ -420,7 +423,10 @@ class IntegrityHealthScore:
                 )
 
         except Exception as e:
-            logger.warning(f"[HealthScore] Failed to update Prometheus: {e}")
+            logger.warning(
+                "health_score.failed_update_prometheus",
+                error=e,
+            )
 
     def _log_recovery_event(self, event: IntegrityRecoveryEvent) -> None:
         """Log recovery event to self-audit trail."""

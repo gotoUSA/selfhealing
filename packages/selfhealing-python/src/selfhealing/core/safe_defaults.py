@@ -14,10 +14,10 @@ PARTIAL DEPRECATION NOTICE:
 새 코드에서는 selfhealing.settings 모듈의 Pydantic Settings를 사용하세요.
 """
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -739,7 +739,11 @@ def _handle_non_fatal_violation(
     except AttributeError:
         # frozen dataclass의 경우
         if log_changes:
-            logger.warning(f"[Startup] Cannot modify frozen {config_type}.{key}")
+            logger.warning(
+                "startup.cannot_modify_frozen",
+                config_type=config_type,
+                key=key,
+            )
 
 
 def _validate_single_config_value(
@@ -782,7 +786,10 @@ def _finalize_validation(
 ) -> None:
     """검증 완료 후 처리 (로깅 및 예외 발생)."""
     if log_changes and result.changes_count > 0:
-        logger.info(f"[Startup] Applied {result.changes_count} safe default(s)")
+        logger.info(
+            "startup.applied_safe_default",
+            result=result.changes_count,
+        )
 
     if result.has_fatal_violations:
         if log_changes:

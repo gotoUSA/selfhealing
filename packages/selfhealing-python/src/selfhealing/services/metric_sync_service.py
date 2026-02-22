@@ -7,7 +7,7 @@ Metric Sync Service - 메트릭 동기화 서비스 레이어.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +20,7 @@ from selfhealing.metrics.reconciler import (
 if TYPE_CHECKING:
     from selfhealing.adapters.metrics.base import MetricSourceAdapter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -195,13 +195,21 @@ class MetricSyncService:
             try:
                 result["dlq_pending"][domain] = self.adapter.get_dlq_pending_count(domain)
             except Exception as e:
-                logger.warning(f"Failed to get DLQ pending for {domain}: {e}")
+                logger.warning(
+                    "failed_get_dlq_pending",
+                    domain=domain,
+                    error=e,
+                )
                 result["dlq_pending"][domain] = 0
 
             try:
                 result["retry_rate"][domain] = self.adapter.get_retry_success_rate(domain)
             except Exception as e:
-                logger.warning(f"Failed to get retry rate for {domain}: {e}")
+                logger.warning(
+                    "failed_get_retry_rate",
+                    domain=domain,
+                    error=e,
+                )
                 result["retry_rate"][domain] = 0.0
 
         return result
@@ -365,10 +373,17 @@ class MetricSyncService:
                 },
             )
             audit_logger.log(event)
-            logger.info(f"[MetricSync] Audit logged: actor={actor}, drifts={summary}")
+            logger.info(
+                "metric_sync.audit_logged",
+                actor=actor,
+                summary=summary,
+            )
         except Exception as e:
             # Audit 실패해도 동기화는 계속
-            logger.warning(f"[MetricSync] Failed to log audit: {e}")
+            logger.warning(
+                "metric_sync.failed_log_audit",
+                error=e,
+            )
 
 
 # =============================================================================

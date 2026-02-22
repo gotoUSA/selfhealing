@@ -21,7 +21,7 @@ Reference:
 from __future__ import annotations
 
 import hashlib
-import logging
+import structlog
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -34,7 +34,7 @@ from .recovery_state import RecoverySession, RecoveryStep, RecoveryStepType
 if TYPE_CHECKING:
     from selfhealing.core.state_backend import StateBackend
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -302,7 +302,10 @@ class IdempotentStepHandler(ABC):
 
         # 3. 비즈니스 로직 레벨에서 이미 적용되었는지 확인
         if self._check_already_applied(session, step):
-            logger.info(f"[IdempotentStepHandler] Already applied (business check): " f"step={step.step_type.value}")
+            logger.info(
+                "idempotent_step_handler.already_applied_business_check",
+                step_type=step.step_type.value,
+            )
             # 레코드 저장
             self._save_completed_record(
                 idempotency_key,
@@ -358,7 +361,11 @@ class IdempotentStepHandler(ABC):
             record.error_message = str(e)
             self._save_record(record)
 
-            logger.exception(f"[IdempotentStepHandler] Execution error: " f"step={step.step_type.value}, error={e}")
+            logger.exception(
+                "idempotent_step_handler.execution_error",
+                step_type=step.step_type.value,
+                error=e,
+            )
 
             return {
                 "success": False,
@@ -503,7 +510,7 @@ class IdempotentBudgetResetHandler(IdempotentStepHandler):
                 "target_multiplier": target,
             }
         except ImportError:
-            logger.warning("[IdempotentBudgetResetHandler] CrisisMultiplierProvider not available")
+            logger.warning("idempotent_budget_reset_handler.crisismultiplierprovider_available")
             return {
                 "success": True,
                 "skipped": True,
@@ -606,7 +613,7 @@ class IdempotentCanaryResumeHandler(IdempotentStepHandler):
                 "resumed_rollouts": resumed,
             }
         except (ImportError, AttributeError):
-            logger.warning("[IdempotentCanaryResumeHandler] CanaryService not available")
+            logger.warning("idempotent_canary_resume_handler.canaryservice_available")
             return {"success": True, "skipped": True, "resumed_count": 0}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -665,7 +672,7 @@ class IdempotentGovernanceNormalHandler(IdempotentStepHandler):
                 "reason": reason,
             }
         except (ImportError, AttributeError):
-            logger.warning("[IdempotentGovernanceNormalHandler] EmergencyModeTracker not available")
+            logger.warning("idempotent_governance_normal_handler.emergencymodetracker_available")
             return {"success": True, "skipped": True, "mode": "NORMAL"}
         except Exception as e:
             return {"success": False, "error": str(e)}

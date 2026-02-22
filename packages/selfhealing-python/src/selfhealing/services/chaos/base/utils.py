@@ -6,10 +6,10 @@ Runtime configuration helpers for chaos experiments.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _apply_chaos_config(config: dict[str, Any]) -> None:

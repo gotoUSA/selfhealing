@@ -8,14 +8,14 @@ Contains:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from selfhealing.audit.integrity.models import compute_hash
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_anchor_retention_days() -> int:
@@ -126,11 +126,19 @@ class DailyHashAnchor:
             # Set TTL for automatic cleanup
             self._redis.expire(anchor_key, self._retention_days * 86400)
 
-            logger.info(f"[DailyAnchor] Created anchor for {date}: seq={sequence}")
+            logger.info(
+                "daily_anchor.created_anchor",
+                date=date,
+                sequence=sequence,
+            )
             return anchor_data
 
         except Exception as e:
-            logger.error(f"[DailyAnchor] Failed to create anchor for {date}: {e}")
+            logger.error(
+                "daily_anchor.failed_create_anchor",
+                date=date,
+                error=e,
+            )
             return {"error": str(e), "date": date}
 
     def _get_current_state(self) -> dict[str, Any]:
@@ -159,7 +167,10 @@ class DailyHashAnchor:
             return {"sequence": sequence, "previous_hash": previous_hash}
 
         except Exception as e:
-            logger.error(f"[DailyAnchor] Failed to get current state: {e}")
+            logger.error(
+                "daily_anchor.failed_get_current_state",
+                error=e,
+            )
             return {"sequence": 0, "previous_hash": "GENESIS"}
 
     def get_anchor(self, date: str) -> dict[str, Any] | None:
@@ -193,7 +204,11 @@ class DailyHashAnchor:
             return result
 
         except Exception as e:
-            logger.error(f"[DailyAnchor] Failed to get anchor for {date}: {e}")
+            logger.error(
+                "daily_anchor.failed_get_anchor",
+                date=date,
+                error=e,
+            )
             return None
 
     def verify_from_anchor(

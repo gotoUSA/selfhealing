@@ -8,13 +8,13 @@ Supports tracking active vs resolved alerts.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 
 from selfhealing.interfaces.alert_adapter import Alert, AlertAdapter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class FileAlertAdapter(AlertAdapter):
@@ -63,7 +63,10 @@ class FileAlertAdapter(AlertAdapter):
                     # Note: We just track keys, not full Alert objects
                     self._active_alerts = dict.fromkeys(data.get("keys", []))
             except Exception as e:
-                logger.warning(f"[FileAlertAdapter] Error loading active alerts: {e}")
+                logger.warning(
+                    "file_alert_adapter.error_loading_active_alerts",
+                    error=e,
+                )
 
     def _save_active_alerts(self) -> None:
         """Save active alerts to file."""
@@ -78,7 +81,10 @@ class FileAlertAdapter(AlertAdapter):
                     indent=2,
                 )
         except Exception as e:
-            logger.error(f"[FileAlertAdapter] Error saving active alerts: {e}")
+            logger.error(
+                "file_alert_adapter.error_saving_active_alerts",
+                error=e,
+            )
 
     def send(self, alert: Alert) -> None:
         """Send an alert by writing to file."""
@@ -96,7 +102,10 @@ class FileAlertAdapter(AlertAdapter):
                 }
                 f.write(json.dumps(entry, default=str) + "\n")
         except Exception as e:
-            logger.error(f"[FileAlertAdapter] Error writing alert history: {e}")
+            logger.error(
+                "file_alert_adapter.error_writing_alert_history",
+                error=e,
+            )
 
     def resolve(self, alert_key: str) -> None:
         """Resolve an alert by removing from active set."""
@@ -117,7 +126,10 @@ class FileAlertAdapter(AlertAdapter):
                 }
                 f.write(json.dumps(entry, default=str) + "\n")
         except Exception as e:
-            logger.error(f"[FileAlertAdapter] Error writing resolution: {e}")
+            logger.error(
+                "file_alert_adapter.error_writing_resolution",
+                error=e,
+            )
 
     def get_active_alerts(self) -> list[str]:
         """Get list of active alert keys."""
@@ -170,6 +182,9 @@ class FileAlertAdapter(AlertAdapter):
                         continue
 
         except Exception as e:
-            logger.warning(f"[FileAlertAdapter] Error reading history: {e}")
+            logger.warning(
+                "file_alert_adapter.error_reading_history",
+                error=e,
+            )
 
         return entries

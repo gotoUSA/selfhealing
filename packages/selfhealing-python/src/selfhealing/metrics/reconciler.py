@@ -7,7 +7,7 @@ during server startup and on-demand.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -22,7 +22,7 @@ from selfhealing.utils.jitter import with_jitter
 if TYPE_CHECKING:
     from selfhealing.models.drift_config import DriftThresholdConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DriftSeverity:
@@ -159,7 +159,11 @@ class MetricReconciler:
                 if metrics and hasattr(metrics, "dlq_pending_gauge"):
                     metrics.dlq_pending_gauge.labels(domain=domain).set(safe_actual)
             except Exception as e:
-                logger.warning(f"[Reconciler] Failed to sync DLQ pending for {domain}: {e}")
+                logger.warning(
+                    "reconciler.failed_sync_dlq_pending",
+                    domain=domain,
+                    error=e,
+                )
 
         # Circuit Breaker 상태 동기화
         state_values = {"closed": 0, "open": 1, "half_open": 2}
@@ -177,7 +181,11 @@ class MetricReconciler:
                     state_value = state_values.get(state, 0)
                     metrics.circuit_breaker_state.labels(service_name=base_service, cell_id=cell_id).set(state_value)
             except Exception as e:
-                logger.warning(f"[Reconciler] Failed to sync CB state for {service}: {e}")
+                logger.warning(
+                    "reconciler.failed_sync_cb_state",
+                    service=service,
+                    error=e,
+                )
 
         # 재시도 성공률 동기화
         for domain in self._get_domains():
@@ -190,11 +198,18 @@ class MetricReconciler:
                 if metrics and hasattr(metrics, "retry_success_rate"):
                     metrics.retry_success_rate.labels(domain=domain).set(safe_rate)
             except Exception as e:
-                logger.warning(f"[Reconciler] Failed to sync retry rate for {domain}: {e}")
+                logger.warning(
+                    "reconciler.failed_sync_retry_rate",
+                    domain=domain,
+                    error=e,
+                )
 
         self._last_sync = datetime.now(timezone.utc)
         self._last_sync_result = result
-        logger.info(f"[Reconciler] Metrics reconciled: domains={len(result.dlq_pending)}")
+        logger.info(
+            "reconciler.metrics_reconciled",
+            count=len(result.dlq_pending),
+        )
 
         return result
 
@@ -258,7 +273,10 @@ class MetricReconciler:
         elif drift.severity == DriftSeverity.CRITICAL:
             self._send_alert(drift)
         elif drift.severity == DriftSeverity.WARNING:
-            logger.warning(f"[Reconciler] Metric drift detected: {drift.max_drift_percent:.1f}%")
+            logger.warning(
+                "reconciler.metric_drift_detected",
+                drift=drift.max_drift_percent,
+            )
 
         return result
 
@@ -357,7 +375,10 @@ class MetricReconciler:
         이 수준의 Drift는 단순한 오차가 아니라
         '이벤트 유실'을 의미합니다.
         """
-        logger.critical(f"[Reconciler] METRIC INTEGRITY INCIDENT: {drift.max_drift_percent}%")
+        logger.critical(
+            "reconciler.metric_integrity_incident",
+            drift=drift.max_drift_percent,
+        )
 
         if self.incident_service:
             try:
@@ -378,11 +399,17 @@ class MetricReconciler:
                     },
                 )
             except Exception as e:
-                logger.error(f"[Reconciler] Failed to create incident: {e}")
+                logger.error(
+                    "reconciler.failed_create_incident",
+                    error=e,
+                )
 
     def _send_alert(self, drift: DriftResult) -> None:
         """20~50% Drift: 알림 발송."""
-        logger.error(f"[Reconciler] Critical metric drift: {drift.max_drift_percent}%")
+        logger.error(
+            "reconciler.critical_metric_drift",
+            drift=drift.max_drift_percent,
+        )
         # Prometheus Alertmanager 또는 자체 알림 시스템 연동
         # 구체적인 구현은 프로젝트에 따라 다름
 

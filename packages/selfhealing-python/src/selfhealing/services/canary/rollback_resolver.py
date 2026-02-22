@@ -15,12 +15,12 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RollbackValueSource(str, Enum):

@@ -26,7 +26,7 @@ Usage:
     recorder.record_auto_tuning(...)
 """
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -56,7 +56,7 @@ from .resilience import (
 from .ring_buffer import BackpressureStrategy, RingBuffer, RingBufferStats
 from .self_audit import SelfAuditEvent, self_audit
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -233,7 +233,10 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
             fallback_path.parent.mkdir(parents=True, exist_ok=True)
             self._fallback_adapter = LocalFileBackend(str(fallback_path))
         except Exception as e:
-            logger.warning(f"[ResilientRecorder] Fallback adapter init failed: {e}")
+            logger.warning(
+                "resilient_recorder.fallback_adapter_init_failed",
+                error=e,
+            )
 
     # ─────────────────────────────────────────────────────────────
     # Lifecycle
@@ -255,7 +258,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         self._flush_thread.start()
 
         self_audit().log(SelfAuditEvent.STARTUP, "Background flush worker started")
-        logger.info("[ResilientRecorder] Background flush worker started")
+        logger.info("resilient_recorder.background_flush_worker_started")
 
     def stop(self, timeout: float = 5.0) -> None:
         """Background flush worker 중지."""
@@ -276,7 +279,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
 
         self._started = False
         self_audit().log(SelfAuditEvent.SHUTDOWN, "Background flush worker stopped")
-        logger.info("[ResilientRecorder] Background flush worker stopped")
+        logger.info("resilient_recorder.background_flush_worker_stopped")
 
     # ─────────────────────────────────────────────────────────────
     # Override: record_with_integrity
@@ -315,7 +318,11 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                 )
                 self._metrics.record_failure("RingBuffer", "overflow")
 
-            logger.debug(f"[ResilientRecorder] Queued: {entry.action} (id={audit_id})")
+            logger.debug(
+                "resilient_recorder.queued",
+                entry=entry.action,
+                audit_id=audit_id,
+            )
 
             return audit_id
 
@@ -333,7 +340,10 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                     SelfAuditEvent.BATCH_FLUSH_FAILED,
                     f"Flush loop error: {e}",
                 )
-                logger.error(f"[ResilientRecorder] Flush loop error: {e}")
+                logger.error(
+                    "resilient_recorder.flush_loop_error",
+                    error=e,
+                )
 
             # Wait for next interval or stop event
             self._stop_event.wait(timeout=self._resilient_config.flush_interval_seconds)
@@ -357,7 +367,11 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                 processed += 1
 
         if processed > 0:
-            logger.debug(f"[ResilientRecorder] Flushed {processed}/{len(batch)} entries")
+            logger.debug(
+                "resilient_recorder.flushed_entries",
+                processed=processed,
+                count=len(batch),
+            )
 
         return processed
 
@@ -371,7 +385,10 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
                 break
 
         if total > 0:
-            logger.info(f"[ResilientRecorder] Final flush: {total} entries")
+            logger.info(
+                "resilient_recorder.final_flush_entries",
+                total=total,
+            )
 
     def _write_with_fallback(self, entry_dict: dict[str, Any]) -> bool:
         """

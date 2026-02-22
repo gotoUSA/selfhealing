@@ -9,7 +9,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -23,7 +23,7 @@ from selfhealing.api.django.permissions import (
 )
 from selfhealing.services.governance_api_service import get_governance_api_service
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class GovernanceReconcileView(APIView):

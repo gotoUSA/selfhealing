@@ -26,13 +26,13 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -120,11 +120,14 @@ class IPCStateCache:
             ]:
                 bus.subscribe(event_type, self._on_state_change)
 
-            logger.debug("[IPCStateCache] Registered EventBus invalidation handlers")
+            logger.debug("cell_registry.bulkheads_registered")
         except ImportError:
-            logger.debug("[IPCStateCache] EventBus not available")
+            logger.debug("ipc_state_cache.eventbus_available")
         except Exception as e:
-            logger.warning(f"[IPCStateCache] EventBus registration failed: {e}")
+            logger.warning(
+                "ipc_state_cache.eventbus_registration_failed",
+                error=e,
+            )
 
     def _on_state_change(self, event: Any) -> None:
         """이벤트 기반 즉시 무효화."""
@@ -132,9 +135,16 @@ class IPCStateCache:
             service_name = event.data.get("service_name")
             if service_name:
                 self.invalidate(service_name)
-                logger.debug(f"[IPCStateCache] Invalidated '{service_name}' " f"on {event.event_type.value}")
+                logger.debug(
+                    "ipc_state_cache.invalidated",
+                    service_name=service_name,
+                    event_type=event.event_type.value,
+                )
         except Exception as e:
-            logger.warning(f"[IPCStateCache] Event handler error: {e}")
+            logger.warning(
+                "ipc_state_cache.event_handler_error",
+                error=e,
+            )
 
     def get(self, service_name: str) -> tuple[Any, bool]:
         """

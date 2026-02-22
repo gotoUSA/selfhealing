@@ -36,7 +36,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
@@ -52,7 +52,7 @@ from selfhealing.audit.cascade_event import (
     get_priority_for_trigger,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

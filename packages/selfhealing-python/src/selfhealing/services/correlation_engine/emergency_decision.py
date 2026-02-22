@@ -32,7 +32,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -41,7 +41,7 @@ from selfhealing.services.correlation_engine.root_cause_ranker import (
 )
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

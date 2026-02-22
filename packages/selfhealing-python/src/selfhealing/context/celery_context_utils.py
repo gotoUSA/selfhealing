@@ -24,14 +24,14 @@ Celery task_prerun/postrun 시그널에서 분산되어 있던 컨텍스트 복�
 from __future__ import annotations
 
 import contextvars
-import logging
+import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -290,7 +290,10 @@ def _setup_causation_context(
     except ImportError:
         return None
     except Exception as e:
-        logger.debug(f"[ContextUtils] causation setup failed: {e}")
+        logger.debug(
+            "context_utils.causation_setup_failed",
+            error=e,
+        )
         return None
 
 
@@ -318,7 +321,10 @@ def _cleanup_causation_context(task: Any) -> None:
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"[ContextUtils] causation cleanup failed: {e}")
+        logger.debug(
+            "context_utils.causation_cleanup_failed",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -414,13 +420,19 @@ def restore_all_task_context(
             }
         )
     except Exception as e:
-        logger.debug(f"[ContextUtils] trace_id restore failed: {e}")
+        logger.debug(
+            "context_utils.restore_failed",
+            error=e,
+        )
 
     # ── 2. causation 복원 [IMPORTANT] ──
     try:
         tokens.causation_token = _setup_causation_context(task, task_id, task_name)
     except Exception as e:
-        logger.warning(f"[ContextUtils] causation restore failed: {e}")
+        logger.warning(
+            "context_utils.causation_restore_failed",
+            error=e,
+        )
 
     # ── 3. cell_id 복원 [CRITICAL] — 통합 리졸버 ──
     try:
@@ -429,7 +441,11 @@ def restore_all_task_context(
             from selfhealing.context.cell_context import _current_cell_id
 
             tokens.cell_id_token = _current_cell_id.set(cell_id)
-            logger.debug(f"[ContextUtils] cell_id restored: {cell_id} (source={source})")
+            logger.debug(
+                "context_utils.restored",
+                cell_id=cell_id,
+                source=source,
+            )
         elif _is_strict_context_enabled():
             raise SelfHealingContextError(
                 context_name="cell_id",
@@ -446,7 +462,10 @@ def restore_all_task_context(
                 task_name=task_name,
                 detail=str(e),
             ) from e
-        logger.debug(f"[ContextUtils] cell_id restore failed: {e}")
+        logger.debug(
+            "context_utils.restore_failed",
+            error=e,
+        )
 
     # ── 4. domain 복원 [OPTIONAL] — 통합 리졸버 ──
     try:
@@ -455,18 +474,25 @@ def restore_all_task_context(
             from selfhealing.decorators.domain_tag import _current_domain
 
             tokens.domain_token = _current_domain.set(domain)
-            logger.debug(f"[ContextUtils] domain restored: {domain} (source={domain_source})")
+            logger.debug(
+                "context_utils.domain_restored",
+                domain=domain,
+                domain_source=domain_source,
+            )
     except ImportError:
         pass  # domain_tag 모듈 미존재 시 무시
     except Exception as e:
-        logger.debug(f"[ContextUtils] domain restore failed: {e}")
+        logger.debug(
+            "context_utils.domain_restore_failed",
+            error=e,
+        )
 
     # ── 토큰을 task.request에 저장 (postrun 정리용) ──
     if request is not None:
         try:
             setattr(request, _CONTEXT_TOKENS_ATTR, tokens)
         except AttributeError:
-            logger.debug("[ContextUtils] Cannot store tokens on task.request")
+            logger.debug("context_utils.cannot_store_tokens_task")
 
     return tokens
 
@@ -493,7 +519,10 @@ def cleanup_all_task_context(task: Any) -> None:
 
             _current_cell_id.reset(tokens.cell_id_token)
         except Exception as e:
-            logger.debug(f"[ContextUtils] cell_id cleanup failed: {e}")
+            logger.debug(
+                "context_utils.cleanup_failed",
+                error=e,
+            )
 
     # ── 2. domain 정리 ──
     if tokens and tokens.domain_token:
@@ -502,7 +531,10 @@ def cleanup_all_task_context(task: Any) -> None:
 
             _current_domain.reset(tokens.domain_token)
         except Exception as e:
-            logger.debug(f"[ContextUtils] domain cleanup failed: {e}")
+            logger.debug(
+                "context_utils.domain_cleanup_failed",
+                error=e,
+            )
 
     # ── 3. baggage_tokens 일괄 정리 ──
     if tokens and tokens.baggage_tokens:
@@ -510,13 +542,20 @@ def cleanup_all_task_context(task: Any) -> None:
             try:
                 pass  # 266 구현 시 활성화
             except Exception as e:
-                logger.debug(f"[ContextUtils] baggage token '{key}' cleanup failed: {e}")
+                logger.debug(
+                    "context_utils.baggage_token_cleanup_failed",
+                    key=key,
+                    error=e,
+                )
 
     # ── 4. causation 정리 ──
     try:
         _cleanup_causation_context(task)
     except Exception as e:
-        logger.debug(f"[ContextUtils] causation cleanup failed: {e}")
+        logger.debug(
+            "context_utils.causation_cleanup_failed",
+            error=e,
+        )
 
     # ── 5. trace_id / celery_context 정리 ──
     try:
@@ -525,7 +564,10 @@ def cleanup_all_task_context(task: Any) -> None:
         clear_trace_id()
         clear_celery_context()
     except Exception as e:
-        logger.debug(f"[ContextUtils] trace_id cleanup failed: {e}")
+        logger.debug(
+            "context_utils.cleanup_failed",
+            error=e,
+        )
 
     # ── 6. request 속성 정리 ──
     if request is not None:

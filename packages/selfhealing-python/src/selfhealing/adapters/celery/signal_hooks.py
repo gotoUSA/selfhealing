@@ -30,7 +30,7 @@ Configuration via environment variables:
 """
 
 import json
-import logging
+import structlog
 import os
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -46,7 +46,7 @@ from celery.signals import (
     task_success,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # =============================================================================
 # Configuration
@@ -305,7 +305,10 @@ def on_task_failure(
         _handle_task_failure_internal(sender, task_id, exception, args, kwargs, einfo)
     except Exception as e:
         # Never let signal handler crash affect task execution
-        logger.error(f"[SelfHealing Signal] Error in failure handler: {e}")
+        logger.error(
+            "selfhealing_signal_error_failure",
+            error=e,
+        )
 
 
 @task_success.connect
@@ -342,7 +345,10 @@ def on_task_success(
             _record_success_metrics(service_name, task_name)
 
     except Exception as e:
-        logger.error(f"[SelfHealing Signal] Error in success handler: {e}")
+        logger.error(
+            "selfhealing_signal_error_success",
+            error=e,
+        )
 
 
 @task_retry.connect
@@ -369,7 +375,10 @@ def on_task_retry(
         domain = _extract_domain_from_task_name(task_name)
         _record_retry_metrics(domain, task_name)
     except Exception as e:
-        logger.error(f"[SelfHealing Signal] Error in retry handler: {e}")
+        logger.error(
+            "selfhealing_signal_error_retry",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -423,12 +432,12 @@ def on_before_task_publish(
 
         # headers 딕셔너리가 없으면 생략 (발행 시점에 headers 설정 불가)
         if headers is None:
-            logger.debug("[SelfHealing Signal] before_task_publish: headers is None, " "cannot inject causation context")
+            logger.debug("selfhealing_signal_headers_none")
             return
 
         # 이미 causation 헤더가 있으면 덮어쓰지 않음 (명시적 설정 우선)
         if headers.get(CELERY_HEADER_CASCADE_ID):
-            logger.debug("[SelfHealing Signal] Causation headers already present, skipping auto-injection")
+            logger.debug("selfhealing_signal_causation_headers")
             return
 
         # Causation 헤더 주입
@@ -446,7 +455,10 @@ def on_before_task_publish(
         pass
     except Exception as e:
         # 시그널 핸들러가 태스크 발행에 영향을 주지 않도록 함
-        logger.debug(f"[SelfHealing Signal] Causation header injection failed: {e}")
+        logger.debug(
+            "selfhealing_signal_causation_header",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -545,7 +557,11 @@ def on_task_prerun(
 
         restore_all_task_context(sender, task_id, task_name, kwargs)
 
-        logger.debug(f"[SelfHealing Signal] Task prerun: {task_name}, task_id={task_id}")
+        logger.debug(
+            "selfhealing_signal_task_prerun",
+            task_name=task_name,
+            task_id=task_id,
+        )
 
     except SelfHealingContextError:
         # R5: CRITICAL 컨텍스트 복원 실패 → Fail-Fast. 재시도 차단은
@@ -553,7 +569,10 @@ def on_task_prerun(
         raise
     except Exception as e:
         # Never let signal handler crash affect task execution
-        logger.error(f"[SelfHealing Signal] Error in prerun handler: {e}")
+        logger.error(
+            "selfhealing_signal_error_prerun",
+            error=e,
+        )
 
 
 @task_postrun.connect
@@ -585,10 +604,18 @@ def on_task_postrun(
 
         cleanup_all_task_context(sender)
 
-        logger.debug(f"[SelfHealing Signal] Task postrun: {task_name}, task_id={task_id}, state={state}")
+        logger.debug(
+            "selfhealing_signal_task_postrun",
+            task_name=task_name,
+            task_id=task_id,
+            state=state,
+        )
 
     except Exception as e:
-        logger.error(f"[SelfHealing Signal] Error in postrun handler: {e}")
+        logger.error(
+            "selfhealing_signal_error_postrun",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -608,12 +635,21 @@ def _record_circuit_breaker_failure(service_name: str, task_name: str, exception
         # record_failure handles threshold checking internally
         cb_service.record_failure(service_name=service_name)
 
-        logger.debug(f"[SelfHealing CB] Recorded failure for '{service_name}'")
+        logger.debug(
+            "selfhealing_cb_recorded_failure",
+            service_name=service_name,
+        )
 
     except ImportError as e:
-        logger.debug(f"[SelfHealing CB] Service not available: {e}")
+        logger.debug(
+            "selfhealing_cb_service_available",
+            error=e,
+        )
     except Exception as e:
-        logger.error(f"[SelfHealing CB] Failed to record failure: {e}")
+        logger.error(
+            "selfhealing_cb_failed_record",
+            error=e,
+        )
 
 
 def _record_circuit_breaker_success(service_name: str, task_name: str):
@@ -628,12 +664,21 @@ def _record_circuit_breaker_success(service_name: str, task_name: str):
         # record_success handles half-open -> closed transition internally
         cb_service.record_success(service_name=service_name)
 
-        logger.debug(f"[SelfHealing CB] Recorded success for '{service_name}'")
+        logger.debug(
+            "selfhealing_cb_recorded_success",
+            service_name=service_name,
+        )
 
     except ImportError as e:
-        logger.debug(f"[SelfHealing CB] Service not available: {e}")
+        logger.debug(
+            "selfhealing_cb_service_available",
+            error=e,
+        )
     except Exception as e:
-        logger.error(f"[SelfHealing CB] Failed to record success: {e}")
+        logger.error(
+            "selfhealing_cb_failed_record",
+            error=e,
+        )
 
 
 def _trigger_conditional_replay(service_name: str):
@@ -645,10 +690,16 @@ def _trigger_conditional_replay(service_name: str):
 
         # Enqueue replay task
         conditional_replay_on_circuit_close.delay(service_name=service_name, max_items=50)
-        logger.info(f"[SelfHealing CB] Triggered conditional replay for '{service_name}'")
+        logger.info(
+            "selfhealing_cb_triggered_conditional",
+            service_name=service_name,
+        )
 
     except Exception as e:
-        logger.error(f"[SelfHealing CB] Failed to trigger conditional replay: {e}")
+        logger.error(
+            "selfhealing_cb_failed_trigger",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -731,9 +782,15 @@ def _store_to_dlq(
             pass
 
     except ImportError as e:
-        logger.debug(f"[SelfHealing DLQ] Service not available: {e}")
+        logger.debug(
+            "selfhealing_dlq_service_available",
+            error=e,
+        )
     except Exception as e:
-        logger.error(f"[SelfHealing DLQ] Failed to store: {e}")
+        logger.error(
+            "selfhealing_dlq_failed_store",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -854,7 +911,10 @@ def _record_failure_metrics(domain: str, task_name: str, exception: Exception):
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"[SelfHealing Metrics] Failed to record failure: {e}")
+        logger.debug(
+            "selfhealing_metrics_failed_record",
+            error=e,
+        )
 
 
 def _record_success_metrics(service_name: str, task_name: str):
@@ -871,7 +931,10 @@ def _record_success_metrics(service_name: str, task_name: str):
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"[SelfHealing Metrics] Failed to record success: {e}")
+        logger.debug(
+            "selfhealing_metrics_failed_record",
+            error=e,
+        )
 
 
 def _record_retry_metrics(domain: str, task_name: str):
@@ -887,7 +950,10 @@ def _record_retry_metrics(domain: str, task_name: str):
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"[SelfHealing Metrics] Failed to record retry: {e}")
+        logger.debug(
+            "selfhealing_metrics_failed_record",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -913,13 +979,19 @@ def _capture_forensic_context(
             task_name=task_name,
         )
 
-        logger.debug(f"[SelfHealing Forensics] Captured context for {task_name}")
+        logger.debug(
+            "selfhealing_forensics_captured_context",
+            task_name=task_name,
+        )
         return context
 
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"[SelfHealing Forensics] Failed to capture: {e}")
+        logger.debug(
+            "selfhealing_forensics_failed_capture",
+            error=e,
+        )
         return None
 
 
@@ -979,7 +1051,7 @@ def setup_selfhealing_signals(
     global _signals_connected
 
     if _signals_connected:
-        logger.warning("[SelfHealing] Signal hooks already connected")
+        logger.warning("self_healing.signal_hooks_already_connected")
         return
 
     # Apply configuration overrides
@@ -1009,7 +1081,10 @@ def setup_selfhealing_signals(
             if SelfHealingContextError not in existing:
                 base_task.dont_autoretry_for = (*existing, SelfHealingContextError)
     except Exception as e:
-        logger.debug(f"[SelfHealing] Failed to register dont_autoretry_for: {e}")
+        logger.debug(
+            "self_healing.failed_register",
+            error=e,
+        )
 
     # Signals are connected via decorators, just mark as connected
     _signals_connected = True
@@ -1038,9 +1113,12 @@ def disconnect_selfhealing_signals():
         task_postrun.disconnect(on_task_postrun)  # trace_id 정리
         before_task_publish.disconnect(on_before_task_publish)  # causation 자동 전파
         _signals_connected = False
-        logger.info("[SelfHealing] Signal hooks disconnected")
+        logger.info("self_healing.signal_hooks_disconnected")
     except Exception as e:
-        logger.error(f"[SelfHealing] Error disconnecting signals: {e}")
+        logger.error(
+            "self_healing.error_disconnecting_signals",
+            error=e,
+        )
 
 
 def is_signals_connected() -> bool:

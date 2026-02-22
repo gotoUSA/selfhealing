@@ -29,12 +29,13 @@ Environment Variables:
 from __future__ import annotations
 
 import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -162,10 +163,7 @@ class StdoutNotificationAdapter:
     """Default adapter that prints to stdout."""
 
     def send(self, notification: Notification) -> bool:
-        print(
-            f"[{notification.severity.value.upper()}] "
-            f"{notification.title}: {notification.message}"
-        )
+        print(f"[{notification.severity.value.upper()}] " f"{notification.title}: {notification.message}")
         return True
 
     def send_batch(self, notifications: list[Notification]) -> int:
@@ -218,9 +216,7 @@ _default_adapter: NotificationAdapter = LoggingNotificationAdapter()
 def register_notification_adapter(adapter: NotificationAdapter) -> None:
     """Register a notification adapter for its channel."""
     _notification_adapters[adapter.channel] = adapter
-    logger.info(
-        f"[Notification] Registered adapter for channel: {adapter.channel.value}"
-    )
+    logger.info(f"[Notification] Registered adapter for channel: {adapter.channel.value}")
 
 
 def get_notification_adapter(

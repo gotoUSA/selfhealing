@@ -6,13 +6,13 @@ Error Budget Enums and Constants
 
 from __future__ import annotations
 
-import logging
+import structlog
 from enum import Enum
 from typing import Any
 
 from selfhealing.core.timezone import now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -169,10 +169,13 @@ def _send_failsafe_alert(
             )
     except ImportError:
         # AlertAdapter가 설정되지 않은 경우 - 로그만 남김
-        logger.warning("[FAIL-SAFE] AlertAdapter not configured, skipping alert")
+        logger.warning("fail_safe_alertadapter_configured")
     except Exception as alert_error:
         # 알림 발송 실패해도 Fail-Safe 응답은 반환해야 함
-        logger.error(f"[FAIL-SAFE] Failed to send alert: {alert_error}")
+        logger.error(
+            "fail_safe_failed_send",
+            alert_error=alert_error,
+        )
 
     # 3. Prometheus 메트릭 증가 (가능한 경우)
     try:

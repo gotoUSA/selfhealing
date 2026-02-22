@@ -21,7 +21,7 @@ Configuration:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -29,7 +29,7 @@ from typing import Any
 
 from selfhealing.core.state_backend import StateBackend, get_state_backend
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -129,18 +129,24 @@ class SystemControlManager:
                 )
             else:
                 self._cached_state = SystemState()
-                logger.info("[SystemControl] No existing state, using defaults")
+                logger.info("system_control.no_existing_state_using")
         except Exception as e:
-            logger.warning(f"[SystemControl] Could not load state: {e}")
+            logger.warning(
+                "system_control.load_state",
+                error=e,
+            )
             self._cached_state = SystemState()
 
     def _save_state(self) -> None:
         """Save state to backend."""
         try:
             self._backend.set(STATE_KEY, self._cached_state.to_dict())
-            logger.debug("[SystemControl] State saved")
+            logger.debug("system_control.state_saved")
         except Exception as e:
-            logger.error(f"[SystemControl] Failed to save state: {e}")
+            logger.error(
+                "system_control.failed_save_state",
+                error=e,
+            )
 
     def _refresh_state(self) -> SystemState:
         """Refresh state from backend (for multi-server sync)."""
@@ -174,7 +180,10 @@ class SystemControlManager:
             )
         except Exception as e:
             # Fail-Open: Audit 실패가 시스템 제어를 중단시키지 않음
-            logger.debug(f"[SystemControl] Audit logging failed (ignored): {e}")
+            logger.debug(
+                "system_control.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def is_enabled(self) -> bool:
         """
@@ -330,7 +339,7 @@ class SystemControlManager:
             self._cached_state = SystemState()
             self._save_state()
             new_state = self._cached_state.to_dict()
-            logger.info("[SystemControl] System state reset to defaults")
+            logger.info("system_control.system_state_reset_defaults")
             # Audit 기록
             self._log_audit(
                 "reset", "system", old_state, new_state, "reset_to_defaults"
@@ -388,7 +397,10 @@ def is_dry_run() -> bool:
 
         def trigger_circuit_breaker(service_name):
             if is_dry_run():
-                logger.info(f"[DRY RUN] Would open circuit breaker for {service_name}")
+                logger.info(
+                    "dry_run_open_circuit",
+                    service_name=service_name,
+                )
                 return
 
             # Actually open the circuit breaker
@@ -411,7 +423,7 @@ def should_execute_action() -> bool:
         def my_healing_action():
             if not should_execute_action():
                 if is_dry_run():
-                    logger.info("[DRY RUN] Would have taken action X")
+                    logger.info("dry_run_taken_action")
                 return
 
             # Execute the actual action

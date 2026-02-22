@@ -24,7 +24,7 @@ Reference:
 from __future__ import annotations
 
 import fnmatch
-import logging
+import structlog
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
@@ -33,7 +33,7 @@ from selfhealing.settings import (
     get_redis_key_guard_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -365,7 +365,10 @@ class RedisKeyPriorityEviction:
                 keys_with_ttl=keys_with_ttl,
             )
         except Exception as e:
-            logger.error(f"[RedisKeyPriorityEviction] Get memory info failed: {e}")
+            logger.error(
+                "redis_key_priority_eviction.get_memory_info_failed",
+                error=e,
+            )
             return RedisMemoryInfo()
 
     def check_memory_status(self, redis_client) -> dict[str, Any]:
@@ -420,7 +423,11 @@ class RedisKeyPriorityEviction:
                         if info.used_percent <= target_used:
                             return True
         except Exception as e:
-            logger.error(f"[RedisKeyPriorityEviction] {counter_key} cleanup error: {e}")
+            logger.error(
+                "redis_key_priority_eviction.cleanup_error",
+                counter_key=counter_key,
+                error=e,
+            )
         return False
 
     def emergency_cleanup(
@@ -523,7 +530,11 @@ class RedisKeyPriorityEviction:
                     redis_client.expire(key, ttl)
                     return True
             except Exception as e:
-                logger.warning(f"[RedisKeyPriorityEviction] Set TTL failed: {key}, {e}")
+                logger.warning(
+                    "redis_key_priority_eviction.set_ttl_failed",
+                    key=key,
+                    error=e,
+                )
 
         return False
 
@@ -557,7 +568,10 @@ class RedisKeyPriorityEviction:
                 else:
                     result["skipped"] += 1
         except Exception as e:
-            logger.error(f"[RedisKeyPriorityEviction] Scan and set TTLs failed: {e}")
+            logger.error(
+                "redis_key_priority_eviction.scan_set_ttls_failed",
+                error=e,
+            )
 
         return result
 

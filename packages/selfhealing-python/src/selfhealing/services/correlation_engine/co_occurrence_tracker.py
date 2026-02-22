@@ -27,7 +27,7 @@ Usage:
 from __future__ import annotations
 
 import collections
-import logging
+import structlog
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,7 +39,7 @@ from selfhealing.services.predictive_forecaster.time_series import (
     HoltLinearForecaster,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -320,7 +320,10 @@ class CoOccurrenceTracker:
         # ZScore 탐지기 초기화 (첫 동시발생)
         if key not in self._pair_detectors:
             self._pair_detectors[key] = ZScoreDetector(window=100, threshold=self._zscore_threshold)
-            logger.debug("First co-occurrence detected for pair: %s", key)
+            logger.debug(
+                "first_co_occurrence_detected",
+                key=key,
+            )
 
     # ─── 주기적 분석 (Cold Path) ───
 
@@ -536,7 +539,10 @@ class CoOccurrenceTracker:
             self._pair_counts.pop(key, None)
             self._pair_forecasters.pop(key, None)
             self._last_report_times.pop(key, None)
-            logger.debug("[CoOccurrenceTracker] Evicted pair: %s", key)
+            logger.debug(
+                "cell_registry.services_evicted",
+                key=key,
+            )
 
     # ─── 유틸리티 ───
 
@@ -659,7 +665,10 @@ class CoOccurrenceTracker:
             )
             return True
         except Exception as e:
-            logger.warning("[CoOccurrenceTracker] Failed to save state: %s", e)
+            logger.warning(
+                "co_occurrence_tracker.failed_save_state",
+                error=e,
+            )
             return False
 
     def load_state(self) -> bool:
@@ -677,7 +686,7 @@ class CoOccurrenceTracker:
             backend = get_state_backend()
             state = backend.get("correlation:co_occurrence_state")
             if not state:
-                logger.debug("[CoOccurrenceTracker] No saved state found")
+                logger.debug("co_occurrence_tracker.no_saved_state_found")
                 return False
 
             # ZScoreDetector 복원: from_dict()로 maxlen 보존
@@ -703,5 +712,8 @@ class CoOccurrenceTracker:
             )
             return True
         except Exception as e:
-            logger.warning("[CoOccurrenceTracker] Failed to load state: %s", e)
+            logger.warning(
+                "co_occurrence_tracker.failed_load_state",
+                error=e,
+            )
             return False

@@ -6,14 +6,14 @@ Provides the base DLQService class with initialization and common utilities.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import FailedOperationRepository
     from selfhealing.services.dlq.models import DLQConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DLQServiceBase:
@@ -107,4 +107,7 @@ class DLQServiceBase:
                 )
         except Exception as e:
             # Audit logging should never break the main flow
-            logger.debug(f"[DLQService] Audit logging skipped: {e}")
+            logger.debug(
+                "dlq_service.audit_logging_skipped",
+                error=e,
+            )

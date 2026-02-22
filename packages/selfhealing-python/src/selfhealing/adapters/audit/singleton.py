@@ -11,13 +11,13 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.core.protocols import AuditLogAdapter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # =============================================================================
 # Singleton Audit Adapter Management
@@ -57,7 +57,7 @@ def get_audit_adapter() -> "AuditLogAdapter":
         adapter = ProviderRegistry.get_audit_adapter()
         if adapter is not None:
             _default_adapter = adapter
-            logger.debug("[AuditAdapter] Using adapter from ProviderRegistry")
+            logger.debug("audit_adapter.using_adapter_providerregistry")
             return adapter
     except (ImportError, ValueError, AttributeError):
         pass
@@ -70,15 +70,21 @@ def get_audit_adapter() -> "AuditLogAdapter":
 
         log_path = os.getenv("AUDIT_LOG_PATH", "logs/audit.jsonl")
         _default_adapter = FileAuditLogAdapter(log_path)
-        logger.debug(f"[AuditAdapter] Using FileAuditLogAdapter: {log_path}")
+        logger.debug(
+            "audit_adapter.using_fileauditlogadapter",
+            log_path=log_path,
+        )
         return _default_adapter
     except Exception as e:
-        logger.warning(f"[AuditAdapter] FileAuditLogAdapter failed: {e}")
+        logger.warning(
+            "audit_adapter.fileauditlogadapter_failed",
+            error=e,
+        )
 
     # 3. Fallback: NullAuditLogAdapter
     from .null_adapter import NullAuditLogAdapter
 
-    logger.warning("[AuditAdapter] Using NullAuditLogAdapter (fallback)")
+    logger.warning("audit_adapter.using_nullauditlogadapter_fallback")
     _default_adapter = NullAuditLogAdapter()
     return _default_adapter
 
@@ -97,7 +103,10 @@ def set_audit_adapter(adapter: "AuditLogAdapter") -> None:
     """
     global _default_adapter
     _default_adapter = adapter
-    logger.debug(f"[AuditAdapter] Set adapter: {type(adapter).__name__}")
+    logger.debug(
+        "audit_adapter.set_adapter",
+        value=type(adapter).__name__,
+    )
 
 
 def reset_audit_adapter() -> None:
@@ -110,4 +119,4 @@ def reset_audit_adapter() -> None:
     """
     global _default_adapter
     _default_adapter = None
-    logger.debug("[AuditAdapter] Reset adapter")
+    logger.debug("audit_adapter.reset_adapter")

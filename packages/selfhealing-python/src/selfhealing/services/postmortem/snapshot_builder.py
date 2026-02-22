@@ -15,12 +15,12 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -95,14 +95,17 @@ class SnapshotBuilder:
         try:
             redis_client = self._get_redis_client()
             if not redis_client:
-                logger.debug("[SnapshotBuilder] Redis client not available")
+                logger.debug("snapshot_builder.redis_client_available")
                 return {}
 
             key = self.OPEN_SNAPSHOT_KEY_PATTERN.format(service=self._service_name)
             data = redis_client.hgetall(key)
 
             if not data:
-                logger.debug(f"[SnapshotBuilder] No OPEN snapshot found for {self._service_name}")
+                logger.debug(
+                    "snapshot_builder.no_open_snapshot_found",
+                    self=self._service_name,
+                )
                 return {}
 
             # Redis HASH에서 조회 후 타입 변환
@@ -119,11 +122,17 @@ class SnapshotBuilder:
                 except ValueError:
                     snapshot[field_key] = field_value
 
-            logger.debug(f"[SnapshotBuilder] Retrieved OPEN snapshot for {self._service_name}")
+            logger.debug(
+                "snapshot_builder.retrieved_open_snapshot",
+                self=self._service_name,
+            )
             return snapshot
 
         except Exception as e:
-            logger.warning(f"[SnapshotBuilder] Failed to get OPEN snapshot: {e}")
+            logger.warning(
+                "snapshot_builder.failed_get_open_snapshot",
+                error=e,
+            )
             return {}
 
     def _collect_close_snapshot(self) -> dict[str, Any]:
@@ -150,16 +159,22 @@ class SnapshotBuilder:
                     cb_states[name] = status.get("state", "UNKNOWN") if status else "UNKNOWN"
                 snapshot["cb_states"] = cb_states
             except Exception as e:
-                logger.debug(f"[SnapshotBuilder] Failed to get CB states: {e}")
+                logger.debug(
+                    "snapshot_builder.failed_get_cb_states",
+                    error=e,
+                )
                 snapshot["cb_states"] = {}
 
             return snapshot
 
         except ImportError:
-            logger.warning("[SnapshotBuilder] collect_system_snapshot not available")
+            logger.warning("snapshot_builder.available")
             return {"timestamp": datetime.now(timezone.utc).isoformat(), "error": "snapshot_unavailable"}
         except Exception as e:
-            logger.error(f"[SnapshotBuilder] Failed to collect CLOSE snapshot: {e}")
+            logger.error(
+                "snapshot_builder.failed_collect_close_snapshot",
+                error=e,
+            )
             return {"timestamp": datetime.now(timezone.utc).isoformat(), "error": str(e)}
 
     def _query_prometheus_peaks(self) -> dict[str, Any]:
@@ -170,12 +185,12 @@ class SnapshotBuilder:
             )
 
             if not self._start_time:
-                logger.debug("[SnapshotBuilder] No start_time, skipping Prometheus query")
+                logger.debug("snapshot_builder.no_skipping_prometheus_query")
                 return {}
 
             collector = get_prometheus_collector()
             if not collector.is_enabled():
-                logger.debug("[SnapshotBuilder] Prometheus query disabled")
+                logger.debug("snapshot_builder.prometheus_query_disabled")
                 return {}
 
             peak = collector.get_peak_metrics(self._start_time, self._end_time)
@@ -195,10 +210,13 @@ class SnapshotBuilder:
             return result
 
         except ImportError:
-            logger.debug("[SnapshotBuilder] PrometheusCollector not available")
+            logger.debug("snapshot_builder.prometheuscollector_available")
             return {}
         except Exception as e:
-            logger.warning(f"[SnapshotBuilder] Prometheus query failed: {e}")
+            logger.warning(
+                "snapshot_builder.prometheus_query_failed",
+                error=e,
+            )
             return {"query_error": str(e)}
 
     def _collect_error_logs(self) -> list[dict[str, Any]]:
@@ -220,10 +238,13 @@ class SnapshotBuilder:
             return logs
 
         except ImportError:
-            logger.debug("[SnapshotBuilder] IncidentLogBuffer not available")
+            logger.debug("snapshot_builder.incidentlogbuffer_available")
             return []
         except Exception as e:
-            logger.warning(f"[SnapshotBuilder] Failed to collect error logs: {e}")
+            logger.warning(
+                "snapshot_builder.failed_collect_error_logs",
+                error=e,
+            )
             return []
 
     def _generate_dashboard_links(self) -> dict[str, str]:
@@ -246,10 +267,13 @@ class SnapshotBuilder:
             return links
 
         except ImportError:
-            logger.debug("[SnapshotBuilder] PrometheusCollector not available")
+            logger.debug("snapshot_builder.prometheuscollector_available")
             return {}
         except Exception as e:
-            logger.warning(f"[SnapshotBuilder] Failed to generate dashboard links: {e}")
+            logger.warning(
+                "snapshot_builder.failed_generate_dashboard_links",
+                error=e,
+            )
             return {}
 
     def build(self, timeline_events: list[dict[str, Any]] | None = None) -> TimelineSnapshot:
@@ -316,7 +340,7 @@ def save_open_snapshot_to_redis(
     try:
         redis_client = get_redis_client()
         if not redis_client:
-            logger.warning("[SnapshotBuilder] Redis client not available")
+            logger.warning("snapshot_builder.redis_client_available")
             return False
 
         key = SnapshotBuilder.OPEN_SNAPSHOT_KEY_PATTERN.format(service=service_name)
@@ -328,11 +352,17 @@ def save_open_snapshot_to_redis(
         # TTL 설정
         redis_client.expire(key, SnapshotBuilder.OPEN_SNAPSHOT_TTL)
 
-        logger.debug(f"[SnapshotBuilder] Saved OPEN snapshot for {service_name}")
+        logger.debug(
+            "snapshot_builder.saved_open_snapshot",
+            service_name=service_name,
+        )
         return True
 
     except Exception as e:
-        logger.warning(f"[SnapshotBuilder] Failed to save OPEN snapshot: {e}")
+        logger.warning(
+            "snapshot_builder.failed_save_open_snapshot",
+            error=e,
+        )
         return False
 
 
@@ -356,11 +386,17 @@ def delete_open_snapshot_from_redis(service_name: str) -> bool:
         key = SnapshotBuilder.OPEN_SNAPSHOT_KEY_PATTERN.format(service=service_name)
         redis_client.delete(key)
 
-        logger.debug(f"[SnapshotBuilder] Deleted OPEN snapshot for {service_name}")
+        logger.debug(
+            "snapshot_builder.deleted_open_snapshot",
+            service_name=service_name,
+        )
         return True
 
     except Exception as e:
-        logger.warning(f"[SnapshotBuilder] Failed to delete OPEN snapshot: {e}")
+        logger.warning(
+            "snapshot_builder.failed_delete_open_snapshot",
+            error=e,
+        )
         return False
 
 

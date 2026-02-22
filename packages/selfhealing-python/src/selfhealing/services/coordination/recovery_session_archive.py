@@ -20,7 +20,7 @@ Reference:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -32,7 +32,7 @@ from .recovery_state import RecoverySession, RecoveryStep, RecoveryStepType
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -425,7 +425,10 @@ class RecoverySessionArchiveService:
             with self._lock:
                 self._memory_storage[data.session_id] = data
         except Exception as e:
-            logger.exception(f"[RecoverySessionArchive] Django save error: {e}")
+            logger.exception(
+                "recovery_session_archive.django_save_error",
+                error=e,
+            )
             # 폴백: 메모리 저장
             with self._lock:
                 self._memory_storage[data.session_id] = data
@@ -465,7 +468,10 @@ class RecoverySessionArchiveService:
             with self._lock:
                 return self._memory_storage.get(session_id)
         except Exception as e:
-            logger.exception(f"[RecoverySessionArchive] Django load error: {e}")
+            logger.exception(
+                "recovery_session_archive.django_load_error",
+                error=e,
+            )
             return None
 
     def _record_to_archive_data(self, record) -> RecoverySessionArchiveData:
@@ -652,7 +658,10 @@ class RecoverySessionArchiveService:
                 end_date=end_date,
             )
         except Exception as e:
-            logger.exception(f"[RecoverySessionArchive] Django history error: {e}")
+            logger.exception(
+                "recovery_session_archive.django_history_error",
+                error=e,
+            )
             return []
 
     def load_for_resume(self, session_id: str) -> RecoverySession | None:
@@ -827,7 +836,10 @@ class RecoverySessionArchiveService:
             except ImportError:
                 pass
             except Exception as e:
-                logger.exception(f"[RecoverySessionArchive] Cleanup error: {e}")
+                logger.exception(
+                    "recovery_session_archive.cleanup_error",
+                    error=e,
+                )
 
         # 인메모리 정리
         with self._lock:

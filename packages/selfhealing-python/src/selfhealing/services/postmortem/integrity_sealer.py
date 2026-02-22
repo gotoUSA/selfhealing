@@ -17,12 +17,12 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class IntegritySealer:
@@ -112,7 +112,10 @@ class IntegritySealer:
             return sealed
 
         except Exception as e:
-            logger.error(f"[IntegritySealer] Failed to seal postmortem: {e}")
+            logger.error(
+                "integrity_sealer.failed_seal_postmortem",
+                error=e,
+            )
             # 봉인 실패해도 원본 반환 (무결성 필드 없음)
             return postmortem
 
@@ -240,9 +243,12 @@ class IntegritySealer:
         try:
             hash_chain = self._get_hash_chain_manager()
             hash_chain.reset()
-            logger.warning("[IntegritySealer] Chain state reset")
+            logger.warning("integrity_sealer.chain_state_reset")
         except Exception as e:
-            logger.error(f"[IntegritySealer] Failed to reset chain: {e}")
+            logger.error(
+                "integrity_sealer.failed_reset_chain",
+                error=e,
+            )
 
 
 # 싱글톤 인스턴스

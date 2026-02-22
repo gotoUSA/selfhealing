@@ -17,12 +17,12 @@ Features:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone as dt_timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -75,7 +75,10 @@ def _get_redis_client() -> Any | None:
     except ImportError:
         return None
     except Exception as e:
-        logger.debug(f"[HealingEvents] Redis client unavailable: {e}")
+        logger.debug(
+            "healing_events.redis_client_unavailable",
+            error=e,
+        )
         return None
 
 
@@ -128,11 +131,17 @@ def add_healing_event_redis(event: dict[str, Any]) -> bool:
             if redis_client.ttl(key) < 0:
                 redis_client.expire(key, EVENTS_TTL_SECONDS)
 
-            logger.debug(f"[HealingEvents] Event saved to Redis: {key}")
+            logger.debug(
+                "healing_events.event_saved_redis",
+                key=key,
+            )
             return True
 
         except Exception as e:
-            logger.warning(f"[HealingEvents] Redis save failed: {e}")
+            logger.warning(
+                "healing_events.redis_save_failed",
+                error=e,
+            )
 
     # In-Memory fallback
     with _events_memory_lock:
@@ -141,7 +150,7 @@ def add_healing_event_redis(event: dict[str, Any]) -> bool:
             # 제자리에서 오래된 이벤트 삭제
             del _events_memory[: len(_events_memory) - _max_events_memory]
 
-    logger.debug("[HealingEvents] Event saved to in-memory fallback")
+    logger.debug("healing_events.event_saved_memory_fallback")
     return False
 
 
@@ -189,12 +198,18 @@ def get_healing_events_redis(
                             raw = raw.decode("utf-8")
                         events.append(json.loads(raw))
                     except (json.JSONDecodeError, UnicodeDecodeError) as e:
-                        logger.warning(f"[HealingEvents] Failed to parse event: {e}")
+                        logger.warning(
+                            "healing_events.failed_parse_event",
+                            error=e,
+                        )
 
             return events[:limit]
 
         except Exception as e:
-            logger.warning(f"[HealingEvents] Redis query failed: {e}")
+            logger.warning(
+                "healing_events.redis_query_failed",
+                error=e,
+            )
 
     # In-Memory fallback
     with _events_memory_lock:
@@ -230,7 +245,10 @@ def get_healing_events_count_redis(days_back: int = 1) -> int:
             return total
 
         except Exception as e:
-            logger.warning(f"[HealingEvents] Redis count failed: {e}")
+            logger.warning(
+                "healing_events.redis_count_failed",
+                error=e,
+            )
 
     # In-Memory fallback
     with _events_memory_lock:
@@ -262,7 +280,10 @@ def clear_healing_events_redis() -> int:
             redis_client.delete(key)
             count = max(count, redis_count)
         except Exception as e:
-            logger.warning(f"[HealingEvents] Redis clear failed: {e}")
+            logger.warning(
+                "healing_events.redis_clear_failed",
+                error=e,
+            )
 
     return count
 

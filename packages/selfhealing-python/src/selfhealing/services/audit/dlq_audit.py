@@ -9,7 +9,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.services.audit.base import (
@@ -18,7 +18,7 @@ from selfhealing.services.audit.base import (
     _write_to_wal,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def log_dlq_store_audit(
@@ -100,7 +100,10 @@ def log_dlq_store_audit(
         )
     except Exception as e:
         # Audit logging should never break the main flow
-        logger.warning(f"[DLQAudit] Failed to log store: {e}")
+        logger.warning(
+            "dlq_audit.failed_log_store",
+            error=e,
+        )
 
     return wal_seq
 
@@ -190,6 +193,9 @@ def log_dlq_replay_audit(
         )
     except Exception as e:
         # Audit logging should never break the main flow
-        logger.warning(f"[DLQAudit] Failed to log replay: {e}")
+        logger.warning(
+            "dlq_audit.failed_log_replay",
+            error=e,
+        )
 
     return wal_seq

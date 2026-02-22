@@ -18,12 +18,12 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.settings.chaos import get_chaos_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 모듈 로드 시점에 설정값 캐싱
 _chaos_settings = get_chaos_settings()
@@ -73,7 +73,10 @@ def run_scheduled_experiments() -> dict[str, Any]:
                 },
             )
         except Exception as audit_error:
-            logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
+            logger.debug(
+                "chaos_scheduler.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
         return result_dict
 
@@ -124,7 +127,10 @@ def generate_daily_resilience_report() -> dict[str, Any]:
                 details=result_dict,
             )
         except Exception as audit_error:
-            logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
+            logger.debug(
+                "chaos_scheduler.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
         return result_dict
 
@@ -176,7 +182,10 @@ def cleanup_expired_approvals() -> dict[str, Any]:
                 },
             )
         except Exception as audit_error:
-            logger.debug(f"[ChaosScheduler] Audit logging failed: {audit_error}")
+            logger.debug(
+                "chaos_scheduler.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
         return result_dict
 
@@ -253,7 +262,7 @@ def register_celery_tasks(app):
         try:
             return generate_daily_resilience_report()
         except Exception as exc:
-            logger.exception("[ChaosScheduler] Daily report generation failed")
+            logger.exception("chaos_scheduler.daily_report_generation_failed")
             raise self.retry(exc=exc)
 
     @app.task(
@@ -391,7 +400,7 @@ def hunt_zombie_experiments() -> dict[str, Any]:
         - skipped: int (락 경쟁으로 스킵된 수)
         - errors: List[Dict] (에러 발생한 실험 정보)
     """
-    logger.info("[ZombieHunter] Starting zombie experiment hunt")
+    logger.info("zombie_hunter.starting_zombie_experiment_hunt")
 
     try:
         from selfhealing.services.chaos import get_chaos_scheduler
@@ -438,11 +447,17 @@ def hunt_zombie_experiments() -> dict[str, Any]:
                 if not idempotency.acquire_lock(lock_key, ttl_seconds=_chaos_settings.experiment_lock_ttl):
                     # 다른 스케줄러가 이미 처리 중
                     skipped += 1
-                    logger.debug(f"[ZombieHunter] {exp_id} already being handled")
+                    logger.debug(
+                        "zombie_hunter.already_handled",
+                        exp_id=exp_id,
+                    )
                     continue
 
                 try:
-                    logger.warning(f"[ZombieHunter] Zombie detected: {exp_id}")
+                    logger.warning(
+                        "zombie_hunter.zombie_detected",
+                        exp_id=exp_id,
+                    )
 
                     # 강제 rollback
                     if hasattr(experiment, "rollback"):
@@ -455,14 +470,21 @@ def hunt_zombie_experiments() -> dict[str, Any]:
                     scheduler.unregister_experiment_instance(exp_id)
 
                     hunted += 1
-                    logger.info(f"[ZombieHunter] Aborted zombie experiment {exp_id}")
+                    logger.info(
+                        "zombie_hunter.aborted_zombie_experiment",
+                        exp_id=exp_id,
+                    )
 
                 finally:
                     # 락 해제
                     idempotency.release_lock(lock_key)
 
             except Exception as e:
-                logger.error(f"[ZombieHunter] Failed to abort {exp_id}: {e}")
+                logger.error(
+                    "zombie_hunter.failed_abort",
+                    exp_id=exp_id,
+                    error=e,
+                )
                 errors.append({"experiment_id": exp_id, "error": str(e)})
 
         result = {
@@ -473,7 +495,10 @@ def hunt_zombie_experiments() -> dict[str, Any]:
         }
 
         if hunted > 0:
-            logger.warning(f"[ZombieHunter] Hunted {hunted} zombie experiments")
+            logger.warning(
+                "zombie_hunter.hunted_zombie_experiments",
+                hunted=hunted,
+            )
 
         return result
 

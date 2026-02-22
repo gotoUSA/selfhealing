@@ -12,7 +12,7 @@ RateController, CascadeLoadShedding, Bulkhead를 파이프라인 형태로 통�
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,7 +26,7 @@ from selfhealing.scaling.rate_controller import (
     get_rate_controller,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # TrafficGate priority int를 RateController priority tier 문자열로 변환하기 위한 임계치.
@@ -160,10 +160,16 @@ class TrafficGate:
                 )
             return True, None
         except KeyError:
-            logger.debug(f"[TrafficGate] Bulkhead '{bulkhead_name}' not found, skipping")
+            logger.debug(
+                "traffic_gate.bulkhead_found_skipping",
+                bulkhead_name=bulkhead_name,
+            )
             return False, None
         except Exception as e:
-            logger.warning(f"[TrafficGate] Bulkhead error: {e}")
+            logger.warning(
+                "traffic_gate.bulkhead_error",
+                error=e,
+            )
             return False, None
 
     def _check_load_shedding(
@@ -188,7 +194,10 @@ class TrafficGate:
                         metadata=metadata,
                     )
         except Exception as e:
-            logger.warning(f"[TrafficGate] LoadShedding error: {e}")
+            logger.warning(
+                "traffic_gate.loadshedding_error",
+                error=e,
+            )
         return None
 
     def should_allow(
@@ -313,7 +322,10 @@ class TrafficGate:
             bulkhead = registry.get(bulkhead_name)
             bulkhead.release()
         except Exception as e:
-            logger.warning(f"[TrafficGate] Failed to release bulkhead: {e}")
+            logger.warning(
+                "traffic_gate.failed_release_bulkhead",
+                error=e,
+            )
 
     def release_bulkhead(self, bulkhead_name: str) -> None:
         """
@@ -386,7 +398,7 @@ def create_traffic_gate_with_cascade_load_shedding(
     try:
         from selfhealing.audit.cascade_load_shedding import CascadeLoadShedding
     except ImportError:
-        logger.warning("[TrafficGate] CascadeLoadShedding not available, creating gate without it")
+        logger.warning("traffic_gate.cascadeloadshedding_available_creating_gate")
         return TrafficGate()
 
     # 버퍼 크기 제공 함수 생성

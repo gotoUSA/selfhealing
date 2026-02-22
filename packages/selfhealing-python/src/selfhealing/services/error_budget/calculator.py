@@ -11,7 +11,7 @@ DLQ 유입량 및 장애 시간을 기반으로 계산합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import warnings
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -20,7 +20,7 @@ from selfhealing.core.timezone import now
 from selfhealing.services.error_budget.models import ErrorBudgetStatus
 from selfhealing.slo import SLI, SLO, SLOConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ErrorBudgetCalculator:
@@ -141,7 +141,10 @@ class ErrorBudgetCalculator:
                         )
                         error_count = stats.get("total_errors", 0)
             except Exception as e:
-                logger.warning(f"[ErrorBudget] Failed to get error stats: {e}")
+                logger.warning(
+                    "error_budget.failed_get_error_stats",
+                    error=e,
+                )
 
         if self._get_request_stats:
             try:
@@ -151,7 +154,10 @@ class ErrorBudgetCalculator:
                 )
                 total_requests = stats.get("total_requests", 0)
             except Exception as e:
-                logger.warning(f"[ErrorBudget] Failed to get request stats: {e}")
+                logger.warning(
+                    "error_budget.failed_get_request_stats",
+                    error=e,
+                )
 
         # Budget 소진량 계산
         # 방법 1: DLQ 기반 (에러 건수 / 허용 에러)

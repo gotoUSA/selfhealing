@@ -21,7 +21,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.permissions import BasePermission
@@ -40,7 +40,7 @@ from selfhealing.services.canary import (
     get_canary_rollout_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -241,7 +241,12 @@ class CanaryRolloutListView(APIView):
             force_during_chaos=request.data.get("force_during_chaos", False),
         )
 
-        logger.info(f"[CanaryAPI] Rollout created: id={rollout.id}, " f"config={config_type}, by={_get_username(request)}")
+        logger.info(
+            "canary_api.rollout_created",
+            rollout=rollout.id,
+            config_type=config_type,
+            _get_username=_get_username(request),
+        )
 
         return Response(
             {

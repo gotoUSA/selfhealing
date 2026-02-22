@@ -7,7 +7,7 @@ Thin Task, Fat Service 원칙:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -16,7 +16,7 @@ from .aggregator import aggregate_daily_results
 from .formatters import format_report_for_email, format_report_for_slack
 from .models import DailyAutonomousReport
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -92,7 +92,10 @@ class DailyReportService:
         if date is None:
             date = get_now() - timedelta(days=1)
 
-        logger.info(f"[DailyReportService] Generating report for {date:%Y-%m-%d}")
+        logger.info(
+            "daily_report_service.generating_report",
+            date=date,
+        )
 
         try:
             # 1. Aggregate results
@@ -100,7 +103,7 @@ class DailyReportService:
 
             # 2. Skip if no data
             if len(report.entries) == 0:
-                logger.info("[DailyReportService] No entries for report, skipping")
+                logger.info("daily_report_service.no_entries_report_skipping")
                 return ReportResult(
                     success=True,
                     report=report,
@@ -150,7 +153,10 @@ class DailyReportService:
             message = format_report_for_email(report)
             self._send_email(report, message, severity)
         else:
-            logger.warning(f"[DailyReportService] Unknown channel: {channel}")
+            logger.warning(
+                "daily_report_service.unknown_channel",
+                channel=channel,
+            )
 
     def _send_slack(
         self,
@@ -173,7 +179,10 @@ class DailyReportService:
                 metadata=report.to_dict(),
             )
         except Exception as e:
-            logger.error(f"[DailyReportService] Slack send failed: {e}")
+            logger.error(
+                "daily_report_service.slack_send_failed",
+                error=e,
+            )
             raise
 
     def _send_email(
@@ -197,7 +206,10 @@ class DailyReportService:
                 metadata=report.to_dict(),
             )
         except Exception as e:
-            logger.error(f"[DailyReportService] Email send failed: {e}")
+            logger.error(
+                "daily_report_service.email_send_failed",
+                error=e,
+            )
             raise
 
 

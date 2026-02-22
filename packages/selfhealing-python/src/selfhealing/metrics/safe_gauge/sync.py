@@ -6,12 +6,12 @@ Provides synchronization state management for metric reliability.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from dataclasses import dataclass
 from enum import Enum
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SyncStatus(str, Enum):
@@ -77,14 +77,17 @@ class SyncInfo:
             # Stale에서 복구 → 안정화 기간 시작
             self.status = SyncStatus.RECOVERING
             self.stabilization_start = now
-            logger.info(f"[SyncInfo] Starting stabilization period ({self.stabilization_duration}s)")
+            logger.info(
+                "sync_info.starting_stabilization_period",
+                self=self.stabilization_duration,
+            )
         elif self.status == SyncStatus.RECOVERING:
             # 복구 중 계속 동기화 → 안정화 기간 유지
             if not self.is_recovering:
                 # 안정화 기간 완료 → 정상 상태로 전환
                 self.status = SyncStatus.SYNCED
                 self.stabilization_start = None
-                logger.info("[SyncInfo] Stabilization complete, now SYNCED")
+                logger.info("sync_info.stabilization_complete_now_synced")
         else:
             self.status = SyncStatus.SYNCED
 
@@ -94,7 +97,10 @@ class SyncInfo:
     def mark_stale(self, reason: str = "timeout") -> None:
         """Stale 상태로 마킹."""
         if self.status != SyncStatus.STALE:
-            logger.warning(f"[SyncInfo] Marked as STALE: {reason}")
+            logger.warning(
+                "sync_info.marked_stale",
+                reason=reason,
+            )
         self.status = SyncStatus.STALE
         self.stabilization_start = None
 

@@ -16,7 +16,7 @@ Features:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import random
 import threading
 import time
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     from selfhealing.core.hooks import BypassResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -119,7 +119,10 @@ def get_rate_limit_config() -> dict:
         }
     except Exception as e:
         # Fallback to Settings if RuntimeConfig fails
-        logger.warning(f"[RateLimit] Failed to get RuntimeConfig, using settings: {e}")
+        logger.warning(
+            "rate_limit.failed_get_runtimeconfig_using",
+            error=e,
+        )
         return {
             "control_api_rate_limit": default_limit,
             "control_api_window_seconds": default_window,
@@ -413,7 +416,7 @@ class RedisHealthChecker:
     def _handle_no_redis(self) -> bool:
         """Handle case where Redis is not configured."""
         if self._state != RedisHealthState.UNHEALTHY:
-            logger.info("[RedisHealth] Redis not configured - using local fallback")
+            logger.info("redis_health.redis_configured_using_local")
             self._state = RedisHealthState.UNHEALTHY
             self._record_degraded_mode(True)
         return False
@@ -436,7 +439,10 @@ class RedisHealthChecker:
         self._recovery_time = time.time() + jitter
         self._state = RedisHealthState.RECOVERING
 
-        logger.info(f"[RedisHealth] Recovery initiated with {jitter:.1f}s jitter")
+        logger.info(
+            "redis_health.recovery_initiated_jitter",
+            jitter=jitter,
+        )
 
     def _complete_recovery_if_ready(self):
         """Complete recovery after jitter delay."""
@@ -445,7 +451,7 @@ class RedisHealthChecker:
             self._consecutive_failures = 0
             self._recovery_time = None
 
-            logger.info("[RedisHealth] RECOVERED - resuming normal operation")
+            logger.info("redis_health.recovered_resuming_normal_operation")
             self._record_degraded_mode(False)
 
     def _get_redis_client(self):
@@ -470,7 +476,10 @@ class RedisHealthChecker:
 
             return None
         except Exception as e:
-            logger.debug(f"[RedisHealth] Could not get Redis client: {e}")
+            logger.debug(
+                "redis_health.get_redis_client",
+                error=e,
+            )
             return None
 
     def _record_degraded_mode(self, is_degraded: bool):
@@ -711,7 +720,7 @@ class HybridRateLimitMiddleware:
         # Redis unavailable - fail-open but this shouldn't happen
         # because we check health first
         if not self.redis_client:
-            logger.warning("[RateLimit] Redis unavailable in check_redis_limit")
+            logger.warning("rate_limit.redis_unavailable")
             return (True, rate_limit, 0)
 
         try:
@@ -734,14 +743,22 @@ class HybridRateLimitMiddleware:
             reset_time = now + window_seconds
 
             if current_count > rate_limit:
-                logger.warning(f"[RateLimit] Exceeded: key={key}, count={current_count}, limit={rate_limit}")
+                logger.warning(
+                    "rate_limit.exceeded",
+                    key=key,
+                    current_count=current_count,
+                    rate_limit=rate_limit,
+                )
                 return (False, 0, reset_time)
 
             return (True, remaining, reset_time)
 
         except Exception as e:
             # On Redis error, fall back to local limiter
-            logger.error(f"[RateLimit] Redis error - falling back to local: {e}")
+            logger.error(
+                "rate_limit.redis_error_falling_back",
+                error=e,
+            )
             config = get_rate_limit_config()
             is_allowed, remaining = self._check_local_limit(
                 request,
@@ -806,7 +823,10 @@ class HybridRateLimitMiddleware:
                 f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
         except Exception as e:
-            logger.error(f"[RateLimit] Failed to write fallback log: {e}")
+            logger.error(
+                "rate_limit.failed_write_fallback_log",
+                error=e,
+            )
 
         # AuditService (best-effort)
         try:
@@ -829,7 +849,10 @@ class HybridRateLimitMiddleware:
                 },
             )
         except Exception as e:
-            logger.debug(f"[RateLimit] Shadow audit failed (non-critical): {e}")
+            logger.debug(
+                "rate_limit.shadow_audit_failed_non",
+                error=e,
+            )
 
     def _record_exceeded(self, mode: str):
         """Record rate limit exceeded metric."""

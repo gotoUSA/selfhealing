@@ -14,7 +14,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import AsyncGenerator
@@ -25,7 +25,7 @@ from selfhealing.resilience.bulkhead.base import (
 )
 from selfhealing.resilience.bulkhead.exceptions import BulkheadFullError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AsyncSemaphoreBulkhead:

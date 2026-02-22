@@ -16,14 +16,14 @@ Tie-breaking 순서 (동일 타임스탬프 시):
 
 from __future__ import annotations
 
-import logging
+import structlog
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
 from selfhealing.multiregion.config import get_multiregion_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

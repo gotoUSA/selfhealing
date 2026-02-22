@@ -11,10 +11,10 @@ RuntimeFeedbackLoop에서 사용하는 메트릭 수집 어댑터들
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AutoTuningMetricsAdapter(Protocol):
@@ -77,7 +77,10 @@ class InternalMetricsAdapter:
             "sample_count": self._get_sample_count(),
         }
 
-        logger.debug(f"[InternalMetrics] Fetched: {metrics}")
+        logger.debug(
+            "internal_metrics.fetched",
+            metrics=metrics,
+        )
         return metrics
 
     def record_metric(self, name: str, value: float):
@@ -90,7 +93,10 @@ class InternalMetricsAdapter:
                 key = f"{self.metrics_prefix}:{name}"
                 self.cache_provider.set(key, value)
             except Exception as e:
-                logger.debug(f"[InternalMetrics] Cache set failed: {e}")
+                logger.debug(
+                    "internal_metrics.cache_set_failed",
+                    error=e,
+                )
 
     def _get_metric(self, name: str, default: float = 0.0) -> float:
         """메트릭 값 조회"""
@@ -201,7 +207,10 @@ class PrometheusMetricsAdapter:
             f'sum(http_requests_total{{job="{self.job_name}"}})', default=1000
         )
 
-        logger.debug(f"[PrometheusMetrics] Fetched: {metrics}")
+        logger.debug(
+            "prometheus_metrics.fetched",
+            metrics=metrics,
+        )
         return metrics
 
     def _query_metric(self, query: str, default: float = 0.0) -> float:
@@ -228,7 +237,10 @@ class PrometheusMetricsAdapter:
 
             return default
         except Exception as e:
-            logger.debug(f"[PrometheusMetrics] Query failed: {e}")
+            logger.debug(
+                "prometheus_metrics.query_failed",
+                error=e,
+            )
             return default
 
 

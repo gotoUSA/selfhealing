@@ -5,10 +5,10 @@ RecoveryDampeningMixin for AdaptiveThrottle.
 """
 
 import selfhealing.services.throttle.adaptive as _adaptive_mod
-import logging
+import structlog
 import threading
 import time
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 
@@ -68,7 +68,10 @@ class RecoveryDampeningMixin:
         target_limit = int(self._base_limit_before_emergency * self.RECOVERY_DAMPENING_MULTIPLIERS[0])
         self.current_limit = target_limit
 
-        logger.info(f"[AdaptiveThrottle] Recovery dampening started: " f"step=0 (80%), limit={target_limit}")
+        logger.info(
+            "adaptive_throttle.recovery_dampening_started",
+            target_limit=target_limit,
+        )
 
         # 감사 로깅 (Recovery Dampening 시작)
         _adaptive_mod._record_audit_safe(

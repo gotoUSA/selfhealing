@@ -8,7 +8,7 @@ Endpoints:
 - POST /api/self-healing/l2-storage/drift/reconcile/<service_name>/  - Reconcile single service
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework import status
@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.views.l2_storage_utils import get_layered_repository
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DriftReconciliationStatsView(APIView):

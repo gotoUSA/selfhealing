@@ -33,7 +33,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -42,7 +42,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -276,11 +276,18 @@ class CausationContext:
 
         token = _current_causation.set(info)
         try:
-            logger.debug(f"[CausationContext] Started cascade: " f"cascade={cascade_id}, namespace={namespace}")
+            logger.debug(
+                "causation_context.started_cascade",
+                cascade_id=cascade_id,
+                namespace=namespace,
+            )
             yield info
         finally:
             _current_causation.reset(token)
-            logger.debug(f"[CausationContext] Ended cascade: " f"cascade={cascade_id}")
+            logger.debug(
+                "causation_context.ended_cascade",
+                cascade_id=cascade_id,
+            )
 
     @classmethod
     @contextmanager
@@ -318,7 +325,11 @@ class CausationContext:
             trigger_event_id=system_event_id,
             metadata={**(metadata or {}), "system_source": source},
         ) as ctx:
-            logger.debug(f"[CausationContext] Started system cascade: " f"source={source}, trigger={system_event_id}")
+            logger.debug(
+                "causation_context.started_system_cascade",
+                source=source,
+                system_event_id=system_event_id,
+            )
             yield ctx
 
     @classmethod
@@ -350,7 +361,11 @@ class CausationContext:
 
         token = _current_causation.set(continued_info)
         try:
-            logger.debug(f"[CausationContext] Continued cascade: " f"cascade={info.cascade_id}, depth={new_depth}")
+            logger.debug(
+                "causation_context.continued_cascade",
+                info=info.cascade_id,
+                new_depth=new_depth,
+            )
             yield continued_info
         finally:
             _current_causation.reset(token)

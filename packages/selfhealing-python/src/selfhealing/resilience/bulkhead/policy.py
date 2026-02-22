@@ -21,7 +21,7 @@ bulkhead_policy() / async_bulkhead_policy() 팩토리 함수가 Registry 연동�
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any, Callable, TypeVar
 
 from selfhealing.interfaces.resilience_policy import (
@@ -37,7 +37,7 @@ from selfhealing.resilience.bulkhead.exceptions import (
     BulkheadTimeoutError,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 

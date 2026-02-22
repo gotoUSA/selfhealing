@@ -8,7 +8,7 @@ L3: Anomaly Detection - Statistical outliers
 
 from __future__ import annotations
 
-import logging
+import structlog
 import math
 import re
 import threading
@@ -19,7 +19,7 @@ from typing import Any
 
 from selfhealing.services.corruption_shield.config import CorruptionShieldConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

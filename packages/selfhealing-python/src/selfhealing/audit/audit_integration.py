@@ -28,7 +28,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import queue
 import threading
 import time
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from selfhealing.audit.recorder import ResilientContinuousAuditRecorder
     from selfhealing.settings.batch import BatchSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -180,7 +180,7 @@ class AsyncLoggerAdapter:
                 name="AsyncLoggerAdapter",
             )
             self._worker_thread.start()
-            logger.info("[AsyncLoggerAdapter] Worker started")
+            logger.info("async_logger_adapter.worker_started")
 
     def stop(self, timeout: float = 5.0) -> None:
         """백그라운드 워커 중지."""
@@ -191,7 +191,7 @@ class AsyncLoggerAdapter:
 
         if self._worker_thread:
             self._worker_thread.join(timeout=timeout)
-            logger.info("[AsyncLoggerAdapter] Worker stopped")
+            logger.info("async_logger_adapter.worker_stopped")
 
     def log(
         self,
@@ -234,7 +234,7 @@ class AsyncLoggerAdapter:
                 return True
             except queue.Full:
                 self._stats["queue_overflows"] += 1
-                logger.warning("[AsyncLoggerAdapter] Queue full, event dropped")
+                logger.warning("async_logger_adapter.queue_full_event_dropped")
                 return False
 
     def log_cb_event(
@@ -410,10 +410,16 @@ class AsyncLoggerAdapter:
             self._flush_callback(events)
             self._stats["events_flushed"] += len(events)
             self._stats["batch_flushes"] += 1
-            logger.debug(f"[AsyncLoggerAdapter] Flushed {len(events)} events")
+            logger.debug(
+                "async_logger_adapter.flushed_events",
+                count=len(events),
+            )
         except Exception as e:
             self._stats["flush_errors"] += 1
-            logger.error(f"[AsyncLoggerAdapter] Flush failed: {e}")
+            logger.error(
+                "async_logger_adapter.flush_failed",
+                error=e,
+            )
 
     def _flush_immediate(self, events: list[dict[str, Any]]) -> None:
         """즉시 전송."""
@@ -588,14 +594,20 @@ class IntegratedAuditRecorder:
         """Observer 등록."""
         with self._observers_lock:
             self._observers.append(observer)
-            logger.debug(f"[IntegratedRecorder] Observer attached: {type(observer).__name__}")
+            logger.debug(
+                "integrated_recorder.observer_attached",
+                value=type(observer).__name__,
+            )
 
     def detach_observer(self, observer: AuditEventObserver) -> None:
         """Observer 해제."""
         with self._observers_lock:
             if observer in self._observers:
                 self._observers.remove(observer)
-                logger.debug(f"[IntegratedRecorder] Observer detached: {type(observer).__name__}")
+                logger.debug(
+                    "integrated_recorder.observer_detached",
+                    value=type(observer).__name__,
+                )
 
     def attach_async_logger(self, async_logger: AsyncLoggerAdapter) -> None:
         """
@@ -612,7 +624,7 @@ class IntegratedAuditRecorder:
         # AsyncLogger 시작 (아직 안 됐으면)
         async_logger.start()
 
-        logger.info("[IntegratedRecorder] AsyncLoggerAdapter attached")
+        logger.info("integrated_recorder.asyncloggeradapter_attached")
 
     def _notify_observers(self, event: AuditEventData) -> None:
         """모든 Observer에 이벤트 전파."""
@@ -621,7 +633,10 @@ class IntegratedAuditRecorder:
                 try:
                     observer.on_event(event)
                 except Exception as e:
-                    logger.error(f"[IntegratedRecorder] Observer error: {e}")
+                    logger.error(
+                        "integrated_recorder.observer_error",
+                        error=e,
+                    )
 
     def _check_circuit_state_change(self) -> None:
         """Circuit Breaker 상태 변경 감지 및 전파."""
@@ -795,11 +810,20 @@ def create_command_center_callback(
             )
             with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
                 if response.status != 200:
-                    logger.warning(f"Command Center returned {response.status}")
+                    logger.warning(
+                        "command_center_returned",
+                        response=response.status,
+                    )
         except urllib.error.URLError as e:
-            logger.error(f"Failed to send to Command Center: {e}")
+            logger.error(
+                "failed_send_command_center",
+                error=e,
+            )
         except Exception as e:
-            logger.error(f"Command Center callback error: {e}")
+            logger.error(
+                "command_center_callback_error",
+                error=e,
+            )
 
     return send_to_command_center
 

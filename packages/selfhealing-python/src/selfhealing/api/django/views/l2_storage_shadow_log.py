@@ -10,7 +10,7 @@ Endpoints:
 - GET  /api/self-healing/l2-storage/shadow-log/service/<name>/     - Get logs by service
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework import status
@@ -24,7 +24,7 @@ from selfhealing.api.django.views.l2_storage_utils import (
     get_shadow_logger,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ShadowLogListView(APIView):

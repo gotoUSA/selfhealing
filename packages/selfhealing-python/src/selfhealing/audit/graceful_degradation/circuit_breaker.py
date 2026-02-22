@@ -7,7 +7,7 @@ Redis instance and allowing recovery time.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from typing import TYPE_CHECKING, Any
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from .degradation_manager import HashChainDegradationManager
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HashChainCircuitBreaker:
@@ -156,13 +156,20 @@ class HashChainCircuitBreaker:
             self._half_open_requests = 0
             self._success_count = 0
             self._state_changes += 1
-            logger.info(f"[CircuitBreaker:{self._name}] OPEN → HALF_OPEN")
+            logger.info(
+                "circuitbreaker_open",
+                self=self._name,
+            )
 
     def _transition_to_open(self) -> None:
         """Transition to OPEN state."""
         self._state = CircuitState.OPEN
         self._state_changes += 1
-        logger.warning(f"[CircuitBreaker:{self._name}] → OPEN (failures: {self._failure_count})")
+        logger.warning(
+            "circuitbreaker_open_failures",
+            self=self._name,
+            self_1=self._failure_count,
+        )
 
     def _transition_to_closed(self) -> None:
         """Transition to CLOSED state."""
@@ -171,7 +178,10 @@ class HashChainCircuitBreaker:
         self._success_count = 0
         self._half_open_requests = 0
         self._state_changes += 1
-        logger.info(f"[CircuitBreaker:{self._name}] → CLOSED (recovered)")
+        logger.info(
+            "circuitbreaker_closed_recovered",
+            self=self._name,
+        )
 
         # Notify degradation manager
         if self._degradation_manager:

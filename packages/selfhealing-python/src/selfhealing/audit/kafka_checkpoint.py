@@ -37,7 +37,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import tempfile
 import threading
@@ -50,7 +50,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -236,7 +236,10 @@ class KafkaCheckpointManager:
             with open(file_path, encoding="utf-8") as f:
                 return KafkaCheckpointData.from_dict(json.load(f))
         except Exception as e:
-            logger.warning(f"[KafkaCheckpointManager] Load failed: {e}")
+            logger.warning(
+                "kafka_checkpoint_manager.load_failed",
+                error=e,
+            )
             return None
 
     def _save_to_file(self, namespace: str, data: KafkaCheckpointData) -> None:
@@ -346,13 +349,19 @@ def sync_wal_to_kafka_with_checkpoint(
                     domain=namespace,
                 )
                 if not success:
-                    logger.error(f"[WAL→Kafka] Publish failed at seq={entry.sequence}")
+                    logger.error(
+                        "wal_kafka_publish_failed",
+                        entry=entry.sequence,
+                    )
                     break
 
                 # 동기 플러시로 전송 완료 확인
                 remaining = producer.flush(timeout=5.0)
                 if remaining > 0:
-                    logger.warning(f"[WAL→Kafka] {remaining} messages pending after flush")
+                    logger.warning(
+                        "wal_kafka_messages_pending",
+                        remaining=remaining,
+                    )
 
                 # 토픽 이름 획득
                 kafka_topic = producer._settings.full_audit_topic
@@ -377,7 +386,11 @@ def sync_wal_to_kafka_with_checkpoint(
             synced += 1
 
         except Exception as e:
-            logger.error(f"[WAL→Kafka] Sync failed at seq={entry.sequence}: {e}")
+            logger.error(
+                "wal_kafka_sync_failed",
+                entry=entry.sequence,
+                error=e,
+            )
             break
 
     return synced

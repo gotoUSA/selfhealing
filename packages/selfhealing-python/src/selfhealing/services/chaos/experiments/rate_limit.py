@@ -7,7 +7,7 @@ Tests rate limit cascade detection and self-DDoS protection.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -15,7 +15,7 @@ from selfhealing.services.chaos.base import (
     _apply_chaos_config,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RateLimitExperiment(ChaosExperiment):
@@ -78,7 +78,10 @@ class RateLimitExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[RateLimitInjection] Failed to inject: {e}")
+            logger.error(
+                "rate_limit_injection.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -90,7 +93,10 @@ class RateLimitExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[RateLimitInjection] Rolling back {self.experiment_id}")
+            logger.info(
+                "rate_limit_injection.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 # Rate Limit Tracker 리셋은 어려우므로 설정만 해제
@@ -105,7 +111,10 @@ class RateLimitExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[RateLimitInjection] Rollback failed: {e}")
+                logger.error(
+                    "rate_limit_injection.rollback_failed",
+                    error=e,
+                )
 
 
 __all__ = ["RateLimitExperiment"]

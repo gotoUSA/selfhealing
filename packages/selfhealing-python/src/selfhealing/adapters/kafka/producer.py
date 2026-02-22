@@ -24,7 +24,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
 from selfhealing.adapters.kafka.config import KafkaSettings, get_kafka_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -127,7 +127,10 @@ class KafkaAuditProducer:
             )
             raise
         except Exception as e:
-            logger.error(f"[KafkaProducer] 초기화 실패: {e}")
+            logger.error(
+                "kafka_producer.초기화_실패",
+                error=e,
+            )
             raise
 
     def _build_producer_config(self) -> dict[str, Any]:
@@ -174,24 +177,38 @@ class KafkaAuditProducer:
             if err:
                 self._stats["messages_failed"] += 1
                 self._stats["last_error"] = str(err)
-                logger.error(f"[KafkaProducer] 전송 실패: {err}")
+                logger.error(
+                    "kafka_producer.전송_실패",
+                    error=err,
+                )
             else:
                 self._stats["messages_delivered"] += 1
-                logger.debug(f"[KafkaProducer] 전송 완료: " f"{report.topic}[{report.partition}]@{report.offset}")
+                logger.debug(
+                    "kafka_producer.전송_완료",
+                    report=report.topic,
+                    report_1=report.partition,
+                    report_2=report.offset,
+                )
 
         # 사용자 정의 콜백 호출
         if user_callback:
             try:
                 user_callback(report)
             except Exception as e:
-                logger.error(f"[KafkaProducer] 사용자 콜백 오류: {e}")
+                logger.error(
+                    "kafka_producer.사용자_콜백_오류",
+                    error=e,
+                )
 
         # 기본 콜백 호출
         if self._on_delivery:
             try:
                 self._on_delivery(report)
             except Exception as e:
-                logger.error(f"[KafkaProducer] on_delivery 콜백 오류: {e}")
+                logger.error(
+                    "kafka_producer.콜백_오류",
+                    error=e,
+                )
 
     def publish(
         self,
@@ -222,7 +239,7 @@ class KafkaAuditProducer:
             전송 시작 성공 여부 (실제 전송 완료는 콜백에서 확인)
         """
         if not self._producer:
-            logger.error("[KafkaProducer] Producer가 초기화되지 않았습니다")
+            logger.error("kafka_producer.producer가_초기화되지_않았습니다")
             return False
 
         try:
@@ -269,7 +286,10 @@ class KafkaAuditProducer:
             return True
 
         except Exception as e:
-            logger.error(f"[KafkaProducer] 발행 오류: {e}")
+            logger.error(
+                "kafka_producer.발행_오류",
+                error=e,
+            )
             with self._lock:
                 self._stats["messages_failed"] += 1
                 self._stats["last_error"] = str(e)
@@ -320,7 +340,10 @@ class KafkaAuditProducer:
 
         remaining = self._producer.flush(timeout)
         if remaining > 0:
-            logger.warning(f"[KafkaProducer] 플러시 후 {remaining}개 메시지가 버퍼에 남음")
+            logger.warning(
+                "kafka_producer.플러시_메시지가_버퍼에_남음",
+                remaining=remaining,
+            )
         return remaining
 
     def poll(self, timeout: float = 0) -> int:
@@ -345,9 +368,12 @@ class KafkaAuditProducer:
             # 미전송 메시지 처리
             remaining = self.flush(timeout=30.0)
             if remaining > 0:
-                logger.warning(f"[KafkaProducer] {remaining}개 메시지가 미전송 상태로 종료")
+                logger.warning(
+                    "kafka_producer.메시지가_미전송_상태로_종료",
+                    remaining=remaining,
+                )
             self._producer = None
-            logger.info("[KafkaProducer] 종료됨")
+            logger.info("kafka_producer.종료됨")
 
     def get_stats(self) -> dict[str, Any]:
         """전송 통계 반환."""

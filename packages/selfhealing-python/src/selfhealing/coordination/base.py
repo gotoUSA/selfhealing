@@ -7,14 +7,14 @@ Leader Election 인터페이스.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Callable, Protocol
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LeadershipState(str, Enum):

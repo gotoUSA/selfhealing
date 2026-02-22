@@ -14,7 +14,7 @@ Related:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, TypeVar
@@ -31,7 +31,7 @@ from selfhealing.interfaces.task_queue import (
 )
 from selfhealing.settings.celery_task import get_celery_task_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 F = TypeVar("F", bound=Callable)
 
@@ -138,7 +138,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
             # Store reference
             self._registered_tasks[task_name] = celery_task
 
-            logger.debug(f"[CeleryAdapter] Registered task: {task_name}")
+            logger.debug(
+                "cell_registry.bulkheads_registered",
+                task_name=task_name,
+            )
             return celery_task
 
         return decorator
@@ -198,7 +201,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
         if not options.retry:
             celery_options["retry"] = False
 
-        logger.debug(f"[CeleryAdapter] Enqueueing task: {task_name}")
+        logger.debug(
+            "celery_adapter.enqueueing_task",
+            task_name=task_name,
+        )
 
         result = task.apply_async(args=args, kwargs=kwargs, **celery_options)
         return result.id
@@ -239,7 +245,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
         for child_result in result.children:
             task_ids.append(child_result.id)
 
-        logger.debug(f"[CeleryAdapter] Enqueued {len(task_ids)} tasks")
+        logger.debug(
+            "celery_adapter.enqueued_tasks",
+            count=len(task_ids),
+        )
         return task_ids
 
     # =========================================================================
@@ -299,7 +308,11 @@ class CeleryTaskAdapter(TaskQueueInterface):
         except TaskTimeoutError:
             raise
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Error getting result for {task_id}: {e}")
+            logger.error(
+                "celery_adapter.error_getting_result",
+                task_id=task_id,
+                error=e,
+            )
             return TaskResult(
                 task_id=task_id,
                 status=TaskStatus.PENDING,
@@ -323,10 +336,17 @@ class CeleryTaskAdapter(TaskQueueInterface):
                 terminate=terminate,
                 signal=signal,
             )
-            logger.info(f"[CeleryAdapter] Revoked task: {task_id}")
+            logger.info(
+                "celery_adapter.revoked_task",
+                task_id=task_id,
+            )
             return True
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Error revoking task {task_id}: {e}")
+            logger.error(
+                "celery_adapter.error_revoking_task",
+                task_id=task_id,
+                error=e,
+            )
             return False
 
     def retry(
@@ -369,7 +389,11 @@ class CeleryTaskAdapter(TaskQueueInterface):
             result.forget()
             return True
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Error forgetting task {task_id}: {e}")
+            logger.error(
+                "celery_adapter.error_forgetting_task",
+                task_id=task_id,
+                error=e,
+            )
             return False
 
     # =========================================================================
@@ -410,7 +434,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
             enabled=True,
         )
 
-        logger.info(f"[CeleryAdapter] Scheduled periodic task: {schedule_name}")
+        logger.info(
+            "celery_adapter.scheduled_periodic_task",
+            schedule_name=schedule_name,
+        )
         return schedule_name
 
     def unschedule(self, schedule_id: str) -> bool:
@@ -420,7 +447,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
 
         if schedule_id in self._schedules:
             del self._schedules[schedule_id]
-            logger.info(f"[CeleryAdapter] Unscheduled: {schedule_id}")
+            logger.info(
+                "celery_adapter.unscheduled",
+                schedule_id=schedule_id,
+            )
             return True
 
         return False
@@ -441,10 +471,17 @@ class CeleryTaskAdapter(TaskQueueInterface):
         """Purge all tasks from a queue."""
         try:
             purged = self._app.control.purge()
-            logger.warning(f"[CeleryAdapter] Purged {purged} tasks from {queue_name}")
+            logger.warning(
+                "celery_adapter.purged_tasks",
+                purged=purged,
+                queue_name=queue_name,
+            )
             return purged or 0
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Error purging queue: {e}")
+            logger.error(
+                "celery_adapter.error_purging_queue",
+                error=e,
+            )
             return 0
 
     def queue_length(self, queue_name: str = "default") -> int:
@@ -455,7 +492,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
                 queue = conn.default_channel.queue_declare(queue_name, passive=True)
                 return queue.message_count
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Error getting queue length: {e}")
+            logger.error(
+                "celery_adapter.error_getting_queue_length",
+                error=e,
+            )
             return 0
 
     def list_queues(self) -> list[str]:
@@ -475,7 +515,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
                 return sum(len(tasks) for tasks in active.values())
             return 0
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Error getting active count: {e}")
+            logger.error(
+                "celery_adapter.error_getting_active_count",
+                error=e,
+            )
             return 0
 
     # =========================================================================
@@ -491,7 +534,10 @@ class CeleryTaskAdapter(TaskQueueInterface):
             ping_result = inspect.ping()
             return ping_result is not None and len(ping_result) > 0
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Health check failed: {e}")
+            logger.error(
+                "celery_adapter.health_check_failed",
+                error=e,
+            )
             return False
 
     def worker_count(self) -> int:
@@ -504,5 +550,8 @@ class CeleryTaskAdapter(TaskQueueInterface):
                 return len(ping_result)
             return 0
         except Exception as e:
-            logger.error(f"[CeleryAdapter] Error getting worker count: {e}")
+            logger.error(
+                "celery_adapter.error_getting_worker_count",
+                error=e,
+            )
             return 0

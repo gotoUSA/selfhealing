@@ -19,7 +19,7 @@ Emergency Level에 따른 CB 임계값 자동 조정.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -31,7 +31,7 @@ from selfhealing.services.circuit_breaker.models import (
 if TYPE_CHECKING:
     from selfhealing.services.emergency_mode import EmergencyModeManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -116,7 +116,7 @@ class AdaptiveThresholdManager:
 
                 self._emergency_manager = EmergencyModeManager()
             except ImportError:
-                logger.warning("[AdaptiveThreshold] EmergencyModeManager not available, " "using NORMAL level")
+                logger.warning("adaptive_threshold.emergencymodemanager_available_using_normal")
         return self._emergency_manager
 
     def get_current_emergency_level(self) -> str:
@@ -135,7 +135,10 @@ class AdaptiveThresholdManager:
             level_value = level.value if hasattr(level, "value") else int(level)
             return EMERGENCY_LEVEL_MAPPING.get(level_value, "NORMAL")
         except Exception as e:
-            logger.warning(f"[AdaptiveThreshold] Failed to get emergency level: {e}")
+            logger.warning(
+                "adaptive_threshold.failed_get_emergency_level",
+                error=e,
+            )
             return "NORMAL"
 
     def get_adjusted_threshold(

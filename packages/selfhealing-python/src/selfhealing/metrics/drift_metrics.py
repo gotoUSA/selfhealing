@@ -17,9 +17,9 @@ Drift Detection Metrics for Self-Healing System.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Try to import prometheus_client, but don't fail if not installed
 try:

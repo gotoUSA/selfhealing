@@ -10,7 +10,7 @@ Note:
 """
 
 import json
-import logging
+import structlog
 
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -19,7 +19,7 @@ from django.views.decorators.http import require_GET
 from selfhealing.services.stress_test_service import get_stress_test_service
 from selfhealing.settings.stress_test import get_stress_test_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

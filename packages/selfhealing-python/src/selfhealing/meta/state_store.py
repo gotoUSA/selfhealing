@@ -12,13 +12,13 @@ Pod 재시작 시에도 상태 유지를 위한 Redis 기반 저장소.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class WatchdogStateStore:
@@ -107,7 +107,10 @@ class WatchdogStateStore:
                         count = count.decode("utf-8")
                     return int(count)
             except Exception as e:
-                logger.debug(f"[WatchdogStateStore] Redis get failed: {e}")
+                logger.debug(
+                    "watchdog_state_store.redis_get_failed",
+                    error=e,
+                )
 
         # 폴백: 로컬 메모리
         with self._lock:
@@ -130,7 +133,10 @@ class WatchdogStateStore:
                 redis.expire(self.FAILURES_KEY, self.STATE_TTL_SECONDS)
                 return new_count
             except Exception as e:
-                logger.debug(f"[WatchdogStateStore] Redis incr failed: {e}")
+                logger.debug(
+                    "watchdog_state_store.redis_incr_failed",
+                    error=e,
+                )
 
         # 폴백
         with self._lock:
@@ -328,7 +334,10 @@ class WatchdogStateStore:
             acquired = redis.set(lock_key, "1", nx=True, ex=lock_ttl_seconds)
             return bool(acquired)
         except Exception as e:
-            logger.debug(f"[WatchdogStateStore] Lock acquire failed: {e}")
+            logger.debug(
+                "watchdog_state_store.lock_acquire_failed",
+                error=e,
+            )
             return True  # 실패 시 진행 허용
 
     def release_escalation_lock(self, component: str) -> None:

@@ -4,14 +4,14 @@ Async Audit Writer (Non-blocking writes).
 Provides asynchronous audit writing with background thread.
 """
 
-import logging
+import structlog
 import queue
 import threading
 import time
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AsyncAuditWriter:
@@ -76,7 +76,7 @@ class AsyncAuditWriter:
             name="AsyncAuditWriter",
         )
         self._thread.start()
-        logger.info("[AsyncAuditWriter] Started")
+        logger.info("async_audit_writer.started")
 
     def stop(self, timeout: float = 5.0) -> None:
         """Stop background writer thread."""
@@ -146,7 +146,10 @@ class AsyncAuditWriter:
                     last_flush = time.monotonic()
 
             except Exception as e:
-                logger.error(f"[AsyncAuditWriter] Writer loop error: {e}")
+                logger.error(
+                    "async_audit_writer.writer_loop_error",
+                    error=e,
+                )
 
         # Final flush on stop
         if batch:
@@ -159,7 +162,10 @@ class AsyncAuditWriter:
                 if self._sync_writer(entry):
                     self._entries_written += 1
             except Exception as e:
-                logger.error(f"[AsyncAuditWriter] Write failed: {e}")
+                logger.error(
+                    "async_audit_writer.write_failed",
+                    error=e,
+                )
 
     def get_stats(self) -> dict[str, Any]:
         """Get writer statistics."""

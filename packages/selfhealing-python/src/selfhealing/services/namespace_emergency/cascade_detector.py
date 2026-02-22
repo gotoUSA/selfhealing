@@ -25,7 +25,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -34,7 +34,7 @@ from typing import Any
 from selfhealing.services.coordination.enums import EmergencyScope
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -398,7 +398,10 @@ class RegionalCascadeDetector:
                 triggered_by="CascadeDetector",
             )
         except Exception as e:
-            logger.warning(f"[CascadeDetector] Audit log failed: {e}")
+            logger.warning(
+                "cascade_detector.audit_log_failed",
+                error=e,
+            )
 
         logger.critical(
             f"[CascadeDetector] AUTO-ESCALATED to GLOBAL STRICT: "

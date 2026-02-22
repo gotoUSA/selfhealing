@@ -11,12 +11,12 @@ Environment Variables:
     SELFHEALING_HTTP_CLIENT_DEFAULT_TIMEOUT=30.0
 """
 
-import logging
+import structlog
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HttpClientSettings(BaseSettings):

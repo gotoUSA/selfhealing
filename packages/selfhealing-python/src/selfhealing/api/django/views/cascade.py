@@ -16,7 +16,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from rest_framework.request import Request
@@ -25,7 +25,7 @@ from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_cascade_auditor():
@@ -482,7 +482,10 @@ class CascadeCheckpointView(APIView):
         auditor = _get_cascade_auditor()
         checkpoint = auditor.create_checkpoint(namespace)
 
-        logger.info(f"[CascadeAPI] Checkpoint created for namespace={namespace}")
+        logger.info(
+            "cascade_api.checkpoint_created",
+            namespace=namespace,
+        )
 
         return Response(
             {

@@ -28,7 +28,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -41,7 +41,7 @@ from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
 if TYPE_CHECKING:
     from selfhealing.services.event_bus import SelfHealingEventBus
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -63,9 +63,12 @@ def _record_audit_safe(
 
         record_throttle_audit(action=action, **kwargs)
     except ImportError:
-        logger.debug("[AdaptiveThrottle] Audit module not available")
+        logger.debug("adaptive_throttle.audit_module_available")
     except Exception as e:
-        logger.debug(f"[AdaptiveThrottle] Failed to record audit: {e}")
+        logger.debug(
+            "adaptive_throttle.failed_record_audit",
+            error=e,
+        )
 
 
 def _record_limit_history(
@@ -90,9 +93,12 @@ def _record_limit_history(
             trigger_source=trigger_source,
         )
     except ImportError:
-        logger.debug("[AdaptiveThrottle] Postmortem module not available")
+        logger.debug("adaptive_throttle.postmortem_module_available")
     except Exception as e:
-        logger.debug(f"[AdaptiveThrottle] Failed to record limit history: {e}")
+        logger.debug(
+            "adaptive_throttle.failed_record_limit_history",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -373,7 +379,10 @@ def _record_throttle_metrics(
         )
 
     except Exception as e:
-        logger.debug(f"[AdaptiveThrottle] Failed to record metrics: {e}")
+        logger.debug(
+            "adaptive_throttle.metrics_failed",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -405,10 +414,13 @@ def _get_event_bus_safe() -> "SelfHealingEventBus | None":
 
         return get_event_bus()
     except ImportError:
-        logger.debug("[AdaptiveThrottle] EventBus not available, skipping event publishing")
+        logger.debug("adaptive_throttle.eventbus_available_skipping_event")
         return None
     except Exception as e:
-        logger.warning(f"[AdaptiveThrottle] Failed to get EventBus: {e}")
+        logger.warning(
+            "adaptive_throttle.failed_get_eventbus",
+            error=e,
+        )
         return None
 
 
@@ -434,7 +446,10 @@ def _emit_throttle_event(
 
         event_type = getattr(EventType, event_type_name, None)
         if event_type is None:
-            logger.warning(f"[AdaptiveThrottle] Unknown event type: {event_type_name}")
+            logger.warning(
+                "adaptive_throttle.unknown_event_type",
+                event_type_name=event_type_name,
+            )
             return
 
         priority = getattr(EventPriority, priority_name, EventPriority.NORMAL)
@@ -445,9 +460,16 @@ def _emit_throttle_event(
             source="throttle",
             priority=priority,
         )
-        logger.debug(f"[AdaptiveThrottle] Published {event_type_name} event")
+        logger.debug(
+            "adaptive_throttle.event_published",
+            event_type_name=event_type_name,
+        )
     except Exception as e:
-        logger.warning(f"[AdaptiveThrottle] Failed to emit {event_type_name}: {e}")
+        logger.warning(
+            "adaptive_throttle.failed_emit",
+            event_type_name=event_type_name,
+            error=e,
+        )
 
 
 # GradientCalculator, RTTSample은 gradient.py로 추출됨.
@@ -617,7 +639,7 @@ class AdaptiveThrottle(
         try:
             self._init_dlq_replay_integration()
         except Exception:
-            logger.debug("[AdaptiveThrottle] DLQ replay integration init skipped")
+            logger.debug("adaptive_throttle.dlq_replay_integration_init")
 
     @property
     def conservative_limit(self) -> int:
@@ -736,7 +758,7 @@ class AdaptiveThrottle(
                     operation_name="adaptive_throttle:limit_adjustment",
                 ):
                     self._gradient_frozen = True
-                    logger.warning("[AdaptiveThrottle] Governance blocked limit adjustment, " "gradient frozen")
+                    logger.warning("adaptive_throttle.governance_blocked")
                     return
             except Exception:
                 # Fail-Open: Governance 체크 실패 시 기존 동작 유지
@@ -887,7 +909,12 @@ class AdaptiveThrottle(
             # Gradient-based adjustment
             if gradient > 0.1:  # RTT increasing more than 10%
                 new_limit = int(self._current_limit * self.config.decrease_ratio)
-                logger.debug(f"[AdaptiveThrottle] Gradient={gradient:.3f} > 0, " f"limit: {self._current_limit} → {new_limit}")
+                logger.debug(
+                    "adaptive_throttle.limit",
+                    gradient=gradient,
+                    self=self._current_limit,
+                    new_limit=new_limit,
+                )
                 self.current_limit = new_limit
                 self._adaptive_stats["adjustments_down"] += 1
 
@@ -920,7 +947,12 @@ class AdaptiveThrottle(
 
             elif gradient < -0.05:  # RTT decreasing more than 5%
                 new_limit = self._current_limit + self.config.increase_step
-                logger.debug(f"[AdaptiveThrottle] Gradient={gradient:.3f} < 0, " f"limit: {self._current_limit} → {new_limit}")
+                logger.debug(
+                    "adaptive_throttle.limit",
+                    gradient=gradient,
+                    self=self._current_limit,
+                    new_limit=new_limit,
+                )
                 self.current_limit = new_limit
                 self._adaptive_stats["adjustments_up"] += 1
 
@@ -961,7 +993,10 @@ class AdaptiveThrottle(
         if self._429_reduction_active and tier_id in PROTECTED_TIERS_ON_429:
             original_limit = self._current_limit
             self._current_limit = self._limit_before_429
-            logger.debug(f"[AdaptiveThrottle] CRITICAL tier protected: " f"using pre-429 limit {self._limit_before_429}")
+            logger.debug(
+                "adaptive_throttle.critical_tier_protected_using",
+                self=self._limit_before_429,
+            )
             result = super().check(key)
             self._current_limit = original_limit
             return result
@@ -1008,7 +1043,7 @@ class AdaptiveThrottle(
         """
         # Break Glass 활성 + Full Stop → Full Stop 해제 후 Recovery Dampening 시작
         if self._break_glass_active and self._full_stop_active:
-            logger.warning("[AdaptiveThrottle] Break Glass: overriding Full Stop")
+            logger.warning("adaptive_throttle.break_glass_overriding_full")
             self.deactivate_full_stop()
 
         # Governance 통합 상태 동기화 (Emergency + Kill Switch + Break Glass, 30초 TTL)
@@ -1059,7 +1094,10 @@ class AdaptiveThrottle(
         try:
             self.store_throttle_rejection_to_dlq(context, rejection_reason)
         except Exception as e:
-            logger.debug(f"[AdaptiveThrottle] DLQ auto-store failed (Fail-Open): {e}")
+            logger.debug(
+                "adaptive_throttle.dlq_auto_store_failed",
+                error=e,
+            )
 
     def get_stats(self) -> dict:
         """Get adaptive throttle statistics."""
@@ -1144,7 +1182,11 @@ class AdaptiveThrottle(
         # base limit으로 복구
         self.current_limit = self._base_limit_before_emergency
 
-        logger.warning(f"[AdaptiveThrottle] Rolled back to base limit: " f"{previous} → {self._base_limit_before_emergency}")
+        logger.warning(
+            "adaptive_throttle.rolled_back_base_limit",
+            previous=previous,
+            self=self._base_limit_before_emergency,
+        )
 
         return self._base_limit_before_emergency
 

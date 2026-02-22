@@ -15,13 +15,13 @@ Fail-Open: 훅 실패가 비즈니스 로직을 중단시키지 않는다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.resilience_policy import PolicyResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -46,14 +46,22 @@ class AuditPolicyHook:
     def on_success(self, policy_name: str, result: PolicyResult) -> None:
         """실행 성공 — debug 레벨 기록."""
         try:
-            logger.debug(f"[AuditPolicyHook] '{policy_name}' execution succeeded")
+            logger.debug(
+                "audit_policy_hook.execution_succeeded",
+                policy_name=policy_name,
+            )
         except Exception:
             pass
 
     def on_failure(self, policy_name: str, error: Exception, attempt: int) -> None:
         """실행 실패 — debug 레벨 기록."""
         try:
-            logger.debug(f"[AuditPolicyHook] '{policy_name}' execution failed: " f"{type(error).__name__}: {error}")
+            logger.debug(
+                "audit_policy_hook.execution_failed",
+                policy_name=policy_name,
+                value=type(error).__name__,
+                error=error,
+            )
         except Exception:
             pass
 
@@ -74,7 +82,10 @@ class AuditPolicyHook:
                 reason=f"request_rejected|{reason}",
             )
         except Exception as e:
-            logger.debug(f"[AuditPolicyHook] on_reject audit failed: {e}")
+            logger.debug(
+                "audit_policy_hook.audit_failed",
+                error=e,
+            )
 
 
 # =============================================================================
@@ -123,7 +134,10 @@ class EventBusPolicyHook:
                 source="circuit_breaker_policy",
             )
         except Exception as e:
-            logger.debug(f"[EventBusPolicyHook] on_reject event failed: {e}")
+            logger.debug(
+                "event_bus_policy_hook.event_failed",
+                error=e,
+            )
 
 
 # =============================================================================
@@ -142,9 +156,15 @@ def build_default_hooks() -> list:
     try:
         hooks.append(AuditPolicyHook())
     except Exception as e:
-        logger.debug(f"[hooks] AuditPolicyHook creation failed: {e}")
+        logger.debug(
+            "hooks.auditpolicyhook_creation_failed",
+            error=e,
+        )
     try:
         hooks.append(EventBusPolicyHook())
     except Exception as e:
-        logger.debug(f"[hooks] EventBusPolicyHook creation failed: {e}")
+        logger.debug(
+            "hooks.eventbuspolicyhook_creation_failed",
+            error=e,
+        )
     return hooks

@@ -6,7 +6,7 @@ Provides rate limit cascade detection and self-DDoS protection functionality.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 from typing import TYPE_CHECKING, Any
 
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from .config import CircuitBreakerConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ProtectionMixin:
@@ -80,7 +80,10 @@ class ProtectionMixin:
             if result.success:
                 # Increment backoff level for this service
                 tracker.increment_backoff(service_name)
-                logger.warning(f"[CircuitBreaker] Auto-opened circuit for '{service_name}' " "due to rate limit cascade")
+                logger.warning(
+                    "circuit_breaker.auto_opened_circuit_due",
+                    service_name=service_name,
+                )
 
             return result
 
@@ -187,7 +190,10 @@ class ProtectionMixin:
         """
         tracker = get_rate_limit_tracker()
         tracker.reset_backoff(service_name)
-        logger.info(f"[CircuitBreaker] Reset backoff level for '{service_name}'")
+        logger.info(
+            "circuit_breaker.reset_backoff_level",
+            service_name=service_name,
+        )
 
     def is_self_ddos_detected(self, service_name: str) -> bool:
         """

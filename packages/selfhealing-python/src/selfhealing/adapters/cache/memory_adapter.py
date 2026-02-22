@@ -20,7 +20,7 @@ Version: 6.4.0 - Drift Detection 메트릭 추가
 from __future__ import annotations
 
 import fnmatch
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass
@@ -46,7 +46,7 @@ try:
 except ImportError:
     HAS_DRIFT_METRICS = False
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -132,14 +132,20 @@ class InMemoryLock(DistributedLock):
                     self._expires_at = time.time() + self._timeout.total_seconds()
                     self._acquired = True
                     InMemoryLock._locks[self._name] = self
-                    logger.debug(f"[InMemoryLock] Acquired lock: {self._name}")
+                    logger.debug(
+                        "in_memory_lock.acquired_lock",
+                        self=self._name,
+                    )
                     return True
 
             if not blocking:
                 return False
 
             if stop_time is not None and time.time() >= stop_time:
-                logger.debug(f"[InMemoryLock] Timeout acquiring lock: {self._name}")
+                logger.debug(
+                    "in_memory_lock.timeout_acquiring_lock",
+                    self=self._name,
+                )
                 return False
 
             time.sleep(0.01)  # Short sleep between retries
@@ -158,9 +164,15 @@ class InMemoryLock(DistributedLock):
                 if current._owner_id == self._owner_id:
                     del InMemoryLock._locks[self._name]
                     self._acquired = False
-                    logger.debug(f"[InMemoryLock] Released lock: {self._name}")
+                    logger.debug(
+                        "in_memory_lock.released_lock",
+                        self=self._name,
+                    )
                 else:
-                    logger.warning(f"[InMemoryLock] Lock not owned: {self._name}")
+                    logger.warning(
+                        "in_memory_lock.lock_owned",
+                        self=self._name,
+                    )
             else:
                 self._acquired = False
 
@@ -494,7 +506,10 @@ class InMemoryCacheAdapter(CacheProviderInterface):
             ]
             for key in keys_to_delete:
                 del self._store[key]
-            logger.info(f"[InMemoryCache] Flushed {len(keys_to_delete)} keys")
+            logger.info(
+                "in_memory_cache.flushed_keys",
+                count=len(keys_to_delete),
+            )
 
         # Also clear locks
         InMemoryLock.clear_all_locks()

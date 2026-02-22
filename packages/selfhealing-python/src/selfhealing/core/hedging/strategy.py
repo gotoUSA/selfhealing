@@ -13,7 +13,7 @@ Bulkhead/Backpressure 연동 및 동적 설정 변경을 지원합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import warnings
 from typing import TYPE_CHECKING, Any, Callable, TypeVar
 
@@ -43,7 +43,7 @@ from selfhealing.core.hedging.otel import hedging_span, record_hedging_result
 if TYPE_CHECKING:
     from selfhealing.resilience.policies.hedging import HedgingPolicy
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -123,7 +123,7 @@ class HedgingStrategy(FallbackStrategy):
 
                 self._bulkhead_registry = get_bulkhead_registry()
             except ImportError:
-                logger.debug("[HedgingStrategy] Bulkhead registry not available")
+                logger.debug("hedging_strategy.bulkhead_registry_available")
 
         # 현재 Backpressure 레벨
         self._current_load_level: str = "none"
@@ -144,11 +144,14 @@ class HedgingStrategy(FallbackStrategy):
                 EventType.CONFIG_UPDATED,
                 self._on_config_updated,
             )
-            logger.debug("[HedgingStrategy] Subscribed to CONFIG_UPDATED")
+            logger.debug("hedging_strategy.subscribed")
         except ImportError:
-            logger.debug("[HedgingStrategy] EventBus not available")
+            logger.debug("hedging_strategy.eventbus_available")
         except Exception as e:
-            logger.warning(f"[HedgingStrategy] Failed to subscribe: {e}")
+            logger.warning(
+                "hedging_strategy.failed_subscribe",
+                error=e,
+            )
 
     def _on_config_updated(self, event: any) -> None:
         """
@@ -169,19 +172,34 @@ class HedgingStrategy(FallbackStrategy):
 
                 try:
                     self._config.mode = HedgingMode(config_value)
-                    logger.info(f"[HedgingStrategy] Mode changed to: {config_value}")
+                    logger.info(
+                        "hedging_strategy.mode_changed",
+                        config_value=config_value,
+                    )
                 except ValueError:
-                    logger.warning(f"[HedgingStrategy] Invalid mode: {config_value}")
+                    logger.warning(
+                        "hedging_strategy.invalid_mode",
+                        config_value=config_value,
+                    )
 
             elif config_key == "hedging.delay" and config_value is not None:
                 self._config.delay = float(config_value)
-                logger.info(f"[HedgingStrategy] Delay changed to: {config_value}")
+                logger.info(
+                    "hedging_strategy.delay_changed",
+                    config_value=config_value,
+                )
 
             elif config_key == "backpressure.level" and config_value:
                 self._current_load_level = config_value.lower()
-                logger.info(f"[HedgingStrategy] Load level updated: {self._current_load_level}")
+                logger.info(
+                    "hedging_strategy.load_level_updated",
+                    self=self._current_load_level,
+                )
         except Exception as e:
-            logger.warning(f"[HedgingStrategy] Config update error: {e}")
+            logger.warning(
+                "hedging_strategy.config_update_error",
+                error=e,
+            )
 
     def _get_effective_delay(self) -> float:
         """
@@ -223,7 +241,10 @@ class HedgingStrategy(FallbackStrategy):
             if bulkhead:
                 return bulkhead.try_acquire()
         except Exception as e:
-            logger.warning(f"[HedgingStrategy] Bulkhead acquire error: {e}")
+            logger.warning(
+                "hedging_strategy.bulkhead_acquire_error",
+                error=e,
+            )
         return True
 
     def _release_bulkhead(self) -> None:
@@ -236,7 +257,10 @@ class HedgingStrategy(FallbackStrategy):
             if bulkhead:
                 bulkhead.release()
         except Exception as e:
-            logger.warning(f"[HedgingStrategy] Bulkhead release error: {e}")
+            logger.warning(
+                "hedging_strategy.bulkhead_release_error",
+                error=e,
+            )
 
     def execute(
         self,
@@ -257,7 +281,10 @@ class HedgingStrategy(FallbackStrategy):
         """
         # Backpressure 체크: 높은 부하 시 헷징 비활성화
         if self._should_disable_hedging():
-            logger.warning(f"[HedgingStrategy] Hedging disabled due to load: " f"{self._current_load_level}")
+            logger.warning(
+                "hedging_strategy.hedging_disabled_due_load",
+                self=self._current_load_level,
+            )
             record_hedging_disabled(self._current_load_level)
             # Primary만 실행 (헷징 없이)
             return self._execute_single(primary_fn, default_value)
@@ -265,7 +292,7 @@ class HedgingStrategy(FallbackStrategy):
         # Bulkhead 획득 (전체 헷징에 대해)
         if not self._config.acquire_bulkhead_per_candidate:
             if not self._acquire_bulkhead():
-                logger.warning("[HedgingStrategy] Bulkhead full, fallback to single")
+                logger.warning("hedging_strategy.bulkhead_full_fallback_single")
                 return self._execute_single(primary_fn, default_value)
 
         original_delay = self._config.delay
@@ -316,7 +343,10 @@ class HedgingStrategy(FallbackStrategy):
                 )
 
         except HedgingError as e:
-            logger.warning(f"[HedgingStrategy] All candidates failed: {e}")
+            logger.warning(
+                "hedging_strategy.all_candidates_failed",
+                error=e,
+            )
             record_hedging_failure()
 
             final_default = default_value or self._default_value

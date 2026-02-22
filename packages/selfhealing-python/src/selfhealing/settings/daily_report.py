@@ -12,12 +12,12 @@ Environment Variables:
     SELFHEALING_DAILY_REPORT_DEFAULT_CHANNELS=slack
 """
 
-import logging
+import structlog
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DailyReportSettings(BaseSettings):

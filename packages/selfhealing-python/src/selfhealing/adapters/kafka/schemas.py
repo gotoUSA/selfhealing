@@ -24,13 +24,13 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.adapters.kafka.config import KafkaSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -193,14 +193,20 @@ class AuditEventSchemaRegistry:
             from confluent_kafka.schema_registry import SchemaRegistryClient
 
             self._client = SchemaRegistryClient({"url": self._settings.schema_registry_url})
-            logger.info(f"[SchemaRegistry] 연결됨: {self._settings.schema_registry_url}")
+            logger.info(
+                "schema_registry.연결됨",
+                self=self._settings.schema_registry_url,
+            )
         except ImportError:
             logger.warning(
                 "[SchemaRegistry] confluent-kafka[schema-registry] 패키지가 "
                 "설치되지 않았습니다. 스키마 레지스트리 기능이 비활성화됩니다."
             )
         except Exception as e:
-            logger.error(f"[SchemaRegistry] 초기화 실패: {e}")
+            logger.error(
+                "schema_registry.초기화_실패",
+                error=e,
+            )
             raise
 
     def is_available(self) -> bool:
@@ -251,7 +257,10 @@ class AuditEventSchemaRegistry:
             return serializer
 
         except Exception as e:
-            logger.error(f"[SchemaRegistry] 직렬화기 생성 실패: {e}")
+            logger.error(
+                "schema_registry.직렬화기_생성_실패",
+                error=e,
+            )
             raise
 
     def get_deserializer(self, schema_str: str | None = None) -> Any:
@@ -286,7 +295,10 @@ class AuditEventSchemaRegistry:
             return deserializer
 
         except Exception as e:
-            logger.error(f"[SchemaRegistry] 역직렬화기 생성 실패: {e}")
+            logger.error(
+                "schema_registry.역직렬화기_생성_실패",
+                error=e,
+            )
             raise
 
     def check_compatibility(
@@ -313,7 +325,10 @@ class AuditEventSchemaRegistry:
             return client.test_compatibility(subject, schema)
 
         except Exception as e:
-            logger.error(f"[SchemaRegistry] 호환성 검사 실패: {e}")
+            logger.error(
+                "schema_registry.호환성_검사_실패",
+                error=e,
+            )
             return False
 
     def register_schema(
@@ -338,11 +353,18 @@ class AuditEventSchemaRegistry:
 
             schema = Schema(schema_str, "AVRO")
             schema_id = client.register_schema(subject, schema)
-            logger.info(f"[SchemaRegistry] 스키마 등록됨: {subject} (ID: {schema_id})")
+            logger.info(
+                "schema_registry.스키마_등록됨_id",
+                subject=subject,
+                schema_id=schema_id,
+            )
             return schema_id
 
         except Exception as e:
-            logger.error(f"[SchemaRegistry] 스키마 등록 실패: {e}")
+            logger.error(
+                "schema_registry.스키마_등록_실패",
+                error=e,
+            )
             raise
 
     def get_latest_version(self, subject: str) -> dict[str, Any] | None:
@@ -365,7 +387,11 @@ class AuditEventSchemaRegistry:
                 "schema": registered.schema.schema_str,
             }
         except Exception as e:
-            logger.warning(f"[SchemaRegistry] 스키마 조회 실패: {subject} - {e}")
+            logger.warning(
+                "schema_registry.스키마_조회_실패",
+                subject=subject,
+                error=e,
+            )
             return None
 
 

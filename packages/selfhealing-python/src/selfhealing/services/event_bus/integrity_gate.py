@@ -12,11 +12,11 @@ EventBus 핸들러 우선순위:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 이벤트 데이터 플래그 키 (bus.py에서 import하여 참조)
 INTEGRITY_GATE_KEY = "integrity_gate_result"
@@ -51,7 +51,11 @@ def on_circuit_breaker_closed_integrity_gate(event: Any) -> None:
     except Exception:
         fail_open = True  # 설정 로드 실패 시 안전한 기본값
 
-    logger.info(f"[IntegrityGate] Checking WAL integrity for {service_name} " f"before replay (fail_open={fail_open})")
+    logger.info(
+        "integrity_gate.checking_wal_integrity_before",
+        service_name=service_name,
+        fail_open=fail_open,
+    )
 
     try:
         result = _verify_recovery_window_integrity(service_name, event)
@@ -83,7 +87,11 @@ def on_circuit_breaker_closed_integrity_gate(event: Any) -> None:
     except Exception as e:
         # Fail-Open/Secure 설정에 따라 분기
         if fail_open:
-            logger.warning(f"[IntegrityGate] Gate check failed for {service_name}: {e}. " f"Proceeding with Fail-Open policy.")
+            logger.warning(
+                "integrity_gate.gate_check_failed_proceeding",
+                service_name=service_name,
+                error=e,
+            )
             event.data[INTEGRITY_FAILED_KEY] = False
         else:
             logger.critical(
@@ -156,7 +164,10 @@ def _get_unsynced_wal_entries(service_name: str) -> list[dict]:
         return [e.data for e in wal_entries if hasattr(e, "data")]
 
     except Exception as e:
-        logger.warning(f"[IntegrityGate] WAL read failed: {e}")
+        logger.warning(
+            "integrity_gate.wal_read_failed",
+            error=e,
+        )
         return []
 
 
@@ -182,7 +193,10 @@ def _send_integrity_violation_alert(
             error_message="Hash chain integrity violation detected during post-recovery check",
         )
     except Exception as e:
-        logger.error(f"[IntegrityGate] Audit write failed: {e}")
+        logger.error(
+            "integrity_gate.audit_write_failed",
+            error=e,
+        )
 
 
 def _update_health_score(result: dict, duration_ms: float) -> None:
@@ -200,4 +214,7 @@ def _update_health_score(result: dict, duration_ms: float) -> None:
         else:
             health.record_chain_break()
     except Exception as e:
-        logger.debug(f"[IntegrityGate] Health score update failed: {e}")
+        logger.debug(
+            "integrity_gate.health_score_update_failed",
+            error=e,
+        )

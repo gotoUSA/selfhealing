@@ -13,10 +13,10 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def get_pool_info() -> dict[str, Any]:
@@ -60,7 +60,10 @@ def get_pool_info() -> dict[str, Any]:
         return {}
 
     except Exception as e:
-        logger.debug(f"[sqlalchemy_pool] Could not retrieve pool info: {e}")
+        logger.debug(
+            "sqlalchemy_pool.retrieve_pool_info",
+            error=e,
+        )
         return {}
 
 

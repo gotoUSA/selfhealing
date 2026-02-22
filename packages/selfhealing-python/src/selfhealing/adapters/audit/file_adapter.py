@@ -8,7 +8,7 @@ Non-invasive - does not require database tables or external services.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,7 +18,7 @@ from selfhealing.interfaces.audit_adapter import (
     AuditLogAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class FileAuditLogAdapter(AuditLogAdapter):
@@ -73,7 +73,10 @@ class FileAuditLogAdapter(AuditLogAdapter):
             with open(file_path, "a", encoding="utf-8") as f:
                 f.write(entry.to_json() + "\n")
         except Exception as e:
-            logger.error(f"[FileAuditLogAdapter] Failed to write audit log: {e}")
+            logger.error(
+                "file_audit_log_adapter.failed_write_audit_log",
+                error=e,
+            )
 
     def _get_log_files(self) -> list[Path]:
         """Get list of log files sorted by modification time (newest first)."""
@@ -138,7 +141,11 @@ class FileAuditLogAdapter(AuditLogAdapter):
                     except json.JSONDecodeError:
                         continue
         except Exception as e:
-            logger.warning(f"[FileAuditLogAdapter] Error reading {log_file}: {e}")
+            logger.warning(
+                "file_audit_log_adapter.error_reading",
+                log_file=log_file,
+                error=e,
+            )
         return entries
 
     def query(

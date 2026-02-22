@@ -27,12 +27,12 @@ Environment Variables:
     SELFHEALING_APPLY_CLEANUP_MAX_AGE_HOURS=24
 """
 
-import logging
+import structlog
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ApplyStrategySettings(BaseSettings):
@@ -243,4 +243,4 @@ def reset_apply_strategy_settings() -> None:
     """
     global _settings
     _settings = None
-    logger.debug("[ApplyStrategySettings] Reset")
+    logger.debug("apply_strategy_settings.reset")

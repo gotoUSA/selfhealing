@@ -22,7 +22,7 @@ Service Configuration Manager for Circuit Breaker
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -32,7 +32,7 @@ from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -87,7 +87,7 @@ class ServiceConfigManager:
         self._default_recovery: RecoveryStrategy = RecoveryStrategy()
         self._initialized = True
 
-        logger.debug("[ServiceConfigManager] Initialized")
+        logger.debug("service_config_manager.initialized")
 
     @classmethod
     def reset_instance(cls) -> None:
@@ -156,11 +156,17 @@ class ServiceConfigManager:
             bool: 해제 성공 여부 (없으면 False)
         """
         if service_id not in self._services:
-            logger.warning(f"[ServiceConfigManager] Service not found: {service_id}")
+            logger.warning(
+                "service_config_manager.service_found",
+                service_id=service_id,
+            )
             return False
 
         del self._services[service_id]
-        logger.info(f"[ServiceConfigManager] Service unregistered: {service_id}")
+        logger.info(
+            "service_config_manager.service_unregistered",
+            service_id=service_id,
+        )
         return True
 
     def clear_services(self) -> int:
@@ -172,7 +178,10 @@ class ServiceConfigManager:
         """
         count = len(self._services)
         self._services.clear()
-        logger.info(f"[ServiceConfigManager] All services cleared ({count} services)")
+        logger.info(
+            "service_config_manager.all_services_cleared_services",
+            count=count,
+        )
         return count
 
     # =========================================================================

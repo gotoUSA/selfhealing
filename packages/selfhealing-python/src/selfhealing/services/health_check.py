@@ -7,12 +7,12 @@ Health Check Service
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -131,7 +131,10 @@ class HealthCheckService:
             summary = stats_repo.get_circuit_breaker_summary()
             return summary.total
         except Exception as e:
-            logger.debug(f"[HealthCheck] CB count via stats failed, trying Redis: {e}")
+            logger.debug(
+                "health_check.cb_count_via_stats",
+                error=e,
+            )
             try:
                 from selfhealing.factory import ProviderRegistry
 
@@ -139,7 +142,10 @@ class HealthCheckService:
                 states = cb_repo.get_all_states()
                 return len(states)
             except Exception as e2:
-                logger.debug(f"[HealthCheck] CB count via Redis failed: {e2}")
+                logger.debug(
+                    "health_check.cb_count_via_redis",
+                    e2=e2,
+                )
                 return 0
 
     def check_database(self, alias: str = "default") -> DatabaseCheck:
@@ -175,7 +181,11 @@ class HealthCheckService:
             )
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000
-            logger.error(f"[HealthCheck] Database {alias} check failed: {e}")
+            logger.error(
+                "health_check.database_check_failed",
+                alias=alias,
+                error=e,
+            )
             return DatabaseCheck(
                 alias=alias,
                 is_connected=False,
@@ -221,7 +231,11 @@ class HealthCheckService:
                 status="healthy" if is_usable else "degraded",
             )
         except Exception as e:
-            logger.error(f"[HealthCheck] Connection pool {alias} check failed: {e}")
+            logger.error(
+                "health_check.connection_pool_check_failed",
+                alias=alias,
+                error=e,
+            )
             return PoolInfo(
                 alias=alias,
                 is_usable=False,
@@ -303,7 +317,10 @@ class HealthCheckService:
                 health_status = "degraded"
                 db_status = "unhealthy"
         except Exception as e:
-            logger.error(f"[HealthCheck] Overall health check failed: {e}")
+            logger.error(
+                "health_check.overall_health_check_failed",
+                error=e,
+            )
             services_count = 0
             health_status = "degraded"
             db_status = "unhealthy"

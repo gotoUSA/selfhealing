@@ -6,7 +6,7 @@ Main emergency mode manager with activation/deactivation and gradual recovery.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -32,7 +32,7 @@ except ImportError:
     update_emergency_cache_age = lambda *args: None
     record_emergency_cache_load = lambda *args: None
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class GracefulDegradationManager:
@@ -105,7 +105,10 @@ class GracefulDegradationManager:
                 self._on_external_level_changed,
             )
         except Exception as e:
-            logger.debug(f"[EmergencyMode] Event bus registration skipped: {e}")
+            logger.debug(
+                "emergency_mode.event_bus_registration_skipped",
+                error=e,
+            )
 
     def _on_external_level_changed(self, event) -> None:
         """외부 이벤트 수신 시 캐시 무효화."""
@@ -114,7 +117,7 @@ class GracefulDegradationManager:
             self._invalidate_cache()
             # v6.3.0: 다음 로드 시 reason 설정을 위해 플래그 설정 필요 없음
             # _load_state에서 "invalidated" reason으로 로드됨
-            logger.debug("[EmergencyMode] Cache invalidated by external event")
+            logger.debug("emergency_mode.cache_invalidated_external_event")
 
     def _invalidate_cache(self) -> None:
         """캐시 무효화 (다음 조회 시 StateBackend 재조회)."""
@@ -182,7 +185,10 @@ class GracefulDegradationManager:
                 return True
 
         except Exception as e:
-            logger.debug(f"[EmergencyMode] Drift check failed: {e}")
+            logger.debug(
+                "emergency_mode.drift_check_failed",
+                error=e,
+            )
 
         return False
 
@@ -204,7 +210,10 @@ class GracefulDegradationManager:
             # v6.3.0: 로드 메트릭 기록
             record_emergency_cache_load(reason)
         except Exception as e:
-            logger.warning(f"[EmergencyMode] Could not load state: {e}")
+            logger.warning(
+                "emergency_mode.load_state",
+                error=e,
+            )
 
     def _save_state(self):
         """상태 저장."""
@@ -214,7 +223,10 @@ class GracefulDegradationManager:
             backend = get_state_backend()
             backend.set("emergency_mode", self._state.to_dict())
         except Exception as e:
-            logger.error(f"[EmergencyMode] Failed to save state: {e}")
+            logger.error(
+                "emergency_mode.failed_save_state",
+                error=e,
+            )
 
     # -------------------------------------------------------------------------
     # State Access
@@ -258,10 +270,13 @@ class GracefulDegradationManager:
         try:
             expires_at = datetime.fromisoformat(self._state.expires_at)
             if datetime.now(timezone.utc) > expires_at:
-                logger.info("[EmergencyMode] Auto-expired, deactivating")
+                logger.info("emergency_mode.auto_expired_deactivating")
                 self._do_deactivate("system", "Auto-expired")
         except Exception as e:
-            logger.error(f"[EmergencyMode] Expiration check failed: {e}")
+            logger.error(
+                "emergency_mode.expiration_check_failed",
+                error=e,
+            )
 
     # -------------------------------------------------------------------------
     # Before Mutation Snapshot (롤백 지원)
@@ -285,7 +300,10 @@ class GracefulDegradationManager:
         if len(self._previous_states) > 10:
             self._previous_states = self._previous_states[-10:]
 
-        logger.debug(f"[EmergencyMode] Saved pre-mutation snapshot: action={action}")
+        logger.debug(
+            "emergency_mode.saved_pre_mutation_snapshot",
+            action=action,
+        )
 
     def get_previous_states(self) -> list[dict[str, Any]]:
         """
@@ -309,13 +327,16 @@ class GracefulDegradationManager:
         """
         with self._state_lock:
             if not self._previous_states:
-                logger.warning("[EmergencyMode] No previous state to rollback")
+                logger.warning("emergency_mode.no_previous_state_rollback")
                 return None
 
             # 역순 인덱스 (0=가장 최근)
             actual_index = len(self._previous_states) - 1 - index
             if actual_index < 0:
-                logger.warning(f"[EmergencyMode] Invalid rollback index: {index}")
+                logger.warning(
+                    "emergency_mode.invalid_rollback_index",
+                    index=index,
+                )
                 return None
 
             snapshot = self._previous_states[actual_index]
@@ -587,7 +608,11 @@ class GracefulDegradationManager:
             reason=reason,
         )
 
-        logger.info(f"[EmergencyMode] DEACTIVATED by {deactivated_by}: {reason}")
+        logger.info(
+            "emergency_mode.deactivated",
+            deactivated_by=deactivated_by,
+            reason=reason,
+        )
 
         # Event Bus 발행: 다른 컴포넌트에 알림
         self._emit_level_changed_event(
@@ -750,7 +775,7 @@ class GracefulDegradationManager:
                     self._state.deactivated_by = "gradual_recovery"
                     self._save_state()
 
-                    logger.info("[EmergencyMode] Gradual recovery complete: NORMAL")
+                    logger.info("emergency_mode.gradual_recovery_complete_normal")
                     break
 
             # 다음 단계 전 대기
@@ -797,7 +822,10 @@ class GracefulDegradationManager:
             )
         except Exception as e:
             # 이벤트 발행 실패해도 비상 모드 동작에는 영향 없음
-            logger.warning(f"[EmergencyMode] Failed to emit event: {e}")
+            logger.warning(
+                "emergency_mode.failed_emit_event",
+                error=e,
+            )
 
     # -------------------------------------------------------------------------
     # History & Audit
@@ -851,7 +879,10 @@ class GracefulDegradationManager:
                 expires_at=self._state.expires_at,
             )
         except Exception as e:
-            logger.error(f"[EmergencyMode] Audit log failed: {e}")
+            logger.error(
+                "emergency_mode.audit_log_failed",
+                error=e,
+            )
 
     def _save_state_to_config_history(
         self,
@@ -880,10 +911,16 @@ class GracefulDegradationManager:
                 changed_by=changed_by,
                 reason=f"Emergency {action}: {reason}",
             )
-            logger.debug(f"[EmergencyMode] Saved to ConfigHistory: {action}")
+            logger.debug(
+                "emergency_mode.saved_confighistory",
+                action=action,
+            )
         except Exception as e:
             # Graceful degradation - 히스토리 저장 실패해도 상태 변경은 성공
-            logger.warning(f"[EmergencyMode] Failed to save to ConfigHistory: {e}")
+            logger.warning(
+                "emergency_mode.failed_save_confighistory",
+                error=e,
+            )
 
     # -------------------------------------------------------------------------
     # Configuration
@@ -897,7 +934,10 @@ class GracefulDegradationManager:
         """복구 게이트 설정 변경."""
         with self._state_lock:
             self._recovery_gate.config = config
-            logger.info(f"[EmergencyMode] Recovery gate config updated by {changed_by}")
+            logger.info(
+                "emergency_mode.recovery_gate_config_updated",
+                changed_by=changed_by,
+            )
 
     def get_recovery_gate_config(self) -> RecoveryGateConfig:
         """현재 복구 게이트 설정 조회."""
@@ -915,4 +955,4 @@ class GracefulDegradationManager:
             self._state = EmergencyState()
             self._history.clear()
             self._save_state()
-            logger.info("[EmergencyMode] State reset to defaults")
+            logger.info("emergency_mode.state_reset_defaults")

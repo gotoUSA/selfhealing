@@ -12,14 +12,14 @@ Redis 다운 시 완전 Fail-Open(제한 없음) 또는 완전 Fail-Closed(모�
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RedisConnectionState(str, Enum):
@@ -131,7 +131,10 @@ class SafeOpenFallbackManager:
             self._on_redis_connected()
             return True
         except Exception as e:
-            logger.warning(f"[SafeOpenFallback] Redis health check failed: {e}")
+            logger.warning(
+                "safe_open_fallback.redis_health_check_failed",
+                error=e,
+            )
             self._on_redis_disconnected()
             return False
 
@@ -148,7 +151,7 @@ class SafeOpenFallbackManager:
                 state.consecutive_failures = 0
 
         if previous_state != RedisConnectionState.CONNECTED:
-            logger.info("[SafeOpenFallback] Redis connection restored")
+            logger.info("safe_open_fallback.redis_connection_restored")
 
     def _on_redis_disconnected(self) -> None:
         """Redis 연결 끊김 시 호출."""
@@ -158,7 +161,7 @@ class SafeOpenFallbackManager:
             for state in self._service_states.values():
                 state.redis_state = RedisConnectionState.DISCONNECTED
 
-        logger.warning("[SafeOpenFallback] Redis connection lost, using safe limits")
+        logger.warning("safe_open_fallback.redis_connection_lost_using")
 
     def get_or_create_service_state(
         self,
@@ -219,7 +222,10 @@ class SafeOpenFallbackManager:
                             state.last_saved_at = now
                         return True
             except Exception as e:
-                logger.error(f"[SafeOpenFallback] Save limit failed: {e}")
+                logger.error(
+                    "safe_open_fallback.save_limit_failed",
+                    error=e,
+                )
                 self._record_failure(service_name)
 
         return False
@@ -262,7 +268,10 @@ class SafeOpenFallbackManager:
                         state.last_known_safe_limit = limit
                     return (limit, f"redis_{source.lower()}")
             except Exception as e:
-                logger.warning(f"[SafeOpenFallback] Redis load failed: {e}")
+                logger.warning(
+                    "safe_open_fallback.redis_load_failed",
+                    error=e,
+                )
                 self._record_failure(service_name)
 
         # Redis 장애 시 로컬 캐시 사용

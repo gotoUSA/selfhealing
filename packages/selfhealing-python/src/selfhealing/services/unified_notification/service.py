@@ -25,7 +25,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -37,7 +37,7 @@ from .models import (
 )
 from .routing import RoutingPolicy
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -94,7 +94,12 @@ class UnifiedNotificationManager:
 
         if not channels:
             # Log only
-            logger.info(f"[UnifiedNotification] {payload.category.value}: " f"{payload.title} - {payload.message}")
+            logger.info(
+                "unified_notification.event",
+                category=payload.category.value,
+                payload=payload.title,
+                payload_2=payload.message,
+            )
             return NotificationResult(success=True, suppressed=True, suppression_reason="log_only")
 
         # 4. Send to each channel
@@ -180,7 +185,10 @@ class UnifiedNotificationManager:
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[UnifiedNotification] Emergency level check failed: {e}")
+            logger.debug(
+                "unified_notification.emergency_level_check_failed",
+                error=e,
+            )
 
         return priority
 
@@ -224,7 +232,10 @@ class UnifiedNotificationManager:
             result.success = len(result.channels_sent) > 0
 
         except Exception as e:
-            logger.error(f"[UnifiedNotification] Send failed: {e}")
+            logger.error(
+                "unified_notification.send_failed",
+                error=e,
+            )
             result.success = False
             result.error = str(e)
 
@@ -254,7 +265,10 @@ class UnifiedNotificationManager:
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[UnifiedNotification] Audit record failed: {e}")
+            logger.debug(
+                "unified_notification.audit_record_failed",
+                error=e,
+            )
 
     def _add_to_daily_report(self, payload: NotificationPayload) -> None:
         """Add notification to daily aggregated report."""
@@ -271,7 +285,10 @@ class UnifiedNotificationManager:
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[UnifiedNotification] Daily report add failed: {e}")
+            logger.debug(
+                "unified_notification.daily_report_add_failed",
+                error=e,
+            )
 
     def reset_cooldowns(self) -> None:
         """Reset all cooldowns (for testing)."""

@@ -6,7 +6,7 @@ Combines L1, L2, L3 validators into a single defense system.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
@@ -19,7 +19,7 @@ from selfhealing.services.corruption_shield.validators import (
     Violation,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # ViolationSeverity: 단일 소스는 services/compliance/models.py (Item 34 중복 제거)
 from selfhealing.services.compliance.models import ViolationSeverity  # noqa: E402, F401
@@ -345,7 +345,10 @@ class CorruptionShield:
                     },
                 )
         except Exception as e:
-            logger.warning(f"[CorruptionShield] Failed to create security incident: {e}")
+            logger.warning(
+                "corruption_shield.failed_create_security_incident",
+                error=e,
+            )
 
     def _map_to_violation_type(self, violation) -> str:
         """

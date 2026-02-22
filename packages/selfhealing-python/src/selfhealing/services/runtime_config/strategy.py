@@ -6,7 +6,7 @@ Manages IMMEDIATE, DELAYED, and GRACEFUL apply strategies for configuration chan
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.core.apply_strategy import (
@@ -15,7 +15,7 @@ from selfhealing.core.apply_strategy import (
     get_effective_apply_options,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class StrategyMixin:
@@ -180,7 +180,10 @@ class StrategyMixin:
             # Mark as applied
             pending_service.mark_applied(pending_id)
 
-            logger.info(f"[RuntimeConfig] Applied pending change {pending_id}")
+            logger.info(
+                "runtime_config.applied_pending_change",
+                pending_id=pending_id,
+            )
             return {
                 "status": "applied",
                 "pending_id": pending_id,

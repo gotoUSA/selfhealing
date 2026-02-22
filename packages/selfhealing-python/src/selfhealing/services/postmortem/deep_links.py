@@ -25,13 +25,13 @@ Environment Variables:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlencode
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

@@ -6,7 +6,7 @@ Cascade Event 생성/저장 책임을 담당합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.audit.cascade_event import (
@@ -21,7 +21,7 @@ from selfhealing.audit.cascade_event import (
 )
 from selfhealing.core.test_mode_context import TestModeContext
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RecordingMixin:
@@ -94,7 +94,10 @@ class RecordingMixin:
                 self._update_last_hash(namespace, cascade_event.current_hash)
                 self._add_to_index(namespace, cascade_id)
             except Exception as e:
-                logger.warning(f"[CascadeAudit] Redis save failed, using fallback: {e}")
+                logger.warning(
+                    "cascade_audit.redis_save_failed_using",
+                    error=e,
+                )
                 self._save_to_local_fallback(cascade_event)
 
             logger.info(

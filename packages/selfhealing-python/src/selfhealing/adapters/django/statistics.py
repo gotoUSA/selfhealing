@@ -23,7 +23,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -44,7 +44,7 @@ from selfhealing.interfaces.statistics import (
 if TYPE_CHECKING:
     from django.db.models import Model
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
@@ -75,7 +75,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         self._circuit_breaker_model = circuit_breaker_model
 
         if failed_operation_model:
-            logger.info(f"[DjangoStatisticsAdapter] Initialized with model: " f"{failed_operation_model.__name__}")
+            logger.info(
+                "django_statistics_adapter.initialized_model",
+                failed_operation_model=failed_operation_model.__name__,
+            )
         else:
             logger.warning(
                 "[DjangoStatisticsAdapter] No failed_operation_model provided. " "Some statistics will not be available."
@@ -88,7 +91,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
     def _check_model(self) -> bool:
         """Check if model is available."""
         if self._failed_operation_model is None:
-            logger.warning("[DjangoStatisticsAdapter] Model not configured")
+            logger.warning("django_statistics_adapter.model_configured")
             return False
         return True
 
@@ -118,7 +121,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return counts
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_status_counts error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return StatusCounts()
 
     def get_domain_distribution(self, limit: int = 10) -> list[DomainDistribution]:
@@ -146,7 +152,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for row in queryset
             ]
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_domain_distribution error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return []
 
     def get_failure_type_distribution(self, limit: int = 10) -> list[FailureTypeDistribution]:
@@ -174,7 +183,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for row in queryset
             ]
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_failure_type_distribution error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return []
 
     def get_recent_activity(self, hours: int = 24, days: int = 7) -> RecentActivity:
@@ -219,7 +231,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 trend=trend,
             )
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_recent_activity error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return RecentActivity()
 
     def get_resolution_rate(self, days: int = 30) -> float:
@@ -244,7 +259,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return round(resolved / total, 4)
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_resolution_rate error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return 0.0
 
     def get_avg_retry_count(self) -> float:
@@ -259,7 +277,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             result = model.objects.aggregate(avg_retry=Avg("retry_count"))
             return round(result["avg_retry"] or 0.0, 2)
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_avg_retry_count error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return 0.0
 
     # =========================================================================
@@ -310,7 +331,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 has_prev=page > 1,
             )
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] list_entries error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return PaginatedResult(page=page, page_size=page_size)
 
     def get_entry_detail(self, entry_id: str) -> dict[str, Any] | None:
@@ -323,7 +347,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             entry = model.objects.filter(pk=entry_id).values().first()
             return dict(entry) if entry else None
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_entry_detail error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return None
 
     # =========================================================================
@@ -367,7 +394,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return breaches
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_sla_breaches error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return {}
 
     # =========================================================================
@@ -409,7 +439,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 archived_older_than_90_days=archived_old,
             )
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_cleanup_stats error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return CleanupStats()
 
     def archive_old_entries(self, older_than_days: int = 30) -> int:
@@ -428,10 +461,16 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 resolved_at__lt=cutoff,
             ).update(status="archived")
 
-            logger.info(f"[DjangoStatisticsAdapter] Archived {count} entries")
+            logger.info(
+                "django_statistics_adapter.archived_entries",
+                count=count,
+            )
             return count
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] archive_old_entries error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return 0
 
     def purge_archived(
@@ -458,10 +497,16 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             count, _ = queryset.delete()
 
-            logger.info(f"[DjangoStatisticsAdapter] Purged {count} entries")
+            logger.info(
+                "django_statistics_adapter.purged_entries",
+                count=count,
+            )
             return count
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] purge_archived error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return 0
 
     # =========================================================================
@@ -495,7 +540,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return summary
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] get_circuit_breaker_summary error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return CircuitBreakerSummary()
 
     def _get_cb_summary_from_redis(self) -> CircuitBreakerSummary:
@@ -517,7 +565,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return summary
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] _get_cb_summary_from_redis error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return CircuitBreakerSummary()
 
     def list_circuit_breakers(self) -> list[CircuitBreakerInfo]:
@@ -542,7 +593,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for entry in entries
             ]
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] list_circuit_breakers error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return []
 
     def _list_cbs_from_redis(self) -> list[CircuitBreakerInfo]:
@@ -565,7 +619,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                 for name, state in states.items()
             ]
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] _list_cbs_from_redis error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return []
 
     # =========================================================================
@@ -592,7 +649,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return str(obj.pk)
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] persist_entry error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return None
 
     def sync_from_runtime(self, entries: list[dict[str, Any]]) -> int:
@@ -605,7 +665,11 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
             if self.persist_entry(entry_data):
                 synced += 1
 
-        logger.info(f"[DjangoStatisticsAdapter] Synced {synced}/{len(entries)} entries")
+        logger.info(
+            "django_statistics_adapter.synced_entries",
+            synced=synced,
+            count=len(entries),
+        )
         return synced
 
     # =========================================================================
@@ -642,7 +706,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                     trail.resolved_at = getattr(entry, "resolved_at", None)
                     trail.current_status = getattr(entry, "status", "unknown")
             except Exception as e:
-                logger.warning(f"[DjangoStatisticsAdapter] Failed to get DLQ entry: {e}")
+                logger.warning(
+                    "django_statistics_adapter.failed_get_dlq_entry",
+                    error=e,
+                )
 
         # Get audit log entries from the audit adapter
         try:
@@ -673,7 +740,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
                         )
                     )
         except Exception as e:
-            logger.debug(f"[DjangoStatisticsAdapter] Audit trail lookup skipped: {e}")
+            logger.debug(
+                "django_statistics_adapter.audit_trail_lookup_skipped",
+                error=e,
+            )
 
         return trail
 
@@ -722,7 +792,10 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             return True
         except Exception as e:
-            logger.error(f"[DjangoStatisticsAdapter] link_audit_entry error: {e}")
+            logger.error(
+                "django_statistics_adapter.error",
+                error=e,
+            )
             return False
 
     # =========================================================================

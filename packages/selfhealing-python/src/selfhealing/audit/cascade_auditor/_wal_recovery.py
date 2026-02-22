@@ -8,7 +8,7 @@ Cascade Auditor - WAL/Load Shedding 모듈.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,7 +16,7 @@ from typing import Any
 from selfhealing.audit.cascade_auditor._helpers import get_index_ids
 from selfhealing.audit.cascade_event import CascadeEvent, ExternalTraceContext
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # WAL 경로 상수
 LOCAL_CASCADE_WAL_DIR = "/var/log/selfhealing/cascade_wal"
@@ -133,9 +133,15 @@ class WALRecoveryMixin:
         """
         try:
             _append_to_wal(event.to_dict())
-            logger.info(f"[CascadeAudit] Saved to local WAL: cascade={event.id}")
+            logger.info(
+                "cascade_audit.saved_local_wal",
+                event=event.id,
+            )
         except Exception as e:
-            logger.error(f"[CascadeAudit] Local WAL save failed: {e}")
+            logger.error(
+                "cascade_audit.local_wal_save_failed",
+                error=e,
+            )
 
     # 하위 호환성
     _save_to_local_fallback = _save_to_local_wal
@@ -165,7 +171,10 @@ class WALRecoveryMixin:
                 }
             )
         except Exception as e:
-            logger.debug(f"[CascadeAudit] Dropped record save failed: {e}")
+            logger.debug(
+                "cascade_audit.dropped_record_save_failed",
+                error=e,
+            )
 
     # 하위 호환성
     _record_dropped_to_fallback = _record_dropped_to_wal
@@ -210,7 +219,11 @@ class WALRecoveryMixin:
                     continue
 
         if dry_run:
-            logger.info(f"[CascadeAudit] WAL recovery dry run: " f"found {len(entries)} entries, namespace={namespace}")
+            logger.info(
+                "cascade_audit.wal_recovery_dry_run",
+                count=len(entries),
+                namespace=namespace,
+            )
             return {
                 "status": "dry_run",
                 "namespace": namespace,
@@ -229,7 +242,10 @@ class WALRecoveryMixin:
                 self._add_to_index(namespace, event.id)
                 recovered += 1
             except Exception as e:
-                logger.error(f"[CascadeAudit] Recovery failed: {e}")
+                logger.error(
+                    "watchdog.recovery_failed",
+                    error=e,
+                )
                 failed += 1
 
         # 복구 완료 후 해당 네임스페이스 엔트리 제거

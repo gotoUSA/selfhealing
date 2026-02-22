@@ -25,14 +25,14 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -344,7 +344,10 @@ class PartitionReconciliationService:
                 backend.get("__ping_test__")
                 return True
             except Exception as e:
-                logger.debug(f"[PartitionReconciliation] Fallback ping failed: {e}")
+                logger.debug(
+                    "partition_reconciliation.fallback_ping_failed",
+                    error=e,
+                )
                 return False
 
         try:
@@ -353,7 +356,10 @@ class PartitionReconciliationService:
             client = tiered_redis.get_redis(RedisScope.GLOBAL)
             return client.ping()
         except Exception as e:
-            logger.debug(f"[PartitionReconciliation] Global Redis ping failed: {e}")
+            logger.debug(
+                "partition_reconciliation.global_redis_ping_failed",
+                error=e,
+            )
             return False
 
     def _get_masked_redis_url(self) -> str:
@@ -463,7 +469,10 @@ class PartitionReconciliationService:
             )
 
         except Exception as e:
-            logger.error(f"[PartitionReconciliation] Reconciliation failed: {e}")
+            logger.error(
+                "partition_reconciliation.reconciliation_failed",
+                error=e,
+            )
             return ReconciliationResult(
                 reconciled=False,
                 reason=f"Reconciliation error: {e}",
@@ -494,7 +503,7 @@ class PartitionReconciliationService:
         주기적으로 Global Redis에 ping을 전송하여 연결 상태를 모니터링합니다.
         """
         if self._heartbeat_running:
-            logger.warning("[PartitionReconciliation] Heartbeat loop already running")
+            logger.warning("partition_reconciliation.heartbeat_loop_already_running")
             return
 
         self._heartbeat_running = True
@@ -517,7 +526,7 @@ class PartitionReconciliationService:
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
             self._heartbeat_thread.join(timeout=5.0)
 
-        logger.info("[PartitionReconciliation] Heartbeat loop stopped")
+        logger.info("partition_reconciliation.heartbeat_loop_stopped")
 
     def _heartbeat_loop(self) -> None:
         """Heartbeat 루프 (백그라운드 스레드)."""
@@ -543,7 +552,10 @@ class PartitionReconciliationService:
                 was_partitioned = status.is_partitioned
 
             except Exception as e:
-                logger.error(f"[PartitionReconciliation] Heartbeat error: {e}")
+                logger.error(
+                    "partition_reconciliation.heartbeat_error",
+                    error=e,
+                )
 
             time.sleep(self._heartbeat_interval)
 

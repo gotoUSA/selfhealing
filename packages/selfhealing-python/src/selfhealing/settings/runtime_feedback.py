@@ -10,12 +10,12 @@ Environment Variables:
     SELFHEALING_RUNTIME_ADJUSTMENT_WAIT=30
 """
 
-import logging
+import structlog
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RuntimeFeedbackSettings(BaseSettings):
@@ -96,4 +96,4 @@ def reset_runtime_feedback_settings() -> None:
     """
     global _settings
     _settings = None
-    logger.debug("[RuntimeFeedbackSettings] Reset")
+    logger.debug("runtime_feedback_settings.reset")

@@ -15,11 +15,11 @@ Design Principle:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -185,7 +185,10 @@ class ImpactPredictor:
             )
 
         except Exception as e:
-            logger.warning(f"[ImpactPredictor] Prediction failed: {e}")
+            logger.warning(
+                "impact_predictor.prediction_failed",
+                error=e,
+            )
             return PredictedOutcome(
                 confidence_score=0.1,
                 recommendations=["예측 실패 - 수동 검토 권장"],

@@ -17,13 +17,13 @@ Reference:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # 기본 폴백 경로 (OS별)
@@ -119,7 +119,10 @@ class CriticalPathFallback:
                         )
                         return self._decode_redis_hash(data)
                 except Exception as e:
-                    logger.warning(f"[CriticalPathFallback] Redis load failed: {e}")
+                    logger.warning(
+                        "critical_path_fallback.redis_load_failed",
+                        error=e,
+                    )
                     self._stats["fallback_events"] += 1
 
             # 2. Local File 시도
@@ -135,14 +138,20 @@ class CriticalPathFallback:
                             )
                             return all_states[namespace]
             except Exception as e:
-                logger.warning(f"[CriticalPathFallback] Local file load failed: {e}")
+                logger.warning(
+                    "critical_path_fallback.local_file_load_failed",
+                    error=e,
+                )
                 self._stats["fallback_events"] += 1
 
             # 3. Memory 폴백
             if self._memory_state and namespace in self._memory_state:
                 self._stats["memory_loads"] += 1
                 self._current_tier = "memory"
-                logger.debug(f"[CriticalPathFallback] Loaded from memory: {namespace}")
+                logger.debug(
+                    "critical_path_fallback.loaded_memory",
+                    namespace=namespace,
+                )
                 return self._memory_state.get(namespace, {})
 
             # 4. 기본 상태 반환 (최후 수단)
@@ -181,7 +190,10 @@ class CriticalPathFallback:
                 tier = "local"
                 self._stats["local_saves"] += 1
             except Exception as e:
-                logger.warning(f"[CriticalPathFallback] Local save failed: {e}")
+                logger.warning(
+                    "critical_path_fallback.local_save_failed",
+                    error=e,
+                )
                 self._stats["fallback_events"] += 1
 
             # Redis 저장 시도
@@ -191,9 +203,15 @@ class CriticalPathFallback:
                     self._redis.hmset(key, self._encode_for_redis(state))
                     tier = "redis"
                     self._stats["redis_saves"] += 1
-                    logger.debug(f"[CriticalPathFallback] Saved to Redis: {namespace}")
+                    logger.debug(
+                        "critical_path_fallback.saved_redis",
+                        namespace=namespace,
+                    )
                 except Exception as e:
-                    logger.warning(f"[CriticalPathFallback] Redis save failed: {e}")
+                    logger.warning(
+                        "critical_path_fallback.redis_save_failed",
+                        error=e,
+                    )
                     self._stats["fallback_events"] += 1
 
             self._current_tier = tier
@@ -229,7 +247,10 @@ class CriticalPathFallback:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 tier = "local"
             except Exception as e:
-                logger.warning(f"[CriticalPathFallback] Audit log write failed: {e}")
+                logger.warning(
+                    "critical_path_fallback.audit_log_write_failed",
+                    error=e,
+                )
                 self._stats["fallback_events"] += 1
 
             return tier
@@ -318,7 +339,10 @@ class CriticalPathFallback:
                         count += 1
                 self._memory_audit_buffer.clear()
             except Exception as e:
-                logger.error(f"[CriticalPathFallback] Flush failed: {e}")
+                logger.error(
+                    "critical_path_fallback.flush_failed",
+                    error=e,
+                )
 
             return count
 
@@ -346,7 +370,10 @@ class CriticalPathFallback:
                             ) as f:
                                 json.dump(all_states, f, ensure_ascii=False, indent=2)
                     except Exception as e:
-                        logger.warning(f"[CriticalPathFallback] Clear failed: {e}")
+                        logger.warning(
+                            "critical_path_fallback.clear_failed",
+                            error=e,
+                        )
             else:
                 # 전체 삭제
                 self._memory_state = None

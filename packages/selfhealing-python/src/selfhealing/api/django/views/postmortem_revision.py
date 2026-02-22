@@ -18,7 +18,7 @@ RBAC Permissions:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from django.utils import timezone
@@ -39,7 +39,7 @@ from selfhealing.services.postmortem.revision import (
     get_postmortem_revision_manager,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _write_revision_audit_log(
@@ -69,7 +69,10 @@ def _write_revision_audit_log(
             target_id=incident_id,
         )
     except Exception as e:
-        logger.warning(f"[PostmortemRevision] Failed to write audit log: {e}")
+        logger.warning(
+            "postmortem_revision.failed_write_audit_log",
+            error=e,
+        )
 
 
 class PostmortemRevisionListView(APIView):

@@ -6,7 +6,7 @@ Governance Approval Views.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from rest_framework import status
@@ -16,7 +16,7 @@ from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ApprovalRequestListView(APIView):
@@ -104,7 +104,11 @@ class ApprovalRequestListView(APIView):
             expiry_hours=expiry_hours,
         )
 
-        logger.info(f"[Governance] Approval request created: {approval_request['id']} by {actor}")
+        logger.info(
+            "governance.approval_request_created",
+            approval_request=approval_request['id'],
+            actor=actor,
+        )
 
         return Response(
             {
@@ -140,7 +144,11 @@ class ApprovalRequestApproveView(APIView):
         if result is None:
             raise ValueError("Request not found, already processed, expired, or self-approval attempted")
 
-        logger.info(f"[Governance] Request {request_id} approved by {actor}")
+        logger.info(
+            "governance.request_approved",
+            request_id=request_id,
+            actor=actor,
+        )
 
         return Response(
             {
@@ -175,7 +183,11 @@ class ApprovalRequestRejectView(APIView):
         if result is None:
             raise ValueError("Request not found or already processed")
 
-        logger.info(f"[Governance] Request {request_id} rejected by {actor}")
+        logger.info(
+            "governance.request_rejected",
+            request_id=request_id,
+            actor=actor,
+        )
 
         return Response(
             {

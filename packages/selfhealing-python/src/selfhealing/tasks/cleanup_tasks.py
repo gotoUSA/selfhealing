@@ -14,10 +14,10 @@ Tasks:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -188,7 +188,10 @@ def flush_expired_jwt_tokens() -> dict[str, Any]:
 
         if not apps.is_installed("rest_framework_simplejwt.token_blacklist"):
             msg = "token_blacklist 앱이 설치되지 않아 건너뜁니다."
-            logger.info(f"[CleanupTask] flush_expired_jwt_tokens skipped: {msg}")
+            logger.info(
+                "cleanup_task.skipped",
+                msg=msg,
+            )
             return {"success": True, "message": msg, "skipped": True}
 
         from django.core.management import call_command
@@ -196,7 +199,10 @@ def flush_expired_jwt_tokens() -> dict[str, Any]:
         call_command("flushexpiredtokens")
 
         msg = "만료된 JWT OutstandingToken 정리 완료"
-        logger.info(f"[CleanupTask] {msg}")
+        logger.info(
+            "cleanup_task.event",
+            msg=msg,
+        )
         return {"success": True, "message": msg}
 
     except Exception as e:
@@ -272,7 +278,7 @@ try:
     CELERY_TASKS_AVAILABLE = True
 
 except ImportError:
-    logger.debug("[CleanupTasks] Celery not available, skipping task registration")
+    logger.debug("cleanup_tasks.celery_available_skipping_task")
     CELERY_TASKS_AVAILABLE = False
 
 
@@ -328,7 +334,7 @@ def get_cleanup_beat_schedule() -> dict[str, Any]:
             },
         }
     except ImportError:
-        logger.debug("[CleanupTasks] Celery not available for beat schedule")
+        logger.debug("cleanup_tasks.celery_available_beat_schedule")
         return {}
 
 

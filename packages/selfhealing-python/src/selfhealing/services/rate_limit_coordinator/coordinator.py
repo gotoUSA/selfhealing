@@ -19,7 +19,7 @@ Design Philosophy:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 import threading
 import time
@@ -40,7 +40,7 @@ from .helpers import (
 )
 from .models import RateLimitCoordinatorConfig, RateLimitResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -147,7 +147,11 @@ class RateLimitCoordinator:
             last_time = self._last_event_emit_times.get(key, 0)
 
             if now - last_time < self._config.debounce_window_seconds:
-                logger.debug(f"[RateLimitCoordinator] Debounced event for '{key}' " f"(last emit {now - last_time:.2f}s ago)")
+                logger.debug(
+                    "rate_limit_coordinator.debounced_event_last_emit",
+                    key=key,
+                    value=now - last_time,
+                )
                 return False
 
             self._last_event_emit_times[key] = now
@@ -180,7 +184,10 @@ class RateLimitCoordinator:
                 },
                 priority_name="NORMAL",
             )
-            logger.info(f"[RateLimitCoordinator] Cooldown ended for '{key}'")
+            logger.info(
+                "rate_limit_coordinator.cooldown_ended",
+                key=key,
+            )
 
             # 타이머 정리
             with self._timer_lock:
@@ -218,7 +225,10 @@ class RateLimitCoordinator:
         with self._canary_lock:
             if key not in self._canary_in_progress:
                 self._canary_in_progress[key] = True
-                logger.info(f"[RateLimitCoordinator] Canary request mode for '{key}'")
+                logger.info(
+                    "rate_limit_coordinator.canary_request_mode",
+                    key=key,
+                )
                 return True
 
         return False
@@ -228,7 +238,10 @@ class RateLimitCoordinator:
         with self._canary_lock:
             if key in self._canary_in_progress:
                 del self._canary_in_progress[key]
-                logger.debug(f"[RateLimitCoordinator] Canary state cleared for '{key}'")
+                logger.debug(
+                    "rate_limit_coordinator.canary_state_cleared",
+                    key=key,
+                )
 
     def get_state(self, key: str) -> RateLimitState:
         """Get current rate limit state for a key."""
@@ -373,12 +386,18 @@ class RateLimitCoordinator:
             # Prevents immediate flood after recovery
             self._storage.reset_consecutive_429s(key)
 
-            logger.debug(f"[RateLimitCoordinator] Success on '{key}', " f"reset consecutive 429 counter")
+            logger.debug(
+                "rate_limit_coordinator.success_reset_consecutive_counter",
+                key=key,
+            )
 
     def clear(self, key: str) -> None:
         """Clear all rate limit state for a key."""
         self._storage.clear(key)
-        logger.info(f"[RateLimitCoordinator] Cleared state for '{key}'")
+        logger.info(
+            "rate_limit_coordinator.cleared_state",
+            key=key,
+        )
 
     def rate_limit_aware(
         self,

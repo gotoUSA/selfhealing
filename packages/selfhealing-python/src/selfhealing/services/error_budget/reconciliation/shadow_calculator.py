@@ -6,7 +6,7 @@ Calculates shadow budget by estimating missed errors from logs.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from collections.abc import Callable
 from datetime import datetime
@@ -17,7 +17,7 @@ from selfhealing.core.timezone import now
 from .enums import ReconciliationStatus
 from .models import FailSafePeriod, ShadowBudget
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -283,7 +283,10 @@ class ShadowBudgetCalculator:
             return weight
 
         except Exception as e:
-            logger.warning(f"[ShadowBudget] Failed to get domain weight: {e}")
+            logger.warning(
+                "shadow_budget.failed_get_domain_weight",
+                error=e,
+            )
             return 1.0  # 기본값
 
     def _get_pattern_weight(self, domain: str, failure_type: str) -> float:
@@ -343,7 +346,10 @@ class ShadowBudgetCalculator:
             return weight
 
         except Exception as e:
-            logger.warning(f"[ShadowBudget] Failed to get pattern weight: {e}")
+            logger.warning(
+                "shadow_budget.failed_get_pattern_weight",
+                error=e,
+            )
             return 1.0  # 기본값 (Learning 서비스 장애 시)
 
     def _estimate_errors(
@@ -366,7 +372,10 @@ class ShadowBudgetCalculator:
                 if count is not None and count >= 0:
                     return count, "prometheus"
             except Exception as e:
-                logger.warning(f"[ShadowBudget] Prometheus query failed: {e}")
+                logger.warning(
+                    "shadow_budget.prometheus_query_failed",
+                    error=e,
+                )
 
         # 2. DLQ 엔트리
         if self._get_dlq_entries:
@@ -375,7 +384,10 @@ class ShadowBudgetCalculator:
                 if count is not None and count >= 0:
                     return count, "dlq"
             except Exception as e:
-                logger.warning(f"[ShadowBudget] DLQ query failed: {e}")
+                logger.warning(
+                    "shadow_budget.dlq_query_failed",
+                    error=e,
+                )
 
         # 3. 애플리케이션 로그
         if self._get_error_logs:
@@ -384,11 +396,14 @@ class ShadowBudgetCalculator:
                 if logs:
                     return len(logs), "application_logs"
             except Exception as e:
-                logger.warning(f"[ShadowBudget] Log query failed: {e}")
+                logger.warning(
+                    "shadow_budget.log_query_failed",
+                    error=e,
+                )
 
         # 4. 기본값: Fail-Open 횟수 기반 추정
         # 보수적으로 Fail-Open 1회당 10개 에러 가정
-        logger.info("[ShadowBudget] Using fallback estimation based on fail_open_count")
+        logger.info("shadow_budget.using_fallback_estimation_based")
         return 0, "none_available"
 
     # =========================================================================
@@ -434,7 +449,10 @@ class ShadowBudgetCalculator:
             )
 
         except Exception as e:
-            logger.warning(f"[ShadowBudget] Failed to activate freeze: {e}")
+            logger.warning(
+                "shadow_budget.failed_activate_freeze",
+                error=e,
+            )
 
     def _deactivate_pending_freeze(self, calculation_id: str, reason: str) -> None:
         """
@@ -457,7 +475,10 @@ class ShadowBudgetCalculator:
                 )
 
         except Exception as e:
-            logger.warning(f"[ShadowBudget] Failed to deactivate freeze: {e}")
+            logger.warning(
+                "shadow_budget.failed_deactivate_freeze",
+                error=e,
+            )
 
     # =========================================================================
     # 알림 연동
@@ -508,7 +529,10 @@ class ShadowBudgetCalculator:
             )
 
         except Exception as e:
-            logger.warning(f"[ShadowBudget] Notification failed (non-critical): {e}")
+            logger.warning(
+                "shadow_budget.notification_failed_non_critical",
+                error=e,
+            )
 
     # =========================================================================
     # Audit 이벤트 기록 헬퍼
@@ -543,4 +567,7 @@ class ShadowBudgetCalculator:
                 recorder.record(event)
 
         except Exception as e:
-            logger.debug(f"[ShadowBudget] Audit recording failed (non-critical): {e}")
+            logger.debug(
+                "shadow_budget.audit_recording_failed_non",
+                error=e,
+            )

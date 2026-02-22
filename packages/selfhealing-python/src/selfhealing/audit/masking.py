@@ -21,10 +21,10 @@ Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
 
 import base64
 import hashlib
-import logging
+import structlog
 from enum import Enum
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # =============================================================================
 # MaskingLevel Enum (RBAC 연동)
@@ -88,7 +88,10 @@ def _get_forensic_fernet():
         )
         return None
     except Exception as e:
-        logger.warning(f"[Security] Failed to initialize Fernet for FORENSIC masking: {e}. " "Falling back to AUDIT level.")
+        logger.warning(
+            "security.failed_initialize_fernet_forensic",
+            error=e,
+        )
         return None
 
 
@@ -136,11 +139,14 @@ def mask_with_level(
                 encrypted = fernet.encrypt(value.encode())
                 return f"encrypted:{encrypted.decode()}"
             except Exception as e:
-                logger.warning(f"[Security] Fernet encryption failed: {e}. " "Using HMAC fallback.")
+                logger.warning(
+                    "security.fernet_encryption_failed_using",
+                    error=e,
+                )
                 return _forensic_hmac_fallback(value, salt)
         else:
             # encryption_key 미설정 시 HMAC 기반 폴백 (encrypted: 접두사 유지)
-            logger.debug("[Security] FORENSIC masking unavailable (no encryption_key). " "Using HMAC fallback.")
+            logger.debug("security.forensic_masking_unavailable_no")
             return _forensic_hmac_fallback(value, salt)
 
     # 기본값은 CLIENT 레벨

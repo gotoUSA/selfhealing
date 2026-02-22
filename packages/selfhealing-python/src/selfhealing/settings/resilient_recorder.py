@@ -16,12 +16,12 @@ Reference:
 - docs/self_healing/middleware_system/92_CONFIG_IMPLEMENTATION_GUIDE.md
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ResilientRecorderSettings(BaseSettings):
@@ -136,7 +136,10 @@ class ResilientRecorderSettings(BaseSettings):
     def validate_circuit_failure_threshold(cls, v: int) -> int:
         """Warn if circuit failure threshold is very low."""
         if v < 2:
-            logger.warning(f"Very low circuit_failure_threshold={v}. " "May cause frequent circuit opens on transient errors")
+            logger.warning(
+                "very_low_cause_frequent",
+                v=v,
+            )
         return v
 
     # ==========================================================================

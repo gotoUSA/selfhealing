@@ -6,13 +6,13 @@ WAL 쓰기 모듈.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
 from selfhealing.audit.wal._serialization import serialize_entry, sync_and_maybe_rotate
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class WALWriterMixin:
@@ -39,7 +39,7 @@ class WALWriterMixin:
         with self._lock:
             # Fail-Open 모드면 WAL 기록 스킵
             if self._state == WALState.DISK_FULL_FAILOPEN:
-                logger.warning("[WAL] Disk full fail-open mode, skipping WAL write")
+                logger.warning("wal.disk_full_fail_open")
                 return -1
 
             if self._state == WALState.CLOSED:

@@ -24,10 +24,10 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def check_emergency_mode_expiry(task_id: str = None) -> dict[str, Any]:
@@ -80,7 +80,10 @@ def check_emergency_mode_expiry(task_id: str = None) -> dict[str, Any]:
                 task_id=task_id,
             )
         except Exception as audit_error:
-            logger.debug(f"[Governance] Audit logging failed: {audit_error}")
+            logger.debug(
+                "governance.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
         return result_dict
 
@@ -160,5 +163,5 @@ try:
 
 except ImportError:
     # Celery not installed, skip task registration
-    logger.debug("[Governance] Celery not installed, skipping task registration")
+    logger.debug("governance.celery_installed_skipping_task")
     pass

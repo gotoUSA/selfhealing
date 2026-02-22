@@ -32,12 +32,12 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class JSONRPCErrorCode(IntEnum):

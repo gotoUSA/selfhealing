@@ -11,11 +11,11 @@ Fail-Open 원칙: audit 서비스 import/호출 실패 시 로깅만 하고
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.interfaces.resilience_policy import PolicyResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditHook:

@@ -26,7 +26,7 @@ Note:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from concurrent import futures
@@ -43,7 +43,7 @@ from selfhealing.adapters.ipc.event_stream_proxy import (
     get_event_stream_proxy,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # gRPC 가용성 확인
 try:
@@ -134,7 +134,10 @@ class SidecarGRPCServer:
 
                 self._cb_service = get_circuit_breaker_service()
             except ImportError as e:
-                logger.warning(f"[GRPCServer] CircuitBreakerService not available: {e}")
+                logger.warning(
+                    "grpc_server.circuitbreakerservice_available",
+                    error=e,
+                )
         return self._cb_service
 
     @property
@@ -146,7 +149,10 @@ class SidecarGRPCServer:
 
                 self._dlq_service = get_dlq_service()
             except ImportError as e:
-                logger.warning(f"[GRPCServer] DLQService not available: {e}")
+                logger.warning(
+                    "grpc_server.dlqservice_available",
+                    error=e,
+                )
         return self._dlq_service
 
     # =========================================================================
@@ -161,7 +167,7 @@ class SidecarGRPCServer:
             blocking: 블로킹 모드 여부
         """
         if self._running:
-            logger.warning("[GRPCServer] Server already running")
+            logger.warning("grpc_server.server_already_running")
             return
 
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=self._max_workers))
@@ -175,7 +181,10 @@ class SidecarGRPCServer:
 
         self._server.start()
         self._running = True
-        logger.info(f"[GRPCServer] Started on {address}")
+        logger.info(
+            "grpc_server.started",
+            address=address,
+        )
 
         if blocking:
             self._server.wait_for_termination()
@@ -190,14 +199,14 @@ class SidecarGRPCServer:
         if self._server:
             self._server.stop(grace)
             self._running = False
-            logger.info("[GRPCServer] Stopped")
+            logger.info("grpc_server.stopped")
 
     def _register_services(self) -> None:
         """gRPC 서비스 등록."""
         # Note: 실제 Proto 생성 후 서비스 구현체를 등록해야 함
         # 예: circuit_breaker_pb2_grpc.add_CircuitBreakerServiceServicer_to_server(
         #         CircuitBreakerServicer(self), self._server)
-        logger.debug("[GRPCServer] Services registered (stub)")
+        logger.debug("grpc_server.services_registered_stub")
 
     @property
     def is_running(self) -> bool:

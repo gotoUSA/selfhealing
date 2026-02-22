@@ -6,14 +6,14 @@
 """
 
 import json
-import logging
+import structlog
 import threading
 from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 DEFAULT_FALLBACK_PATH = "/var/log/selfhealing/notification_fallback.jsonl"
 
@@ -66,13 +66,19 @@ class NotificationFallbackRecorder:
                 f.write("\n")
             return True
         except Exception as e:
-            logger.warning(f"[NotificationFallback] File write failed: {e}")
+            logger.warning(
+                "notification_fallback.file_write_failed",
+                error=e,
+            )
             return False
 
     def _write_to_memory(self, entry: dict) -> None:
         """메모리 버퍼에 저장 (최종 폴백)."""
         self._memory_buffer.append(entry)
-        logger.debug(f"[NotificationFallback] Stored in memory buffer " f"({len(self._memory_buffer)} entries)")
+        logger.debug(
+            "notification_fallback.stored_memory_buffer_entries",
+            count=len(self._memory_buffer),
+        )
 
     def get_pending_notifications(self) -> list[dict]:
         """미처리 알림 목록을 반환 (재시도용)."""

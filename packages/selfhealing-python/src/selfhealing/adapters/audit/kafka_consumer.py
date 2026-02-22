@@ -23,7 +23,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any, Callable
 if TYPE_CHECKING:
     from confluent_kafka import Consumer, Message
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -155,12 +155,18 @@ class BaseAuditConsumer(ABC):
     def _on_assign(self, consumer: Consumer, partitions: list) -> None:
         """파티션 할당 콜백 (서브클래스에서 오버라이드 가능)."""
         partition_info = [(p.topic, p.partition, p.offset) for p in partitions]
-        logger.info(f"[Consumer] Partitions assigned: {partition_info}")
+        logger.info(
+            "consumer.partitions_assigned",
+            partition_info=partition_info,
+        )
 
     def _on_revoke(self, consumer: Consumer, partitions: list) -> None:
         """파티션 해제 콜백 (서브클래스에서 오버라이드 가능)."""
         partition_info = [(p.topic, p.partition) for p in partitions]
-        logger.info(f"[Consumer] Partitions revoked: {partition_info}")
+        logger.info(
+            "consumer.partitions_revoked",
+            partition_info=partition_info,
+        )
 
     @abstractmethod
     def process_message(self, message: Message) -> bool:
@@ -181,7 +187,10 @@ class BaseAuditConsumer(ABC):
         self._running = True
         consumer = self._ensure_consumer()
 
-        logger.info(f"[Consumer] Starting consumer for topic: {self._config.topic}")
+        logger.info(
+            "consumer.starting_consumer_topic",
+            self=self._config.topic,
+        )
 
         try:
             while self._running:
@@ -191,7 +200,10 @@ class BaseAuditConsumer(ABC):
                     continue
 
                 if msg.error():
-                    logger.error(f"[Consumer] Message error: {msg.error()}")
+                    logger.error(
+                        "consumer.message_error",
+                        msg=msg.error(),
+                    )
                     self._error_count += 1
                     continue
 
@@ -205,11 +217,14 @@ class BaseAuditConsumer(ABC):
                         self._error_count += 1
 
                 except Exception as e:
-                    logger.error(f"[Consumer] Process error: {e}")
+                    logger.error(
+                        "consumer.process_error",
+                        error=e,
+                    )
                     self._error_count += 1
 
         except KeyboardInterrupt:
-            logger.info("[Consumer] Interrupted by user")
+            logger.info("consumer.interrupted_user")
         finally:
             self.close()
 
@@ -224,7 +239,10 @@ class BaseAuditConsumer(ABC):
             try:
                 self._consumer.close()
             except Exception as e:
-                logger.warning(f"[Consumer] Close error: {e}")
+                logger.warning(
+                    "consumer.close_error",
+                    error=e,
+                )
 
         logger.info(
             f"[Consumer] Closed. Processed: {self._processed_count}, "
@@ -330,7 +348,10 @@ class IdempotentAuditConsumer(BaseAuditConsumer):
         key = self._get_idempotency_key(message)
 
         if self._is_processed(key):
-            logger.debug(f"[IdempotentConsumer] Skipping duplicate: {key}")
+            logger.debug(
+                "idempotent_consumer.skipping_duplicate",
+                key=key,
+            )
             self._skipped_count += 1
             return True  # 스킵해도 성공으로 간주 (커밋 진행)
 
@@ -340,7 +361,10 @@ class IdempotentAuditConsumer(BaseAuditConsumer):
                 self._mark_processed(key)
             return success
         except Exception as e:
-            logger.error(f"[IdempotentConsumer] Process error: {e}")
+            logger.error(
+                "idempotent_consumer.process_error",
+                error=e,
+            )
             return False
 
     def _do_process(self, message: Message) -> bool:
@@ -351,10 +375,16 @@ class IdempotentAuditConsumer(BaseAuditConsumer):
         """
         try:
             value = json.loads(message.value().decode("utf-8"))
-            logger.info(f"[IdempotentConsumer] Processed: action={value.get('action')}")
+            logger.info(
+                "idempotent_consumer.processed",
+                value=value.get('action'),
+            )
             return True
         except Exception as e:
-            logger.error(f"[IdempotentConsumer] Parse error: {e}")
+            logger.error(
+                "idempotent_consumer.parse_error",
+                error=e,
+            )
             return False
 
 
@@ -399,18 +429,31 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
                 committed = consumer.committed([p])
                 if committed and committed[0] and committed[0].offset >= 0:
                     p.offset = committed[0].offset
-                    logger.debug(f"[RebalanceConsumer] Partition {p.partition} " f"resuming from offset {p.offset}")
+                    logger.debug(
+                        "rebalance_consumer.partition_resuming_offset",
+                        p=p.partition,
+                        p_1=p.offset,
+                    )
             except Exception as e:
-                logger.warning(f"[RebalanceConsumer] Failed to get committed offset: {e}")
+                logger.warning(
+                    "rebalance_consumer.failed_get_committed_offset",
+                    error=e,
+                )
 
         consumer.assign(partitions)
-        logger.info(f"[RebalanceConsumer] Assigned {len(partitions)} partitions")
+        logger.info(
+            "rebalance_consumer.assigned_partitions",
+            count=len(partitions),
+        )
 
         if self._on_rebalance_callback:
             try:
                 self._on_rebalance_callback("assign", partitions)
             except Exception as e:
-                logger.error(f"[RebalanceConsumer] Rebalance callback error: {e}")
+                logger.error(
+                    "rebalance_consumer.rebalance_callback_error",
+                    error=e,
+                )
 
     def _on_revoke(self, consumer: Consumer, partitions: list) -> None:
         """파티션 해제 전 현재 배치 커밋."""
@@ -418,19 +461,31 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
             try:
                 offsets_to_commit = list(self._pending_offsets.values())
                 consumer.commit(offsets=offsets_to_commit, asynchronous=False)
-                logger.info(f"[RebalanceConsumer] Committed {len(offsets_to_commit)} " f"pending offsets before revoke")
+                logger.info(
+                    "rebalance_consumer.committed_pending_offsets_before",
+                    count=len(offsets_to_commit),
+                )
             except Exception as e:
-                logger.error(f"[RebalanceConsumer] Failed to commit on revoke: {e}")
+                logger.error(
+                    "rebalance_consumer.failed_commit_revoke",
+                    error=e,
+                )
             finally:
                 self._pending_offsets.clear()
 
-        logger.info(f"[RebalanceConsumer] Revoked {len(partitions)} partitions")
+        logger.info(
+            "rebalance_consumer.revoked_partitions",
+            count=len(partitions),
+        )
 
         if self._on_rebalance_callback:
             try:
                 self._on_rebalance_callback("revoke", partitions)
             except Exception as e:
-                logger.error(f"[RebalanceConsumer] Rebalance callback error: {e}")
+                logger.error(
+                    "rebalance_consumer.rebalance_callback_error",
+                    error=e,
+                )
 
     def process_message(self, message: Message) -> bool:
         """
@@ -440,7 +495,10 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
         """
         try:
             value = json.loads(message.value().decode("utf-8"))
-            logger.info(f"[RebalanceConsumer] Processed: action={value.get('action')}")
+            logger.info(
+                "rebalance_consumer.processed",
+                value=value.get('action'),
+            )
 
             # pending offset 기록 (리밸런싱 시 커밋용)
             try:
@@ -457,7 +515,10 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
 
             return True
         except Exception as e:
-            logger.error(f"[RebalanceConsumer] Parse error: {e}")
+            logger.error(
+                "rebalance_consumer.parse_error",
+                error=e,
+            )
             return False
 
 
@@ -548,7 +609,10 @@ class PostgreSQLSinkConsumer(IdempotentAuditConsumer):
             return True
 
         except Exception as e:
-            logger.error(f"[PostgreSQLSink] Parse error: {e}")
+            logger.error(
+                "postgre_sql_sink.parse_error",
+                error=e,
+            )
             return False
 
     def _flush_batch(self) -> bool:
@@ -574,12 +638,18 @@ class PostgreSQLSinkConsumer(IdempotentAuditConsumer):
                 execute_values(cur, sql, self._batch)
                 conn.commit()
 
-            logger.info(f"[PostgreSQLSink] Flushed {len(self._batch)} records to DB")
+            logger.info(
+                "postgre_sql_sink.flushed_records_db",
+                count=len(self._batch),
+            )
             self._batch.clear()
             return True
 
         except Exception as e:
-            logger.error(f"[PostgreSQLSink] DB error: {e}")
+            logger.error(
+                "postgre_sql_sink.db_error",
+                error=e,
+            )
             try:
                 self._db_connection.rollback()
             except Exception:

@@ -34,12 +34,12 @@ Reference:
 from __future__ import annotations
 
 import functools
-import logging
+import structlog
 from collections.abc import Callable
 from contextvars import ContextVar, Token
 from typing import Any, TypeVar
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -95,7 +95,11 @@ class DomainContext:
         self._previous_domain = _current_domain.get()
         self._token = _current_domain.set(self.domain)
 
-        logger.debug(f"[DomainContext] Entered: domain={self.domain}, " f"previous={self._previous_domain}")
+        logger.debug(
+            "domain_context.entered",
+            self=self.domain,
+            self_1=self._previous_domain,
+        )
 
         return self
 
@@ -105,7 +109,11 @@ class DomainContext:
             _current_domain.reset(self._token)
             self._token = None
 
-        logger.debug(f"[DomainContext] Exited: domain={self.domain}, " f"restored={_current_domain.get()}")
+        logger.debug(
+            "domain_context.exited",
+            self=self.domain,
+            _current_domain=_current_domain.get(),
+        )
 
         # 예외 전파 (False 반환)
         return False

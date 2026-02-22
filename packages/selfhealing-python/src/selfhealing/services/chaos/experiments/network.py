@@ -10,7 +10,7 @@ Includes:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -22,7 +22,7 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     NETWORK_BLACKHOLE_HYPOTHESIS,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class PacketLossExperiment(ChaosExperiment):
@@ -67,7 +67,10 @@ class PacketLossExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[PacketLoss] Failed to inject: {e}")
+            logger.error(
+                "packet_loss.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -79,7 +82,10 @@ class PacketLossExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[PacketLoss] Rolling back {self.experiment_id}")
+            logger.info(
+                "packet_loss.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -93,7 +99,10 @@ class PacketLossExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[PacketLoss] Rollback failed: {e}")
+                logger.error(
+                    "packet_loss.rollback_failed",
+                    error=e,
+                )
 
 
 class ConnectionResetExperiment(ChaosExperiment):
@@ -146,7 +155,10 @@ class ConnectionResetExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[ConnectionReset] Failed to inject: {e}")
+            logger.error(
+                "connection_reset.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -158,7 +170,10 @@ class ConnectionResetExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[ConnectionReset] Rolling back {self.experiment_id}")
+            logger.info(
+                "connection_reset.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -172,7 +187,10 @@ class ConnectionResetExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[ConnectionReset] Rollback failed: {e}")
+                logger.error(
+                    "connection_reset.rollback_failed",
+                    error=e,
+                )
 
 
 class NetworkBlackholeExperiment(ChaosExperiment):
@@ -238,7 +256,10 @@ class NetworkBlackholeExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[NetworkBlackhole] Failed to inject: {e}")
+            logger.error(
+                "network_blackhole.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -247,7 +268,10 @@ class NetworkBlackholeExperiment(ChaosExperiment):
             if self._rollback_completed:
                 return
 
-            logger.info(f"[NetworkBlackhole] Rolling back {self.experiment_id}")
+            logger.info(
+                "network_blackhole.rolling_back",
+                self=self.experiment_id,
+            )
             _apply_chaos_config(
                 {
                     "network_blackhole": {
@@ -370,7 +394,10 @@ class ConnectionPartitionExperiment(ChaosExperiment):
             return True
 
         except Exception as e:
-            logger.error(f"[ConnectionPartition] Failed to inject: {e}")
+            logger.error(
+                "connection_partition.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -382,7 +409,10 @@ class ConnectionPartitionExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[ConnectionPartition] Rolling back {self.experiment_id}")
+            logger.info(
+                "connection_partition.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 if self._monitor_instance:
@@ -397,9 +427,12 @@ class ConnectionPartitionExperiment(ChaosExperiment):
                     }
                 )
                 self._rollback_completed = True
-                logger.info("[ConnectionPartition] Partition simulation cleared")
+                logger.info("connection_partition.partition_simulation_cleared")
             except Exception as e:
-                logger.error(f"[ConnectionPartition] Rollback failed: {e}")
+                logger.error(
+                    "connection_partition.rollback_failed",
+                    error=e,
+                )
 
 
 __all__ = [

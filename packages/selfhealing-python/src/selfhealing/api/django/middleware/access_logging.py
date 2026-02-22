@@ -13,7 +13,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import re
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -236,7 +236,10 @@ class SensitiveEndpointAccessLogger:
             self._append_to_file(entry)
             primary_success = True
         except Exception as e:
-            logger.warning(f"[AccessLog] Failed to write to file: {e}")
+            logger.warning(
+                "access_log.failed_write_file",
+                error=e,
+            )
 
         # FALLBACK: If all primary logging failed, use stdout as last resort
         if not primary_success:
@@ -334,6 +337,9 @@ class SensitiveAccessLoggingMiddleware:
             self.access_logger.log_if_sensitive(request, response, response_time_ms)
         except Exception as e:
             # Log error but don't affect response
-            logger.error(f"[AccessLog] Middleware error (fail-open): {e}")
+            logger.error(
+                "access_log.middleware_error_fail_open",
+                error=e,
+            )
 
         return response

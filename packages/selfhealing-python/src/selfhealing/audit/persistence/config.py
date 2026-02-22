@@ -307,9 +307,12 @@ def get_disk_buffer_settings() -> DiskBufferSettings:
     if warnings:
         import logging
 
-        logger = logging.getLogger(__name__)
+        logger = structlog.get_logger()
         for warning in warnings:
-            logger.warning(f"[DiskBufferSettings] {warning}")
+            logger.warning(
+                "disk_buffer_settings.event",
+                warning=warning,
+            )
 
     return settings
 

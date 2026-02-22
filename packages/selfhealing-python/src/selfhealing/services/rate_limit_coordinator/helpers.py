@@ -6,10 +6,10 @@ EventBus integration and utility functions for rate limit coordination.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -38,7 +38,10 @@ def _emit_rate_limit_event(
         bus = get_event_bus()
         event_type = getattr(EventType, event_type_name, None)
         if event_type is None:
-            logger.warning(f"[RateLimitCoordinator] Unknown event type: {event_type_name}")
+            logger.warning(
+                "adaptive_throttle.unknown_event_type",
+                event_type_name=event_type_name,
+            )
             return
 
         priority = getattr(EventPriority, priority_name, EventPriority.HIGH)
@@ -48,11 +51,17 @@ def _emit_rate_limit_event(
             source="rate_limit_coordinator",
             priority=priority,
         )
-        logger.debug(f"[RateLimitCoordinator] Emitted {event_type_name}")
+        logger.debug(
+            "rate_limit_coordinator.emitted",
+            event_type_name=event_type_name,
+        )
     except ImportError:
-        logger.debug("[RateLimitCoordinator] EventBus not available")
+        logger.debug("rate_limit_coordinator.eventbus_available")
     except Exception as e:
-        logger.warning(f"[RateLimitCoordinator] Failed to emit event: {e}")
+        logger.warning(
+            "rate_limit_coordinator.failed_emit_event",
+            error=e,
+        )
 
 
 def _record_rate_limit_metrics(
@@ -82,9 +91,12 @@ def _record_rate_limit_metrics(
             rate_limit_consecutive_429s.labels(key=key).set(consecutive_429s)
 
     except ImportError:
-        logger.debug("[RateLimitCoordinator] Metrics module not available")
+        logger.debug("rate_limit_coordinator.metrics_module_available")
     except Exception as e:
-        logger.debug(f"[RateLimitCoordinator] Failed to record metrics: {e}")
+        logger.debug(
+            "adaptive_throttle.metrics_failed",
+            error=e,
+        )
 
 
 def _default_is_429(response: Any) -> bool:

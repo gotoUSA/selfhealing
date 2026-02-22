@@ -12,14 +12,14 @@ Design Philosophy:
 - 무결성 검증 엔드포인트
 """
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from django.http import HttpRequest, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views import View
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
@@ -116,7 +116,10 @@ class ContinuousAuditQueryView(View):
             )
 
         except Exception as e:
-            logger.error(f"[ContinuousAuditQueryView] Error: {e}")
+            logger.error(
+                "continuous_audit_query_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -163,7 +166,10 @@ class ContinuousAuditDetailView(View):
             return JsonResponse({"error": f"Log entry '{log_id}' not found"}, status=404)
 
         except Exception as e:
-            logger.error(f"[ContinuousAuditDetailView] Error: {e}")
+            logger.error(
+                "continuous_audit_detail_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -205,7 +211,10 @@ class ContinuousAuditAutoTuningView(LoginRequiredMixin, View):
             )
 
         except Exception as e:
-            logger.error(f"[ContinuousAuditAutoTuningView] Error: {e}")
+            logger.error(
+                "continuous_audit_auto_tuning_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -251,7 +260,10 @@ class DriftHistoryView(View):
             )
 
         except Exception as e:
-            logger.error(f"[DriftHistoryView] Error: {e}")
+            logger.error(
+                "drift_history_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -293,7 +305,10 @@ class ComplianceHistoryView(View):
             )
 
         except Exception as e:
-            logger.error(f"[ComplianceHistoryView] Error: {e}")
+            logger.error(
+                "compliance_history_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -315,7 +330,10 @@ class IntegrityVerifyView(View):
             return JsonResponse(result, status=status_code)
 
         except Exception as e:
-            logger.error(f"[IntegrityVerifyView] Error: {e}")
+            logger.error(
+                "integrity_verify_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -340,7 +358,10 @@ class ChainStateView(View):
             )
 
         except Exception as e:
-            logger.error(f"[ChainStateView] Error: {e}")
+            logger.error(
+                "chain_state_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -397,7 +418,10 @@ class ExportJSONLView(View):
             return response
 
         except Exception as e:
-            logger.error(f"[ExportJSONLView] Error: {e}")
+            logger.error(
+                "export_jsonl_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -461,7 +485,10 @@ class ExportCSVView(View):
             return response
 
         except Exception as e:
-            logger.error(f"[ExportCSVView] Error: {e}")
+            logger.error(
+                "export_csv_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -486,7 +513,10 @@ class ConfigView(View):
             )
 
         except Exception as e:
-            logger.error(f"[ConfigView] Error: {e}")
+            logger.error(
+                "config_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 

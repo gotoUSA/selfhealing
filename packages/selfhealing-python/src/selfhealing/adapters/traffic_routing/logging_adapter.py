@@ -14,7 +14,7 @@ ProviderRegistry에 등록하세요.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.interfaces.traffic_routing import (
@@ -22,7 +22,7 @@ from selfhealing.interfaces.traffic_routing import (
     TrafficRoutingAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LoggingTrafficRoutingAdapter(TrafficRoutingAdapter):
@@ -75,7 +75,10 @@ class LoggingTrafficRoutingAdapter(TrafficRoutingAdapter):
                 )
             )
         except Exception as e:
-            logger.error(f"[TrafficRouting] Event publish failed: {e}")
+            logger.error(
+                "traffic_routing.event_publish_failed",
+                error=e,
+            )
 
         return RoutingChange(
             success=True,

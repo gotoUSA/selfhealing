@@ -15,11 +15,11 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Lua 스크립트: 레벨 확인 + 모드 변경 + 인과관계 ID 기록 (원자적)
@@ -241,7 +241,10 @@ class AtomicLevelTransition:
             return (success, message, level)
 
         except Exception as e:
-            logger.error(f"[AtomicTransition] Error: {e}")
+            logger.error(
+                "atomic_transition.error",
+                error=e,
+            )
             return (False, str(e), expected_level)
 
     def transition_conditional(
@@ -297,7 +300,10 @@ class AtomicLevelTransition:
             return (success, message, level)
 
         except Exception as e:
-            logger.error(f"[AtomicTransition] Conditional error: {e}")
+            logger.error(
+                "atomic_transition.conditional_error",
+                error=e,
+            )
             return (False, str(e), required_level)
 
     def escalate_only(
@@ -349,7 +355,10 @@ class AtomicLevelTransition:
             return (success, message, level)
 
         except Exception as e:
-            logger.error(f"[AtomicTransition] Escalate error: {e}")
+            logger.error(
+                "atomic_transition.escalate_error",
+                error=e,
+            )
             return (False, str(e), new_level)
 
     def get_current_state(
@@ -381,5 +390,8 @@ class AtomicLevelTransition:
             return result
 
         except Exception as e:
-            logger.error(f"[AtomicTransition] Get state error: {e}")
+            logger.error(
+                "atomic_transition.get_state_error",
+                error=e,
+            )
             return None

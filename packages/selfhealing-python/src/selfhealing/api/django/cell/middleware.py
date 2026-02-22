@@ -25,14 +25,14 @@ MIDDLEWARE 설정:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from ipaddress import ip_address, ip_network
 from typing import Any
 
 from django.http import HttpRequest, HttpResponse
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # CIDR 캐시 갱신 주기 (초) — WSGI 프로세스 재시작 없이 Settings 변경을 반영
 _TRUSTED_CIDRS_CACHE_TTL_SECONDS = 300.0

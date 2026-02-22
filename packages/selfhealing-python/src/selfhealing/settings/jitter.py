@@ -17,12 +17,12 @@ Environment Variables:
     SELFHEALING_JITTER_LOAD_LOW_THRESHOLD=0.3
 """
 
-import logging
+import structlog
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class JitterSettings(BaseSettings):

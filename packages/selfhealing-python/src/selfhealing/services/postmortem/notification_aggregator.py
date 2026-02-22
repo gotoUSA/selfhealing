@@ -19,14 +19,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -207,13 +207,16 @@ class NotificationAggregator:
             backend = get_state_backend()
             if isinstance(backend, RedisStateBackend):
                 self._redis_client = backend._client
-                logger.info("[NotificationAggregator] Redis mode enabled")
+                logger.info("notification_aggregator.redis_mode_enabled")
             else:
-                logger.info("[NotificationAggregator] File backend, using memory mode")
+                logger.info("notification_aggregator.file_backend_using_memory")
         except Exception as e:
             from selfhealing.adapters.resilient.backend import _safe_error_message
 
-            logger.warning("[NotificationAggregator] Redis init failed: %s", _safe_error_message(e))
+            logger.warning(
+                "resilient_storage.redis_init_failed",
+                _safe_error_message=_safe_error_message(e),
+            )
 
     def _compute_hash(self, incident_id: str) -> str:
         """중복 방지용 해시 계산."""
@@ -257,7 +260,10 @@ class NotificationAggregator:
                     namespace,
                 )
             except Exception as e:
-                logger.warning(f"[NotificationAggregator] Redis error, fallback to memory: {e}")
+                logger.warning(
+                    "notification_aggregator.redis_error_fallback_memory",
+                    error=e,
+                )
 
         return self._add_notification_memory(
             incident_id,
@@ -281,7 +287,10 @@ class NotificationAggregator:
         # 중복 체크
         hash_key = self.REDIS_KEY_SENT.format(hash=self._compute_hash(incident_id))
         if self._redis_client.exists(hash_key):
-            logger.debug(f"[NotificationAggregator] Duplicate notification skipped: {incident_id}")
+            logger.debug(
+                "notification_aggregator.duplicate_notification_skipped",
+                incident_id=incident_id,
+            )
             return False
 
         now = time.time()
@@ -301,7 +310,11 @@ class NotificationAggregator:
         self._redis_client.zadd(pending_key, {member: now})
         self._redis_client.expire(pending_key, self.DEFAULT_PENDING_TTL)
 
-        logger.info(f"[NotificationAggregator] Notification queued: {incident_id} " f"(namespace={namespace})")
+        logger.info(
+            "notification_aggregator.notification_queued",
+            incident_id=incident_id,
+            namespace=namespace,
+        )
 
         return True
 
@@ -319,7 +332,10 @@ class NotificationAggregator:
 
         with self._lock:
             if hash_val in self._sent_hashes:
-                logger.debug(f"[NotificationAggregator] Duplicate notification skipped: " f"{incident_id}")
+                logger.debug(
+                    "notification_aggregator.duplicate_notification_skipped",
+                    incident_id=incident_id,
+                )
                 return False
 
             if namespace not in self._pending:
@@ -336,7 +352,10 @@ class NotificationAggregator:
 
             self._pending[namespace].append(notification)
 
-            logger.info(f"[NotificationAggregator] Notification queued (memory): {incident_id}")
+            logger.info(
+                "notification_aggregator.notification_queued_memory",
+                incident_id=incident_id,
+            )
 
             return True
 
@@ -358,7 +377,10 @@ class NotificationAggregator:
             try:
                 return self._should_flush_redis(namespace)
             except Exception as e:
-                logger.warning(f"[NotificationAggregator] Redis error, fallback to memory: {e}")
+                logger.warning(
+                    "notification_aggregator.redis_error_fallback_memory",
+                    error=e,
+                )
 
         return self._should_flush_memory(namespace)
 
@@ -407,7 +429,10 @@ class NotificationAggregator:
             try:
                 return self._flush_and_create_summary_redis(namespace)
             except Exception as e:
-                logger.warning(f"[NotificationAggregator] Redis error, fallback to memory: {e}")
+                logger.warning(
+                    "notification_aggregator.redis_error_fallback_memory",
+                    error=e,
+                )
 
         return self._flush_and_create_summary_memory(namespace)
 
@@ -470,7 +495,10 @@ class NotificationAggregator:
             for n in notifications:
                 self._sent_hashes.add(self._compute_hash(n.incident_id))
 
-            logger.info(f"[NotificationAggregator] Summary created (memory): " f"{summary.total_incidents} incidents")
+            logger.info(
+                "notification_aggregator.summary_created_memory_incidents",
+                summary=summary.total_incidents,
+            )
 
             return summary
 
@@ -514,7 +542,10 @@ class NotificationAggregator:
                 pending_key = self.REDIS_KEY_PENDING.format(namespace=namespace)
                 self._redis_client.delete(pending_key)
             except Exception as e:
-                logger.warning(f"[NotificationAggregator] Redis clear error: {e}")
+                logger.warning(
+                    "notification_aggregator.redis_clear_error",
+                    error=e,
+                )
 
         with self._lock:
             if namespace in self._pending:

@@ -30,7 +30,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from typing import Any, Callable
 
 from selfhealing.adapters.ipc.exceptions import (
@@ -39,7 +39,7 @@ from selfhealing.adapters.ipc.exceptions import (
     IPCServiceUnavailableError,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RequestHandler:
@@ -74,7 +74,10 @@ class RequestHandler:
 
                 self._cb_service = get_circuit_breaker_service()
             except ImportError as e:
-                logger.warning(f"[RequestHandler] CircuitBreakerService not available: {e}")
+                logger.warning(
+                    "request_handler.circuitbreakerservice_available",
+                    error=e,
+                )
         return self._cb_service
 
     @property
@@ -86,7 +89,10 @@ class RequestHandler:
 
                 self._dlq_service = get_dlq_service()
             except ImportError as e:
-                logger.warning(f"[RequestHandler] DLQService not available: {e}")
+                logger.warning(
+                    "request_handler.dlqservice_available",
+                    error=e,
+                )
         return self._dlq_service
 
     @property
@@ -98,7 +104,10 @@ class RequestHandler:
 
                 self._learning_service = LearningService()
             except ImportError as e:
-                logger.warning(f"[RequestHandler] LearningService not available: {e}")
+                logger.warning(
+                    "request_handler.learningservice_available",
+                    error=e,
+                )
         return self._learning_service
 
     # =========================================================================
@@ -141,7 +150,10 @@ class RequestHandler:
             handler: 핸들러 함수
         """
         self._handlers[method] = handler
-        logger.debug(f"[RequestHandler] Registered handler: {method}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            method=method,
+        )
 
     def get_registered_methods(self) -> list[str]:
         """등록된 메서드 목록 반환."""

@@ -10,7 +10,7 @@ Usage:
     batch = buffer.get_batch(max_size=100)  # Background worker
 """
 
-import logging
+import structlog
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,7 +21,7 @@ from typing import Generic, TypeVar
 # BackpressureStrategy: 단일 소스는 scaling/config.py (Item 6 중복 제거)
 from selfhealing.scaling.config import BackpressureStrategy  # noqa: E402, F401
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 

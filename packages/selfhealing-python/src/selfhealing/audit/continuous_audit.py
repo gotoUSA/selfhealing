@@ -15,7 +15,7 @@ Design Philosophy:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import threading
 import time
@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     )
     from selfhealing.audit.wal import WALConfig, WriteAheadLog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ContinuousAuditRecorder:
@@ -143,9 +143,12 @@ class ContinuousAuditRecorder:
                 from selfhealing.audit.wal import WriteAheadLog
 
                 self._wal = WriteAheadLog(config=wal_config or WALConfigClass())
-                logger.info("[ContinuousAudit] WAL enabled")
+                logger.info("continuous_audit.wal_enabled")
             except Exception as e:
-                logger.warning(f"[ContinuousAudit] WAL initialization failed: {e}")
+                logger.warning(
+                    "continuous_audit.wal_initialization_failed",
+                    error=e,
+                )
                 self._wal_enabled = False
 
         # Checkpoint Strategy 초기화
@@ -164,9 +167,12 @@ class ContinuousAuditRecorder:
                 from selfhealing.audit.checkpoint_strategy import get_default_checkpoint_strategy
 
                 self._checkpoint_strategy = get_default_checkpoint_strategy()
-                logger.info("[ContinuousAudit] Checkpoint strategy initialized")
+                logger.info("continuous_audit.checkpoint_strategy_initialized")
             except Exception as e:
-                logger.warning(f"[ContinuousAudit] Checkpoint strategy init failed: {e}")
+                logger.warning(
+                    "continuous_audit.checkpoint_strategy_init_failed",
+                    error=e,
+                )
 
         # 환경 정보
         self._environment = os.environ.get("ENVIRONMENT", "development")
@@ -762,7 +768,10 @@ class ContinuousAuditRecorder:
                 try:
                     wal_seq = self._wal.write(entry_dict)
                 except Exception as e:
-                    logger.warning(f"[ContinuousAudit] WAL write failed: {e}")
+                    logger.warning(
+                        "continuous_audit.wal_write_failed",
+                        error=e,
+                    )
 
             # Fail-Open 패턴으로 기록
             try:
@@ -773,7 +782,10 @@ class ContinuousAuditRecorder:
                     try:
                         self._wal.mark_processed(wal_seq)
                     except Exception as e:
-                        logger.warning(f"[ContinuousAudit] WAL commit failed: {e}")
+                        logger.warning(
+                            "continuous_audit.wal_commit_failed",
+                            error=e,
+                        )
 
                 # Checkpoint 저장 (Back-pressure 적용)
                 if wal_seq is not None and self._checkpoint_strategy:
@@ -803,7 +815,11 @@ class ContinuousAuditRecorder:
             integrity = entry_dict.get("integrity", {})
             audit_id = f"audit-{entry.timestamp.strftime('%Y%m%d%H%M%S')}-{integrity.get('sequence', 0):06d}"
 
-            logger.debug(f"[ContinuousAudit] Recorded: {entry.action} (id={audit_id})")
+            logger.debug(
+                "continuous_audit.recorded",
+                entry=entry.action,
+                audit_id=audit_id,
+            )
 
             return audit_id
 
@@ -852,10 +868,16 @@ class ContinuousAuditRecorder:
             self._records_since_checkpoint = 0
             self._last_checkpoint_time = time.time()
 
-            logger.debug(f"[ContinuousAudit] Checkpoint saved: seq={wal_seq}")
+            logger.debug(
+                "continuous_audit.checkpoint_saved",
+                wal_seq=wal_seq,
+            )
 
         except Exception as e:
-            logger.warning(f"[ContinuousAudit] Checkpoint save failed: {e}")
+            logger.warning(
+                "continuous_audit.checkpoint_save_failed",
+                error=e,
+            )
 
     def force_save_checkpoint(self, wal_seq: int | None = None) -> None:
         """
@@ -880,10 +902,16 @@ class ContinuousAuditRecorder:
             self._records_since_checkpoint = 0
             self._last_checkpoint_time = time.time()
 
-            logger.info(f"[ContinuousAudit] Checkpoint force saved: seq={wal_seq}")
+            logger.info(
+                "continuous_audit.checkpoint_force_saved",
+                wal_seq=wal_seq,
+            )
 
         except Exception as e:
-            logger.warning(f"[ContinuousAudit] Checkpoint force save failed: {e}")
+            logger.warning(
+                "continuous_audit.checkpoint_force_save_failed",
+                error=e,
+            )
 
     def _send_alert(self, channel: str, data: dict[str, Any]) -> None:
         """알림 발송."""
@@ -891,8 +919,15 @@ class ContinuousAuditRecorder:
             try:
                 self.alert_callback(channel, data)
             except Exception as e:
-                logger.warning(f"[ContinuousAudit] Alert callback failed: {e}")
+                logger.warning(
+                    "continuous_audit.alert_callback_failed",
+                    error=e,
+                )
 
         # 설정된 채널로 알림 (확장 가능)
         if channel in self.config.alert_channels or "all" in self.config.alert_channels:
-            logger.info(f"[ContinuousAudit] Alert: {channel} - {data}")
+            logger.info(
+                "continuous_audit.alert",
+                channel=channel,
+                data=data,
+            )

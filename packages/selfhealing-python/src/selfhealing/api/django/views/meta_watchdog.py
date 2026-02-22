@@ -10,13 +10,13 @@ Endpoints:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class MetaWatchdogLivenessView(APIView):
@@ -70,7 +70,11 @@ class MetaWatchdogLivenessView(APIView):
             max_age = settings.probe_interval_seconds * 3
 
             if age_seconds > max_age:
-                logger.warning(f"[MetaWatchdog] Liveness check FAILED: " f"age={age_seconds:.1f}s > max={max_age:.1f}s")
+                logger.warning(
+                    "meta_watchdog.liveness_check_failed",
+                    age_seconds=age_seconds,
+                    max_age=max_age,
+                )
                 return Response(
                     {
                         "status": "stuck",
@@ -96,7 +100,10 @@ class MetaWatchdogLivenessView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception as e:
-            logger.error(f"[MetaWatchdog] Liveness check error: {e}")
+            logger.error(
+                "meta_watchdog.liveness_check_error",
+                error=e,
+            )
             return Response(
                 {"status": "error", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -175,7 +182,10 @@ class MetaWatchdogStatusView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception as e:
-            logger.error(f"[MetaWatchdog] Status check error: {e}")
+            logger.error(
+                "meta_watchdog.status_check_error",
+                error=e,
+            )
             return Response(
                 {"status": "error", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -235,7 +245,10 @@ class MetaWatchdogForceCheckView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
         except Exception as e:
-            logger.error(f"[MetaWatchdog] Force check error: {e}")
+            logger.error(
+                "meta_watchdog.force_check_error",
+                error=e,
+            )
             return Response(
                 {"status": "error", "message": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

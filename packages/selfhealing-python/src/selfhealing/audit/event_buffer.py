@@ -35,7 +35,7 @@ Version: 2.0.0 (RingBuffer + WAL 통합)
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditEventType(str, Enum):
@@ -400,7 +400,10 @@ class RequestAuditBuffer:
             return WriteAheadLog(config=config)
 
         except Exception as e:
-            logger.warning(f"Failed to initialize WAL for RequestAuditBuffer: {e}")
+            logger.warning(
+                "failed_initialize_wal_requestauditbuffer",
+                error=e,
+            )
             return None
 
     @property
@@ -445,7 +448,10 @@ class RequestAuditBuffer:
                 seq = self._wal.write(event.to_dict())
                 self._wal_sequences.append(seq)
             except Exception as e:
-                logger.warning(f"WAL write failed: {e}")
+                logger.warning(
+                    "wal_write_failed",
+                    error=e,
+                )
                 # WAL 실패해도 메모리 버퍼에는 추가
 
         # 메모리 버퍼에 추가

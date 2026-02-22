@@ -16,13 +16,13 @@ Reference:
 - docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
-import logging
+import structlog
 from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SLOSettings(BaseSettings):

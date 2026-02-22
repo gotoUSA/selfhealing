@@ -34,7 +34,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from selfhealing.adapters.kafka.event_bus import KafkaEventBus
     from selfhealing.adapters.kafka.consumer import ConsumedEvent
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Kafka Topic for Rate Limit 429 events
 RATE_LIMIT_TOPIC = "selfhealing.rate_limit.events"
@@ -102,7 +102,10 @@ class DistributedRateLimitChannel:
 
                 self._kafka_bus = KafkaEventBus()
             except ImportError as e:
-                logger.error(f"[DistributedRateLimitChannel] Kafka not available: {e}")
+                logger.error(
+                    "distributed_rate_limit_channel.kafka_available",
+                    error=e,
+                )
                 raise RuntimeError("Kafka adapter not available") from e
 
         return self._kafka_bus
@@ -156,7 +159,10 @@ class DistributedRateLimitChannel:
             return success
 
         except Exception as e:
-            logger.error(f"[DistributedRateLimitChannel] Broadcast error: {e}")
+            logger.error(
+                "distributed_rate_limit_channel.broadcast_error",
+                error=e,
+            )
             return False
 
     def subscribe_rate_limit_429(
@@ -181,7 +187,10 @@ class DistributedRateLimitChannel:
             kafka_bus = self._ensure_kafka_bus()
             kafka_bus.subscribe(RATE_LIMIT_TOPIC, self._dispatch_to_handlers)
         except Exception as e:
-            logger.warning(f"[DistributedRateLimitChannel] Subscribe setup failed: {e}")
+            logger.warning(
+                "distributed_rate_limit_channel.subscribe_setup_failed",
+                error=e,
+            )
 
     def _dispatch_to_handlers(self, event: "ConsumedEvent") -> bool:
         """
@@ -203,7 +212,10 @@ class DistributedRateLimitChannel:
             try:
                 handler(event_data)
             except Exception as e:
-                logger.error(f"[DistributedRateLimitChannel] Handler error: {e}")
+                logger.error(
+                    "distributed_rate_limit_channel.handler_error",
+                    error=e,
+                )
                 success = False
 
         return success
@@ -211,16 +223,19 @@ class DistributedRateLimitChannel:
     def start(self) -> None:
         """Kafka Consumer 시작."""
         if self._running:
-            logger.warning("[DistributedRateLimitChannel] Already running")
+            logger.warning("distributed_rate_limit_channel.already_running")
             return
 
         try:
             kafka_bus = self._ensure_kafka_bus()
             kafka_bus.start()
             self._running = True
-            logger.info("[DistributedRateLimitChannel] Started")
+            logger.info("distributed_rate_limit_channel.started")
         except Exception as e:
-            logger.error(f"[DistributedRateLimitChannel] Start failed: {e}")
+            logger.error(
+                "distributed_rate_limit_channel.start_failed",
+                error=e,
+            )
 
     def stop(self) -> None:
         """Kafka Consumer 정지."""
@@ -231,9 +246,12 @@ class DistributedRateLimitChannel:
             if self._kafka_bus:
                 self._kafka_bus.stop()
             self._running = False
-            logger.info("[DistributedRateLimitChannel] Stopped")
+            logger.info("distributed_rate_limit_channel.stopped")
         except Exception as e:
-            logger.error(f"[DistributedRateLimitChannel] Stop failed: {e}")
+            logger.error(
+                "distributed_rate_limit_channel.stop_failed",
+                error=e,
+            )
 
     @property
     def is_running(self) -> bool:

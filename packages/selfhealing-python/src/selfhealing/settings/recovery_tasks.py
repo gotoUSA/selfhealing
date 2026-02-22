@@ -20,12 +20,12 @@ Environment Variables:
     SELFHEALING_RECOVERY_TASKS_HEALTH_CHECK_RETRY_DELAY=60
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RecoveryTasksSettings(BaseSettings):

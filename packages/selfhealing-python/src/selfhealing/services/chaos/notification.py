@@ -12,10 +12,10 @@ Principle:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def send_chaos_experiment_alert(
@@ -95,9 +95,16 @@ def send_chaos_experiment_alert(
             )
         )
 
-        logger.info(f"[ChaosNotification] Sent {event_type} alert for {experiment_id}")
+        logger.info(
+            "chaos_notification.sent_alert",
+            event_type=event_type,
+            experiment_id=experiment_id,
+        )
         return True
 
     except Exception as e:
-        logger.warning(f"[ChaosNotification] Failed to send alert: {e}")
+        logger.warning(
+            "chaos_notification.failed_send_alert",
+            error=e,
+        )
         return False

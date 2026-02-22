@@ -7,7 +7,7 @@ Pod 재시작, Deployment 스케일링 등 인프라 레벨 복구 수행.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import re
 import shutil
@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RecoveryAction(str, Enum):
@@ -191,18 +191,21 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
 
             try:
                 config.load_incluster_config()
-                logger.info("[KubernetesRecoveryAdapter] Loaded in-cluster config")
+                logger.info("kubernetes_recovery_adapter.loaded_cluster_config")
             except config.ConfigException:
                 config.load_kube_config()
-                logger.info("[KubernetesRecoveryAdapter] Loaded kubeconfig")
+                logger.info("kubernetes_recovery_adapter.loaded_kubeconfig")
 
             self._apps_v1 = client.AppsV1Api()
             self._core_v1 = client.CoreV1Api()
             self._is_available = True
         except ImportError:
-            logger.warning("[KubernetesRecoveryAdapter] kubernetes package not installed")
+            logger.warning("kubernetes_recovery_adapter.kubernetes_package_installed")
         except Exception as e:
-            logger.warning(f"[KubernetesRecoveryAdapter] Init failed: {e}")
+            logger.warning(
+                "kubernetes_recovery_adapter.init_failed",
+                error=e,
+            )
 
     def is_available(self) -> bool:
         return self._is_available
@@ -233,7 +236,10 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
         try:
             self._apps_v1.read_namespaced_deployment(name, self._namespace)
             self._resource_kind_cache[cache_key] = "Deployment"
-            logger.debug(f"[KubernetesRecoveryAdapter] Detected {name} as Deployment")
+            logger.debug(
+                "kubernetes_recovery_adapter.detected_deployment",
+                name=name,
+            )
             return "Deployment"
         except ApiException as e:
             if e.status != 404:
@@ -243,7 +249,10 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
         try:
             self._apps_v1.read_namespaced_stateful_set(name, self._namespace)
             self._resource_kind_cache[cache_key] = "StatefulSet"
-            logger.debug(f"[KubernetesRecoveryAdapter] Detected {name} as StatefulSet")
+            logger.debug(
+                "kubernetes_recovery_adapter.detected_statefulset",
+                name=name,
+            )
             return "StatefulSet"
         except ApiException as e:
             if e.status != 404:
@@ -300,7 +309,11 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                     body=patch,
                 )
 
-            logger.info(f"[KubernetesRecoveryAdapter] Triggered restart: " f"{worker_name} ({kind})")
+            logger.info(
+                "kubernetes_recovery_adapter.triggered_restart",
+                worker_name=worker_name,
+                kind=kind,
+            )
             return RecoveryResult(
                 action=RecoveryAction.RESTART_WORKER,
                 success=True,
@@ -309,7 +322,10 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                 timestamp=datetime.now(timezone.utc),
             )
         except Exception as e:
-            logger.error(f"[KubernetesRecoveryAdapter] Restart failed: {e}")
+            logger.error(
+                "kubernetes_recovery_adapter.restart_failed",
+                error=e,
+            )
             return RecoveryResult(
                 action=RecoveryAction.RESTART_WORKER,
                 success=False,
@@ -347,7 +363,11 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                 namespace=self._namespace,
                 body={"spec": {"replicas": replicas}},
             )
-            logger.info(f"[KubernetesRecoveryAdapter] Scaled {name} to {replicas} replicas")
+            logger.info(
+                "kubernetes_recovery_adapter.scaled_replicas",
+                name=name,
+                replicas=replicas,
+            )
             return RecoveryResult(
                 action=RecoveryAction.SCALE_DEPLOYMENT,
                 success=True,
@@ -356,7 +376,10 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                 timestamp=datetime.now(timezone.utc),
             )
         except Exception as e:
-            logger.error(f"[KubernetesRecoveryAdapter] Scale failed: {e}")
+            logger.error(
+                "kubernetes_recovery_adapter.scale_failed",
+                error=e,
+            )
             return RecoveryResult(
                 action=RecoveryAction.SCALE_DEPLOYMENT,
                 success=False,
@@ -388,7 +411,10 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
 
         try:
             self._core_v1.delete_namespaced_pod(name=pod_name, namespace=ns)
-            logger.info(f"[KubernetesRecoveryAdapter] Deleted pod: {pod_name}")
+            logger.info(
+                "kubernetes_recovery_adapter.deleted_pod",
+                pod_name=pod_name,
+            )
             return RecoveryResult(
                 action=RecoveryAction.DELETE_POD,
                 success=True,
@@ -397,7 +423,10 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
                 timestamp=datetime.now(timezone.utc),
             )
         except Exception as e:
-            logger.error(f"[KubernetesRecoveryAdapter] Delete pod failed: {e}")
+            logger.error(
+                "kubernetes_recovery_adapter.delete_pod_failed",
+                error=e,
+            )
             return RecoveryResult(
                 action=RecoveryAction.DELETE_POD,
                 success=False,
@@ -546,7 +575,10 @@ class NoOpRecoveryAdapter(RecoveryInfrastructureAdapter):
         return True
 
     def restart_worker(self, worker_name: str) -> RecoveryResult:
-        logger.info(f"[NoOpRecoveryAdapter] Would restart: {worker_name}")
+        logger.info(
+            "no_op_recovery_adapter.restart",
+            worker_name=worker_name,
+        )
         return RecoveryResult(
             action=RecoveryAction.RESTART_WORKER,
             success=True,
@@ -556,7 +588,11 @@ class NoOpRecoveryAdapter(RecoveryInfrastructureAdapter):
         )
 
     def scale_deployment(self, name: str, replicas: int) -> RecoveryResult:
-        logger.info(f"[NoOpRecoveryAdapter] Would scale {name} to {replicas}")
+        logger.info(
+            "no_op_recovery_adapter.scale",
+            name=name,
+            replicas=replicas,
+        )
         return RecoveryResult(
             action=RecoveryAction.SCALE_DEPLOYMENT,
             success=True,
@@ -566,7 +602,10 @@ class NoOpRecoveryAdapter(RecoveryInfrastructureAdapter):
         )
 
     def delete_pod(self, pod_name: str, namespace: str = "") -> RecoveryResult:
-        logger.info(f"[NoOpRecoveryAdapter] Would delete pod: {pod_name}")
+        logger.info(
+            "no_op_recovery_adapter.delete_pod",
+            pod_name=pod_name,
+        )
         return RecoveryResult(
             action=RecoveryAction.DELETE_POD,
             success=True,
@@ -602,9 +641,9 @@ def get_recovery_adapter() -> RecoveryInfrastructureAdapter:
         # K8s 불가 시 Docker로 폴백
         docker_adapter = DockerComposeRecoveryAdapter()
         if docker_adapter.is_available():
-            logger.info("[RecoveryAdapter] K8s unavailable, falling back to Docker")
+            logger.info("recovery_adapter.unavailable_falling_back_docker")
             return docker_adapter
 
         # 최종 폴백: NoOp
-        logger.warning("[RecoveryAdapter] No adapter available, using NoOp")
+        logger.warning("recovery_adapter.no_adapter_available_using")
         return NoOpRecoveryAdapter()

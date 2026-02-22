@@ -13,12 +13,12 @@ Environment Variables:
     SELFHEALING_STEADY_STATE_THROUGHPUT_MIN_RPS=100.0
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SteadyStateSettings(BaseSettings):

@@ -20,13 +20,13 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ClusterIdentity(BaseSettings):
@@ -156,7 +156,10 @@ class ClusterIdentity(BaseSettings):
                 logger.critical(error_msg)
                 sys.exit(1)  # Fail-Fast: 즉시 종료
             else:
-                logger.error(f"{error_msg} " "Running in Quarantine Mode (SELFHEALING_FAIL_FAST=false)")
+                logger.error(
+                    "running_quarantine_mode",
+                    error_msg=error_msg,
+                )
                 return False
 
         logger.info(
@@ -231,9 +234,9 @@ def set_quarantine_mode(enabled: bool) -> None:
     global _quarantine_mode
     _quarantine_mode = enabled
     if enabled:
-        logger.warning("[QuarantineMode] Manually enabled by administrator")
+        logger.warning("quarantine_mode.manually_enabled_administrator")
     else:
-        logger.info("[QuarantineMode] Disabled by administrator")
+        logger.info("quarantine_mode.disabled_administrator")
 
 
 def reset_cluster_identity() -> None:

@@ -8,7 +8,7 @@ Error Budget Gate - Core Gate Class.
 from __future__ import annotations
 
 import functools
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -24,7 +24,7 @@ from selfhealing.services.error_budget_gate.exceptions import AutomationBlockedE
 from selfhealing.services.error_budget_gate.fault_detector import GateFaultDetector
 from selfhealing.services.error_budget_gate.rate_limiter import InMemoryRateLimiter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ErrorBudgetGate:
@@ -105,7 +105,10 @@ class ErrorBudgetGate:
                     cooldown_seconds=self._config.alert_cooldown_seconds,
                 )
         except Exception as e:
-            logger.warning(f"[ErrorBudgetGate] Failed to load config: {e}")
+            logger.warning(
+                "error_budget_gate.failed_load_config",
+                error=e,
+            )
 
     def _is_cache_valid(self, cache_key: str = "__global__") -> bool:
         """캐시 유효성 체크."""
@@ -131,7 +134,7 @@ class ErrorBudgetGate:
         """
         # Fault Detector 체크
         if self._config.circuit_breaker_enabled and not self._fault_detector.can_execute():
-            logger.debug("[ErrorBudgetGate] Fault detector DEGRADED - fast fail-open")
+            logger.debug("error_budget_gate.fault_detector_degraded_fast")
             return None
 
         try:
@@ -145,7 +148,10 @@ class ErrorBudgetGate:
             if status is None:
                 # 리전 데이터 Missing 시 글로벌 버짯으로 Fallback
                 if region is not None:
-                    logger.warning(f"[ErrorBudgetGate] Region '{region}' data missing, " "falling back to global budget")
+                    logger.warning(
+                        "error_budget_gate.region_data_missing_falling",
+                        region=region,
+                    )
                     status = service.get_budget_status(region=None)
 
                 if status is None:
@@ -171,7 +177,10 @@ class ErrorBudgetGate:
             return None
 
         except Exception as e:
-            logger.error(f"[ErrorBudgetGate] Failed to get error budget: {e}")
+            logger.error(
+                "error_budget_gate.failed_get_error_budget",
+                error=e,
+            )
             self._fault_detector.record_failure()
 
             # Fault Detector Degraded 시 알림
@@ -191,7 +200,11 @@ class ErrorBudgetGate:
             for key, value in kwargs.items():
                 if hasattr(self._config, key):
                     setattr(self._config, key, value)
-                    logger.info(f"[ErrorBudgetGate] Updated config.{key} = {value}")
+                    logger.info(
+                        "error_budget_gate.updated_config",
+                        key=key,
+                        value=value,
+                    )
 
             # 캐시 무효화
             self._cache.clear()
@@ -223,7 +236,10 @@ class ErrorBudgetGate:
             manager = get_runtime_config_manager()
             manager.update_chaos_config(error_budget_gate_config=self._config.to_dict())
         except Exception as e:
-            logger.warning(f"[ErrorBudgetGate] Failed to persist config: {e}")
+            logger.warning(
+                "error_budget_gate.failed_persist_config",
+                error=e,
+            )
 
     def check(
         self,
@@ -426,7 +442,7 @@ class ErrorBudgetGate:
         """
         if not self._config.fail_open:
             # Fail-close (권장하지 않음)
-            logger.error("[ErrorBudgetGate] FAIL-CLOSE triggered - " "Could not retrieve error budget, blocking automation")
+            logger.error("error_budget_gate.fail_close_triggered_retrieve")
             return GateCheckResult(
                 allowed=False,
                 status=GateStatus.BLOCKED,
@@ -438,7 +454,7 @@ class ErrorBudgetGate:
             )
 
         # Fail-open with Rate Limiting
-        logger.warning("[ErrorBudgetGate] FAIL-OPEN triggered - " "Could not retrieve error budget")
+        logger.warning("error_budget_gate.fail_open_triggered_retrieve")
 
         # 메트릭 기록
         try:
@@ -451,7 +467,7 @@ class ErrorBudgetGate:
         # Rate Limit 적용 여부 확인
         if not self._config.fail_open_rate_limit_enabled:
             # Rate Limit 비활성화 - 무조건 허용 (기존 동작)
-            logger.info("[ErrorBudgetGate] Rate limiting disabled - allowing without limit")
+            logger.info("error_budget_gate.rate_limiting_disabled_allowing")
             return GateCheckResult(
                 allowed=True,
                 status=GateStatus.FAIL_OPEN,
@@ -470,7 +486,10 @@ class ErrorBudgetGate:
         allowed, remaining, reset_at = self._fail_open_rate_limiter.try_acquire()
 
         if allowed:
-            logger.info(f"[ErrorBudgetGate] FAIL-OPEN allowed (rate limit: {remaining} remaining)")
+            logger.info(
+                "error_budget_gate.fail_open_allowed_rate",
+                remaining=remaining,
+            )
 
             # Fail-Open 알림 발송
             if self._config.alert_on_fail_open:
@@ -586,7 +605,10 @@ class ErrorBudgetGate:
                 reason=result.reason,
             )
         except Exception as e:
-            logger.warning(f"[ErrorBudgetGate] Failed to audit block: {e}")
+            logger.warning(
+                "error_budget_gate.failed_audit_block",
+                error=e,
+            )
 
     def clear_cache(self) -> None:
         """캐시 초기화."""
@@ -625,7 +647,10 @@ class ErrorBudgetGate:
             )
         except Exception as e:
             # 이벤트 발행 실패해도 Gate 동작에는 영향 없음
-            logger.warning(f"[ErrorBudgetGate] Failed to emit critical event: {e}")
+            logger.warning(
+                "error_budget_gate.failed_emit_critical_event",
+                error=e,
+            )
 
     def _emit_error_budget_warning_event(self, budget_percent: float) -> None:
         """에러 예산 경고 이벤트 발행."""
@@ -648,7 +673,10 @@ class ErrorBudgetGate:
                 priority=EventPriority.HIGH,
             )
         except Exception as e:
-            logger.warning(f"[ErrorBudgetGate] Failed to emit warning event: {e}")
+            logger.warning(
+                "error_budget_gate.failed_emit_warning_event",
+                error=e,
+            )
 
     def _emit_error_budget_recovered_event(self, budget_percent: float) -> None:
         """에러 예산 회복 이벤트 발행 (WARNING/BLOCKED → OPEN 전이 시)."""
@@ -671,7 +699,10 @@ class ErrorBudgetGate:
                 priority=EventPriority.NORMAL,
             )
         except Exception as e:
-            logger.warning(f"[ErrorBudgetGate] Failed to emit recovered event: {e}")
+            logger.warning(
+                "error_budget_gate.failed_emit_recovered_event",
+                error=e,
+            )
 
     # -------------------------------------------------------------------------
     # Rate Limiter & Fault Detector Status
@@ -696,7 +727,7 @@ class ErrorBudgetGate:
         주의: 프로덕션에서는 신중하게 사용하세요.
         """
         self._fail_open_rate_limiter.reset()
-        logger.info("[ErrorBudgetGate] Rate limiter reset by admin action")
+        logger.info("error_budget_gate.rate_limiter_reset_admin")
 
     def get_fault_detector_status(self) -> dict[str, Any]:
         """Gate Fault Detector 현재 상태 조회."""
@@ -707,7 +738,7 @@ class ErrorBudgetGate:
     def reset_fault_detector(self) -> None:
         """Gate Fault Detector 리셋."""
         self._fault_detector.reset()
-        logger.info("[ErrorBudgetGate] Fault detector reset by admin action")
+        logger.info("error_budget_gate.fault_detector_reset_admin")
 
     def get_alert_status(self) -> dict[str, Any]:
         """Alert Manager 현재 상태 조회."""
@@ -718,7 +749,7 @@ class ErrorBudgetGate:
     def reset_alert_cooldowns(self) -> None:
         """알림 쿨다운 리셋."""
         self._alert_manager.reset()
-        logger.info("[ErrorBudgetGate] Alert cooldowns reset by admin action")
+        logger.info("error_budget_gate.alert_cooldowns_reset_admin")
 
     def get_health_status(self) -> dict[str, Any]:
         """
@@ -740,7 +771,10 @@ class ErrorBudgetGate:
         except Exception as e:
             gate_status = "error"
             gate_healthy = False
-            logger.error(f"[ErrorBudgetGate] Health check failed: {e}")
+            logger.error(
+                "error_budget_gate.health_check_failed",
+                error=e,
+            )
 
         # 컴포넌트 상태
         fault_detector_status = self.get_fault_detector_status()

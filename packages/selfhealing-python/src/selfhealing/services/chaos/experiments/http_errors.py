@@ -7,7 +7,7 @@ Simulates server errors, client errors, authentication failures, and rate limiti
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -18,7 +18,7 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     ERROR_5XX_HYPOTHESIS,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class Error5xxExperiment(ChaosExperiment):
@@ -87,7 +87,10 @@ class Error5xxExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[Error5xxInjection] Failed to inject: {e}")
+            logger.error(
+                "error5xx_injection.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -99,7 +102,10 @@ class Error5xxExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[Error5xxInjection] Rolling back {self.experiment_id}")
+            logger.info(
+                "error5xx_injection.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -113,7 +119,10 @@ class Error5xxExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[Error5xxInjection] Rollback failed: {e}")
+                logger.error(
+                    "error5xx_injection.rollback_failed",
+                    error=e,
+                )
 
 
 class Error4xxExperiment(ChaosExperiment):
@@ -187,7 +196,10 @@ class Error4xxExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[Error4xxInjection] Failed to inject: {e}")
+            logger.error(
+                "error4xx_injection.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -199,7 +211,10 @@ class Error4xxExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[Error4xxInjection] Rolling back {self.experiment_id}")
+            logger.info(
+                "error4xx_injection.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -213,7 +228,10 @@ class Error4xxExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[Error4xxInjection] Rollback failed: {e}")
+                logger.error(
+                    "error4xx_injection.rollback_failed",
+                    error=e,
+                )
 
 
 __all__ = ["Error5xxExperiment", "Error4xxExperiment"]

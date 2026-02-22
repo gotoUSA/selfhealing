@@ -25,7 +25,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -35,7 +35,7 @@ from selfhealing.services.coordination.enums import EmergencyScope
 from selfhealing.services.coordination.models import ScopedEmergencyState
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -466,7 +466,10 @@ class NamespacedEmergencyTracker:
                         ns = parts[1] if parts[0] == "selfhealing" else parts[0]
                         active.append(ns)
         except Exception as e:
-            logger.warning(f"[NamespacedTracker] Failed to scan namespaces: {e}")
+            logger.warning(
+                "namespaced_tracker.failed_scan_namespaces",
+                error=e,
+            )
 
         return active
 

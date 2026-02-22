@@ -17,12 +17,12 @@ Reference:
 - docs/self_healing/middleware_system/72_EMERGENCY_COORDINATION_LAYER.md
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AntiFlappingSettings(BaseSettings):

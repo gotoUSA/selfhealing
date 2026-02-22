@@ -16,7 +16,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any, ClassVar
 
 from selfhealing.scaling.config import get_backpressure_settings
@@ -27,7 +27,7 @@ from selfhealing.scaling.graceful_degradation import (
 )
 from selfhealing.scaling.rate_controller import get_rate_controller
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class BackpressureTaskMixin:
@@ -96,7 +96,10 @@ class BackpressureTaskMixin:
             degradation = get_graceful_degradation()
             for feature in self.backpressure_features:
                 degradation.register_feature(feature)
-                logger.debug(f"[BackpressureTaskMixin] Registered feature: {feature.name}")
+                logger.debug(
+                    "cell_registry.bulkheads_registered",
+                    feature=feature.name,
+                )
 
     def should_process_with_backpressure(self) -> bool:
         """

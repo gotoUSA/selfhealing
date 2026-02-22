@@ -8,7 +8,7 @@ Includes:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.services.chaos.base import (
@@ -20,7 +20,7 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     POOL_EXHAUSTION_HYPOTHESIS,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ResourceExhaustionExperiment(ChaosExperiment):
@@ -87,7 +87,10 @@ class ResourceExhaustionExperiment(ChaosExperiment):
 
             return actual_bytes
         except Exception as e:
-            logger.debug(f"[ResourceExhaustion] Cgroup check failed: {e}")
+            logger.debug(
+                "resource_exhaustion.cgroup_check_failed",
+                error=e,
+            )
             return None
 
     def inject_chaos(self) -> bool:
@@ -127,7 +130,10 @@ class ResourceExhaustionExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[ResourceExhaustion] Failed to inject: {e}")
+            logger.error(
+                "resource_exhaustion.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -139,7 +145,10 @@ class ResourceExhaustionExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[ResourceExhaustion] Rolling back {self.experiment_id}")
+            logger.info(
+                "resource_exhaustion.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -153,7 +162,10 @@ class ResourceExhaustionExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[ResourceExhaustion] Rollback failed: {e}")
+                logger.error(
+                    "resource_exhaustion.rollback_failed",
+                    error=e,
+                )
 
 
 class PoolExhaustionExperiment(ChaosExperiment):
@@ -259,7 +271,10 @@ class PoolExhaustionExperiment(ChaosExperiment):
             return True
 
         except Exception as e:
-            logger.error(f"[PoolExhaustion] Failed to inject: {e}")
+            logger.error(
+                "pool_exhaustion.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -271,7 +286,10 @@ class PoolExhaustionExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[PoolExhaustion] Rolling back {self.experiment_id}")
+            logger.info(
+                "pool_exhaustion.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 if self._monitor_instance:
@@ -286,9 +304,12 @@ class PoolExhaustionExperiment(ChaosExperiment):
                     }
                 )
                 self._rollback_completed = True
-                logger.info("[PoolExhaustion] Simulation override cleared")
+                logger.info("pool_exhaustion.simulation_override_cleared")
             except Exception as e:
-                logger.error(f"[PoolExhaustion] Rollback failed: {e}")
+                logger.error(
+                    "pool_exhaustion.rollback_failed",
+                    error=e,
+                )
 
 
 __all__ = ["ResourceExhaustionExperiment", "PoolExhaustionExperiment"]

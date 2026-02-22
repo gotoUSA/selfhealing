@@ -4,13 +4,13 @@ Prometheus metrics for the self-healing system.
 This module provides Prometheus metric definitions and collection utilities.
 """
 
-import logging
+import structlog
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from selfhealing.metrics.safe_gauge import clamp_non_negative, clamp_percentage
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Try to import prometheus_client, but don't fail if not installed
 try:
@@ -73,7 +73,7 @@ class SelfHealingMetrics:
         self._initialized = False
 
         if not PROMETHEUS_AVAILABLE:
-            logger.warning("prometheus_client not installed. Metrics will be no-ops.")
+            logger.warning("installed_metrics_no_ops")
             return
 
         # =============================================================================
@@ -313,9 +313,16 @@ class SelfHealingMetrics:
         try:
             self.dlq_items_total.labels(domain=domain, failure_type=failure_type).inc()
             self.dlq_created_total.labels(domain=domain).inc()
-            logger.debug(f"[Metrics] DLQ item created: domain={domain}, type={failure_type}")
+            logger.debug(
+                "metrics.dlq_item_created",
+                domain=domain,
+                failure_type=failure_type,
+            )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record DLQ creation metric: {e}")
+            logger.warning(
+                "metrics.failed_record_dlq_creation",
+                error=e,
+            )
 
     def set_dlq_pending_count(self, domain: str, count: int) -> None:
         """Set the pending DLQ item count for a domain."""
@@ -326,7 +333,10 @@ class SelfHealingMetrics:
             safe_count = clamp_non_negative(count, f"dlq_pending_count[{domain}]")
             self.dlq_pending_gauge.labels(domain=domain).set(safe_count)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set DLQ pending count: {e}")
+            logger.warning(
+                "metrics.failed_set_dlq_pending",
+                error=e,
+            )
 
     def set_dlq_status_count(self, status: str, count: int) -> None:
         """Set the DLQ item count for a status."""
@@ -337,7 +347,10 @@ class SelfHealingMetrics:
             safe_count = clamp_non_negative(count, f"dlq_status_count[{status}]")
             self.dlq_by_status_gauge.labels(status=status).set(safe_count)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set DLQ status count: {e}")
+            logger.warning(
+                "metrics.failed_set_dlq_status",
+                error=e,
+            )
 
     # =========================================================================
     # Retry Recording Methods
@@ -350,9 +363,17 @@ class SelfHealingMetrics:
         try:
             self.retry_attempts_histogram.labels(domain=domain).observe(attempt_count)
             self.retry_outcomes_total.labels(domain=domain, outcome=outcome).inc()
-            logger.debug(f"[Metrics] Retry recorded: domain={domain}, attempts={attempt_count}, outcome={outcome}")
+            logger.debug(
+                "metrics.retry_recorded",
+                domain=domain,
+                attempt_count=attempt_count,
+                outcome=outcome,
+            )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record retry metric: {e}")
+            logger.warning(
+                "metrics.failed_record_retry_metric",
+                error=e,
+            )
 
     def record_retry(self, domain: str, success: bool, delay: float | None = None) -> None:
         """Record a retry attempt with optional delay."""
@@ -365,7 +386,10 @@ class SelfHealingMetrics:
             if delay is not None:
                 self.retry_delay_seconds.labels(domain=domain).observe(delay)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record retry metric: {e}")
+            logger.warning(
+                "metrics.failed_record_retry_metric",
+                error=e,
+            )
 
     def set_retry_success_rate(self, domain: str, rate: float) -> None:
         """Set the retry success rate for a domain (0-100)."""
@@ -376,7 +400,10 @@ class SelfHealingMetrics:
             safe_rate = clamp_percentage(rate, f"retry_success_rate[{domain}]")
             self.retry_success_rate.labels(domain=domain).set(safe_rate)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set retry success rate: {e}")
+            logger.warning(
+                "metrics.failed_set_retry_success",
+                error=e,
+            )
 
     # =========================================================================
     # Recovery Recording Methods
@@ -395,9 +422,17 @@ class SelfHealingMetrics:
         try:
             duration = (resolved_at - created_at).total_seconds()
             self.recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
-            logger.debug(f"[Metrics] Recovery time recorded: domain={domain}, type={resolution_type}, duration={duration}s")
+            logger.debug(
+                "metrics.recovery_time_recorded",
+                domain=domain,
+                resolution_type=resolution_type,
+                duration=duration,
+            )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record recovery time metric: {e}")
+            logger.warning(
+                "metrics.failed_record_recovery_time",
+                error=e,
+            )
 
     def record_sla_breach(self, domain: str) -> None:
         """Record an SLA breach event."""
@@ -405,9 +440,15 @@ class SelfHealingMetrics:
             return
         try:
             self.sla_breach_total.labels(domain=domain).inc()
-            logger.info(f"[Metrics] SLA breach recorded: domain={domain}")
+            logger.info(
+                "metrics.sla_breach_recorded",
+                domain=domain,
+            )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record SLA breach metric: {e}")
+            logger.warning(
+                "metrics.failed_record_sla_breach",
+                error=e,
+            )
 
     # =========================================================================
     # Circuit Breaker Recording Methods
@@ -422,7 +463,10 @@ class SelfHealingMetrics:
             value = state_map.get(state, 0)
             self.circuit_breaker_state.labels(service_name=service_name, cell_id=cell_id).set(value)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set circuit breaker state: {e}")
+            logger.warning(
+                "metrics.failed_set_circuit_breaker",
+                error=e,
+            )
 
     def record_circuit_failure(self, service_name: str) -> None:
         """Record a circuit breaker failure."""
@@ -431,7 +475,10 @@ class SelfHealingMetrics:
         try:
             self.circuit_breaker_failures.labels(service_name=service_name).inc()
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record circuit failure: {e}")
+            logger.warning(
+                "metrics.failed_record_circuit_failure",
+                error=e,
+            )
 
     def record_circuit_trip(self, service_name: str) -> None:
         """Record a circuit breaker trip to open state."""
@@ -440,7 +487,10 @@ class SelfHealingMetrics:
         try:
             self.circuit_breaker_trips.labels(service_name=service_name).inc()
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record circuit trip: {e}")
+            logger.warning(
+                "metrics.failed_record_circuit_trip",
+                error=e,
+            )
 
     def record_circuit_breaker_state_change(
         self,
@@ -464,9 +514,17 @@ class SelfHealingMetrics:
                 to_state=to_state,
             ).inc()
 
-            logger.info(f"[Metrics] Circuit breaker transition: {service_name} {from_state} -> {to_state}")
+            logger.info(
+                "metrics.circuit_breaker_transition",
+                service_name=service_name,
+                from_state=from_state,
+                to_state=to_state,
+            )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record circuit breaker metric: {e}")
+            logger.warning(
+                "metrics.failed_record_circuit_breaker",
+                error=e,
+            )
 
     def record_circuit_breaker_open_duration(self, service_name: str, duration_seconds: float) -> None:
         """Record how long a circuit breaker was in open state."""
@@ -474,9 +532,16 @@ class SelfHealingMetrics:
             return
         try:
             self.circuit_breaker_open_duration.labels(service_name=service_name).observe(duration_seconds)
-            logger.debug(f"[Metrics] CB open duration recorded: {service_name}={duration_seconds}s")
+            logger.debug(
+                "metrics.cb_open_duration_recorded",
+                service_name=service_name,
+                duration_seconds=duration_seconds,
+            )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record CB duration metric: {e}")
+            logger.warning(
+                "metrics.failed_record_cb_duration",
+                error=e,
+            )
 
     # =========================================================================
     # Replay Recording Methods
@@ -490,9 +555,17 @@ class SelfHealingMetrics:
             self.replay_attempts_total.labels(domain=domain, replay_type=replay_type).inc()
             outcome = "success" if success else "failure"
             self.replay_outcomes_total.labels(domain=domain, outcome=outcome).inc()
-            logger.debug(f"[Metrics] Replay recorded: domain={domain}, type={replay_type}, success={success}")
+            logger.debug(
+                "metrics.replay_recorded",
+                domain=domain,
+                replay_type=replay_type,
+                success=success,
+            )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record replay metric: {e}")
+            logger.warning(
+                "metrics.failed_record_replay_metric",
+                error=e,
+            )
 
     def record_replay(self, domain: str, result: str, duration: float | None = None) -> None:
         """Record a replay operation."""
@@ -504,7 +577,10 @@ class SelfHealingMetrics:
             if duration is not None:
                 self.replay_duration_seconds.labels(domain=domain).observe(duration)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record replay metric: {e}")
+            logger.warning(
+                "metrics.failed_record_replay_metric",
+                error=e,
+            )
 
     # =========================================================================
     # Security Recording Methods
@@ -517,7 +593,10 @@ class SelfHealingMetrics:
         try:
             self.security_incidents.labels(incident_type=incident_type, severity=severity).inc()
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record security incident: {e}")
+            logger.warning(
+                "metrics.failed_record_security_incident",
+                error=e,
+            )
 
     # =========================================================================
     # RED Metrics Recording Methods
@@ -559,7 +638,10 @@ class SelfHealingMetrics:
                 f"[Metrics] HTTP request: {method} {endpoint} " f"status={status_code} duration={duration_seconds:.3f}s"
             )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record HTTP request: {e}")
+            logger.warning(
+                "metrics.failed_record_http_request",
+                error=e,
+            )
 
     def record_http_error(
         self,
@@ -583,9 +665,17 @@ class SelfHealingMetrics:
                 endpoint=endpoint,
                 error_type=error_type,
             ).inc()
-            logger.debug(f"[Metrics] HTTP error: {method} {endpoint} error={error_type}")
+            logger.debug(
+                "metrics.http_error",
+                method=method,
+                endpoint=endpoint,
+                error_type=error_type,
+            )
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to record HTTP error: {e}")
+            logger.warning(
+                "metrics.failed_record_http_error",
+                error=e,
+            )
 
     # =========================================================================
     # Four Golden Signals Recording Methods
@@ -605,7 +695,10 @@ class SelfHealingMetrics:
             safe_depth = clamp_non_negative(depth, f"request_queue_depth[{service}]")
             self.request_queue_depth.labels(service=service).set(safe_depth)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set queue depth: {e}")
+            logger.warning(
+                "metrics.failed_set_queue_depth",
+                error=e,
+            )
 
     def set_worker_utilization(self, pool_name: str, ratio: float) -> None:
         """
@@ -621,10 +714,18 @@ class SelfHealingMetrics:
             # Clamp to 0.0-1.0 range
             safe_ratio = max(0.0, min(1.0, ratio))
             if ratio < 0.0 or ratio > 1.0:
-                logger.warning(f"[Metrics] worker_utilization_ratio[{pool_name}] clamped: " f"{ratio} -> {safe_ratio}")
+                logger.warning(
+                    "metrics.clamped",
+                    pool_name=pool_name,
+                    ratio=ratio,
+                    safe_ratio=safe_ratio,
+                )
             self.worker_utilization_ratio.labels(pool_name=pool_name).set(safe_ratio)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set worker utilization: {e}")
+            logger.warning(
+                "metrics.failed_set_worker_utilization",
+                error=e,
+            )
 
     def set_active_connections(self, connection_type: str, count: int) -> None:
         """
@@ -640,7 +741,10 @@ class SelfHealingMetrics:
             safe_count = clamp_non_negative(count, f"active_connections[{connection_type}]")
             self.active_connections.labels(connection_type=connection_type).set(safe_count)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set active connections: {e}")
+            logger.warning(
+                "metrics.failed_set_active_connections",
+                error=e,
+            )
 
     def set_latency_percentile(
         self,
@@ -665,7 +769,10 @@ class SelfHealingMetrics:
                 endpoint=endpoint,
             ).set(safe_value)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set latency percentile: {e}")
+            logger.warning(
+                "metrics.failed_set_latency_percentile",
+                error=e,
+            )
 
     def set_error_rate(self, service: str, rate_percent: float) -> None:
         """
@@ -681,7 +788,10 @@ class SelfHealingMetrics:
             safe_rate = clamp_percentage(rate_percent, f"error_rate_percent[{service}]")
             self.error_rate_percent.labels(service=service).set(safe_rate)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set error rate: {e}")
+            logger.warning(
+                "metrics.failed_set_error_rate",
+                error=e,
+            )
 
     @contextmanager
     def http_request_timer(self, method: str, endpoint: str):
@@ -731,7 +841,10 @@ class SelfHealingMetrics:
         try:
             self.info.info(info_dict)
         except Exception as e:
-            logger.warning(f"[Metrics] Failed to set info: {e}")
+            logger.warning(
+                "metrics.failed_set_info",
+                error=e,
+            )
 
     @contextmanager
     def timer(self, domain: str, metric_type: str = "replay"):

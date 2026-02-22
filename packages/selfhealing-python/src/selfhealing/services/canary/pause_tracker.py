@@ -14,12 +14,12 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

@@ -13,7 +13,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -22,7 +22,7 @@ from typing import Any
 
 from selfhealing.core.timezone import now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -281,7 +281,10 @@ class ResilienceReportGenerator:
             manager = get_runtime_config_manager()
             manager.update_chaos_config(report_config=self._config.to_dict())
         except Exception as e:
-            logger.warning(f"[ReportGenerator] Could not persist config: {e}")
+            logger.warning(
+                "report_generator.persist_config",
+                error=e,
+            )
 
     # =========================================================================
     # Report Generation
@@ -306,7 +309,10 @@ class ResilienceReportGenerator:
         report_date_str = report_date.strftime("%Y-%m-%d")
         report_id = f"resilience-{report_date_str}"
 
-        logger.info(f"[ReportGenerator] Generating daily report for {report_date_str}")
+        logger.info(
+            "report_generator.generating_daily_report",
+            report_date_str=report_date_str,
+        )
 
         try:
             # 1. Collect experiment results
@@ -379,7 +385,10 @@ class ResilienceReportGenerator:
             return report
 
         except Exception as e:
-            logger.exception(f"[ReportGenerator] Error generating report: {e}")
+            logger.exception(
+                "report_generator.error_generating_report",
+                error=e,
+            )
 
             # Return minimal report on error
             return DailyResilienceReport(
@@ -445,7 +454,10 @@ class ResilienceReportGenerator:
                     experiments.append(summary)
 
         except Exception as e:
-            logger.warning(f"[ReportGenerator] Could not collect experiments: {e}")
+            logger.warning(
+                "report_generator.collect_experiments",
+                error=e,
+            )
 
         return experiments
 
@@ -478,7 +490,10 @@ class ResilienceReportGenerator:
                 "consumed_percent": 100 - status.get("remaining_percent", 100),
             }
         except Exception as e:
-            logger.warning(f"[ReportGenerator] Could not get error budget: {e}")
+            logger.warning(
+                "report_generator.get_error_budget",
+                error=e,
+            )
             return {"remaining_percent": 100, "consumed_percent": 0}
 
     # =========================================================================
@@ -780,7 +795,10 @@ class ResilienceReportGenerator:
                 )
 
         except Exception as e:
-            logger.warning(f"[ReportGenerator] Could not send notification: {e}")
+            logger.warning(
+                "report_generator.send_notification",
+                error=e,
+            )
 
     # =========================================================================
     # Report Retrieval
@@ -850,7 +868,10 @@ class ResilienceReportGenerator:
             }
             backend.set("chaos:resilience_reports", data)
         except Exception as e:
-            logger.warning(f"[ReportGenerator] Could not persist reports: {e}")
+            logger.warning(
+                "report_generator.persist_reports",
+                error=e,
+            )
 
     def _load_reports(self) -> None:
         """Load reports from storage."""
@@ -892,7 +913,10 @@ class ResilienceReportGenerator:
                         forensic_summary=rdata.get("forensic_summary", {}),
                     )
         except Exception as e:
-            logger.warning(f"[ReportGenerator] Could not load reports: {e}")
+            logger.warning(
+                "report_generator.load_reports",
+                error=e,
+            )
 
 
 # =============================================================================

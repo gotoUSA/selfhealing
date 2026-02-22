@@ -7,7 +7,7 @@ Adjustment Recorder - 조정 기록기
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import uuid
 from datetime import datetime, timezone
@@ -16,7 +16,7 @@ from typing import Any
 
 from .models import AdjustmentRecord, TuningSession, TuningState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AdjustmentRecorder:
@@ -50,7 +50,7 @@ class AdjustmentRecorder:
         if self.enable_persistence:
             self._load_from_file()
 
-        logger.info("[AdjustmentRecorder] Initialized")
+        logger.info("adjustment_recorder.initialized")
 
     def record(
         self,
@@ -147,7 +147,10 @@ class AdjustmentRecorder:
             if self.enable_persistence:
                 self._save_to_file()
 
-            logger.info(f"[AdjustmentRecorder] Marked rollback: {record_id}")
+            logger.info(
+                "adjustment_recorder.marked_rollback",
+                record_id=record_id,
+            )
             return True
 
     def get_record(self, record_id: str) -> AdjustmentRecord | None:
@@ -200,7 +203,10 @@ class AdjustmentRecorder:
             self._sessions[session_id] = session
             self._current_session_id = session_id
 
-            logger.info(f"[AdjustmentRecorder] Started session: {session_id}")
+            logger.info(
+                "adjustment_recorder.started_session",
+                session_id=session_id,
+            )
             return session
 
     def end_session(
@@ -280,7 +286,10 @@ class AdjustmentRecorder:
             if self.enable_persistence:
                 self._save_to_file()
 
-            logger.info(f"[AdjustmentRecorder] Cleared {count} records")
+            logger.info(
+                "adjustment_recorder.cleared_records",
+                count=count,
+            )
             return count
 
     def _generate_id(self) -> str:
@@ -300,7 +309,10 @@ class AdjustmentRecorder:
         for record_id, _ in sorted_records[:to_delete]:
             del self._records[record_id]
 
-        logger.debug(f"[AdjustmentRecorder] Cleaned up {to_delete} old records")
+        logger.debug(
+            "adjustment_recorder.cleaned_up_old_records",
+            to_delete=to_delete,
+        )
 
     def _save_to_file(self):
         """파일로 저장"""
@@ -319,9 +331,12 @@ class AdjustmentRecorder:
             with open(self.storage_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            logger.debug("[AdjustmentRecorder] Saved to file")
+            logger.debug("adjustment_recorder.saved_file")
         except Exception as e:
-            logger.warning(f"[AdjustmentRecorder] Save failed: {e}")
+            logger.warning(
+                "adjustment_recorder.save_failed",
+                error=e,
+            )
 
     def _load_from_file(self):
         """파일에서 로드"""
@@ -341,7 +356,10 @@ class AdjustmentRecorder:
                 f"[AdjustmentRecorder] Loaded {len(self._records)} records from file"
             )
         except Exception as e:
-            logger.warning(f"[AdjustmentRecorder] Load failed: {e}")
+            logger.warning(
+                "adjustment_recorder.load_failed",
+                error=e,
+            )
 
 
 __all__ = ["AdjustmentRecorder"]

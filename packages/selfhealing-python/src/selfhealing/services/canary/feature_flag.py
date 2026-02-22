@@ -41,7 +41,7 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import logging
+import structlog
 import os
 import random
 from collections.abc import Callable
@@ -55,7 +55,7 @@ from selfhealing.utils.time import utc_now
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -215,7 +215,10 @@ class RequestContextExtractor:
 
             return extract_client_ip(request)
         except Exception as e:
-            logger.warning(f"[CanaryContextExtractor] Failed to extract client IP: {e}")
+            logger.warning(
+                "canary_context_extractor.failed_extract_client_ip",
+                error=e,
+            )
             return None
 
     @staticmethod
@@ -331,7 +334,10 @@ class CanaryFeatureFlag:
         """
         if config_type in self._flags:
             del self._flags[config_type]
-            logger.info(f"[CanaryFeatureFlag] Unregistered: {config_type}")
+            logger.info(
+                "canary_feature_flag.unregistered",
+                config_type=config_type,
+            )
             return True
         return False
 
@@ -621,7 +627,12 @@ class CanaryFeatureFlag:
         old_percentage = self._flags[config_type].percentage
         self._flags[config_type].percentage = new_percentage
 
-        logger.info(f"[CanaryFeatureFlag] Updated percentage: {config_type} " f"{old_percentage}% → {new_percentage}%")
+        logger.info(
+            "canary_feature_flag.updated_percentage",
+            config_type=config_type,
+            old_percentage=old_percentage,
+            new_percentage=new_percentage,
+        )
 
         return True
 

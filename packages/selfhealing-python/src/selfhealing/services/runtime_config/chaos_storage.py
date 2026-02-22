@@ -8,7 +8,7 @@ Provides get/update methods for:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import asdict, fields
 from typing import Any
 
@@ -16,7 +16,7 @@ from selfhealing.settings import L2StorageSettings as L2StorageConfig
 
 from .constants import STORAGE_KEYS
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ChaosStorageMixin:
@@ -71,19 +71,19 @@ class ChaosStorageMixin:
 
             if scheduler_config is not None:
                 current["scheduler_config"] = scheduler_config
-                logger.info("[RuntimeConfig] Updated chaos.scheduler_config")
+                logger.info("runtime_config.updated_chaos")
 
             if safety_guard_config is not None:
                 current["safety_guard_config"] = safety_guard_config
-                logger.info("[RuntimeConfig] Updated chaos.safety_guard_config")
+                logger.info("runtime_config.updated_chaos")
 
             if blast_radius_policy is not None:
                 current["blast_radius_policy"] = blast_radius_policy
-                logger.info("[RuntimeConfig] Updated chaos.blast_radius_policy")
+                logger.info("runtime_config.updated_chaos")
 
             if report_config is not None:
                 current["report_config"] = report_config
-                logger.info("[RuntimeConfig] Updated chaos.report_config")
+                logger.info("runtime_config.updated_chaos")
 
             self._backend.set(storage_key, current)
             return current.copy()
@@ -131,7 +131,7 @@ class ChaosStorageMixin:
 
             current["ttl_config"] = ttl_config
             self._backend.set(storage_key, current)
-            logger.info("[RuntimeConfig] Updated chaos.ttl_config")
+            logger.info("runtime_config.updated_chaos")
             return ttl_config
 
     def update_chaos_stop_conditions_config(
@@ -194,7 +194,7 @@ class ChaosStorageMixin:
 
             current["stop_conditions_config"] = stop_config
             self._backend.set(storage_key, current)
-            logger.info("[RuntimeConfig] Updated chaos.stop_conditions_config")
+            logger.info("runtime_config.updated_chaos")
             return stop_config
 
     def update_chaos_dry_run_config(
@@ -307,5 +307,5 @@ class ChaosStorageMixin:
             default_config = asdict(L2StorageConfig())
             self._backend.set(storage_key, default_config)
             self._cache["l2_storage"] = default_config
-            logger.info("[RuntimeConfig] Reset l2_storage config to defaults")
+            logger.info("runtime_config.reset_config_defaults")
             return default_config

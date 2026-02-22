@@ -11,7 +11,7 @@ Cell Registry — Consistent Hash 기반 Cell 할당.
 from __future__ import annotations
 
 import hashlib
-import logging
+import structlog
 import threading
 from typing import Any
 
@@ -22,7 +22,7 @@ from selfhealing.services.cell_topology.models import (
 )
 from selfhealing.settings.cell_topology import CellTopologySettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 VNODES_PER_CELL = 150
 """Consistent Hash Ring의 Cell당 가상 노드 수."""
@@ -181,7 +181,10 @@ class CellRegistry:
         with self._lock:
             cell = self._cells.get(cell_id)
             if not cell:
-                logger.warning(f"Cell not found: {cell_id}")
+                logger.warning(
+                    "cell_registry.cell_not_found",
+                    cell_id=cell_id,
+                )
                 return False
 
             old_state = cell.state
@@ -192,7 +195,13 @@ class CellRegistry:
                 "reason": reason,
             }
 
-            logger.info(f"Cell state changed: {cell_id} " f"{old_state.value} → {state.value} ({reason})")
+            logger.info(
+                "cell_registry.state_changed",
+                cell_id=cell_id,
+                old_state=old_state.value,
+                state=state.value,
+                reason=reason,
+            )
             return True
 
     def update_health_score(self, cell_id: str, score: float) -> None:
@@ -242,7 +251,10 @@ class CellRegistry:
             key = f"selfhealing:cell:{cell_id}:services"
             redis.zadd(key, {service_name: time.time()})
         except Exception as e:
-            logger.debug(f"Service heartbeat recording failed: {e}")
+            logger.debug(
+                "cell_registry.heartbeat_failed",
+                error=e,
+            )
 
     def _evict_expired_services(self, cell_id: str, ttl_seconds: float = 300.0) -> list[str]:
         """
@@ -279,9 +291,18 @@ class CellRegistry:
                         cell.assigned_services.discard(svc_str)
                         evicted.append(svc_str)
 
-                logger.info(f"Evicted {len(evicted)} expired services " f"from {cell_id}: {evicted}")
+                logger.info(
+                    "cell_registry.services_evicted",
+                    count=len(evicted),
+                    cell_id=cell_id,
+                    evicted=evicted,
+                )
         except Exception as e:
-            logger.debug(f"Service eviction failed for {cell_id}: {e}")
+            logger.debug(
+                "service_eviction_failed",
+                cell_id=cell_id,
+                error=e,
+            )
 
         return evicted
 
@@ -311,9 +332,12 @@ class CellRegistry:
                 f"{self._settings.bulkhead_max_concurrent_per_cell})"
             )
         except ImportError:
-            logger.warning("BulkheadRegistry not available, " "skipping Cell Bulkhead registration")
+            logger.warning("bulkheadregistry_available_skipping_cell")
         except Exception as e:
-            logger.error(f"Cell Bulkhead registration failed: {e}")
+            logger.error(
+                "cell_bulkhead_registration_failed",
+                error=e,
+            )
 
     # ── L1/L2 동기화 ────────────────────────────────────────
 
@@ -350,7 +374,11 @@ class CellRegistry:
                 f"{cell_id}:{cell.state.value}",
             )
         except Exception as e:
-            logger.warning(f"L2 state sync failed for {cell_id}: {e}")
+            logger.warning(
+                "state_sync_failed",
+                cell_id=cell_id,
+                error=e,
+            )
 
     def _load_all_states_from_redis(self) -> int:
         """
@@ -402,7 +430,10 @@ class CellRegistry:
 
                 synced += 1
         except Exception as e:
-            logger.warning(f"L2 state load failed: {e}")
+            logger.warning(
+                "state_load_failed",
+                error=e,
+            )
 
         return synced
 
@@ -421,9 +452,12 @@ class CellRegistry:
                 EventType.CONFIG_UPDATED,
                 self._on_cell_state_event,
             )
-            logger.info("[CellRegistry] Subscribed to cell state change events")
+            logger.info("cell_registry.subscribed_cell_state_change")
         except Exception as e:
-            logger.warning(f"[CellRegistry] Event subscription failed: {e}")
+            logger.warning(
+                "cell_registry.event_subscription_failed",
+                error=e,
+            )
 
     def _on_cell_state_event(self, event: Any) -> None:
         """Cell 상태 변경 이벤트 핸들러."""
@@ -479,7 +513,12 @@ class CellRegistry:
             for cell_id in added:
                 self._sync_state_to_redis(cell_id)
 
-            logger.info(f"Added {count} cells (WARMUP): {added}. " f"Total: {len(self._cells)} cells")
+            logger.info(
+                "added_cells_warmup_total",
+                count=count,
+                added=added,
+                count_2=len(self._cells),
+            )
             return added
 
     def remove_cells(self, cell_ids: list[str]) -> list[str]:

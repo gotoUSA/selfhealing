@@ -7,7 +7,7 @@ Self-Healing 시스템의 각 컴포넌트(Circuit Breaker, DLQ, Redis 등)의
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -19,7 +19,7 @@ from typing import Any
 from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_settings
 from selfhealing.meta.audit_probe import AuditSystemProbe
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HealthStatus(str, Enum):
@@ -452,7 +452,11 @@ class HealthProbeManager:
                 result = probe.probe()
                 results[probe.component_name] = result
             except Exception as e:
-                logger.error(f"[HealthProbeManager] {probe.component_name} probe error: {e}")
+                logger.error(
+                    "health_probe_manager.probe_error",
+                    probe=probe.component_name,
+                    error=e,
+                )
                 results[probe.component_name] = ProbeResult(
                     component=probe.component_name,
                     status=HealthStatus.UNKNOWN,
@@ -523,7 +527,10 @@ class HealthProbeManager:
             try:
                 self.probe_all()
             except Exception as e:
-                logger.error(f"[HealthProbeManager] Loop error: {e}")
+                logger.error(
+                    "health_probe_manager.loop_error",
+                    error=e,
+                )
 
             self._stop_event.wait(self._settings.probe_interval_seconds)
             if self._stop_event.is_set():
@@ -542,7 +549,7 @@ class HealthProbeManager:
             daemon=True,
         )
         self._worker.start()
-        logger.info("[HealthProbeManager] Started")
+        logger.info("health_probe_manager.started")
 
     def stop(self) -> None:
         """프로브 중지."""
@@ -551,7 +558,7 @@ class HealthProbeManager:
         if self._worker:
             self._worker.join(timeout=2.0)
             self._worker = None
-        logger.info("[HealthProbeManager] Stopped")
+        logger.info("health_probe_manager.stopped")
 
     def is_running(self) -> bool:
         """실행 중 여부 반환."""

@@ -8,14 +8,14 @@ Contains:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from selfhealing.audit.integrity.models import compute_hash
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HashChainReconciler:
@@ -89,7 +89,7 @@ class HashChainReconciler:
 
             if not degraded_entries:
                 result["status"] = "no_degraded_entries"
-                logger.info("[Reconciler] No degraded entries to reconcile")
+                logger.info("reconciler.no_degraded_entries_reconcile")
                 return result
 
             # Step 2: Get current Redis chain state
@@ -118,7 +118,10 @@ class HashChainReconciler:
             return result
 
         except Exception as e:
-            logger.error(f"[Reconciler] Reconciliation failed: {e}")
+            logger.error(
+                "reconciler.reconciliation_failed",
+                error=e,
+            )
             result["status"] = "error"
             result["error"] = str(e)
             return result
@@ -159,7 +162,11 @@ class HashChainReconciler:
                             continue
 
             except Exception as e:
-                logger.warning(f"[Reconciler] Error reading {log_file}: {e}")
+                logger.warning(
+                    "reconciler.error_reading",
+                    log_file=log_file,
+                    error=e,
+                )
                 continue
 
         # Sort by timestamp for proper ordering
@@ -273,7 +280,10 @@ class HashChainReconciler:
             )
         except (ImportError, AttributeError):
             # self_audit not available or event not found, just log
-            logger.info(f"[Reconciler] Reconciliation event: {result}")
+            logger.info(
+                "reconciler.reconciliation_event",
+                result=result,
+            )
 
     def get_stats(self) -> dict[str, Any]:
         """

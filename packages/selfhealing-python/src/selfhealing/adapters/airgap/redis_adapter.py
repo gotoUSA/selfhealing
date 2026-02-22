@@ -11,7 +11,7 @@ Architecture:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.adapters.airgap.base import BaseAirGapAdapter
@@ -19,7 +19,7 @@ from selfhealing.adapters.airgap.base import BaseAirGapAdapter
 if TYPE_CHECKING:
     import redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_airgap_redis_ttl() -> int:
@@ -88,7 +88,10 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         self.redis = redis_client
         self.prefix = prefix if prefix is not None else _get_airgap_key_prefix()
         self.default_ttl = default_ttl if default_ttl is not None else _get_airgap_redis_ttl()
-        logger.info(f"[AirGap] RedisAirGapAdapter initialized (prefix={self.prefix})")
+        logger.info(
+            "air_gap.redisairgapadapter_initialized",
+            self=self.prefix,
+        )
 
     def _make_key(self, key: str) -> str:
         """Create a Redis key with the configured prefix."""
@@ -138,11 +141,19 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             else:
                 self.redis.set(redis_key, serialized)
 
-            logger.debug(f"[AirGap] Written: {redis_key} = {value}")
+            logger.debug(
+                "air_gap.written",
+                redis_key=redis_key,
+                value=value,
+            )
             return True
 
         except Exception as e:
-            logger.warning(f"[AirGap] Write failed for {key}: {e}")
+            logger.warning(
+                "air_gap.write_failed",
+                key=key,
+                error=e,
+            )
             return False
 
     def read_summary(self, key: str) -> Any:
@@ -159,11 +170,19 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             redis_key = self._make_key(key)
             value = self.redis.get(redis_key)
             result = self._deserialize(value)
-            logger.debug(f"[AirGap] Read: {redis_key} = {result}")
+            logger.debug(
+                "air_gap.read",
+                redis_key=redis_key,
+                result=result,
+            )
             return result
 
         except Exception as e:
-            logger.warning(f"[AirGap] Read failed for {key}: {e}")
+            logger.warning(
+                "air_gap.read_failed",
+                key=key,
+                error=e,
+            )
             return None
 
     def delete_summary(self, key: str) -> bool:
@@ -179,11 +198,18 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         try:
             redis_key = self._make_key(key)
             self.redis.delete(redis_key)
-            logger.debug(f"[AirGap] Deleted: {redis_key}")
+            logger.debug(
+                "air_gap.deleted",
+                redis_key=redis_key,
+            )
             return True
 
         except Exception as e:
-            logger.warning(f"[AirGap] Delete failed for {key}: {e}")
+            logger.warning(
+                "air_gap.delete_failed",
+                key=key,
+                error=e,
+            )
             return False
 
     def read_many(self, keys: list[str]) -> dict[str, Any]:
@@ -210,7 +236,10 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             return result
 
         except Exception as e:
-            logger.warning(f"[AirGap] Read many failed: {e}")
+            logger.warning(
+                "air_gap.read_many_failed",
+                error=e,
+            )
             return dict.fromkeys(keys)
 
     def increment(self, key: str, amount: int = 1) -> int:
@@ -232,11 +261,20 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             if self.default_ttl:
                 self.redis.expire(redis_key, self.default_ttl)
 
-            logger.debug(f"[AirGap] Incremented: {redis_key} += {amount} = {new_value}")
+            logger.debug(
+                "air_gap.incremented",
+                redis_key=redis_key,
+                amount=amount,
+                new_value=new_value,
+            )
             return new_value
 
         except Exception as e:
-            logger.warning(f"[AirGap] Increment failed for {key}: {e}")
+            logger.warning(
+                "air_gap.increment_failed",
+                key=key,
+                error=e,
+            )
             return 0
 
     def decrement(self, key: str, amount: int = 1) -> int:
@@ -272,11 +310,20 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         try:
             redis_key = self._make_key(key)
             new_value = self.redis.eval(lua_script, 1, redis_key, amount, self.default_ttl or 0)
-            logger.debug(f"[AirGap] Decremented: {redis_key} -= {amount} = {new_value}")
+            logger.debug(
+                "air_gap.decremented",
+                redis_key=redis_key,
+                amount=amount,
+                new_value=new_value,
+            )
             return int(new_value)
 
         except Exception as e:
-            logger.warning(f"[AirGap] Decrement failed for {key}: {e}")
+            logger.warning(
+                "air_gap.decrement_failed",
+                key=key,
+                error=e,
+            )
             return 0
 
     def is_enabled(self) -> bool:

@@ -13,14 +13,14 @@ Slack/PagerDuty 전송 실패 시 로컬 디스크에 기록.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 폴백 로그 경로
 DEFAULT_ESCALATION_LOG_PATH = Path(
@@ -88,7 +88,10 @@ class FallbackEscalationHandler:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
             return True
         except Exception as e:
-            logger.error(f"[FallbackEscalation] Cannot create directory: {e}")
+            logger.error(
+                "fallback_escalation.cannot_create_directory",
+                error=e,
+            )
             return False
 
     def record_failed_escalation(
@@ -154,10 +157,17 @@ class FallbackEscalationHandler:
                 with open(self._log_path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-            logger.warning(f"[EMERGENCY_ESCALATION_LOG] Recorded: " f"{entry['component']} - {entry['title']}")
+            logger.warning(
+                "emergency_escalation_log.recorded",
+                entry=entry['component'],
+                entry_1=entry['title'],
+            )
             return True
         except Exception as e:
-            logger.error(f"[FallbackEscalation] File write failed: {e}")
+            logger.error(
+                "fallback_escalation.file_write_failed",
+                error=e,
+            )
             return False
 
     def _write_to_memory(self, entry: dict[str, Any]) -> bool:
@@ -201,7 +211,10 @@ class FallbackEscalationHandler:
                         if line:
                             entries.append(json.loads(line))
             except Exception as e:
-                logger.error(f"[FallbackEscalation] File read failed: {e}")
+                logger.error(
+                    "fallback_escalation.file_read_failed",
+                    error=e,
+                )
 
         # 메모리 버퍼 추가
         with self._lock:
@@ -256,9 +269,12 @@ class FallbackEscalationHandler:
         try:
             if self._log_path.exists():
                 self._log_path.unlink()
-                logger.info("[FallbackEscalation] File cleared")
+                logger.info("fallback_escalation.file_cleared")
         except Exception as e:
-            logger.error(f"[FallbackEscalation] Clear failed: {e}")
+            logger.error(
+                "fallback_escalation.clear_failed",
+                error=e,
+            )
 
     def clear_memory(self) -> None:
         """메모리 버퍼 초기화."""

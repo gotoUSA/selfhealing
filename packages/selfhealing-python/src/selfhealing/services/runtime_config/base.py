@@ -6,7 +6,7 @@ Core infrastructure including storage, cache, and history tracking.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import asdict as dataclass_asdict
 from dataclasses import fields, is_dataclass
@@ -16,7 +16,7 @@ from selfhealing.core.state_backend import get_state_backend
 
 from .constants import CONFIG_CLASSES, DEFAULT_SLO_CONFIG, STORAGE_KEYS
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def get_field_names(config_class: type) -> set:
@@ -158,14 +158,27 @@ class BaseConfigManager:
                             )
                         else:
                             current[key] = value
-                            logger.info(f"[RuntimeConfig] Updated {config_type}.{key} = {value}")
+                            logger.info(
+                                "runtime_config.updated",
+                                config_type=config_type,
+                                key=key,
+                                value=value,
+                            )
                     else:
                         current[key] = value
-                        logger.info(f"[RuntimeConfig] Updated {config_type}.{key} = {value}")
+                        logger.info(
+                            "runtime_config.updated",
+                            config_type=config_type,
+                            key=key,
+                            value=value,
+                        )
 
             # Diff-Aware: Only save if there are actual changes
             if previous == current:
-                logger.debug(f"[RuntimeConfig] No changes detected for {config_type}")
+                logger.debug(
+                    "runtime_config.no_changes_detected",
+                    config_type=config_type,
+                )
                 return current.copy()
 
             # Compute diff for audit
@@ -275,7 +288,10 @@ class BaseConfigManager:
             )
         except Exception as e:
             # Graceful degradation - audit failure should not break config update
-            logger.warning(f"[RuntimeConfig] Failed to emit audit: {e}")
+            logger.warning(
+                "runtime_config.failed_emit_audit",
+                error=e,
+            )
 
     def _emit_config_updated_event(
         self,
@@ -310,9 +326,15 @@ class BaseConfigManager:
                 source="runtime_config_manager",
                 priority=EventPriority.NORMAL,
             )
-            logger.debug(f"[RuntimeConfig] CONFIG_UPDATED event emitted: {config_type}")
+            logger.debug(
+                "runtime_config.event_emitted",
+                config_type=config_type,
+            )
         except Exception as e:
-            logger.warning(f"[RuntimeConfig] Failed to emit CONFIG_UPDATED: {e}")
+            logger.warning(
+                "runtime_config.failed_emit",
+                error=e,
+            )
 
     def _save_to_history(
         self,
@@ -342,10 +364,17 @@ class BaseConfigManager:
                 changed_by=changed_by,
                 reason=reason,
             )
-            logger.debug(f"[RuntimeConfig] Saved history for {config_type} by {changed_by}")
+            logger.debug(
+                "runtime_config.saved_history",
+                config_type=config_type,
+                changed_by=changed_by,
+            )
         except Exception as e:
             # Graceful degradation - history save failure should not break config update
-            logger.warning(f"[RuntimeConfig] Failed to save history: {e}")
+            logger.warning(
+                "runtime_config.failed_save_history",
+                error=e,
+            )
 
     def get_all_config(self) -> dict[str, dict[str, Any]]:
         """Get all configuration."""
@@ -362,6 +391,9 @@ class BaseConfigManager:
                     # SLO는 별도 기본값 사용
                     default_config = DEFAULT_SLO_CONFIG.copy()
                 self._save_config(config_type, default_config)
-                logger.info(f"[RuntimeConfig] Reset {config_type} to defaults")
+                logger.info(
+                    "runtime_config.reset_defaults",
+                    config_type=config_type,
+                )
 
             return self.get_all_config()

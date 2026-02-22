@@ -16,7 +16,7 @@ Note:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -33,7 +33,7 @@ from selfhealing.services.unified_notification import (
     UnifiedNotificationManager,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _map_grafana_severity_to_priority(severity: str) -> NotificationPriority:
@@ -163,7 +163,7 @@ class GrafanaAlertWebhookView(APIView):
         # Alert 목록 추출 (DRF가 자동으로 JSON 파싱)
         alerts = request.data.get("alerts", [])
         if not alerts:
-            logger.info("Grafana webhook: 빈 Alert 목록 수신")
+            logger.info("grafana_webhook_alert_목록")
             return Response(
                 {"status": "ok", "message": "No alerts to process"},
                 status=status.HTTP_200_OK,
@@ -179,7 +179,10 @@ class GrafanaAlertWebhookView(APIView):
                 self._process_single_alert(alert, notification_manager)
                 processed_count += 1
             except Exception as e:
-                logger.error("Grafana webhook: Alert 처리 실패 - %s", str(e))
+                logger.error(
+                    "grafana_webhook_alert_처리",
+                    error=str(e),
+                )
                 error_count += 1
 
         logger.info(
@@ -216,7 +219,10 @@ class GrafanaAlertWebhookView(APIView):
         # resolved 상태는 로깅만 하고 알림은 보내지 않음
         if status == "resolved":
             alertname = labels.get("alertname", "unknown")
-            logger.info("Grafana webhook: Alert 해결됨 - %s", alertname)
+            logger.info(
+                "grafana_webhook_alert_해결됨",
+                alertname=alertname,
+            )
             return
 
         # Alert 정보 추출
@@ -300,7 +306,10 @@ class GrafanaAlertWebhookTestView(APIView):
         # DRF가 자동으로 JSON 파싱 (request.data)
         payload = request.data if request.data else {}
 
-        logger.info("Grafana webhook 테스트: 수신된 페이로드 - %s", payload)
+        logger.info(
+            "grafana_webhook_테스트_수신된",
+            payload=payload,
+        )
 
         return Response(
             {

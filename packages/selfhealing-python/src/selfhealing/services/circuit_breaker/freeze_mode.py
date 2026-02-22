@@ -20,12 +20,12 @@ Freeze Mode 동작:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from selfhealing.services.circuit_breaker.models import FreezeModeState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -104,7 +104,7 @@ class FreezeModeManager:
 
                 self._emergency_manager = EmergencyModeManager()
             except ImportError:
-                logger.debug("[FreezeMode] EmergencyModeManager not available")
+                logger.debug("freeze_mode.emergencymodemanager_available")
         return self._emergency_manager
 
     def is_active(self) -> bool:
@@ -171,7 +171,11 @@ class FreezeModeManager:
             activated_by=activated_by,
         )
 
-        logger.warning(f"[FreezeMode] ACTIVATED | by={activated_by} | reason={reason}")
+        logger.warning(
+            "freeze_mode.activated",
+            activated_by=activated_by,
+            reason=reason,
+        )
 
         # Audit 기록
         try:
@@ -185,7 +189,10 @@ class FreezeModeManager:
                 emergency_level=self._get_emergency_level_str(),
             )
         except Exception as e:
-            logger.debug(f"[FreezeMode] Audit log failed: {e}")
+            logger.debug(
+                "freeze_mode.audit_log_failed",
+                error=e,
+            )
 
         return True
 
@@ -224,7 +231,11 @@ class FreezeModeManager:
             activated_by="",
         )
 
-        logger.info(f"[FreezeMode] DEACTIVATED | by={deactivated_by} | reason={reason}")
+        logger.info(
+            "freeze_mode.deactivated",
+            deactivated_by=deactivated_by,
+            reason=reason,
+        )
 
         # Audit 기록
         try:
@@ -238,7 +249,10 @@ class FreezeModeManager:
                 emergency_level=self._get_emergency_level_str(),
             )
         except Exception as e:
-            logger.debug(f"[FreezeMode] Audit log failed: {e}")
+            logger.debug(
+                "freeze_mode.audit_log_failed",
+                error=e,
+            )
 
         return True
 
@@ -287,7 +301,10 @@ class FreezeModeManager:
             f"LOCKDOWN: Freeze Mode active - automatic state change to {new_state} "
             f"blocked for {service_id}. Use manual override."
         )
-        logger.warning(f"[FreezeMode] {reason}")
+        logger.warning(
+            "freeze_mode.event",
+            reason=reason,
+        )
 
         return False, reason
 

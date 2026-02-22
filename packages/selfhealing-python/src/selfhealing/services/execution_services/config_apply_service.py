@@ -6,7 +6,7 @@ Config Apply Service
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.services.governance_checks import (
@@ -14,7 +14,7 @@ from selfhealing.services.governance_checks import (
     check_all_governance,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -74,7 +74,10 @@ class ConfigApplyService(GovernanceCheckMixin):
         )
 
         if not governance_result.allowed:
-            logger.warning(f"[ConfigApplyService] Config changes blocked: " f"{governance_result.block_message}")
+            logger.warning(
+                "config_apply_service.config_changes_blocked",
+                governance_result=governance_result.block_message,
+            )
             return {
                 "status": "blocked",
                 "reason": governance_result.block_message,
@@ -107,10 +110,17 @@ class ConfigApplyService(GovernanceCheckMixin):
 
                     if result.get("status") == "applied":
                         applied_count += 1
-                        logger.info(f"[ConfigApplyService] Applied pending change {change.id}")
+                        logger.info(
+                            "config_apply_service.applied_pending_change",
+                            change=change.id,
+                        )
                     else:
                         failed_count += 1
-                        logger.error(f"[ConfigApplyService] Failed to apply {change.id}: " f"{result.get('error')}")
+                        logger.error(
+                            "config_apply_service.failed_apply",
+                            change=change.id,
+                            result=result.get('error'),
+                        )
 
                     results.append(
                         {

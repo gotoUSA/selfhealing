@@ -9,14 +9,14 @@ Fail-Open 원칙: SystemControlManager import/호출 실패 시 통과 허용.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.interfaces.resilience_policy import (
     GuardResult,
     PolicyContext,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class KillSwitchGuard:
@@ -48,8 +48,11 @@ class KillSwitchGuard:
                     reason="System kill switch is disabled",
                 )
         except ImportError:
-            logger.debug("SystemControlManager not available (fail-open)")
+            logger.debug("systemcontrolmanager_available_fail_open")
         except Exception as e:
-            logger.warning("KillSwitchGuard check failed (fail-open): %s", e)
+            logger.warning(
+                "killswitchguard_check_failed_fail",
+                error=e,
+            )
 
         return GuardResult(allowed=True)

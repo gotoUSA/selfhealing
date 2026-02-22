@@ -29,11 +29,11 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -248,7 +248,10 @@ class MultiplierSmoother:
     def force_converge(self) -> None:
         """강제 수렴 (현재 값을 목표 값으로 즉시 설정)."""
         self._current_value = self._target_value
-        logger.debug(f"[Smoother] Forced convergence to {self._target_value:.2f}")
+        logger.debug(
+            "smoother.forced_convergence",
+            self=self._target_value,
+        )
 
     def reset(self) -> None:
         """상태 초기화."""

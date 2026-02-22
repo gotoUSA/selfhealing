@@ -10,7 +10,7 @@ Endpoints:
 - GET  /api/self-healing/l2-storage/metrics/     - Get L2 storage metrics (Viewer)
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework import status
@@ -21,7 +21,7 @@ from rest_framework.views import APIView
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.views.l2_storage_utils import get_layered_repository
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class L2StorageStatusView(APIView):
@@ -118,7 +118,10 @@ class L2StorageHealthResetView(APIView):
 
         repo.reset_l2_health()
 
-        logger.info(f"[L2StorageAPI] L2 health reset by {request.user}")
+        logger.info(
+            "l2_storage_api.health_reset",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -153,7 +156,10 @@ class L2StorageSyncFromL2View(APIView):
         if not success:
             raise RuntimeError("Sync from L2 failed")
 
-        logger.info(f"[L2StorageAPI] Force sync from L2 by {request.user}")
+        logger.info(
+            "l2_storage_api.force_sync",
+            request=request.user,
+        )
         return Response(
             {
                 "status": "success",
@@ -184,7 +190,11 @@ class L2StorageSyncToL2View(APIView):
 
         result = repo.force_sync_to_l2()
 
-        logger.info(f"[L2StorageAPI] Force sync to L2 by {request.user}: {result}")
+        logger.info(
+            "l2_storage_api.force_sync",
+            request=request.user,
+            result=result,
+        )
 
         return Response(
             {

@@ -8,12 +8,12 @@ Canonical location: ``selfhealing.services.idempotency.anti_flapping``
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from collections import defaultdict
 from threading import Lock
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AntiFlappingWindow:
@@ -75,13 +75,16 @@ class AntiFlappingWindow:
             backend = get_state_backend()
             if isinstance(backend, RedisStateBackend):
                 self._redis_client = backend._client
-                logger.info("[AntiFlappingWindow] Redis mode enabled (distributed)")
+                logger.info("anti_flapping_window.redis_mode_enabled_distributed")
             else:
-                logger.info("[AntiFlappingWindow] File backend detected, using memory mode")
+                logger.info("anti_flapping_window.file_backend_detected_using")
         except Exception as e:
             from selfhealing.adapters.resilient.backend import _safe_error_message
 
-            logger.warning("[AntiFlappingWindow] Redis init failed, using memory: %s", _safe_error_message(e))
+            logger.warning(
+                "resilient_storage.redis_init_failed",
+                _safe_error_message=_safe_error_message(e),
+            )
 
     def check_and_record(
         self,
@@ -166,7 +169,10 @@ class AntiFlappingWindow:
             return False, ""
 
         except Exception as e:
-            logger.warning(f"[AntiFlappingWindow] Redis error, fallback to memory: {e}")
+            logger.warning(
+                "anti_flapping_window.redis_error_fallback_memory",
+                error=e,
+            )
             return self._check_and_record_memory(key, new_value)
 
     def _check_and_record_memory(
@@ -226,7 +232,10 @@ class AntiFlappingWindow:
                 self._redis_client.delete(redis_key)
                 return True
             except Exception as e:
-                logger.warning(f"[AntiFlappingWindow] Redis clear failed: {e}")
+                logger.warning(
+                    "anti_flapping_window.redis_clear_failed",
+                    error=e,
+                )
 
         with self._lock:
             if key in self._windows:

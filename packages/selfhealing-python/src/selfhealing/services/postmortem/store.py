@@ -20,12 +20,12 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from datetime import datetime, timedelta, timezone as dt_timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -111,16 +111,22 @@ def _save_incident_to_db(incident: dict[str, Any]) -> bool:
 
     PostmortemRecord = _get_postmortem_model()
     if PostmortemRecord is None:
-        logger.debug("[Postmortem] PostmortemRecord model not available")
+        logger.debug("postmortem.postmortemrecord_model_available")
         return False
 
     try:
         record = PostmortemRecord.create_from_incident_dict(incident)
         record.save()
-        logger.debug(f"[Postmortem] Saved to DB: {record.incident_id}")
+        logger.debug(
+            "postmortem.saved_db",
+            record=record.incident_id,
+        )
         return True
     except Exception as e:
-        logger.warning(f"[Postmortem] DB save failed, using in-memory fallback: {e}")
+        logger.warning(
+            "postmortem.db_save_failed_using",
+            error=e,
+        )
         return False
 
 
@@ -149,9 +155,9 @@ def add_healing_incident(incident: dict[str, Any]) -> None:
             _healing_incidents = _healing_incidents[-_max_incidents:]
 
     if db_saved:
-        logger.debug("[Postmortem] Incident saved to DB and cache")
+        logger.debug("postmortem.incident_saved_db_cache")
     else:
-        logger.debug("[Postmortem] Incident saved to in-memory cache only")
+        logger.debug("postmortem.incident_saved_memory_cache")
 
 
 def _get_redis_client():
@@ -170,7 +176,10 @@ def _get_redis_client():
     except ImportError:
         return None
     except Exception as e:
-        logger.debug(f"[Postmortem] Redis client not available: {e}")
+        logger.debug(
+            "postmortem.redis_client_available",
+            error=e,
+        )
         return None
 
 
@@ -205,10 +214,13 @@ def _acquire_postmortem_lock(incident_id: str, timeout_seconds: int = LOCK_TTL_P
         )
         return lock
     except ImportError:
-        logger.debug("[Postmortem] RedisDistributedLock not available")
+        logger.debug("postmortem.redisdistributedlock_available")
         return None
     except Exception as e:
-        logger.debug(f"[Postmortem] Failed to create lock: {e}")
+        logger.debug(
+            "postmortem.failed_create_lock",
+            error=e,
+        )
         return None
 
 
@@ -227,7 +239,7 @@ def add_healing_incident_with_lock(incident: dict[str, Any]) -> bool:
     """
     incident_id = incident.get("incident_id")
     if not incident_id:
-        logger.warning("[Postmortem] incident_id is required for locked save")
+        logger.warning("postmortem.required_locked_save")
         add_healing_incident(incident)
         return True
 
@@ -240,18 +252,27 @@ def add_healing_incident_with_lock(incident: dict[str, Any]) -> bool:
 
     # 락 획득 시도
     if not lock.acquire(blocking=True, timeout=1.0):
-        logger.info(f"[Postmortem] Skip duplicate save, lock held: {incident_id}")
+        logger.info(
+            "postmortem.skip_duplicate_save_lock",
+            incident_id=incident_id,
+        )
         return False
 
     try:
         add_healing_incident(incident)
-        logger.debug(f"[Postmortem] Saved with lock: {incident_id}")
+        logger.debug(
+            "postmortem.saved_lock",
+            incident_id=incident_id,
+        )
         return True
     finally:
         try:
             lock.release()
         except Exception as e:
-            logger.debug(f"[Postmortem] Lock release error: {e}")
+            logger.debug(
+                "postmortem.lock_release_error",
+                error=e,
+            )
 
 
 def acquire_group_close_lock(group_id: str, timeout_seconds: int = LOCK_TTL_POSTMORTEM_GROUP):
@@ -284,10 +305,13 @@ def acquire_group_close_lock(group_id: str, timeout_seconds: int = LOCK_TTL_POST
         )
         return lock
     except ImportError:
-        logger.debug("[Postmortem] RedisDistributedLock not available")
+        logger.debug("postmortem.redisdistributedlock_available")
         return None
     except Exception as e:
-        logger.debug(f"[Postmortem] Failed to create group lock: {e}")
+        logger.debug(
+            "postmortem.failed_create_group_lock",
+            error=e,
+        )
         return None
 
 
@@ -332,7 +356,10 @@ def get_healing_incidents(
                 offset=offset,
             )
         except Exception as e:
-            logger.warning(f"[Postmortem] DB query failed, using in-memory: {e}")
+            logger.warning(
+                "postmortem.db_query_failed_using",
+                error=e,
+            )
 
     # In-Memory fallback (필터링 없이 최근 데이터만)
     with _healing_incidents_lock:
@@ -418,7 +445,10 @@ def get_healing_incidents_count(
                 min_duration=min_duration,
             )
         except Exception as e:
-            logger.warning(f"[Postmortem] DB count failed, using in-memory: {e}")
+            logger.warning(
+                "postmortem.db_count_failed_using",
+                error=e,
+            )
 
     with _healing_incidents_lock:
         return len(_healing_incidents)
@@ -496,7 +526,10 @@ def get_incident_by_id(incident_id: str, use_db: bool = True) -> dict[str, Any] 
             if incident is not None:
                 return incident
         except Exception as e:
-            logger.warning(f"[Postmortem] DB query by ID failed, using in-memory: {e}")
+            logger.warning(
+                "postmortem.db_query_id_failed",
+                error=e,
+            )
 
     # In-Memory fallback
     with _healing_incidents_lock:
@@ -553,7 +586,10 @@ def update_incident_fields(incident_id: str, fields: dict[str, Any]) -> bool:
             db_updated = _update_incident_fields_in_db(incident_id, fields)
             updated = updated or db_updated
         except Exception as e:
-            logger.warning(f"[Postmortem] DB update_incident_fields failed: {e}")
+            logger.warning(
+                "postmortem.db_failed",
+                error=e,
+            )
 
     return updated
 
@@ -581,7 +617,10 @@ def _update_incident_fields_in_db(incident_id: str, fields: dict[str, Any]) -> b
         record.save(update_fields=list(fields.keys()))
         return True
     except Exception as e:
-        logger.debug(f"[Postmortem] _update_incident_fields_in_db failed: {e}")
+        logger.debug(
+            "postmortem.failed",
+            error=e,
+        )
         return False
 
 
@@ -685,7 +724,10 @@ def _collect_deployment_context(
     except ImportError:
         pass
     except Exception as e:
-        logger.warning(f"Failed to collect deployment context: {e}")
+        logger.warning(
+            "failed_collect_deployment_context",
+            error=e,
+        )
     return deployment_context, deployment_timeline_events
 
 
@@ -708,7 +750,10 @@ def _build_timeline_snapshot(
     except ImportError:
         pass
     except Exception as e:
-        logger.warning(f"Failed to build timeline snapshot: {e}")
+        logger.warning(
+            "failed_build_timeline_snapshot",
+            error=e,
+        )
     return {}
 
 
@@ -727,7 +772,10 @@ def _collect_throttle_data(
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"Failed to collect throttle data: {e}")
+        logger.debug(
+            "failed_collect_throttle_data",
+            error=e,
+        )
     return {}
 
 
@@ -756,7 +804,10 @@ def _collect_cascade_event_data(
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"Failed to collect cascade event data: {e}")
+        logger.debug(
+            "failed_collect_cascade_event",
+            error=e,
+        )
     return cascade_event_id, causation_chain, evidence_hash
 
 
@@ -785,7 +836,10 @@ def _build_deep_links(
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"Failed to build deep links: {e}")
+        logger.debug(
+            "failed_build_deep_links",
+            error=e,
+        )
     return {}
 
 

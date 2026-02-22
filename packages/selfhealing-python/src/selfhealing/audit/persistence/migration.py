@@ -26,7 +26,7 @@ Pod 재시작 시 이전에 영속된 이벤트를 주 스토리지로 플러시
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
         DiskPersistentBuffer,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -95,16 +95,22 @@ def drain_on_startup(
 
     entry_count = buffer.count()
     if entry_count == 0:
-        logger.info("[DrainOnStartup] No pending entries to drain")
+        logger.info("drain_on_startup.no_pending_entries_drain")
         return result
 
-    logger.info(f"[DrainOnStartup] Draining {entry_count} pending entries...")
+    logger.info(
+        "drain_on_startup.draining_pending_entries",
+        entry_count=entry_count,
+    )
 
     batches_processed = 0
 
     while True:
         if max_batches and batches_processed >= max_batches:
-            logger.warning(f"[DrainOnStartup] Max batches ({max_batches}) reached")
+            logger.warning(
+                "drain_on_startup.max_batches_reached",
+                max_batches=max_batches,
+            )
             break
 
         # 배치 조회
@@ -119,7 +125,10 @@ def drain_on_startup(
             success = flush_handler(entry_dicts)
         except Exception as e:
             error_msg = f"Handler error: {e}"
-            logger.error(f"[DrainOnStartup] {error_msg}")
+            logger.error(
+                "drain_on_startup.event",
+                error_msg=error_msg,
+            )
             result.errors.append(error_msg)
             result.failed += len(entries)
 
@@ -132,11 +141,17 @@ def drain_on_startup(
             keys = [e.key for e in entries]
             deleted = buffer.delete_batch(keys)
             result.drained += deleted
-            logger.debug(f"[DrainOnStartup] Drained batch: {deleted} entries")
+            logger.debug(
+                "drain_on_startup.drained_batch_entries",
+                deleted=deleted,
+            )
         else:
             # 실패 시 해당 배치 스킵 (다음 배치 시도)
             result.skipped += len(entries)
-            logger.warning(f"[DrainOnStartup] Batch failed, skipping {len(entries)} entries")
+            logger.warning(
+                "drain_on_startup.batch_failed_skipping_entries",
+                count=len(entries),
+            )
 
             if fail_fast:
                 break
@@ -195,7 +210,10 @@ async def async_drain_on_startup(
     if entry_count == 0:
         return result
 
-    logger.info(f"[AsyncDrainOnStartup] Draining {entry_count} entries...")
+    logger.info(
+        "async_drain_on_startup.draining_entries",
+        entry_count=entry_count,
+    )
 
     batches_processed = 0
 

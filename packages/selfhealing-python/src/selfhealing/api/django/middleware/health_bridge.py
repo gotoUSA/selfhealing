@@ -14,7 +14,7 @@ Usage in settings.py:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HealthBridgeMiddleware:
@@ -144,7 +144,10 @@ class HealthBridgeMiddleware:
 
         except Exception as e:
             # Log at warning level temporarily for debugging
-            logger.warning(f"CB snapshot update failed (non-critical): {e}")
+            logger.warning(
+                "cb_snapshot_update_failed",
+                error=e,
+            )
 
     def _get_snapshot(self) -> dict[str, Any]:
         """Thread-safe snapshot read."""

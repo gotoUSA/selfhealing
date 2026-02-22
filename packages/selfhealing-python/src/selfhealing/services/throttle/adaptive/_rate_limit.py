@@ -5,9 +5,9 @@ RateLimitHandlerMixin for AdaptiveThrottle.
 """
 
 import selfhealing.services.throttle.adaptive as _adaptive_mod
-import logging
+import structlog
 import time
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 
@@ -35,11 +35,14 @@ class RateLimitHandlerMixin:
             # Cooldown 종료 이벤트 구독
             bus.subscribe(EventType.RATE_LIMIT_COOLDOWN_END, self._handle_cooldown_end)
 
-            logger.info("[AdaptiveThrottle] Subscribed to rate limit events")
+            logger.info("adaptive_throttle.subscribed_rate_limit_events")
         except ImportError:
-            logger.debug("[AdaptiveThrottle] EventBus not available for subscription")
+            logger.debug("adaptive_throttle.eventbus_available_subscription")
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to subscribe: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_subscribe",
+                error=e,
+            )
 
     def _handle_rate_limit_429(self, event) -> None:
         """
@@ -159,7 +162,10 @@ class RateLimitHandlerMixin:
         # Recovery Dampening 시작 (기존 메서드 활용)
         self.start_recovery_dampening()
 
-        logger.info(f"[AdaptiveThrottle] Cooldown ended for '{key}', " f"starting recovery dampening (80% → 90% → 100%)")
+        logger.info(
+            "adaptive_throttle.cooldown_ended_starting_recovery",
+            key=key,
+        )
 
     def is_rate_limited_for_key(self, key: str) -> bool:
         """특정 외부 API가 현재 cooldown 상태인지 확인."""

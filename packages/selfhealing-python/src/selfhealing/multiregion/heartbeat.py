@@ -15,7 +15,7 @@ Layer 2(RegionHeartbeat)를 담당합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 from selfhealing.core.shutdown_coordinator import ShutdownHandler
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RegionHeartbeat:
@@ -86,7 +86,10 @@ class RegionHeartbeat:
                 ttl_seconds=self.HEARTBEAT_TTL,
             )
         except Exception as e:
-            logger.warning(f"[Heartbeat] Failed: {e}")
+            logger.warning(
+                "heartbeat.failed",
+                error=e,
+            )
 
     def start(self) -> None:
         """하트비트 시작."""
@@ -119,7 +122,10 @@ class RegionHeartbeat:
         self._running = False
         if self._worker:
             self._worker.join(timeout=2.0)
-        logger.info(f"[Heartbeat] Stopped for {self._settings.current_region}")
+        logger.info(
+            "heartbeat.stopped",
+            self=self._settings.current_region,
+        )
 
     def is_running(self) -> bool:
         """실행 중인지 확인."""
@@ -176,9 +182,15 @@ class MultiRegionShutdownHandler(ShutdownHandler):
                     source="shutdown_coordinator",
                 )
             )
-            logger.info(f"[Shutdown] Notified peers: " f"{self._settings.current_region} stopping")
+            logger.info(
+                "shutdown.notified_peers_stopping",
+                self=self._settings.current_region,
+            )
         except Exception as e:
-            logger.warning(f"[Shutdown] Failed to notify peers: {e}")
+            logger.warning(
+                "shutdown.failed_notify_peers",
+                error=e,
+            )
 
     def on_drain_complete(self) -> None:
         """드레인 완료 시 추가 동작 불필요."""

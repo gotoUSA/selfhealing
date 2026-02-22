@@ -12,7 +12,7 @@ RateController와 GracefulDegradation을 통합합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any, Callable
 
 from django.http import HttpRequest, HttpResponse
@@ -21,7 +21,7 @@ from selfhealing.scaling.config import get_backpressure_settings
 from selfhealing.scaling.graceful_degradation import get_graceful_degradation
 from selfhealing.scaling.rate_controller import get_rate_controller
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class BackpressureMiddleware:
@@ -89,7 +89,10 @@ class BackpressureMiddleware:
         """과부하 시 503 응답 생성."""
         current_level = self._controller.get_state().level
 
-        logger.warning(f"[BackpressureMiddleware] Request rejected: level={current_level.value}")
+        logger.warning(
+            "backpressure_middleware.request_rejected",
+            current_level=current_level.value,
+        )
 
         return HttpResponse(
             content=self._settings.reject_message,
@@ -157,7 +160,10 @@ class AsyncBackpressureMiddleware:
         """과부하 시 503 응답 생성."""
         current_level = self._controller.get_state().level
 
-        logger.warning(f"[AsyncBackpressureMiddleware] Request rejected: level={current_level.value}")
+        logger.warning(
+            "async_backpressure_middleware.request_rejected",
+            current_level=current_level.value,
+        )
 
         return HttpResponse(
             content=self._settings.reject_message,

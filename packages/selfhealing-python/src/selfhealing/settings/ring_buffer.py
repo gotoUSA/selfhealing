@@ -13,13 +13,13 @@ Environment Variables:
     SELFHEALING_RING_BUFFER_STRATEGY=drop_oldest
 """
 
-import logging
+import structlog
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RingBufferSettings(BaseSettings):

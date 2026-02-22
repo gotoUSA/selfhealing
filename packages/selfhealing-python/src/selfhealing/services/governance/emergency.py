@@ -35,7 +35,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
@@ -43,7 +43,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -155,7 +155,10 @@ class EmergencyModeTracker:
             manager = get_runtime_config_manager()
             return manager.get_governance_config()
         except Exception as e:
-            logger.debug(f"[Governance] Failed to get governance config: {e}")
+            logger.debug(
+                "governance.failed_get_governance_config",
+                error=e,
+            )
             # Return defaults
             return {
                 "emergency_expiry_hours": 8,
@@ -224,7 +227,12 @@ class EmergencyModeTracker:
 
             self._save_state(state)
 
-            logger.warning(f"[Governance] Emergency mode activated: " f"mode={mode}, by={activated_by}, reason={reason}")
+            logger.warning(
+                "governance.emergency_mode_activated",
+                mode=mode,
+                activated_by=activated_by,
+                reason=reason,
+            )
 
             # Send notification
             config = self._get_governance_config()
@@ -377,7 +385,7 @@ class EmergencyModeTracker:
             state = self._load_state()
             state.warning_sent_at = datetime.now(timezone.utc).isoformat()
             self._save_state(state)
-            logger.info("[Governance] Warning notification marked as sent")
+            logger.info("governance.warning_notification_marked_sent")
 
     def mark_final_warning_sent(self) -> None:
         """Mark that final warning notification has been sent."""
@@ -385,7 +393,7 @@ class EmergencyModeTracker:
             state = self._load_state()
             state.final_warning_sent_at = datetime.now(timezone.utc).isoformat()
             self._save_state(state)
-            logger.info("[Governance] Final warning notification marked as sent")
+            logger.info("governance.final_warning_notification_marked")
 
     def acknowledge_warning(self, acknowledged_by: str) -> dict[str, Any]:
         """
@@ -407,7 +415,10 @@ class EmergencyModeTracker:
             state.acknowledged_at = datetime.now(timezone.utc).isoformat()
             self._save_state(state)
 
-            logger.info(f"[Governance] Emergency warning acknowledged: " f"by={acknowledged_by}")
+            logger.info(
+                "governance.emergency_warning_acknowledged",
+                acknowledged_by=acknowledged_by,
+            )
 
             return {
                 "status": "acknowledged",
@@ -427,7 +438,7 @@ class EmergencyModeTracker:
             reason="Emergency mode auto-expired after configured duration",
         )
 
-        logger.warning("[Governance] Emergency mode auto-expired and restored to NORMAL")
+        logger.warning("governance.emergency_mode_auto_expired")
 
         return result
 
@@ -451,17 +462,28 @@ class EmergencyModeTracker:
             channels = config.get("notify_channels", ["slack", "email"])
             message = self._build_notification_message(event_type, state, extra)
 
-            logger.info(f"[Governance] Notification: event={event_type}, " f"channels={channels}, message={message[:100]}...")
+            logger.info(
+                "governance.notification",
+                event_type=event_type,
+                channels=channels,
+                message=message[:100],
+            )
 
             # Call registered notification handlers
             for handler in self._notification_handlers:
                 try:
                     handler(event_type, message, channels, config)
                 except Exception as e:
-                    logger.error(f"[Governance] Notification handler error: {e}")
+                    logger.error(
+                        "governance.notification_handler_error",
+                        error=e,
+                    )
 
         except Exception as e:
-            logger.error(f"[Governance] Failed to send notification: {e}")
+            logger.error(
+                "governance.failed_send_notification",
+                error=e,
+            )
 
     def _build_notification_message(
         self,

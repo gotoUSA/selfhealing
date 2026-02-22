@@ -16,7 +16,7 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import logging
+import structlog
 import time
 from typing import Any
 
@@ -28,7 +28,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin, collect_system_snapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -135,7 +135,11 @@ class BackoffPreviewView(XTestModeMixin, APIView):
 
         snapshot = collect_system_snapshot()
 
-        logger.info(f"[X-Test-Mode] Backoff preview: max_attempts={final_max_attempts}, " f"delays={delays}")
+        logger.info(
+            "test_mode_backoff_preview",
+            final_max_attempts=final_max_attempts,
+            delays=delays,
+        )
 
         response_data = {
             "status": "success",
@@ -416,7 +420,10 @@ class RetrySimulateView(XTestModeMixin, APIView):
                 return result.dlq_id
             return None
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to create DLQ entry: {e}")
+            logger.warning(
+                "test_mode_failed_create",
+                error=e,
+            )
             return None
 
 
@@ -527,7 +534,10 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Rate limit status check failed: {e}")
+            logger.warning(
+                "test_mode_rate_limit",
+                error=e,
+            )
             snapshot = collect_system_snapshot()
             return Response(
                 {
@@ -625,7 +635,12 @@ class XTestRetryConfigView(XTestModeMixin, APIView):
 
         snapshot = collect_system_snapshot()
 
-        logger.info(f"[X-Test-Mode] Retry config: domain={domain}, source={source}, " f"max_attempts={config.max_attempts}")
+        logger.info(
+            "test_mode_retry_config",
+            domain=domain,
+            source=source,
+            config=config.max_attempts,
+        )
 
         response_data = {
             "status": "success",

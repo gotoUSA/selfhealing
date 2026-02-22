@@ -19,7 +19,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -31,7 +31,7 @@ from selfhealing.settings import (
     get_recovery_shutdown_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -213,7 +213,7 @@ class RecoveryAwareShutdownHook:
 
     def on_drain_complete(self) -> None:
         """Drain 완료 시 호출."""
-        logger.info("[RecoveryAwareShutdownHook] Drain completed successfully.")
+        logger.info("recovery_aware_shutdown_hook.drain_completed_successfully")
         self._shutdown_complete.set()
 
     def on_force_shutdown(self, pending_requests: list[Any] | None = None) -> None:
@@ -406,7 +406,10 @@ def create_recovery_aware_shutdown_hook(
             session = coordinator.get_active_session(namespace)
             return session is not None
         except Exception as e:
-            logger.warning(f"[RecoveryAwareShutdownHook] Check recovery failed: {e}")
+            logger.warning(
+                "recovery_aware_shutdown_hook.check_recovery_failed",
+                error=e,
+            )
             return False
 
     return RecoveryAwareShutdownHook(
@@ -446,15 +449,18 @@ def run_prestop_check(
 
     hook = create_recovery_aware_shutdown_hook(namespace=namespace, config=config)
 
-    logger.info(f"[preStop] Starting recovery-aware shutdown check for {namespace}")
+    logger.info(
+        "pre_stop.starting_recovery_aware_shutdown",
+        namespace=namespace,
+    )
 
     hook.on_shutdown_start()
 
     stats = hook.get_stats()
 
     if stats.force_shutdown:
-        logger.warning("[preStop] Shutdown with force (recovery still active)")
+        logger.warning("pre_stop.shutdown_force_recovery_still")
         return 1
 
-    logger.info("[preStop] Shutdown safe")
+    logger.info("pre_stop.shutdown_safe")
     return 0

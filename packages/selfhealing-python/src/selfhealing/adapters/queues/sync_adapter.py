@@ -17,7 +17,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import traceback
 import uuid
 from collections.abc import Callable
@@ -35,7 +35,7 @@ from selfhealing.interfaces.task_queue import (
     TaskStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 F = TypeVar("F", bound=Callable)
 
@@ -151,7 +151,10 @@ class SyncTaskAdapter(TaskQueueInterface):
                 autoretry_for=autoretry_for,
             )
 
-            logger.debug(f"[SyncAdapter] Registered task: {task_name}")
+            logger.debug(
+                "cell_registry.bulkheads_registered",
+                task_name=task_name,
+            )
 
             # Return wrapper that allows .delay() calls
             @wraps(func)
@@ -207,7 +210,11 @@ class SyncTaskAdapter(TaskQueueInterface):
             status=TaskStatus.PENDING,
         )
 
-        logger.debug(f"[SyncAdapter] Executing task: {task_name} ({task_id})")
+        logger.debug(
+            "sync_adapter.executing_task",
+            task_name=task_name,
+            task_id=task_id,
+        )
 
         # Handle delayed execution (just mark as pending, don't execute)
         if (
@@ -250,7 +257,10 @@ class SyncTaskAdapter(TaskQueueInterface):
             record.result = result
             record.completed_at = datetime.now()
 
-            logger.debug(f"[SyncAdapter] Task succeeded: {record.task_id}")
+            logger.debug(
+                "sync_adapter.task_succeeded",
+                record=record.task_id,
+            )
 
         except registered.autoretry_for as e:
             # Auto-retry for configured exceptions
@@ -273,7 +283,11 @@ class SyncTaskAdapter(TaskQueueInterface):
             record.traceback = traceback.format_exc()
             record.completed_at = datetime.now()
 
-            logger.error(f"[SyncAdapter] Task failed: {record.task_id} - {e}")
+            logger.error(
+                "sync_adapter.task_failed",
+                record=record.task_id,
+                error=e,
+            )
 
     def enqueue_many(
         self,
@@ -335,7 +349,10 @@ class SyncTaskAdapter(TaskQueueInterface):
             self._pending_queue.remove(task_id)
             if task_id in self._results:
                 self._results[task_id].status = TaskStatus.REVOKED
-            logger.debug(f"[SyncAdapter] Revoked task: {task_id}")
+            logger.debug(
+                "sync_adapter.revoked_task",
+                task_id=task_id,
+            )
             return True
         return False
 
@@ -399,7 +416,10 @@ class SyncTaskAdapter(TaskQueueInterface):
             enabled=True,
         )
 
-        logger.debug(f"[SyncAdapter] Scheduled periodic task: {schedule_id}")
+        logger.debug(
+            "sync_adapter.scheduled_periodic_task",
+            schedule_id=schedule_id,
+        )
         return schedule_id
 
     def unschedule(self, schedule_id: str) -> bool:

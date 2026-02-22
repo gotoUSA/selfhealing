@@ -11,7 +11,7 @@ WAL 파일 보관 기간 기반 정리 기능 제공.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -19,7 +19,7 @@ from pathlib import Path
 from threading import Thread
 from typing import Callable
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 기본 보관 기간 (일)
 DEFAULT_RETENTION_DAYS = 90
@@ -64,9 +64,12 @@ class WALRetentionCleaner:
             settings = get_audit_settings()
             return getattr(settings, "retention_days", DEFAULT_RETENTION_DAYS)
         except ImportError:
-            logger.debug("[RetentionCleaner] audit_settings not available")
+            logger.debug("retention_cleaner.available")
         except Exception as e:
-            logger.debug(f"[RetentionCleaner] Failed to load settings: {e}")
+            logger.debug(
+                "retention_cleaner.failed_load_settings",
+                error=e,
+            )
 
         return DEFAULT_RETENTION_DAYS
 
@@ -78,7 +81,10 @@ class WALRetentionCleaner:
             삭제된 파일 수
         """
         if not self._wal_dir.exists():
-            logger.debug(f"[RetentionCleaner] WAL directory not found: {self._wal_dir}")
+            logger.debug(
+                "retention_cleaner.wal_directory_found",
+                self=self._wal_dir,
+            )
             return 0
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
@@ -97,7 +103,10 @@ class WALRetentionCleaner:
 
                 # 동기화 완료 확인 (옵션)
                 if self._check_synced and not self._is_synced(wal_file):
-                    logger.warning(f"[RetentionCleaner] Skipping unsynced old file: {wal_file.name}")
+                    logger.warning(
+                        "retention_cleaner.skipping_unsynced_old_file",
+                        wal_file=wal_file.name,
+                    )
                     continue
 
                 # 파일 삭제
@@ -105,7 +114,11 @@ class WALRetentionCleaner:
                 wal_file.unlink()
                 deleted_count += 1
 
-                logger.info(f"[RetentionCleaner] Deleted expired WAL: {wal_file.name} " f"(age: {age_days} days)")
+                logger.info(
+                    "retention_cleaner.deleted_expired_wal_age",
+                    wal_file=wal_file.name,
+                    age_days=age_days,
+                )
 
                 # synced 마커도 삭제
                 synced_marker = wal_file.with_suffix(".synced")
@@ -113,9 +126,16 @@ class WALRetentionCleaner:
                     synced_marker.unlink()
 
             except PermissionError:
-                logger.warning(f"[RetentionCleaner] Permission denied: {wal_file}")
+                logger.warning(
+                    "retention_cleaner.permission_denied",
+                    wal_file=wal_file,
+                )
             except Exception as e:
-                logger.error(f"[RetentionCleaner] Failed to clean {wal_file}: {e}")
+                logger.error(
+                    "retention_cleaner.failed_clean",
+                    wal_file=wal_file,
+                    error=e,
+                )
 
         return deleted_count
 
@@ -214,14 +234,14 @@ class RetentionCleanupScheduler:
             name="WAL-RetentionCleanupScheduler",
         )
         self._thread.start()
-        logger.info("[RetentionScheduler] Started")
+        logger.info("retention_scheduler.started")
 
     def stop(self) -> None:
         """스케줄러 중지."""
         self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
-        logger.info("[RetentionScheduler] Stopped")
+        logger.info("retention_scheduler.stopped")
 
     def _cleanup_loop(self) -> None:
         """백그라운드 정리 루프."""
@@ -230,13 +250,19 @@ class RetentionCleanupScheduler:
                 deleted = self._cleaner.cleanup()
 
                 if deleted > 0:
-                    logger.info(f"[RetentionScheduler] Cleaned {deleted} expired WAL files")
+                    logger.info(
+                        "retention_scheduler.cleaned_expired_wal_files",
+                        deleted=deleted,
+                    )
 
                 if self._on_cleanup:
                     self._on_cleanup(deleted)
 
             except Exception as e:
-                logger.error(f"[RetentionScheduler] Cleanup error: {e}")
+                logger.error(
+                    "retention_scheduler.cleanup_error",
+                    error=e,
+                )
 
             # 다음 정리까지 대기
             for _ in range(int(self._interval_seconds)):
@@ -299,5 +325,8 @@ def mark_as_synced(wal_file: Path | str) -> bool:
         synced_marker.touch()
         return True
     except Exception as e:
-        logger.error(f"[RetentionCleaner] Failed to mark as synced: {e}")
+        logger.error(
+            "retention_cleaner.failed_mark_synced",
+            error=e,
+        )
         return False

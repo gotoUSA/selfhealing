@@ -13,11 +13,11 @@ Metrics:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -86,14 +86,17 @@ def _initialize_metrics() -> bool:
             )
 
             _metrics_initialized = True
-            logger.debug("[BulkheadMetrics] Prometheus metrics initialized")
+            logger.debug("bulkhead_metrics.prometheus_metrics_initialized")
             return True
 
         except ImportError:
-            logger.warning("[BulkheadMetrics] prometheus_client not available, " "metrics disabled")
+            logger.warning("bulkhead_metrics.available_metrics_disabled")
             return False
         except Exception as e:
-            logger.warning(f"[BulkheadMetrics] Failed to initialize metrics: {e}")
+            logger.warning(
+                "bulkhead_metrics.failed_initialize_metrics",
+                error=e,
+            )
             return False
 
 
@@ -140,7 +143,10 @@ def update_bulkhead_metrics(
         ).set(utilization)
 
     except Exception as e:
-        logger.debug(f"[BulkheadMetrics] Failed to update metrics: {e}")
+        logger.debug(
+            "bulkhead_metrics.failed_update_metrics",
+            error=e,
+        )
 
 
 def increment_rejected_count(bulkhead_name: str) -> None:
@@ -158,7 +164,10 @@ def increment_rejected_count(bulkhead_name: str) -> None:
             bulkhead_name=bulkhead_name,
         ).inc()
     except Exception as e:
-        logger.debug(f"[BulkheadMetrics] Failed to increment rejected count: {e}")
+        logger.debug(
+            "bulkhead_metrics.failed_increment_rejected_count",
+            error=e,
+        )
 
 
 class BulkheadMetricsUpdater:
@@ -195,14 +204,17 @@ class BulkheadMetricsUpdater:
             daemon=True,
         )
         self._thread.start()
-        logger.info(f"[BulkheadMetricsUpdater] Started (interval={self._interval}s)")
+        logger.info(
+            "bulkhead_metrics_updater.started",
+            self=self._interval,
+        )
 
     def stop(self) -> None:
         """메트릭 업데이터 중지."""
         self._running = False
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=self._interval + 1)
-        logger.info("[BulkheadMetricsUpdater] Stopped")
+        logger.info("bulkhead_metrics_updater.stopped")
 
     def _update_loop(self) -> None:
         """메트릭 업데이트 루프."""
@@ -210,7 +222,10 @@ class BulkheadMetricsUpdater:
             try:
                 self._update_all_metrics()
             except Exception as e:
-                logger.warning(f"[BulkheadMetricsUpdater] Update error: {e}")
+                logger.warning(
+                    "bulkhead_metrics_updater.update_error",
+                    error=e,
+                )
 
             time.sleep(self._interval)
 
@@ -233,7 +248,10 @@ class BulkheadMetricsUpdater:
                 )
 
         except Exception as e:
-            logger.debug(f"[BulkheadMetricsUpdater] Failed to update: {e}")
+            logger.debug(
+                "bulkhead_metrics_updater.failed_update",
+                error=e,
+            )
 
 
 # =============================================================================

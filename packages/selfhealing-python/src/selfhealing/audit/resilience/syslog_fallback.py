@@ -8,13 +8,13 @@ audit trail that survives application crashes.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import sys
 import threading
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SyslogFallback:
@@ -56,7 +56,7 @@ class SyslogFallback:
             if sys.platform == "win32":
                 # Windows doesn't have syslog, use stderr
                 self._syslog_available = False
-                logger.debug("[SyslogFallback] Windows detected, using stderr fallback")
+                logger.debug("syslog_fallback.windows_detected_using_stderr")
             else:
                 import syslog
 
@@ -66,9 +66,12 @@ class SyslogFallback:
                     facility=syslog.LOG_AUTH,  # Security/auth facility
                 )
                 self._syslog_available = True
-                logger.debug("[SyslogFallback] Syslog initialized")
+                logger.debug("syslog_fallback.syslog_initialized")
         except Exception as e:
-            logger.warning(f"[SyslogFallback] Failed to init syslog: {e}")
+            logger.warning(
+                "syslog_fallback.failed_init_syslog",
+                error=e,
+            )
             self._syslog_available = False
 
     @classmethod
@@ -146,7 +149,10 @@ class SyslogFallback:
                 syslog.syslog(priority, message)
                 success = True
             except Exception as e:
-                logger.error(f"[SyslogFallback] Syslog write failed: {e}")
+                logger.error(
+                    "syslog_fallback.syslog_write_failed",
+                    error=e,
+                )
 
         # Always also write to stderr for visibility
         if self._stderr_fallback:

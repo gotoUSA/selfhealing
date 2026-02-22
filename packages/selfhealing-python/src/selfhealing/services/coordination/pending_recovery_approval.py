@@ -20,7 +20,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import uuid
 from collections.abc import Callable
@@ -29,7 +29,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RecoveryApprovalStatus(str, Enum):
@@ -312,7 +312,10 @@ class PendingRecoveryApprovalManager:
         with self._lock:
             request = self._requests.get(request_id)
             if not request:
-                logger.warning(f"[PendingRecoveryApproval] Request not found: {request_id}")
+                logger.warning(
+                    "pending_recovery_approval.request_found",
+                    request_id=request_id,
+                )
                 return None
 
             if not request.is_pending():
@@ -326,7 +329,11 @@ class PendingRecoveryApprovalManager:
             request.approved_at = datetime.now(timezone.utc)
             request.approval_reason = reason
 
-            logger.info(f"[PendingRecoveryApproval] Approved: " f"id={request_id}, by={approved_by}")
+            logger.info(
+                "pending_recovery_approval.approved",
+                request_id=request_id,
+                approved_by=approved_by,
+            )
 
             # 승인 알림
             self._send_notification(request, "approved")
@@ -363,7 +370,12 @@ class PendingRecoveryApprovalManager:
             request.approved_at = datetime.now(timezone.utc)
             request.approval_reason = reason
 
-            logger.info(f"[PendingRecoveryApproval] Rejected: " f"id={request_id}, by={rejected_by}, reason={reason}")
+            logger.info(
+                "pending_recovery_approval.rejected",
+                request_id=request_id,
+                rejected_by=rejected_by,
+                reason=reason,
+            )
 
             # 거부 알림
             self._send_notification(request, "rejected")
@@ -512,7 +524,10 @@ class PendingRecoveryApprovalManager:
                     self._send_notification(request, "expired")
                     expired.append(request)
 
-                    logger.warning(f"[PendingRecoveryApproval] Expired: " f"id={request.request_id}")
+                    logger.warning(
+                        "pending_recovery_approval.expired",
+                        request=request.request_id,
+                    )
 
             return expired
 
@@ -554,7 +569,10 @@ class PendingRecoveryApprovalManager:
                 self._session_to_request.pop(request.session_id, None)
 
             if to_remove:
-                logger.info(f"[PendingRecoveryApproval] Cleaned up {len(to_remove)} old requests")
+                logger.info(
+                    "pending_recovery_approval.cleaned_up_old_requests",
+                    count=len(to_remove),
+                )
 
             return len(to_remove)
 
@@ -613,7 +631,10 @@ class PendingRecoveryApprovalManager:
             try:
                 self._notification_callback(request, message_type)
             except Exception as e:
-                logger.exception(f"[PendingRecoveryApproval] Notification failed: {e}")
+                logger.exception(
+                    "pending_recovery_approval.notification_failed",
+                    error=e,
+                )
         else:
             # 기본 로깅
             logger.info(

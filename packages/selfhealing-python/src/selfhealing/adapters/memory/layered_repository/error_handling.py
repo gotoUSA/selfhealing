@@ -6,10 +6,10 @@ Provides methods for handling L2 errors and success states.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ErrorHandlingMixin:

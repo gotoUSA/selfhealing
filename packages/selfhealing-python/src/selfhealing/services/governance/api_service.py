@@ -20,14 +20,14 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class GovernanceApiService:
@@ -250,13 +250,19 @@ class GovernanceApiService:
                     restored_by=actor,
                     reason=reason or "Mode restored to NORMAL",
                 )
-                logger.info(f"[Governance] Emergency tracker deactivated: actor={actor}")
+                logger.info(
+                    "governance.emergency_tracker_deactivated",
+                    actor=actor,
+                )
                 return result
 
         except ImportError:
-            logger.debug("[Governance] EmergencyModeTracker not available")
+            logger.debug("governance.emergencymodetracker_available")
         except Exception as e:
-            logger.warning(f"[Governance] Failed to sync emergency tracker: {e}")
+            logger.warning(
+                "governance.failed_sync_emergency_tracker",
+                error=e,
+            )
 
         return None
 
@@ -268,10 +274,13 @@ class GovernanceApiService:
             manager = get_reliability_manager()
             return manager.get_all_states()
         except ImportError:
-            logger.debug("[Governance] ReliabilityManager not available")
+            logger.debug("governance.reliabilitymanager_available")
             return {}
         except Exception as e:
-            logger.warning(f"[Governance] Failed to get reliability states: {e}")
+            logger.warning(
+                "governance.failed_get_reliability_states",
+                error=e,
+            )
             return {}
 
     def _build_domains_status(self, reliability_states: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -402,7 +411,10 @@ class GovernanceApiService:
         except ImportError:
             return {"age_seconds": None, "is_valid": False, "path": None}
         except Exception as e:
-            logger.warning(f"[Governance] Snapshot health check failed: {e}")
+            logger.warning(
+                "governance.snapshot_health_check_failed",
+                error=e,
+            )
             return {
                 "age_seconds": None,
                 "is_valid": False,
@@ -438,7 +450,10 @@ class GovernanceApiService:
                 "domains_with_drift": list(set(domains_with_drift)),
             }
         except Exception as e:
-            logger.warning(f"[Governance] Drift summary failed: {e}")
+            logger.warning(
+                "governance.drift_summary_failed",
+                error=e,
+            )
             return {"total_drifts": 0, "critical_drifts": 0, "domains_with_drift": []}
 
     def _get_next_sync_expected_at(self) -> str | None:
@@ -479,7 +494,10 @@ class GovernanceApiService:
             )
             audit_logger.log(event)
         except Exception as e:
-            logger.warning(f"[Governance] Audit logging failed: {e}")
+            logger.warning(
+                "governance.audit_logging_failed",
+                error=e,
+            )
 
     def _get_mode_warning(self, mode: Any) -> str | None:
         """모드별 경고 메시지."""

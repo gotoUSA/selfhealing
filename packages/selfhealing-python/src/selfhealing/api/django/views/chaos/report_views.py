@@ -4,7 +4,7 @@ Chaos Engineering Report Views.
 API views for resilience reports and grade history.
 """
 
-import logging
+import structlog
 from datetime import datetime
 
 from rest_framework.request import Request
@@ -16,7 +16,7 @@ from selfhealing.api.django.serializers.chaos import (
     DryRunAnalysisRequestSerializer,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ReportListView(APIView):

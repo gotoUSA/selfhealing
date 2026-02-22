@@ -22,7 +22,7 @@ Memory Management (LRU Cache):
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections import OrderedDict
 from collections.abc import Callable
@@ -34,7 +34,7 @@ from .sync import SyncInfo
 if TYPE_CHECKING:
     from prometheus_client import Gauge
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_max_label_combinations() -> int:
@@ -229,7 +229,12 @@ class SafeGaugeChild:
             self._initialized = True
             self._sync_info.mark_synced(source)
             if old_shadow != actual_value:
-                logger.info(f"[SafeGauge] Synced from source: {old_shadow} -> {actual_value}. " f"labels={self._label_values}")
+                logger.info(
+                    "safe_gauge.synced_source",
+                    old_shadow=old_shadow,
+                    actual_value=actual_value,
+                    self=self._label_values,
+                )
 
     def mark_stale(self, reason: str = "external") -> None:
         """
@@ -392,7 +397,10 @@ class SafeGauge:
             try:
                 self._on_eviction(oldest_key, oldest_child)
             except Exception as e:
-                logger.error(f"[SafeGauge] Eviction callback failed: {e}")
+                logger.error(
+                    "safe_gauge.eviction_callback_failed",
+                    error=e,
+                )
 
     def get_child(self, **kwargs) -> SafeGaugeChild | None:
         """

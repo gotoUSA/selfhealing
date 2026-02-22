@@ -9,7 +9,7 @@ and batch metric recording for high-throughput paths.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import queue
 import re
 import threading
@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 from prometheus_client import REGISTRY, Counter, Gauge, Histogram
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -122,7 +122,10 @@ class MetricsBatchRecorder:
                 try:
                     metric_fn(*args, **kwargs)
                 except Exception as e:
-                    logger.debug(f"[MetricsBatchRecorder] Failed to record metric: {e}")
+                    logger.debug(
+                        "metrics_batch_recorder.failed_record_metric",
+                        error=e,
+                    )
 
     def shutdown(self) -> None:
         """그레이스풀 셧다운 — 잔여 배치 flush."""

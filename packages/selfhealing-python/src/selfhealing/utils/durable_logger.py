@@ -25,7 +25,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import queue
 import threading
 import time
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
 
 __all__ = ["DurableEventLogger"]
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DurableEventLogger(AsyncHealingLogger):
@@ -82,7 +82,7 @@ class DurableEventLogger(AsyncHealingLogger):
         """
         with cls._lock:
             cls._wal = wal
-        logger.info("[DurableEventLogger] WAL configured (durable mode enabled)")
+        logger.info("durable_event_logger.wal_configured_durable_mode")
 
     @classmethod
     def log(cls, event: dict[str, Any], severity: EventSeverity = EventSeverity.INFO) -> None:
@@ -116,9 +116,12 @@ class DurableEventLogger(AsyncHealingLogger):
                 with cls._lock:
                     cls._durable_stats["wal_writes_failed"] += 1
                 # Fail-Open: WAL 실패해도 계속 진행
-                logger.warning(f"[DurableEventLogger] WAL write failed (continuing): {e}")
+                logger.warning(
+                    "durable_event_logger.wal_write_failed_continuing",
+                    error=e,
+                )
         else:
-            logger.warning("[DurableEventLogger] WAL not configured, event not durable")
+            logger.warning("durable_event_logger.wal_configured_event_durable")
 
         with cls._lock:
             cls._stats["events_logged"] += 1
@@ -146,7 +149,7 @@ class DurableEventLogger(AsyncHealingLogger):
                 with cls._lock:
                     cls._stats["queue_overflows"] += 1
                 # 큐가 가득 차도 WAL에는 이미 기록됨
-                logger.warning("[DurableEventLogger] Queue full, event in WAL only")
+                logger.warning("durable_event_logger.queue_full_event_wal")
 
     @classmethod
     def recover_from_wal(cls, last_processed_seq: int = 0) -> int:
@@ -163,14 +166,14 @@ class DurableEventLogger(AsyncHealingLogger):
             복구된 이벤트 수
         """
         if not cls._wal:
-            logger.warning("[DurableEventLogger] WAL not configured, cannot recover")
+            logger.warning("durable_event_logger.wal_configured_cannot_recover")
             return 0
 
         try:
             entries = cls._wal.recover_unprocessed(last_processed_seq)
 
             if not entries:
-                logger.info("[DurableEventLogger] No events to recover from WAL")
+                logger.info("durable_event_logger.no_events_recover_wal")
                 return 0
 
             recovered_count = 0
@@ -192,17 +195,23 @@ class DurableEventLogger(AsyncHealingLogger):
                         cls._priority_queue.put_nowait(prioritized)
                         recovered_count += 1
                     except queue.Full:
-                        logger.warning("[DurableEventLogger] Queue full during recovery")
+                        logger.warning("durable_event_logger.queue_full_during_recovery")
                         break
 
             with cls._lock:
                 cls._durable_stats["recovered_events"] += recovered_count
 
-            logger.info(f"[DurableEventLogger] Recovered {recovered_count} events from WAL")
+            logger.info(
+                "durable_event_logger.recovered_events_wal",
+                recovered_count=recovered_count,
+            )
             return recovered_count
 
         except Exception as e:
-            logger.error(f"[DurableEventLogger] WAL recovery failed: {e}")
+            logger.error(
+                "durable_event_logger.wal_recovery_failed",
+                error=e,
+            )
             return 0
 
     @classmethod

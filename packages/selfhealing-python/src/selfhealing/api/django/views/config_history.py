@@ -10,7 +10,7 @@ Endpoints:
 - GET  /api/self-healing/config/{config_type}/compare/    - 버전 비교
 """
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.request import Request
@@ -21,7 +21,7 @@ from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.services.config_history import get_config_history_service
 from selfhealing.services.runtime_config import get_runtime_config_manager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ConfigHistoryView(APIView):
@@ -293,9 +293,16 @@ class ConfigRollbackView(APIView):
 
         if update_method:
             update_method(**values)
-            logger.info(f"[ConfigRollback] Applied {config_type} values: {values}")
+            logger.info(
+                "config_rollback.applied_values",
+                config_type=config_type,
+                values=values,
+            )
         else:
-            logger.warning(f"[ConfigRollback] No update method for {config_type}")
+            logger.warning(
+                "config_rollback.no_update_method",
+                config_type=config_type,
+            )
 
 
 class ConfigCompareView(APIView):

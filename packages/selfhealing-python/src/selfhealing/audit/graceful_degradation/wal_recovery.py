@@ -9,7 +9,7 @@ Contains:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import threading
 from dataclasses import dataclass
@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -181,12 +181,18 @@ class HashChainWALRecovery:
             self._recovered_count = result["entries_recovered"]
             self._failed_count = result["entries_failed"]
 
-            logger.info(f"[HashChainWAL] Recovery completed: {result}")
+            logger.info(
+                "hash_chain_wal.recovery_completed",
+                result=result,
+            )
 
         except Exception as e:
             result["status"] = "failed"
             result["error"] = str(e)
-            logger.error(f"[HashChainWAL] Recovery failed: {e}")
+            logger.error(
+                "watchdog.recovery_failed",
+                error=e,
+            )
 
         return result
 
@@ -233,7 +239,10 @@ class HashChainWALRecovery:
                 # 1차 방어: IdempotencyKey를 사용한 중복 체크 (Redis)
                 if self._is_duplicate_via_idempotency(wal_seq, "redis_replay"):
                     result["idempotency_skipped"] += 1
-                    logger.debug(f"[HashChainWAL] Skipped duplicate entry via idempotency: seq={wal_seq}")
+                    logger.debug(
+                        "hash_chain_wal.skipped_duplicate_entry_via",
+                        wal_seq=wal_seq,
+                    )
                     continue
 
                 # Attempt to replay
@@ -245,14 +254,18 @@ class HashChainWALRecovery:
                     result["failed"] += 1
 
         except Exception as e:
-            logger.error(f"[HashChainWAL] Error reading {wal_file}: {e}")
+            logger.error(
+                "hash_chain_wal.error_reading",
+                wal_file=wal_file,
+                error=e,
+            )
 
         return result
 
     def _replay_entry(self, wal_entry: dict[str, Any]) -> bool:
         """Replay a single WAL entry to Redis."""
         if not self._redis:
-            logger.warning("[HashChainWAL] No Redis client for replay")
+            logger.warning("hash_chain_wal.no_redis_client_replay")
             return False
 
         try:
@@ -288,11 +301,17 @@ class HashChainWALRecovery:
             )
             pipe.execute()
 
-            logger.debug(f"[HashChainWAL] Replayed entry seq={entry_seq}")
+            logger.debug(
+                "hash_chain_wal.replayed_entry",
+                entry_seq=entry_seq,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[HashChainWAL] Replay failed: {e}")
+            logger.error(
+                "hash_chain_wal.replay_failed",
+                error=e,
+            )
             return False
 
     def _is_duplicate_via_idempotency(self, wal_seq: int, operation: str) -> bool:
@@ -327,11 +346,14 @@ class HashChainWALRecovery:
 
         except ImportError:
             # IdempotencyService 미사용 환경
-            logger.debug("[HashChainWAL] IdempotencyService not available")
+            logger.debug("hash_chain_wal.idempotencyservice_available")
             return False
         except Exception as e:
             # 멱등성 검사 실패 시 안전하게 진행 (중복 허용)
-            logger.warning(f"[HashChainWAL] Idempotency check failed: {e}")
+            logger.warning(
+                "hash_chain_wal.idempotency_check_failed",
+                error=e,
+            )
             return False
 
     def _mark_as_processed_idempotency(self, wal_seq: int, operation: str) -> None:
@@ -362,7 +384,10 @@ class HashChainWALRecovery:
         except ImportError:
             pass
         except Exception as e:
-            logger.warning(f"[HashChainWAL] Failed to mark as processed: {e}")
+            logger.warning(
+                "hash_chain_wal.failed_mark_processed",
+                error=e,
+            )
 
     def cleanup_old_wal_files(self, max_age_days: int = 7) -> int:
         """Remove WAL files older than specified days."""
@@ -378,7 +403,10 @@ class HashChainWALRecovery:
                 if file_date < cutoff:
                     wal_file.unlink()
                     removed += 1
-                    logger.debug(f"[HashChainWAL] Removed old WAL file: {wal_file.name}")
+                    logger.debug(
+                        "hash_chain_wal.removed_old_wal_file",
+                        wal_file=wal_file.name,
+                    )
             except Exception:
                 continue
 

@@ -37,14 +37,14 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -176,7 +176,10 @@ class CrisisMultiplierConfig:
                     level = EmergencyLevel(level_name)
                 multipliers[level] = float(value)
             except (KeyError, ValueError):
-                logger.warning(f"[CrisisMultiplierConfig] Invalid level: {level_name}")
+                logger.warning(
+                    "crisis_multiplier_config.invalid_level",
+                    level_name=level_name,
+                )
                 continue
 
         return cls(
@@ -299,7 +302,10 @@ class CrisisMultiplierProvider:
             state = tracker.get_effective_state(namespace=namespace)
             level = state.emergency_level
         except Exception as e:
-            logger.warning(f"[CrisisMultiplier] Failed to get emergency level, " f"using NORMAL: {e}")
+            logger.warning(
+                "crisis_multiplier.failed_get_emergency_level",
+                error=e,
+            )
             level = EmergencyLevel.NORMAL
 
         # 가중치 조회
@@ -310,7 +316,12 @@ class CrisisMultiplierProvider:
         self._cached_namespace = namespace
         self._cache_timestamp = now
 
-        logger.debug(f"[CrisisMultiplier] Level={level.name}, " f"multiplier={multiplier}x, namespace={namespace}")
+        logger.debug(
+            "crisis_multiplier.event",
+            level=level.name,
+            multiplier=multiplier,
+            namespace=namespace,
+        )
 
         return multiplier
 
@@ -325,7 +336,7 @@ class CrisisMultiplierProvider:
         self._cached_namespace = None
         self._cache_timestamp = 0.0
 
-        logger.debug("[CrisisMultiplier] Cache invalidated")
+        logger.debug("crisis_multiplier.cache_invalidated")
 
     def set_multiplier_override(
         self,
@@ -343,7 +354,11 @@ class CrisisMultiplierProvider:
         self.config.multipliers[level] = capped_multiplier
         self.invalidate_cache()
 
-        logger.info(f"[CrisisMultiplier] Override set: " f"level={level.name}, multiplier={capped_multiplier}")
+        logger.info(
+            "crisis_multiplier.override_set",
+            level=level.name,
+            capped_multiplier=capped_multiplier,
+        )
 
     def get_config(self) -> CrisisMultiplierConfig:
         """
@@ -411,7 +426,7 @@ class CrisisMultiplierProvider:
 
                 error_weight = get_weight_for_error_code(error_code)
             except ImportError:
-                logger.warning("[CrisisMultiplier] exception_weights not available")
+                logger.warning("crisis_multiplier.available")
 
         # 3. 결합 정책 조회
         try:

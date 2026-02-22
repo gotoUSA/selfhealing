@@ -15,7 +15,7 @@ Related:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 import time
 from datetime import timedelta
@@ -26,7 +26,7 @@ from selfhealing.interfaces.cache_provider import (
     DistributedLock,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RedisDistributedLock(DistributedLock):
@@ -106,14 +106,20 @@ class RedisDistributedLock(DistributedLock):
 
             if acquired:
                 self._acquired = True
-                logger.debug(f"[RedisLock] Acquired lock: {self._name}")
+                logger.debug(
+                    "redis_lock.acquired_lock",
+                    self=self._name,
+                )
                 return True
 
             if not blocking:
                 return False
 
             if stop_time is not None and time.time() >= stop_time:
-                logger.debug(f"[RedisLock] Timeout acquiring lock: {self._name}")
+                logger.debug(
+                    "redis_lock.timeout_acquiring_lock",
+                    self=self._name,
+                )
                 return False
 
             time.sleep(self._sleep_interval)
@@ -128,7 +134,10 @@ class RedisDistributedLock(DistributedLock):
             LockNotOwnedError: If lock is not owned by this instance
         """
         if not self._acquired:
-            logger.warning(f"[RedisLock] Attempting to release non-acquired lock: {self._name}")
+            logger.warning(
+                "redis_lock.attempting_release_non_acquired",
+                self=self._name,
+            )
             return
 
         # Lua script for atomic check-and-delete
@@ -145,12 +154,21 @@ class RedisDistributedLock(DistributedLock):
             result = self._redis.eval(lua_script, 1, self._name, self._owner_id)
             if result == 1:
                 self._acquired = False
-                logger.debug(f"[RedisLock] Released lock: {self._name}")
+                logger.debug(
+                    "redis_lock.released_lock",
+                    self=self._name,
+                )
             else:
-                logger.warning(f"[RedisLock] Lock not owned or expired: {self._name}")
+                logger.warning(
+                    "redis_lock.lock_owned_expired",
+                    self=self._name,
+                )
                 self._acquired = False
         except Exception as e:
-            logger.error(f"[RedisLock] Error releasing lock: {e}")
+            logger.error(
+                "redis_lock.error_releasing_lock",
+                error=e,
+            )
             self._acquired = False
             raise
 
@@ -197,7 +215,10 @@ class RedisDistributedLock(DistributedLock):
             result = self._redis.eval(lua_script, 1, self._name, self._owner_id, additional_ms)
             return result == 1
         except Exception as e:
-            logger.error(f"[RedisLock] Error extending lock: {e}")
+            logger.error(
+                "redis_lock.error_extending_lock",
+                error=e,
+            )
             return False
 
 
@@ -297,7 +318,11 @@ class RedisCacheAdapter(CacheProviderInterface):
                 return None
             return self._deserialize(data)
         except Exception as e:
-            logger.error(f"[RedisCache] Get error for {key}: {e}")
+            logger.error(
+                "redis_cache.get_error",
+                key=key,
+                error=e,
+            )
             return None
 
     def set(
@@ -322,7 +347,11 @@ class RedisCacheAdapter(CacheProviderInterface):
             else:
                 return bool(self._redis.set(self._make_key(key), serialized))
         except Exception as e:
-            logger.error(f"[RedisCache] Set error for {key}: {e}")
+            logger.error(
+                "redis_cache.set_error",
+                key=key,
+                error=e,
+            )
             return False
 
     def delete(self, key: str) -> bool:
@@ -330,7 +359,11 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.delete(self._make_key(key)) > 0
         except Exception as e:
-            logger.error(f"[RedisCache] Delete error for {key}: {e}")
+            logger.error(
+                "redis_cache.delete_error",
+                key=key,
+                error=e,
+            )
             return False
 
     def exists(self, key: str) -> bool:
@@ -338,7 +371,11 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.exists(self._make_key(key)) > 0
         except Exception as e:
-            logger.error(f"[RedisCache] Exists error for {key}: {e}")
+            logger.error(
+                "redis_cache.exists_error",
+                key=key,
+                error=e,
+            )
             return False
 
     # =========================================================================
@@ -350,7 +387,11 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.incr(self._make_key(key), amount)
         except Exception as e:
-            logger.error(f"[RedisCache] Incr error for {key}: {e}")
+            logger.error(
+                "redis_cache.incr_error",
+                key=key,
+                error=e,
+            )
             return 0
 
     def decr(self, key: str, amount: int = 1) -> int:
@@ -358,7 +399,11 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.decr(self._make_key(key), amount)
         except Exception as e:
-            logger.error(f"[RedisCache] Decr error for {key}: {e}")
+            logger.error(
+                "redis_cache.decr_error",
+                key=key,
+                error=e,
+            )
             return 0
 
     def expire(self, key: str, ttl: timedelta) -> bool:
@@ -371,7 +416,11 @@ class RedisCacheAdapter(CacheProviderInterface):
                 )
             )
         except Exception as e:
-            logger.error(f"[RedisCache] Expire error for {key}: {e}")
+            logger.error(
+                "redis_cache.expire_error",
+                key=key,
+                error=e,
+            )
             return False
 
     def ttl(self, key: str) -> int | None:
@@ -384,7 +433,11 @@ class RedisCacheAdapter(CacheProviderInterface):
                 return -2  # Key doesn't exist
             return result
         except Exception as e:
-            logger.error(f"[RedisCache] TTL error for {key}: {e}")
+            logger.error(
+                "redis_cache.ttl_error",
+                key=key,
+                error=e,
+            )
             return -2
 
     def setnx(self, key: str, value: Any, ttl: timedelta | None = None) -> bool:
@@ -403,7 +456,11 @@ class RedisCacheAdapter(CacheProviderInterface):
             else:
                 return bool(self._redis.setnx(self._make_key(key), serialized))
         except Exception as e:
-            logger.error(f"[RedisCache] SetNX error for {key}: {e}")
+            logger.error(
+                "redis_cache.setnx_error",
+                key=key,
+                error=e,
+            )
             return False
 
     # =========================================================================
@@ -443,7 +500,10 @@ class RedisCacheAdapter(CacheProviderInterface):
                     result[key] = self._deserialize(value)
             return result
         except Exception as e:
-            logger.error(f"[RedisCache] MGet error: {e}")
+            logger.error(
+                "redis_cache.mget_error",
+                error=e,
+            )
             return {}
 
     def mset(
@@ -470,7 +530,10 @@ class RedisCacheAdapter(CacheProviderInterface):
 
             return True
         except Exception as e:
-            logger.error(f"[RedisCache] MSet error: {e}")
+            logger.error(
+                "redis_cache.mset_error",
+                error=e,
+            )
             return False
 
     def mdelete(self, keys: list[str]) -> int:
@@ -482,7 +545,10 @@ class RedisCacheAdapter(CacheProviderInterface):
             prefixed_keys = [self._make_key(k) for k in keys]
             return self._redis.delete(*prefixed_keys)
         except Exception as e:
-            logger.error(f"[RedisCache] MDelete error: {e}")
+            logger.error(
+                "redis_cache.mdelete_error",
+                error=e,
+            )
             return 0
 
     # =========================================================================
@@ -497,7 +563,12 @@ class RedisCacheAdapter(CacheProviderInterface):
                 return None
             return self._deserialize(data)
         except Exception as e:
-            logger.error(f"[RedisCache] HGet error for {name}:{key}: {e}")
+            logger.error(
+                "redis_cache.hget_error",
+                name=name,
+                key=key,
+                error=e,
+            )
             return None
 
     def hset(self, name: str, key: str, value: Any) -> bool:
@@ -507,7 +578,12 @@ class RedisCacheAdapter(CacheProviderInterface):
             self._redis.hset(self._make_key(name), key, serialized)
             return True
         except Exception as e:
-            logger.error(f"[RedisCache] HSet error for {name}:{key}: {e}")
+            logger.error(
+                "redis_cache.hset_error",
+                name=name,
+                key=key,
+                error=e,
+            )
             return False
 
     def hgetall(self, name: str) -> dict[str, Any]:
@@ -521,7 +597,11 @@ class RedisCacheAdapter(CacheProviderInterface):
                 result[k] = self._deserialize(v)
             return result
         except Exception as e:
-            logger.error(f"[RedisCache] HGetAll error for {name}: {e}")
+            logger.error(
+                "redis_cache.hgetall_error",
+                name=name,
+                error=e,
+            )
             return {}
 
     # =========================================================================
@@ -533,7 +613,10 @@ class RedisCacheAdapter(CacheProviderInterface):
         try:
             return self._redis.ping()
         except Exception as e:
-            logger.error(f"[RedisCache] Health check failed: {e}")
+            logger.error(
+                "redis_cache.health_check_failed",
+                error=e,
+            )
             return False
 
     def flush_all(self) -> bool:
@@ -551,10 +634,16 @@ class RedisCacheAdapter(CacheProviderInterface):
                 if cursor == 0:
                     break
 
-            logger.info(f"[RedisCache] Flushed {deleted} keys")
+            logger.info(
+                "redis_cache.flushed_keys",
+                deleted=deleted,
+            )
             return True
         except Exception as e:
-            logger.error(f"[RedisCache] Flush error: {e}")
+            logger.error(
+                "redis_cache.flush_error",
+                error=e,
+            )
             return False
 
     # =========================================================================
@@ -570,7 +659,11 @@ class RedisCacheAdapter(CacheProviderInterface):
             prefix_len = len(self._key_prefix)
             return [(k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:]) for k in raw_keys]
         except Exception as e:
-            logger.error(f"[RedisCache] Keys error for {pattern}: {e}")
+            logger.error(
+                "redis_cache.keys_error",
+                pattern=pattern,
+                error=e,
+            )
             return []
 
     def scan(
@@ -586,7 +679,11 @@ class RedisCacheAdapter(CacheProviderInterface):
             keys = [(k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:]) for k in raw_keys]
             return (cursor, keys)
         except Exception as e:
-            logger.error(f"[RedisCache] Scan error for {pattern}: {e}")
+            logger.error(
+                "redis_cache.scan_error",
+                pattern=pattern,
+                error=e,
+            )
             return (0, [])
 
     def reconnect(self) -> bool:
@@ -603,5 +700,8 @@ class RedisCacheAdapter(CacheProviderInterface):
             self._redis.connection_pool.disconnect()
             return self._redis.ping()
         except Exception as e:
-            logger.error(f"[RedisCache] Reconnect failed: {e}")
+            logger.error(
+                "redis_cache.reconnect_failed",
+                error=e,
+            )
             return False

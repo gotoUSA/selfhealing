@@ -13,7 +13,7 @@ Self-Healing 시스템 자체가 장애 나면 자동 복구하거나 인간에�
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
@@ -32,7 +32,7 @@ from selfhealing.meta.health_probe import (
     ProbeResult,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -135,7 +135,7 @@ class SelfHealerWatchdog:
         # Half-Open 전환 확인
         elapsed = time.time() - self._self_cb_open_time
         if elapsed > self._settings.self_cb_recovery_timeout_seconds:
-            logger.info("[SelfHealerWatchdog] Self CB → Half-Open")
+            logger.info("watchdog.self_cb_half_open")
             self._self_cb_open = False
             self._self_cb_failure_count = 0
             return False
@@ -145,7 +145,7 @@ class SelfHealerWatchdog:
     def _open_self_cb(self) -> None:
         """Self-Healing CB 열기."""
         if self._settings.self_cb_enabled and not self._self_cb_open:
-            logger.warning("[SelfHealerWatchdog] Self CB → OPEN (overload protection)")
+            logger.warning("watchdog.self_cb_opened")
             self._self_cb_open = True
             self._self_cb_open_time = time.time()
 
@@ -166,10 +166,16 @@ class SelfHealerWatchdog:
         if self._consecutive_failures[name] < self._settings.self_cb_failure_threshold:
             return False
 
-        logger.warning(f"[SelfHealerWatchdog] {name} unhealthy, attempting recovery")
+        logger.warning(
+            "watchdog.unhealthy_detected",
+            name=name,
+        )
 
         if self._settings.dry_run_mode:
-            logger.info(f"[SelfHealerWatchdog] Dry-run: would attempt recovery for {name}")
+            logger.info(
+                "watchdog.dry_run_recovery",
+                name=name,
+            )
             return False
 
         recovered = self._attempt_recovery(name, result)
@@ -212,7 +218,7 @@ class SelfHealerWatchdog:
             현재 Watchdog 상태
         """
         if self._should_skip_due_to_self_cb():
-            logger.debug("[SelfHealerWatchdog] Skipping due to Self CB")
+            logger.debug("watchdog.self_cb_skipped")
             return self._build_watchdog_state(HealthStatus.UNKNOWN, {}, False)
 
         try:
@@ -236,7 +242,10 @@ class SelfHealerWatchdog:
             return self._build_watchdog_state(overall_status, component_statuses, escalation_pending)
 
         except Exception as e:
-            logger.error(f"[SelfHealerWatchdog] check_health error: {e}")
+            logger.error(
+                "watchdog.health_check_failed",
+                error=e,
+            )
             self._record_self_cb_failure()
             return self._build_watchdog_state(HealthStatus.UNKNOWN, {}, False)
 
@@ -250,7 +259,10 @@ class SelfHealerWatchdog:
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[SelfHealerWatchdog] State store update failed: {e}")
+            logger.debug(
+                "watchdog.state_store_failed",
+                error=e,
+            )
 
     def _attempt_recovery(self, component: str, result: ProbeResult) -> bool:
         """
@@ -272,7 +284,11 @@ class SelfHealerWatchdog:
         elapsed = now - last_time
         if elapsed < self._settings.recovery_cooldown_seconds:
             remaining = self._settings.recovery_cooldown_seconds - elapsed
-            logger.info(f"[SelfHealerWatchdog] Recovery cooldown active for {component}: " f"{remaining:.0f}s remaining")
+            logger.info(
+                "watchdog.recovery_cooldown_active",
+                component=component,
+                remaining=remaining,
+            )
             return False
 
         start_time = now
@@ -296,7 +312,10 @@ class SelfHealerWatchdog:
             elif component == "recovery_pipeline":
                 success = self._recover_recovery_pipeline(result)
             else:
-                logger.debug(f"[SelfHealerWatchdog] No recovery action for {component}")
+                logger.debug(
+                    "watchdog.no_recovery_action",
+                    component=component,
+                )
                 return False
 
             # 복구 시도 후 타임스탬프 기록 (성공/실패 무관)
@@ -324,7 +343,11 @@ class SelfHealerWatchdog:
             if recorder:
                 self._record_recovery_failed_audit(recorder, session_id, component, str(e), duration_ms)
 
-            logger.error(f"[SelfHealerWatchdog] Recovery failed for {component}: {e}")
+            logger.error(
+                "watchdog.recovery_failed",
+                component=component,
+                error=e,
+            )
             return False
 
     def _get_recovery_audit_recorder(self) -> Any:
@@ -367,7 +390,10 @@ class SelfHealerWatchdog:
                 },
             )
         except Exception as e:
-            logger.debug(f"[SelfHealerWatchdog] Audit start record failed: {e}")
+            logger.debug(
+                "watchdog.audit_start_failed",
+                error=e,
+            )
 
     def _record_recovery_complete_audit(
         self,
@@ -395,7 +421,10 @@ class SelfHealerWatchdog:
                 duration_ms=duration_ms,
             )
         except Exception as e:
-            logger.debug(f"[SelfHealerWatchdog] Audit complete record failed: {e}")
+            logger.debug(
+                "watchdog.audit_complete_failed",
+                error=e,
+            )
 
     def _record_recovery_failed_audit(
         self,
@@ -422,7 +451,10 @@ class SelfHealerWatchdog:
                 duration_ms=duration_ms,
             )
         except Exception as e:
-            logger.debug(f"[SelfHealerWatchdog] Audit failed record failed: {e}")
+            logger.debug(
+                "watchdog.audit_failed_record_failed",
+                error=e,
+            )
 
     def _recover_circuit_breaker(self, result: ProbeResult) -> bool:
         """
@@ -443,7 +475,7 @@ class SelfHealerWatchdog:
             stuck_count = result.details.get("stuck_count", 0)
 
             if stuck_count > 0:
-                logger.info("[SelfHealerWatchdog] Forcing stuck CBs to HALF_OPEN")
+                logger.info("watchdog.stuck_cb_force_half_open")
                 # CB 서비스를 통한 상태 리셋
                 all_states = cb_service.get_all_states()
                 for state in all_states:
@@ -455,10 +487,13 @@ class SelfHealerWatchdog:
 
             return True
         except ImportError:
-            logger.debug("[SelfHealerWatchdog] CB service not available")
+            logger.debug("watchdog.cb_service_unavailable")
             return False
         except Exception as e:
-            logger.error(f"[SelfHealerWatchdog] CB recovery error: {e}")
+            logger.error(
+                "watchdog.cb_recovery_failed",
+                error=e,
+            )
             return False
 
     def _recover_dlq(self, result: ProbeResult) -> bool:
@@ -475,7 +510,7 @@ class SelfHealerWatchdog:
         """
         try:
             # DLQ Consumer 상태 확인 및 재시작 트리거
-            logger.info("[SelfHealerWatchdog] Attempting DLQ recovery")
+            logger.info("watchdog.dlq_recovery_started")
 
             # Recovery Adapter를 통한 복구 시도
             try:
@@ -489,7 +524,10 @@ class SelfHealerWatchdog:
 
             return False
         except Exception as e:
-            logger.error(f"[SelfHealerWatchdog] DLQ recovery error: {e}")
+            logger.error(
+                "watchdog.dlq_recovery_failed",
+                error=e,
+            )
             return False
 
     def _recover_redis(self, result: ProbeResult) -> bool:
@@ -511,18 +549,18 @@ class SelfHealerWatchdog:
         """
         # === Stage 1: 진성 커넥션 풀 복구 ===
         try:
-            logger.info("[SelfHealerWatchdog] Redis recovery Stage 1: connection pool reset")
+            logger.info("watchdog.redis_recovery_stage1")
 
             from selfhealing.factory import ProviderRegistry
 
             adapter = ProviderRegistry.get_cache("redis")
             if adapter.reconnect():
-                logger.info("[SelfHealerWatchdog] Redis Stage 1 success: " "connection pool restored")
+                logger.info("watchdog.redis_recovery_stage1_succeeded")
                 return True
             # reconnect()가 False 반환 — ping 실패
-            logger.warning("[SelfHealerWatchdog] Redis Stage 1 failed: reconnect returned False")
+            logger.warning("watchdog.redis_stage_failed_reconnect")
         except ImportError:
-            logger.warning("[SelfHealerWatchdog] ProviderRegistry not available")
+            logger.warning("watchdog.providerregistry_available")
         except Exception as e:
             import redis as redis_lib
 
@@ -538,7 +576,10 @@ class SelfHealerWatchdog:
                     "proceeding to Stage 2 (infrastructure restart)"
                 )
             else:
-                logger.error(f"[SelfHealerWatchdog] Redis Stage 1 failed " f"(non-recoverable, skip Stage 2): {e}")
+                logger.error(
+                    "watchdog.redis_stage_failed_non",
+                    error=e,
+                )
                 return False
 
         # === Stage 2: RecoveryAdapter 인프라 재시작 ===
@@ -549,15 +590,18 @@ class SelfHealerWatchdog:
             workload_name = self._settings.redis_workload_name
             recovery_result = recovery_adapter.restart_worker(workload_name)
             if recovery_result.success:
-                logger.info("[SelfHealerWatchdog] Redis Stage 2 success: " f"{recovery_result.message}")
+                logger.info("watchdog.redis_stage_success")
             else:
-                logger.error("[SelfHealerWatchdog] Redis Stage 2 failed: " f"{recovery_result.message}")
+                logger.error("watchdog.redis_stage_failed")
             return recovery_result.success
         except ImportError:
-            logger.warning("[SelfHealerWatchdog] RecoveryAdapter not available")
+            logger.warning("watchdog.recoveryadapter_available")
             return False
         except Exception as e:
-            logger.error(f"[SelfHealerWatchdog] Redis Stage 2 error: {e}")
+            logger.error(
+                "watchdog.redis_stage_error",
+                error=e,
+            )
             return False
 
     def _recover_recovery_pipeline(self, result: ProbeResult) -> bool:
@@ -573,11 +617,14 @@ class SelfHealerWatchdog:
             복구 성공 여부
         """
         try:
-            logger.info("[SelfHealerWatchdog] Recovery Pipeline recovery")
+            logger.info("watchdog.recovery_pipeline_recovery")
             # Coordinator 리셋 등 복구 로직
             return True
         except Exception as e:
-            logger.error(f"[SelfHealerWatchdog] Recovery Pipeline error: {e}")
+            logger.error(
+                "watchdog.recovery_pipeline_error",
+                error=e,
+            )
             return False
 
     def _escalate(self, component: str, result: ProbeResult) -> None:
@@ -605,7 +652,11 @@ class SelfHealerWatchdog:
 
         if escalation_result.success:
             self._escalation_count += 1
-            logger.warning(f"[SelfHealerWatchdog] Escalated: {component} " f"(channels: {escalation_result.channels_sent})")
+            logger.warning(
+                "escalation.escalated",
+                component=component,
+                escalation_result=escalation_result.channels_sent,
+            )
         else:
             # 에스컬레이션도 실패하면 폴백 기록
             self._record_fallback_escalation(component, result, event)
@@ -642,9 +693,16 @@ class SelfHealerWatchdog:
                 error_message=result.error or "Unknown error",
             )
         except ImportError:
-            logger.error(f"[SelfHealerWatchdog] Fallback escalation not available for {component}")
+            logger.error(
+                "watchdog.fallback_escalation_available",
+                component=component,
+            )
         except Exception as e:
-            logger.error(f"[SelfHealerWatchdog] Fallback escalation failed for {component}: {e}")
+            logger.error(
+                "watchdog.fallback_escalation_failed",
+                component=component,
+                error=e,
+            )
 
     def _run_loop(self) -> None:
         """Watchdog 백그라운드 루프."""
@@ -652,7 +710,10 @@ class SelfHealerWatchdog:
             try:
                 self.check_health()
             except Exception as e:
-                logger.error(f"[SelfHealerWatchdog] Loop error: {e}")
+                logger.error(
+                    "watchdog.loop_error",
+                    error=e,
+                )
 
             self._stop_event.wait(self._settings.probe_interval_seconds)
             if self._stop_event.is_set():
@@ -661,7 +722,7 @@ class SelfHealerWatchdog:
     def start(self) -> None:
         """Watchdog 시작."""
         if not self._settings.enabled:
-            logger.info("[SelfHealerWatchdog] Disabled")
+            logger.info("watchdog.disabled")
             return
 
         if self._running:
@@ -675,7 +736,7 @@ class SelfHealerWatchdog:
             daemon=True,
         )
         self._worker.start()
-        logger.info("[SelfHealerWatchdog] Started")
+        logger.info("watchdog.started")
 
     def stop(self) -> None:
         """Watchdog 중지."""
@@ -684,7 +745,7 @@ class SelfHealerWatchdog:
         if self._worker:
             self._worker.join(timeout=2.0)
             self._worker = None
-        logger.info("[SelfHealerWatchdog] Stopped")
+        logger.info("watchdog.stopped")
 
     def is_running(self) -> bool:
         """실행 중 여부 반환."""

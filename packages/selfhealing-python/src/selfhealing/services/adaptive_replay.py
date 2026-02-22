@@ -13,12 +13,12 @@ Algorithm:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -160,7 +160,7 @@ class AdaptiveReplayManager:
             failures: Number of failed replays
         """
         if total == 0:
-            logger.debug("[AdaptiveReplay] Empty batch, skipping adjustment")
+            logger.debug("adaptive_replay.empty_batch_skipping_adjustment")
             return
 
         failure_rate = failures / total

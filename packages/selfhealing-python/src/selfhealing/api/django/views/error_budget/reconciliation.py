@@ -20,7 +20,7 @@ Endpoints:
 Core Principle: "시스템은 계산하고, 반영은 사람이 결정한다."
 """
 
-import logging
+import structlog
 from datetime import datetime
 
 from django.utils import timezone
@@ -30,7 +30,7 @@ from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ReconciliationStatusView(APIView):

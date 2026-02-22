@@ -13,12 +13,12 @@ Celery 태스크에 cell_id 태깅 — 하이브리드 3단계 전파.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from celery.signals import before_task_publish
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # kwargs에서 추출할 라우팅 키 (우선순위 순)
 CELERY_ROUTING_KEYS = [

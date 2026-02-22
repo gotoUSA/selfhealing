@@ -18,13 +18,13 @@ Postmortem에 포함시켜 장애 원인 분석 정확도를 높입니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CorrelationType(str, Enum):
@@ -165,17 +165,20 @@ class DeploymentCorrelator:
 
                 adapter = KubernetesDeploymentAdapter()
                 if adapter.is_available():
-                    logger.info("[DeploymentCorrelator] Using Kubernetes adapter")
+                    logger.info("deployment_correlator.using_kubernetes_adapter")
                     return adapter
                 else:
-                    logger.warning("[DeploymentCorrelator] Kubernetes not available, " "falling back to Mock adapter")
+                    logger.warning("deployment_correlator.kubernetes_available_falling_back")
             except Exception as e:
-                logger.warning(f"[DeploymentCorrelator] Kubernetes adapter failed: {e}, " "falling back to Mock adapter")
+                logger.warning(
+                    "deployment_correlator.kubernetes_adapter_failed_falling",
+                    error=e,
+                )
 
         # Mock 어댑터로 폴백
         from selfhealing.adapters.deployment import MockDeploymentAdapter
 
-        logger.info("[DeploymentCorrelator] Using Mock adapter")
+        logger.info("deployment_correlator.using_mock_adapter")
         return MockDeploymentAdapter()
 
     def is_enabled(self) -> bool:
@@ -204,7 +207,7 @@ class DeploymentCorrelator:
             DeploymentCorrelationResult: 상관관계 분석 결과
         """
         if not self.is_enabled():
-            logger.debug("[DeploymentCorrelator] Feature disabled")
+            logger.debug("deployment_correlator.feature_disabled")
             return DeploymentCorrelationResult(analysis_summary="Deployment correlation feature disabled")
 
         self._ensure_initialized()
@@ -274,7 +277,10 @@ class DeploymentCorrelator:
             }
 
         except Exception as e:
-            logger.warning(f"[DeploymentCorrelator] Failed to collect deployment context: {e}")
+            logger.warning(
+                "deployment_correlator.failed_collect_deployment_context",
+                error=e,
+            )
             return {
                 "status": "error",
                 "error": str(e),
@@ -358,7 +364,10 @@ class DeploymentCorrelator:
                     namespace=namespace,
                 )
         except Exception as e:
-            logger.warning(f"[DeploymentCorrelator] Failed to get deployments: {e}")
+            logger.warning(
+                "deployment_correlator.failed_get_deployments",
+                error=e,
+            )
         return []
 
     def _get_config_changes_safe(
@@ -378,7 +387,10 @@ class DeploymentCorrelator:
                     namespace=namespace,
                 )
         except Exception as e:
-            logger.warning(f"[DeploymentCorrelator] Failed to get config changes: {e}")
+            logger.warning(
+                "deployment_correlator.failed_get_config_changes",
+                error=e,
+            )
         return []
 
     def _find_closest_deployment(

@@ -21,7 +21,7 @@ Fallback Hierarchy:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import tempfile
 import threading
@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_snapshot_max_age() -> int:
@@ -203,14 +203,18 @@ class MetricSnapshotStorage:
         try:
             self._storage_dir.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            logger.warning(f"[Snapshot] Failed to create directory {self._storage_dir}: {e}")
+            logger.warning(
+                "snapshot.failed_create_directory",
+                self=self._storage_dir,
+                error=e,
+            )
 
     def _load_snapshot(self) -> None:
         """파일에서 스냅샷 로드."""
         try:
             if not self.file_path.exists():
                 self._snapshot = MetricSnapshot(source="new")
-                logger.debug("[Snapshot] No existing snapshot, created new")
+                logger.debug("snapshot.no_existing_snapshot_created")
                 return
 
             with open(self.file_path, encoding="utf-8") as f:
@@ -222,7 +226,10 @@ class MetricSnapshotStorage:
                 f"categories: {len(self._snapshot.values)})"
             )
         except Exception as e:
-            logger.warning(f"[Snapshot] Failed to load snapshot: {e}")
+            logger.warning(
+                "snapshot.failed_load_snapshot",
+                error=e,
+            )
             self._snapshot = MetricSnapshot(source="new_after_error")
 
     def _save_snapshot_atomic(self) -> bool:
@@ -262,7 +269,10 @@ class MetricSnapshotStorage:
                 os.replace(temp_path, self.file_path)
 
                 self._dirty = False
-                logger.debug(f"[Snapshot] Saved snapshot to {self.file_path}")
+                logger.debug(
+                    "snapshot.saved_snapshot",
+                    self=self.file_path,
+                )
                 return True
 
             except Exception:
@@ -274,7 +284,10 @@ class MetricSnapshotStorage:
                 raise
 
         except Exception as e:
-            logger.warning(f"[Snapshot] Failed to save snapshot: {e}")
+            logger.warning(
+                "snapshot.failed_save_snapshot",
+                error=e,
+            )
             return False
 
     def save_value(
@@ -360,7 +373,11 @@ class MetricSnapshotStorage:
             effective_max_age = max_age if max_age is not None else self._max_age
 
             if self._snapshot.age_seconds > effective_max_age:
-                logger.debug(f"[Snapshot] Value too old ({self._snapshot.age_seconds:.1f}s > {effective_max_age}s)")
+                logger.debug(
+                    "snapshot.value_too_old",
+                    self=self._snapshot.age_seconds,
+                    effective_max_age=effective_max_age,
+                )
                 return default
 
             return self._snapshot.get_value(category, key, default)

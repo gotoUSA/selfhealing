@@ -37,7 +37,7 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import logging
+import structlog
 import threading
 import time
 from typing import Any
@@ -71,7 +71,7 @@ from selfhealing.settings.correlation_engine import (
     get_correlation_engine_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -170,7 +170,7 @@ class CorrelationEngineService:
             초기화 성공 여부. enabled=False 시 False 반환.
         """
         if not self._engine_settings.enabled:
-            logger.info("[CorrelationEngine] Disabled by settings")
+            logger.info("correlation_engine.disabled_settings")
             return False
 
         if self._initialized:
@@ -220,11 +220,14 @@ class CorrelationEngineService:
             self._subscribe_config_updates()
 
             self._initialized = True
-            logger.info("[CorrelationEngine] Initialized successfully")
+            logger.info("correlation_engine.initialized_successfully")
             return True
 
         except Exception as e:
-            logger.error(f"[CorrelationEngine] Initialization failed: {e}")
+            logger.error(
+                "correlation_engine.initialization_failed",
+                error=e,
+            )
             return False
 
     def start_analysis_loop(self) -> None:
@@ -251,7 +254,10 @@ class CorrelationEngineService:
             try:
                 self._scheduler.stop()
             except Exception as e:
-                logger.debug(f"[CorrelationEngine] Scheduler stop error: {e}")
+                logger.debug(
+                    "correlation_engine.scheduler_stop_error",
+                    error=e,
+                )
             self._scheduler = None
 
         self._running = False
@@ -261,7 +267,10 @@ class CorrelationEngineService:
             try:
                 self._observer.unregister(self._get_event_bus())
             except Exception as e:
-                logger.debug(f"[CorrelationEngine] Observer unregister error: {e}")
+                logger.debug(
+                    "correlation_engine.observer_unregister_error",
+                    error=e,
+                )
 
         # 3. 상태 영속화
         if self._engine_settings.state_persistence_enabled and self._co_occurrence is not None:
@@ -271,7 +280,7 @@ class CorrelationEngineService:
         self._shutdown_ml_strategies()
 
         self._initialized = False
-        logger.info("[CorrelationEngine] Shut down")
+        logger.info("correlation_engine.shut_down")
 
     def _shutdown_ml_strategies(self) -> None:
         """ML 전략의 StrategyLifecycle.teardown()을 호출한다."""
@@ -284,7 +293,10 @@ class CorrelationEngineService:
 
         for name, strategy in strategies:
             if isinstance(strategy, StrategyLifecycle):
-                logger.info(f"[CorrelationEngine] Tearing down ML strategy: {name}")
+                logger.info(
+                    "correlation_engine.tearing_down_ml_strategy",
+                    name=name,
+                )
                 strategy.teardown()
 
     # ─────────────────────────────────────────────
@@ -305,7 +317,7 @@ class CorrelationEngineService:
 
             elector = get_leader_elector("correlation-engine")
             if not elector.is_lease_valid():
-                logger.warning("[CorrelationEngine] Lease expired, aborting analysis")
+                logger.warning("correlation_engine.lease_expired_aborting_analysis")
                 return
         except Exception:
             pass  # elector 미사용 환경에서는 무시
@@ -314,7 +326,10 @@ class CorrelationEngineService:
         if self._observer is not None:
             rate_anomaly = self._observer.check_event_rate_anomaly()
             if rate_anomaly:
-                logger.warning(f"[CorrelationEngine] {rate_anomaly['message']}")
+                logger.warning(
+                    "correlation_engine.event",
+                    rate_anomaly=rate_anomaly['message'],
+                )
 
         # 2. Co-occurrence 분석
         correlation_results = self._co_occurrence.analyze_tick()
@@ -367,7 +382,10 @@ class CorrelationEngineService:
 
             # 4. 멱등성 검사 (IdempotencyService)
             if self._check_already_analyzed(resolved_id):
-                logger.debug(f"[CorrelationEngine] Already analyzed: {resolved_id}")
+                logger.debug(
+                    "correlation_engine.already_analyzed",
+                    resolved_id=resolved_id,
+                )
                 return None
 
             # 5. Root Cause 분석
@@ -393,7 +411,10 @@ class CorrelationEngineService:
             }
 
         except Exception as e:
-            logger.error(f"[CorrelationEngine] Incident analysis failed: {e}")
+            logger.error(
+                "correlation_engine.incident_analysis_failed",
+                error=e,
+            )
             return None
 
     # ─────────────────────────────────────────────
@@ -452,7 +473,10 @@ class CorrelationEngineService:
                 priority=EventPriority.LOW,
             )
         except Exception as e:
-            logger.debug(f"[CorrelationEngine] Event handler registration failed: {e}")
+            logger.debug(
+                "correlation_engine.event_handler_registration_failed",
+                error=e,
+            )
 
     def _on_incident_resolved(self, event) -> None:
         """인시던트 해소 시 자동 분석.
@@ -473,7 +497,10 @@ class CorrelationEngineService:
                     f"({result['root_cause'].primary_cause.score:.0%})"
                 )
         except Exception as e:
-            logger.debug(f"[CorrelationEngine] Auto-analysis skipped: {e}")
+            logger.debug(
+                "correlation_engine.auto_analysis_skipped",
+                error=e,
+            )
 
     # ─────────────────────────────────────────────
     # Postmortem 연동
@@ -497,7 +524,10 @@ class CorrelationEngineService:
 
             incident = get_incident_by_id(incident_id)
             if not incident:
-                logger.debug(f"[CorrelationEngine] Postmortem not found: {incident_id}, " f"skipping injection")
+                logger.debug(
+                    "correlation_engine.postmortem_found_skipping_injection",
+                    incident_id=incident_id,
+                )
                 return
 
             update_incident_fields(
@@ -528,7 +558,10 @@ class CorrelationEngineService:
                 },
             )
         except Exception as e:
-            logger.debug(f"[CorrelationEngine] Postmortem injection skipped: {e}")
+            logger.debug(
+                "correlation_engine.postmortem_injection_skipped",
+                error=e,
+            )
 
     # ─────────────────────────────────────────────
     # Learning 연동
@@ -557,7 +590,10 @@ class CorrelationEngineService:
                     confidence=result.confidence,
                 )
         except Exception as e:
-            logger.debug(f"[CorrelationEngine] Learning report skipped: {e}")
+            logger.debug(
+                "correlation_engine.learning_report_skipped",
+                error=e,
+            )
 
     # ─────────────────────────────────────────────
     # BlastRadius 연동
@@ -628,7 +664,10 @@ class CorrelationEngineService:
             )
             service.mark_as_processed(key)
         except Exception as e:
-            logger.debug(f"[CorrelationEngine] Idempotency mark failed: {e}")
+            logger.debug(
+                "correlation_engine.idempotency_mark_failed",
+                error=e,
+            )
 
     # ─────────────────────────────────────────────
     # 동적 설정 리로드 (RuntimeConfigManager)
@@ -652,7 +691,10 @@ class CorrelationEngineService:
                 priority=EventPriority.NORMAL,
             )
         except Exception as e:
-            logger.debug(f"[CorrelationEngine] Config update subscription failed: {e}")
+            logger.debug(
+                "correlation_engine.config_update_subscription_failed",
+                error=e,
+            )
 
     def _on_config_updated(self, event) -> None:
         """설정 변경 시 내부 상태 Flush & Resize.
@@ -691,7 +733,7 @@ class CorrelationEngineService:
             # 3. enabled=False 전환 시 엔진 중단
             if not self._engine_settings.enabled:
                 self.shutdown()
-                logger.info("[CorrelationEngine] Disabled via dynamic config")
+                logger.info("correlation_engine.disabled_via_dynamic_config")
                 return
 
             logger.info(
@@ -701,7 +743,10 @@ class CorrelationEngineService:
             )
 
         except Exception as e:
-            logger.error(f"[CorrelationEngine] Config reload failed: {e}")
+            logger.error(
+                "correlation_engine.config_reload_failed",
+                error=e,
+            )
 
     # ─────────────────────────────────────────────
     # 전략 교체 API
@@ -937,11 +982,17 @@ class CorrelationEngineService:
 
         for name, strategy in strategies:
             if isinstance(strategy, StrategyLifecycle):
-                logger.info(f"[CorrelationEngine] Initializing ML strategy: {name}")
+                logger.info(
+                    "correlation_engine.initializing_ml_strategy",
+                    name=name,
+                )
                 strategy.initialize()
                 strategy.warmup()
                 if not strategy.is_ready():
-                    logger.error(f"[CorrelationEngine] Strategy '{name}' " f"failed readiness check")
+                    logger.error(
+                        "correlation_engine.strategy_failed_readiness_check",
+                        name=name,
+                    )
 
     def get_ml_strategies(self) -> list[tuple[str, Any]]:
         """등록된 ML 전략 목록.

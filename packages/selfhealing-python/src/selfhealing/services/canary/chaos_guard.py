@@ -21,11 +21,11 @@ Usage:
     # result.safe_clusters만 롤아웃 진행
 """
 
-import logging
+import structlog
 from dataclasses import dataclass
 from enum import Enum
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ChaosConflictPolicy(str, Enum):
@@ -86,7 +86,10 @@ class CanaryChaosGuard:
         )
 
         if result.has_conflict:
-            logger.warning(f"Chaos clusters excluded: {result.chaos_clusters}")
+            logger.warning(
+                "chaos_clusters_excluded",
+                result=result.chaos_clusters,
+            )
 
         if not result.can_proceed:
             raise ValueError("All target clusters have active chaos")
@@ -222,7 +225,10 @@ class CanaryChaosGuard:
             )
 
         # LOOSE: 경고 후 전체 진행
-        logger.warning(f"[ChaosGuard] LOOSE: Warning - active chaos on {conflict_set}")
+        logger.warning(
+            "chaos_guard.loose_warning_active_chaos",
+            conflict_set=conflict_set,
+        )
         return ChaosConflictResult(
             has_conflict=True,
             chaos_clusters=list(conflict_set),
@@ -263,7 +269,10 @@ class CanaryChaosGuard:
             return clusters
 
         except Exception as e:
-            logger.warning(f"[ChaosGuard] Failed to get active chaos: {e}")
+            logger.warning(
+                "chaos_guard.failed_get_active_chaos",
+                error=e,
+            )
             return set()
 
     def _get_active_experiments(self) -> list:
@@ -302,15 +311,21 @@ class CanaryChaosGuard:
                             exp = ChaosExperimentContext.from_dict(exp_data)
                             experiments.append(exp)
                 except Exception as e:
-                    logger.debug(f"[ChaosGuard] Failed to parse experiment: {e}")
+                    logger.debug(
+                        "chaos_guard.failed_parse_experiment",
+                        error=e,
+                    )
 
             return experiments
 
         except ImportError:
-            logger.debug("[ChaosGuard] Django cache not available")
+            logger.debug("chaos_guard.django_cache_available")
             return []
         except Exception as e:
-            logger.warning(f"[ChaosGuard] Failed to get experiments: {e}")
+            logger.warning(
+                "chaos_guard.failed_get_experiments",
+                error=e,
+            )
             return []
 
     @property
@@ -322,4 +337,7 @@ class CanaryChaosGuard:
     def policy(self, value: ChaosConflictPolicy) -> None:
         """정책 변경."""
         self._policy = value
-        logger.info(f"[ChaosGuard] Policy changed to: {value}")
+        logger.info(
+            "chaos_guard.policy_changed",
+            value=value,
+        )

@@ -7,7 +7,7 @@ Buffer → Processing Queue → External 패턴을 통한 데이터 손실 방�
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 import redis as redis_lib
@@ -15,7 +15,7 @@ import redis as redis_lib
 if TYPE_CHECKING:
     from redis import Redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditBatchLuaScripts:
@@ -116,9 +116,12 @@ class AuditBatchLuaScripts:
             self._scripts["batch_move"] = self._redis.script_load(self.LUA_ATOMIC_BATCH_MOVE)
             self._scripts["batch_complete"] = self._redis.script_load(self.LUA_ATOMIC_BATCH_COMPLETE)
             self._scripts["batch_restore"] = self._redis.script_load(self.LUA_ATOMIC_BATCH_RESTORE)
-            logger.info("[AuditBatchLuaScripts] Lua scripts registered")
+            logger.info("audit_batch_lua_scripts.lua_scripts_registered")
         except redis_lib.RedisError as e:
-            logger.error(f"[AuditBatchLuaScripts] Script registration failed: {e}")
+            logger.error(
+                "audit_batch_lua_scripts.script_registration_failed",
+                error=e,
+            )
             raise
 
     def atomic_batch_move(
@@ -152,7 +155,7 @@ class AuditBatchLuaScripts:
             )
             return int(result) if result else 0
         except redis_lib.exceptions.NoScriptError:
-            logger.warning("[AuditBatchLuaScripts] Script cache miss, re-registering")
+            logger.warning("audit_batch_lua_scripts.script_cache_miss_re")
             self._register_scripts()
             return self.atomic_batch_move(domain, batch_size, worker_id)
 
@@ -243,6 +246,9 @@ class AuditBatchLuaScripts:
                     orphaned.append((key_str, "unknown", timeout_seconds + 1))
 
         except redis_lib.RedisError as e:
-            logger.error(f"[AuditBatchLuaScripts] Failed to get orphaned queues: {e}")
+            logger.error(
+                "audit_batch_lua_scripts.failed_get_orphaned_queues",
+                error=e,
+            )
 
         return orphaned

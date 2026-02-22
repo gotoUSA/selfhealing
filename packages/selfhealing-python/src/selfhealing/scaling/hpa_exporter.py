@@ -12,7 +12,7 @@ Kubernetes HPA용 커스텀 메트릭을 Prometheus 형식으로 노출합니다
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from typing import Callable
@@ -25,7 +25,7 @@ from selfhealing.scaling.config import (
 from selfhealing.scaling.metrics import BackpressureMetrics, get_backpressure_metrics
 from selfhealing.scaling.rate_controller import RateController, get_rate_controller
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Backpressure 레벨을 정수로 변환 (Prometheus 메트릭용)
@@ -116,7 +116,10 @@ class HPAMetricsExporter:
             )
 
         except Exception as e:
-            logger.error(f"[HPAMetricsExporter] Update error: {e}")
+            logger.error(
+                "hpa_metrics_exporter.update_error",
+                error=e,
+            )
 
     def _run_loop(self) -> None:
         """메트릭 업데이트 루프."""
@@ -129,11 +132,11 @@ class HPAMetricsExporter:
     def start(self) -> None:
         """Exporter 시작."""
         if not self._settings.hpa_enabled:
-            logger.info("[HPAMetricsExporter] HPA disabled")
+            logger.info("hpa_metrics_exporter.hpa_disabled")
             return
 
         if not self._settings.metrics_enabled:
-            logger.info("[HPAMetricsExporter] Metrics disabled")
+            logger.info("hpa_metrics_exporter.metrics_disabled")
             return
 
         with self._lock:
@@ -148,7 +151,7 @@ class HPAMetricsExporter:
                 daemon=True,
             )
             self._worker.start()
-            logger.info("[HPAMetricsExporter] Started")
+            logger.info("hpa_metrics_exporter.started")
 
     def stop(self) -> None:
         """Exporter 중지."""
@@ -160,7 +163,7 @@ class HPAMetricsExporter:
             self._worker.join(timeout=2.0)
             self._worker = None
 
-        logger.info("[HPAMetricsExporter] Stopped")
+        logger.info("hpa_metrics_exporter.stopped")
 
     def is_running(self) -> bool:
         """실행 중 여부 반환."""

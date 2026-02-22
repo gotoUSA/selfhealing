@@ -18,12 +18,12 @@ Reference:
 - docs/self_healing/middleware_system/91_CONFIG_INVENTORY.md §9.1
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ErrorBudgetPropagationSettings(BaseSettings):

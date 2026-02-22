@@ -21,7 +21,7 @@ Performance Note:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -32,7 +32,7 @@ from selfhealing.interfaces.rate_limit_storage import (
     RateLimitStorageType,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DatabaseRateLimitStorage(RateLimitStorageInterface):
@@ -101,7 +101,10 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
             self._available = True
             return True
         except Exception as e:
-            logger.warning(f"[DatabaseRateLimitStorage] Database unavailable: {e}")
+            logger.warning(
+                "database_rate_limit_storage.database_unavailable",
+                error=e,
+            )
             self._available = False
             return False
 
@@ -122,7 +125,10 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
             )
 
         except Exception as e:
-            logger.error(f"[DatabaseRateLimitStorage] Failed to get state: {e}")
+            logger.error(
+                "database_rate_limit_storage.failed_get_state",
+                error=e,
+            )
             return RateLimitState(key=key)
 
     def set_cooldown(
@@ -151,7 +157,10 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 )
 
         except Exception as e:
-            logger.error(f"[DatabaseRateLimitStorage] Failed to set cooldown: {e}")
+            logger.error(
+                "database_rate_limit_storage.failed_set_cooldown",
+                error=e,
+            )
             raise
 
     def increment_consecutive_429s(self, key: str) -> int:
@@ -168,7 +177,10 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 return new_value
 
         except Exception as e:
-            logger.error(f"[DatabaseRateLimitStorage] Failed to increment: {e}")
+            logger.error(
+                "database_rate_limit_storage.failed_increment",
+                error=e,
+            )
             raise
 
     def reset_consecutive_429s(self, key: str) -> None:
@@ -183,7 +195,10 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 )
 
         except Exception as e:
-            logger.error(f"[DatabaseRateLimitStorage] Failed to reset: {e}")
+            logger.error(
+                "database_rate_limit_storage.failed_reset",
+                error=e,
+            )
 
     def clear(self, key: str) -> None:
         """Clear all rate limit state for a key."""
@@ -192,7 +207,13 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 repo = self._get_repository()
                 repo.delete(key)
 
-                logger.debug(f"[DatabaseRateLimitStorage] Cleared state for '{key}'")
+                logger.debug(
+                    "database_rate_limit_storage.cleared_state",
+                    key=key,
+                )
 
         except Exception as e:
-            logger.error(f"[DatabaseRateLimitStorage] Failed to clear: {e}")
+            logger.error(
+                "database_rate_limit_storage.failed_clear",
+                error=e,
+            )

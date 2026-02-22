@@ -15,13 +15,13 @@ Active-Active 환경에서 충돌 해결(LWW)의 정확성을 위해 5ms 이하�
 
 from __future__ import annotations
 
-import logging
+import structlog
 import platform
 import subprocess
 from dataclasses import dataclass
 from functools import lru_cache
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -66,7 +66,7 @@ class TimeSyncChecker:
         # 정확도만 확인
         accuracy_ms = checker.get_clock_accuracy_ms()
         if accuracy_ms > 5:
-            logger.warning("Clock accuracy degraded")
+            logger.warning("clock_accuracy_degraded")
     """
 
     AWS_TIME_SYNC_IP = "169.254.169.123"
@@ -101,7 +101,7 @@ class TimeSyncChecker:
             )
 
             if result.returncode != 0:
-                logger.warning("[TimeSync] chronyc command failed")
+                logger.warning("time_sync.chronyc_command_failed")
                 return TimeSyncStatus(
                     is_synced=False,
                     offset_ms=float("inf"),
@@ -112,10 +112,10 @@ class TimeSyncChecker:
             return self._parse_chronyc_output(result.stdout)
 
         except FileNotFoundError:
-            logger.debug("[TimeSync] chronyc not found, trying ntpq")
+            logger.debug("time_sync.chronyc_found_trying_ntpq")
             return self._check_linux_ntpq()
         except subprocess.TimeoutExpired:
-            logger.warning("[TimeSync] chronyc command timeout")
+            logger.warning("time_sync.chronyc_command_timeout")
             return TimeSyncStatus(
                 is_synced=False,
                 offset_ms=float("inf"),
@@ -123,7 +123,10 @@ class TimeSyncChecker:
                 stratum=16,
             )
         except Exception as e:
-            logger.warning(f"[TimeSync] chronyc check failed: {e}")
+            logger.warning(
+                "time_sync.chronyc_check_failed",
+                error=e,
+            )
             return TimeSyncStatus(
                 is_synced=False,
                 offset_ms=float("inf"),
@@ -213,7 +216,10 @@ class TimeSyncChecker:
             )
 
         except Exception as e:
-            logger.warning(f"[TimeSync] ntpq check failed: {e}")
+            logger.warning(
+                "time_sync.ntpq_check_failed",
+                error=e,
+            )
             return TimeSyncStatus(
                 is_synced=False,
                 offset_ms=float("inf"),
@@ -242,7 +248,7 @@ class TimeSyncChecker:
             return self._parse_w32tm_output(result.stdout)
 
         except FileNotFoundError:
-            logger.debug("[TimeSync] w32tm not found")
+            logger.debug("time_sync.found")
             return TimeSyncStatus(
                 is_synced=False,
                 offset_ms=float("inf"),
@@ -250,7 +256,10 @@ class TimeSyncChecker:
                 stratum=16,
             )
         except Exception as e:
-            logger.warning(f"[TimeSync] w32tm check failed: {e}")
+            logger.warning(
+                "time_sync.check_failed",
+                error=e,
+            )
             return TimeSyncStatus(
                 is_synced=False,
                 offset_ms=float("inf"),

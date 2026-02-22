@@ -11,7 +11,7 @@ Kubernetes API를 통해 Deployment 이력을 수집하는 어댑터입니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -23,7 +23,7 @@ from .base import (
     ExternalDeploymentAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class KubernetesDeploymentAdapter:
@@ -83,24 +83,27 @@ class KubernetesDeploymentAdapter:
             if self._in_cluster:
                 try:
                     config.load_incluster_config()
-                    logger.info("[KubernetesAdapter] Loaded in-cluster config")
+                    logger.info("kubernetes_adapter.loaded_cluster_config")
                 except config.ConfigException:
                     # In-cluster 실패 시 kubeconfig 시도
                     config.load_kube_config(config_file=self._kubeconfig_path)
-                    logger.info("[KubernetesAdapter] Loaded kubeconfig")
+                    logger.info("kubernetes_adapter.loaded_kubeconfig")
             else:
                 config.load_kube_config(config_file=self._kubeconfig_path)
-                logger.info("[KubernetesAdapter] Loaded kubeconfig")
+                logger.info("kubernetes_adapter.loaded_kubeconfig")
 
             self._apps_v1 = client.AppsV1Api()
             self._core_v1 = client.CoreV1Api()
             self._is_available = True
 
         except ImportError:
-            logger.warning("[KubernetesAdapter] kubernetes package not installed. " "Install with: pip install kubernetes")
+            logger.warning("kubernetes_adapter.kubernetes_package_installed_install")
             self._is_available = False
         except Exception as e:
-            logger.warning(f"[KubernetesAdapter] Failed to initialize: {e}")
+            logger.warning(
+                "kubernetes_adapter.failed_initialize",
+                error=e,
+            )
             self._is_available = False
 
     def get_deployments_in_range(
@@ -125,7 +128,7 @@ class KubernetesDeploymentAdapter:
             배포 이벤트 목록 (시간순 정렬)
         """
         if not self._is_available or not self._apps_v1:
-            logger.warning("[KubernetesAdapter] Client not available")
+            logger.warning("kubernetes_adapter.client_available")
             return []
 
         try:
@@ -188,11 +191,19 @@ class KubernetesDeploymentAdapter:
                 deployments.append(deployment)
                 previous_version = version_to
 
-            logger.debug(f"[KubernetesAdapter] Found {len(deployments)} deployments " f"for {service_name} in {namespace}")
+            logger.debug(
+                "kubernetes_adapter.found_deployments",
+                count=len(deployments),
+                service_name=service_name,
+                namespace=namespace,
+            )
             return deployments
 
         except Exception as e:
-            logger.warning(f"[KubernetesAdapter] Failed to get deployments: {e}")
+            logger.warning(
+                "kubernetes_adapter.failed_get_deployments",
+                error=e,
+            )
             return []
 
     def get_deployment_by_version(
@@ -240,7 +251,10 @@ class KubernetesDeploymentAdapter:
             return None
 
         except Exception as e:
-            logger.warning(f"[KubernetesAdapter] Failed to get deployment by version: {e}")
+            logger.warning(
+                "kubernetes_adapter.failed_get_deployment_version",
+                error=e,
+            )
             return None
 
     def get_current_version(
@@ -284,7 +298,10 @@ class KubernetesDeploymentAdapter:
             return None
 
         except Exception as e:
-            logger.warning(f"[KubernetesAdapter] Failed to get current version: {e}")
+            logger.warning(
+                "kubernetes_adapter.failed_get_current_version",
+                error=e,
+            )
             return None
 
     def get_rollback_history(
@@ -328,7 +345,10 @@ class KubernetesDeploymentAdapter:
             return rollbacks[:limit]
 
         except Exception as e:
-            logger.warning(f"[KubernetesAdapter] Failed to get rollback history: {e}")
+            logger.warning(
+                "kubernetes_adapter.failed_get_rollback_history",
+                error=e,
+            )
             return []
 
     def get_config_changes_in_range(
@@ -358,7 +378,7 @@ class KubernetesDeploymentAdapter:
         """
         # Kubernetes는 ConfigMap 변경 이력을 보관하지 않음
         # RuntimeConfig의 ConfigHistory를 통해 수집
-        logger.debug("[KubernetesAdapter] Config changes should be collected " "from RuntimeConfig.ConfigHistory")
+        logger.debug("kubernetes_adapter.config_changes_collected_runtimeconfig")
         return []
 
     def is_available(self) -> bool:

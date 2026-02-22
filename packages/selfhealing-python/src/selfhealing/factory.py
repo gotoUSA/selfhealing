@@ -21,7 +21,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from selfhealing.interfaces.statistics import StatisticsRepositoryInterface
     from selfhealing.interfaces.task_queue import TaskQueueInterface
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ProviderRegistry:
@@ -82,61 +82,91 @@ class ProviderRegistry:
     def register_cache(cls, name: str, provider_class: type) -> None:
         """Register a cache provider adapter."""
         cls._cache_providers[name] = provider_class
-        logger.debug(f"[Registry] Registered cache provider: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_queue(cls, name: str, provider_class: type) -> None:
         """Register a task queue adapter."""
         cls._task_queues[name] = provider_class
-        logger.debug(f"[Registry] Registered task queue: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_failed_operation_repo(cls, name: str, repo_class: type) -> None:
         """Register a failed operation repository."""
         cls._failed_op_repos[name] = repo_class
-        logger.debug(f"[Registry] Registered failed operation repo: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_circuit_breaker_repo(cls, name: str, repo_class: type) -> None:
         """Register a circuit breaker state repository."""
         cls._circuit_breaker_repos[name] = repo_class
-        logger.debug(f"[Registry] Registered circuit breaker repo: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_security_repo(cls, name: str, repo_class: type) -> None:
         """Register a security incident repository."""
         cls._security_repos[name] = repo_class
-        logger.debug(f"[Registry] Registered security repo: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_audit_adapter(cls, name: str, adapter_class: type) -> None:
         """Register an audit log adapter."""
         cls._audit_adapters[name] = adapter_class
-        logger.debug(f"[Registry] Registered audit adapter: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_traffic_routing(cls, name: str, adapter_class: type) -> None:
         """Register a traffic routing adapter."""
         cls._traffic_routing_adapters[name] = adapter_class
-        logger.debug(f"[Registry] Registered traffic routing: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_correlation_strategy(cls, name: str, strategy_class: type) -> None:
         """Correlation Engine 상관관계 분석 전략 등록."""
         cls._correlation_strategies[name] = strategy_class
-        logger.debug(f"[Registry] Registered correlation strategy: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_root_cause_strategy(cls, name: str, strategy_class: type) -> None:
         """Correlation Engine 근본 원인 분석 전략 등록."""
         cls._root_cause_strategies[name] = strategy_class
-        logger.debug(f"[Registry] Registered root cause strategy: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_graph_build_strategy(cls, name: str, strategy_class: type) -> None:
         """Correlation Engine DAG 구축 전략 등록."""
         cls._graph_build_strategies[name] = strategy_class
-        logger.debug(f"[Registry] Registered graph build strategy: {name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            name=name,
+        )
 
     @classmethod
     def register_statistics_adapter(
@@ -164,7 +194,10 @@ class ProviderRegistry:
                     )
         """
         cls._statistics_adapter = adapter
-        logger.info(f"[Registry] Statistics adapter registered: {type(adapter).__name__}")
+        logger.info(
+            "registry.statistics_adapter_registered",
+            value=type(adapter).__name__,
+        )
 
     @classmethod
     def register_postmortem_model(cls, model_class: type) -> None:
@@ -187,7 +220,10 @@ class ProviderRegistry:
                     ProviderRegistry.register_postmortem_model(PostmortemRecord)
         """
         cls._postmortem_model = model_class
-        logger.info(f"[Registry] Postmortem model registered: {model_class.__name__}")
+        logger.info(
+            "registry.postmortem_model_registered",
+            model_class=model_class.__name__,
+        )
 
     @classmethod
     def get_postmortem_model(cls) -> type | None:
@@ -627,7 +663,7 @@ class ProviderRegistry:
         For testing only. Use to reset singleton instances between tests.
         """
         cls._instances.clear()
-        logger.debug("[Registry] Cleared all cached instances")
+        logger.debug("registry.cleared_all_cached_instances")
 
     @classmethod
     def reset(cls) -> None:
@@ -654,7 +690,7 @@ class ProviderRegistry:
         cls._default_repo = "redis"  # Changed from "django" to "redis"
         cls._default_audit = "file"
         cls._default_traffic_routing = "logging"
-        logger.debug("[Registry] Reset to initial state")
+        logger.debug("registry.reset_initial_state")
 
     # =========================================================================
     # Health Check
@@ -674,14 +710,20 @@ class ProviderRegistry:
             cache = cls.get_cache()
             results["cache"] = cache.health_check()
         except Exception as e:
-            logger.error(f"[Registry] Cache health check failed: {e}")
+            logger.error(
+                "registry.cache_health_check_failed",
+                error=e,
+            )
             results["cache"] = False
 
         try:
             queue = cls.get_queue()
             results["queue"] = queue.health_check()
         except Exception as e:
-            logger.error(f"[Registry] Queue health check failed: {e}")
+            logger.error(
+                "registry.queue_health_check_failed",
+                error=e,
+            )
             results["queue"] = False
 
         return results

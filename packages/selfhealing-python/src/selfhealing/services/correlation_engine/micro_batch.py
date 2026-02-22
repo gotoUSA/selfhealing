@@ -21,7 +21,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import queue
 import threading
 import time
@@ -32,7 +32,7 @@ from selfhealing.interfaces.ml_strategy import (
     BatchCapable,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -186,7 +186,7 @@ class MicroBatchConsumer:
             self._processed_count += len(values)
             self._flush_count += 1
         except Exception:
-            logger.exception("[MicroBatchConsumer] Batch flush failed " f"(batch_size={len(values)})")
+            logger.exception("micro_batch_consumer.batch_flush_failed")
 
     # ─────────────────────────────────────────────
     # 메트릭

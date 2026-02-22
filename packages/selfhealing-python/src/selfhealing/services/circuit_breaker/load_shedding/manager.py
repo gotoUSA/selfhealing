@@ -23,7 +23,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -43,7 +43,7 @@ from selfhealing.services.circuit_breaker.models import (
     SheddingLevel,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LoadSheddingManager:
@@ -79,7 +79,7 @@ class LoadSheddingManager:
         self._audit_callback: Callable[[SheddingAuditEntry], None] | None = None
         self._initialized = True
 
-        logger.debug("[LoadSheddingManager] Initialized")
+        logger.debug("load_shedding_manager.initialized")
 
     @classmethod
     def reset_instance(cls) -> None:
@@ -98,7 +98,10 @@ class LoadSheddingManager:
     def set_policy(self, policy: LoadSheddingPolicy) -> None:
         """정책 설정."""
         self._policy = policy
-        logger.info(f"[LoadSheddingManager] Policy updated: enabled={policy.enabled}")
+        logger.info(
+            "load_shedding_manager.policy_updated",
+            policy=policy.enabled,
+        )
 
     def set_audit_callback(
         self,
@@ -127,7 +130,11 @@ class LoadSheddingManager:
             bool: 등록 성공 여부
         """
         self._service_configs[config.service_id] = config
-        logger.debug(f"[LoadSheddingManager] Service registered: {config.service_id} " f"(criticality={config.criticality})")
+        logger.debug(
+            "load_shedding_manager.service_registered",
+            config=config.service_id,
+            config_1=config.criticality,
+        )
         return True
 
     def register_services(self, configs: list[ServiceConfig]) -> int:
@@ -343,7 +350,10 @@ class LoadSheddingManager:
             try:
                 self._audit_callback(audit_entry)
             except Exception as e:
-                logger.error(f"[LoadSheddingManager] Audit callback failed: {e}")
+                logger.error(
+                    "load_shedding_manager.audit_callback_failed",
+                    error=e,
+                )
 
         # EventBus로 Shedding 상태 변경 이벤트 발행 (Fail-Open)
         self._publish_shedding_event(
@@ -398,9 +408,12 @@ class LoadSheddingManager:
                 )
             )
         except ImportError:
-            logger.debug("[LoadSheddingManager] EventBus not available for shedding event")
+            logger.debug("load_shedding_manager.eventbus_available_shedding_event")
         except Exception as e:
-            logger.warning(f"[LoadSheddingManager] Failed to publish shedding event: {e}")
+            logger.warning(
+                "load_shedding_manager.failed_publish_shedding_event",
+                error=e,
+            )
 
     def _get_affected_services(self, level_index: int) -> list[ServiceConfig]:
         """현재 레벨에서 영향받는 서비스 목록."""
@@ -477,7 +490,10 @@ class LoadSheddingManager:
     ) -> bool:
         """Shedding 강제 활성화 (테스트/운영용)."""
         if level_index < 0 or level_index >= len(self._policy.levels):
-            logger.warning(f"[LoadSheddingManager] Invalid level index: {level_index}")
+            logger.warning(
+                "load_shedding_manager.invalid_level_index",
+                level_index=level_index,
+            )
             return False
 
         target_level = self._policy.levels[level_index]
@@ -488,7 +504,11 @@ class LoadSheddingManager:
 
         self.update_shedding_state()
 
-        logger.info(f"[LoadSheddingManager] Force activated at level {level_index}: {reason}")
+        logger.info(
+            "load_shedding_manager.force_activated_level",
+            level_index=level_index,
+            reason=reason,
+        )
         return True
 
     def force_deactivate(self, reason: str = "manual_deactivation") -> bool:
@@ -500,7 +520,10 @@ class LoadSheddingManager:
 
         self.update_shedding_state()
 
-        logger.info(f"[LoadSheddingManager] Force deactivated: {reason}")
+        logger.info(
+            "load_shedding_manager.force_deactivated",
+            reason=reason,
+        )
         return True
 
     def reset(self) -> None:
@@ -508,4 +531,4 @@ class LoadSheddingManager:
         self._error_rate_provider.reset()
         self._current_level_index = -1
         self._activated_at = None
-        logger.debug("[LoadSheddingManager] Reset complete")
+        logger.debug("load_shedding_manager.reset_complete")

@@ -15,12 +15,12 @@ Environment Variables:
     SELFHEALING_API_RATE_REDIS_RECOVERY_JITTER_MAX=10
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ApiRateLimitSettings(BaseSettings):

@@ -36,7 +36,7 @@ Note:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 import threading
 from typing import TYPE_CHECKING
@@ -48,7 +48,7 @@ from django.db.models.signals import post_migrate
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # RBAC group definitions
 SELFHEALING_GROUPS: list[str] = [
@@ -82,14 +82,23 @@ def create_selfhealing_groups(sender, **kwargs):
                 existing_groups.append(group_name)
 
         if created_groups:
-            logger.info(f"[SelfHealing] RBAC groups created: {created_groups}")
+            logger.info(
+                "self_healing.rbac_groups_created",
+                created_groups=created_groups,
+            )
 
         if existing_groups and created_groups:
-            logger.debug(f"[SelfHealing] RBAC groups already existed: {existing_groups}")
+            logger.debug(
+                "self_healing.rbac_groups_already_existed",
+                existing_groups=existing_groups,
+            )
 
     except Exception as e:
         # Best-effort: 실패해도 시스템은 시작
-        logger.warning(f"[SelfHealing] Failed to create RBAC groups: {e}")
+        logger.warning(
+            "self_healing.failed_create_rbac_groups",
+            error=e,
+        )
 
 
 class SelfHealingConfig(AppConfig):
@@ -182,7 +191,10 @@ class SelfHealingConfig(AppConfig):
 
             connect_session_signals()
         except Exception as e:
-            logger.warning(f"[SelfHealing] Failed to connect session signals: {e}")
+            logger.warning(
+                "self_healing.failed_connect_session_signals",
+                error=e,
+            )
 
     @staticmethod
     def _autodiscover_celery_tasks():
@@ -197,11 +209,14 @@ class SelfHealingConfig(AppConfig):
             from celery import current_app
 
             current_app.autodiscover_tasks(["selfhealing.celery_tasks"])
-            logger.info("[SelfHealing] Celery tasks autodiscovered from selfhealing.celery_tasks")
+            logger.info("self_healing.celery_tasks_autodiscovered_selfhealing")
         except ImportError:
-            logger.debug("[SelfHealing] Celery not installed, skipping task autodiscovery")
+            logger.debug("self_healing.celery_installed_skipping_task")
         except Exception as e:
-            logger.warning(f"[SelfHealing] Failed to autodiscover celery tasks: {e}")
+            logger.warning(
+                "self_healing.failed_autodiscover_celery_tasks",
+                error=e,
+            )
 
     def _log_env_snapshot(self):
         """
@@ -215,10 +230,13 @@ class SelfHealingConfig(AppConfig):
 
             log_env_snapshot_to_audit()
         except ImportError:
-            logger.debug("[SelfHealing] env_snapshot module not available")
+            logger.debug("self_healing.module_available")
         except Exception as e:
             # Best-effort: 실패해도 시스템은 시작
-            logger.warning(f"[SelfHealing] Failed to log env snapshot: {e}")
+            logger.warning(
+                "self_healing.failed_log_env_snapshot",
+                error=e,
+            )
 
     def _sync_hash_chain_on_startup(self):
         """
@@ -238,7 +256,7 @@ class SelfHealingConfig(AppConfig):
         try:
             # Check if distributed hash chain is enabled
             if not getattr(settings, "SELFHEALING_DISTRIBUTED_HASH_CHAIN", False):
-                logger.debug("[SelfHealing] Distributed hash chain not enabled, skipping sync")
+                logger.debug("self_healing.distributed_hash_chain_enabled")
                 return
 
             from pathlib import Path
@@ -248,7 +266,7 @@ class SelfHealingConfig(AppConfig):
             # Get Redis client
             redis_client = self._get_redis_client_for_hash_chain()
             if redis_client is None:
-                logger.debug("[SelfHealing] Redis client not available for hash chain sync")
+                logger.debug("self_healing.redis_client_available_hash")
                 return
 
             # Get log directory from settings
@@ -273,22 +291,31 @@ class SelfHealingConfig(AppConfig):
                         f"synced to file (seq {result.get('file_sequence')})"
                     )
                 elif action == "fresh_start":
-                    logger.info("[SelfHealing] Hash chain sync: Fresh start (no prior state)")
+                    logger.info("self_healing.hash_chain_sync_fresh")
                 else:
-                    logger.info(f"[SelfHealing] Hash chain sync: {action}")
+                    logger.info(
+                        "self_healing.hash_chain_sync",
+                        action=action,
+                    )
 
                 if pending_cleaned > 0:
                     logger.info(
                         f"[SelfHealing] Hash chain sync: Cleaned {pending_cleaned} " "pending sequences from previous crash"
                     )
             else:
-                logger.warning(f"[SelfHealing] Hash chain sync failed: {result.get('error', 'unknown')}")
+                logger.warning(
+                    "self_healing.hash_chain_sync_failed",
+                    result=result.get('error', 'unknown'),
+                )
 
         except ImportError:
-            logger.debug("[SelfHealing] integrity module not available for hash chain sync")
+            logger.debug("self_healing.integrity_module_available_hash")
         except Exception as e:
             # Best-effort: 실패해도 시스템은 시작
-            logger.warning(f"[SelfHealing] Failed to sync hash chain on startup: {e}")
+            logger.warning(
+                "self_healing.failed_sync_hash_chain",
+                error=e,
+            )
 
     def _get_redis_client_for_hash_chain(self):
         """
@@ -356,22 +383,31 @@ class SelfHealingConfig(AppConfig):
                 changes = validate_startup_config(log_changes=True, raise_on_fatal=False)
 
                 if changes > 0:
-                    logger.info(f"[SelfHealing] Startup config validation: " f"applied {changes} safe default(s)")
+                    logger.info(
+                        "self_healing.startup_config_validation_applied",
+                        changes=changes,
+                    )
                 else:
-                    logger.debug("[SelfHealing] Startup config validation: all settings valid")
+                    logger.debug("self_healing.startup_config_validation_all")
 
             except FatalConfigError as e:
                 # Fatal 설정 위반 시 Quarantine Mode 활성화
                 if ENABLE_QUARANTINE_ON_FATAL:
                     self._activate_quarantine_mode(e)
                 else:
-                    logger.critical(f"[SelfHealing] Fatal config error (Quarantine disabled): {e}")
+                    logger.critical(
+                        "self_healing.fatal_config_error_quarantine",
+                        error=e,
+                    )
 
         except ImportError:
-            logger.debug("[SelfHealing] safe_defaults module not available")
+            logger.debug("self_healing.module_available")
         except Exception as e:
             # Best-effort: 실패해도 시스템은 시작
-            logger.warning(f"[SelfHealing] Failed to validate startup config: {e}")
+            logger.warning(
+                "self_healing.failed_validate_startup_config",
+                error=e,
+            )
 
     def _activate_quarantine_mode(self, error: Exception):
         """
@@ -407,9 +443,12 @@ class SelfHealingConfig(AppConfig):
             )
 
         except ImportError:
-            logger.warning("[SelfHealing] emergency_mode module not available for Quarantine")
+            logger.warning("self_healing.module_available_quarantine")
         except Exception as e:
-            logger.error(f"[SelfHealing] Failed to activate Quarantine Mode: {e}")
+            logger.error(
+                "self_healing.failed_activate_quarantine_mode",
+                error=e,
+            )
 
     # =========================================================================
     # Startup Hydration - 시작 시 Prometheus Gauge 초기화
@@ -426,13 +465,13 @@ class SelfHealingConfig(AppConfig):
         """
         # 설정에서 비활성화된 경우
         if not getattr(settings, "SELFHEALING_SYNC_ON_STARTUP", True):
-            logger.debug("[SelfHealing] Gauge hydration disabled by settings")
+            logger.debug("self_healing.gauge_hydration_disabled_settings")
             return False
 
         # 중복 실행 방지
         with self._hydration_lock:
             if self._hydration_done:
-                logger.debug("[SelfHealing] Gauge hydration already scheduled")
+                logger.debug("self_healing.gauge_hydration_already_scheduled")
                 return False
             SelfHealingConfig._hydration_done = True
             return True
@@ -460,7 +499,11 @@ class SelfHealingConfig(AppConfig):
         timer.daemon = True  # 메인 스레드 종료 시 함께 종료
         timer.start()
 
-        logger.info(f"[SelfHealing] Gauge hydration scheduled in {jitter:.1f}s " f"(max_jitter={jitter_max}s)")
+        logger.info(
+            "self_healing.gauge_hydration_scheduled",
+            jitter=jitter,
+            jitter_max=jitter_max,
+        )
 
     def _hydrate_gauges(self):
         """
@@ -487,7 +530,7 @@ class SelfHealingConfig(AppConfig):
             )
 
         except ImportError:
-            logger.debug("[SelfHealing] reconciler module not available")
+            logger.debug("self_healing.reconciler_module_available")
         except Exception as e:
             # Graceful Degradation: 실패해도 서버 기동은 계속
             logger.warning(
@@ -513,13 +556,13 @@ class SelfHealingConfig(AppConfig):
         """
         # 설정에서 비활성화된 경우
         if not getattr(settings, "SELFHEALING_PRECOMPUTED_CACHE_ENABLED", True):
-            logger.debug("[SelfHealing] Pre-computed cache disabled by settings")
+            logger.debug("self_healing.pre_computed_cache_disabled")
             return
 
         # 중복 실행 방지
         with self._cache_worker_lock:
             if self._cache_worker_started:
-                logger.debug("[SelfHealing] Pre-computed cache worker already started")
+                logger.debug("self_healing.pre_computed_cache_worker")
                 return
             SelfHealingConfig._cache_worker_started = True
 
@@ -541,7 +584,7 @@ class SelfHealingConfig(AppConfig):
             )
 
         except ImportError:
-            logger.debug("[SelfHealing] precomputed_cache module not available")
+            logger.debug("self_healing.module_available")
         except Exception as e:
             # Graceful Degradation: 실패해도 서버 기동은 계속
             logger.warning(
@@ -567,7 +610,7 @@ class SelfHealingConfig(AppConfig):
 
         settings = get_system_metrics_cache_settings()
         if not settings.enabled:
-            logger.debug("[SelfHealing] System metrics cache disabled by settings")
+            logger.debug("self_healing.system_metrics_cache_disabled")
             return
 
         with self._metrics_cache_lock:
@@ -595,7 +638,7 @@ class SelfHealingConfig(AppConfig):
             )
 
         except ImportError:
-            logger.debug("[SelfHealing] system_metrics_cache module not available")
+            logger.debug("self_healing.module_available")
         except Exception as e:
             logger.warning(
                 f"[SelfHealing] Failed to start system metrics cache (non-fatal): {e}. "
@@ -632,18 +675,18 @@ class SelfHealingConfig(AppConfig):
 
         # 환경변수로 비활성화 가능
         if os.environ.get("SELFHEALING_META_ENABLED", "true").lower() != "true":
-            logger.debug("[SelfHealing] Meta-Watchdog disabled by environment variable")
+            logger.debug("self_healing.meta_watchdog_disabled_environment")
             return
 
         # Django settings에서 비활성화된 경우
         if not getattr(settings, "SELFHEALING_META_WATCHDOG_ENABLED", True):
-            logger.debug("[SelfHealing] Meta-Watchdog disabled by Django settings")
+            logger.debug("self_healing.meta_watchdog_disabled_django")
             return
 
         # 중복 실행 방지
         with self._meta_watchdog_lock:
             if self._meta_watchdog_started:
-                logger.debug("[SelfHealing] Meta-Watchdog already started")
+                logger.debug("self_healing.meta_watchdog_already_started")
                 return
             SelfHealingConfig._meta_watchdog_started = True
 
@@ -653,10 +696,10 @@ class SelfHealingConfig(AppConfig):
             watchdog = get_selfhealer_watchdog()
             watchdog.start()
 
-            logger.info("[SelfHealing] Meta-Watchdog started " "(monitoring: circuit_breaker, dlq, redis, recovery_pipeline)")
+            logger.info("self_healing.meta_watchdog_started_monitoring")
 
         except ImportError:
-            logger.debug("[SelfHealing] meta.watchdog module not available")
+            logger.debug("self_healing.meta_watchdog_module_available")
         except Exception as e:
             # Graceful Degradation: 실패해도 서버 기동은 계속
             logger.warning(
@@ -699,11 +742,17 @@ class SelfHealingConfig(AppConfig):
             warning_count = len(result.get("warning", []))
 
             if critical_count > 0:
-                logger.error(f"[SelfHealing] {critical_count} CRITICAL secrets not configured. " "Check logs for details.")
+                logger.error(
+                    "self_healing.critical_secrets_configured_check",
+                    critical_count=critical_count,
+                )
             elif warning_count > 0:
-                logger.warning(f"[SelfHealing] {warning_count} important secrets not configured. " "Check logs for details.")
+                logger.warning(
+                    "self_healing.important_secrets_configured_check",
+                    warning_count=warning_count,
+                )
             else:
-                logger.info("[SelfHealing] All secrets validated successfully")
+                logger.info("self_healing.all_secrets_validated_successfully")
 
         except RuntimeError as e:
             # 프로덕션에서 CRITICAL 시크릿 미설정 → 재발생으로 시작 차단
@@ -722,7 +771,10 @@ class SelfHealingConfig(AppConfig):
             raise
         except Exception as e:
             # 기타 오류 → best-effort로 시작 계속
-            logger.warning(f"[SelfHealing] Secrets validation failed: {e}")
+            logger.warning(
+                "self_healing.secrets_validation_failed",
+                error=e,
+            )
 
     # =========================================================================
     # JWT Blacklist Hook Registration
@@ -740,7 +792,7 @@ class SelfHealingConfig(AppConfig):
             from django.apps import apps
 
             if not apps.is_installed("rest_framework_simplejwt.token_blacklist"):
-                logger.debug("[SelfHealing] token_blacklist not installed, skipping JWT hook")
+                logger.debug("self_healing.installed_skipping_jwt_hook")
                 return
 
             from selfhealing.services.security.hooks import (
@@ -763,16 +815,22 @@ class SelfHealingConfig(AppConfig):
                 return f"jwt_blacklisted({count})" if count > 0 else ""
 
             register_session_invalidation_hook(blacklist_user_jwt)
-            logger.info("[SelfHealing] JWT blacklist hook registered")
+            logger.info("self_healing.jwt_blacklist_hook_registered")
 
             # DONE(#217): OutstandingToken 정리 Celery Beat 등록 완료
             # 태스크: selfhealing/tasks/cleanup_tasks.py flush_expired_jwt_tokens
             # 스케줄: get_cleanup_beat_schedule() + myproject/celery.py (매일 02:30)
 
         except ImportError as e:
-            logger.debug(f"[SelfHealing] JWT hook registration skipped: {e}")
+            logger.debug(
+                "self_healing.jwt_hook_registration_skipped",
+                error=e,
+            )
         except Exception as e:
-            logger.warning(f"[SelfHealing] JWT hook registration failed: {e}")
+            logger.warning(
+                "self_healing.jwt_hook_registration_failed",
+                error=e,
+            )
 
     # =========================================================================
     # Test Helpers

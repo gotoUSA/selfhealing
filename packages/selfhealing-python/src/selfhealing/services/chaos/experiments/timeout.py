@@ -6,7 +6,7 @@ Injects request timeouts to simulate services that hang without responding.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -14,7 +14,7 @@ from selfhealing.services.chaos.base import (
     _apply_chaos_config,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class TimeoutExperiment(ChaosExperiment):
@@ -61,7 +61,10 @@ class TimeoutExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[Timeout] Failed to inject: {e}")
+            logger.error(
+                "timeout.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -73,7 +76,10 @@ class TimeoutExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[Timeout] Rolling back {self.experiment_id}")
+            logger.info(
+                "timeout.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -87,7 +93,10 @@ class TimeoutExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[Timeout] Rollback failed: {e}")
+                logger.error(
+                    "timeout.rollback_failed",
+                    error=e,
+                )
 
 
 __all__ = ["TimeoutExperiment"]

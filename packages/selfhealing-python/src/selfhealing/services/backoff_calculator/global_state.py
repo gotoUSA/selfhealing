@@ -6,13 +6,13 @@ Redis-based global throttle state management for cluster-wide coordination.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
 from .models import GlobalThrottleState, ThrottleState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -69,7 +69,10 @@ class GlobalThrottleStateManager:
                 ),
             )
         except Exception as e:
-            logger.debug(f"[GlobalThrottleState] Failed to report: {e}")
+            logger.debug(
+                "global_throttle_state.failed_report",
+                error=e,
+            )
 
     def get_global_state(self) -> GlobalThrottleState | None:
         """클러스터 전체 상태 조회."""
@@ -107,5 +110,8 @@ class GlobalThrottleStateManager:
                 last_updated=time.time(),
             )
         except Exception as e:
-            logger.debug(f"[GlobalThrottleState] Failed to get: {e}")
+            logger.debug(
+                "global_throttle_state.failed_get",
+                error=e,
+            )
             return None

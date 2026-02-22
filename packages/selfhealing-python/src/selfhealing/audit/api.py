@@ -8,14 +8,14 @@ Provides REST API for managing audit system resilience:
 - Health check endpoint
 """
 
-import logging
+import structlog
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditHealthView(View):
@@ -70,7 +70,10 @@ class AuditHealthView(View):
             )
 
         except Exception as e:
-            logger.error(f"[AuditHealthView] Error: {e}")
+            logger.error(
+                "audit_health_view.error",
+                error=e,
+            )
             return JsonResponse(
                 {
                     "status": "error",
@@ -113,7 +116,10 @@ class CircuitBreakerStatusView(View):
                 )
 
         except Exception as e:
-            logger.error(f"[CircuitBreakerStatusView] Error: {e}")
+            logger.error(
+                "circuit_breaker_status_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -144,7 +150,10 @@ class CircuitBreakerResetView(View):
             )
 
         except Exception as e:
-            logger.error(f"[CircuitBreakerResetView] Error: {e}")
+            logger.error(
+                "circuit_breaker_reset_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -175,7 +184,10 @@ class CircuitBreakerForceOpenView(View):
             )
 
         except Exception as e:
-            logger.error(f"[CircuitBreakerForceOpenView] Error: {e}")
+            logger.error(
+                "circuit_breaker_force_open_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -199,7 +211,10 @@ class CircuitBreakerResetAllView(View):
             )
 
         except Exception as e:
-            logger.error(f"[CircuitBreakerResetAllView] Error: {e}")
+            logger.error(
+                "circuit_breaker_reset_all_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -229,7 +244,10 @@ class AuditMetricsView(View):
                 )
 
         except Exception as e:
-            logger.error(f"[AuditMetricsView] Error: {e}")
+            logger.error(
+                "audit_metrics_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -249,7 +267,10 @@ class DegradedModeStatusView(View):
             return JsonResponse(manager.get_status())
 
         except Exception as e:
-            logger.error(f"[DegradedModeStatusView] Error: {e}")
+            logger.error(
+                "degraded_mode_status_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -298,7 +319,10 @@ class DegradedModeForceView(View):
                 )
 
         except Exception as e:
-            logger.error(f"[DegradedModeForceView] Error: {e}")
+            logger.error(
+                "degraded_mode_force_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -321,7 +345,10 @@ class MetricsResetView(View):
             )
 
         except Exception as e:
-            logger.error(f"[MetricsResetView] Error: {e}")
+            logger.error(
+                "metrics_reset_view.error",
+                error=e,
+            )
             return JsonResponse({"error": str(e)}, status=500)
 
 

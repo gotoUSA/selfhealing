@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+import structlog
 import os
 import threading
 from datetime import datetime, timedelta, timezone
@@ -17,7 +17,7 @@ from typing import Any
 
 from selfhealing.audit.graceful_degradation.enums import FallbackConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HashChainFallbackChain:
@@ -105,7 +105,10 @@ class HashChainFallbackChain:
                 self._stats["primary_writes"] += 1
                 return result
             except Exception as e:
-                logger.warning(f"[FallbackChain] Primary failed: {e}")
+                logger.warning(
+                    "fallback_chain.primary_failed",
+                    error=e,
+                )
                 self._stats["fallback_events"] += 1
 
         # Try Redis Replica (read state, write locally)
@@ -116,7 +119,10 @@ class HashChainFallbackChain:
                 self._stats["replica_reads"] += 1
                 return result
             except Exception as e:
-                logger.warning(f"[FallbackChain] Replica failed: {e}")
+                logger.warning(
+                    "fallback_chain.replica_failed",
+                    error=e,
+                )
                 self._stats["fallback_events"] += 1
 
         # Try Local File
@@ -126,7 +132,10 @@ class HashChainFallbackChain:
             self._stats["local_writes"] += 1
             return result
         except Exception as e:
-            logger.warning(f"[FallbackChain] Local failed: {e}")
+            logger.warning(
+                "fallback_chain.local_failed",
+                error=e,
+            )
             self._stats["fallback_events"] += 1
 
         # Last resort: Memory Buffer
@@ -290,7 +299,10 @@ class HashChainFallbackChain:
             disk_buffer = get_disk_buffer()
             use_disk_buffer = True
         except Exception as e:
-            logger.warning(f"[FallbackChain] DiskBuffer unavailable, using memory: {e}")
+            logger.warning(
+                "fallback_chain.diskbuffer_unavailable_using_memory",
+                error=e,
+            )
             use_disk_buffer = False
 
         with self._lock:
@@ -353,7 +365,10 @@ class HashChainFallbackChain:
             self._local_file_handle.flush()
 
         except Exception as e:
-            logger.error(f"[FallbackChain] Local file write failed: {e}")
+            logger.error(
+                "fallback_chain.local_file_write_failed",
+                error=e,
+            )
 
     def _compute_hash(self, entry: dict[str, Any]) -> str:
         """Compute SHA-256 hash of entry."""

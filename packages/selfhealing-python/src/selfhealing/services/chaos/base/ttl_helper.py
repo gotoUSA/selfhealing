@@ -6,12 +6,12 @@ Provides clock-skew resistant TTL tracking using monotonic time.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -106,7 +106,10 @@ class MonotonicTTLHelper:
     def reset(self) -> None:
         """타이머 리셋 (재시작)."""
         self._start_time = time.monotonic()
-        logger.debug(f"[MonotonicTTL] Timer reset at {self._start_time:.2f}")
+        logger.debug(
+            "monotonic_ttl.timer_reset",
+            self=self._start_time,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """직렬화용 딕셔너리 반환."""

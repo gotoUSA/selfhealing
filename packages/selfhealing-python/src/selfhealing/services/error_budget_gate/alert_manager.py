@@ -10,12 +10,12 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class GateAlertManager:
@@ -62,7 +62,10 @@ class GateAlertManager:
         """
         alert_type = "fail_open"
         if not self._can_send_alert(alert_type):
-            logger.debug(f"[GateAlert] Skipping {alert_type} alert (cooldown)")
+            logger.debug(
+                "gate_alert.skipping_alert_cooldown",
+                alert_type=alert_type,
+            )
             return False
 
         try:
@@ -79,7 +82,10 @@ class GateAlertManager:
             self._record_alert_sent(alert_type)
             return True
         except Exception as e:
-            logger.warning(f"[GateAlert] Failed to send fail_open alert: {e}")
+            logger.warning(
+                "gate_alert.failed_send_alert",
+                error=e,
+            )
             return False
 
     def send_rate_limit_exceeded_alert(self) -> bool:
@@ -100,7 +106,10 @@ class GateAlertManager:
             self._record_alert_sent(alert_type)
             return True
         except Exception as e:
-            logger.warning(f"[GateAlert] Failed to send rate_limit alert: {e}")
+            logger.warning(
+                "gate_alert.failed_send_alert",
+                error=e,
+            )
             return False
 
     def send_circuit_open_alert(self, failure_count: int) -> bool:
@@ -121,7 +130,10 @@ class GateAlertManager:
             self._record_alert_sent(alert_type)
             return True
         except Exception as e:
-            logger.warning(f"[GateAlert] Failed to send circuit_open alert: {e}")
+            logger.warning(
+                "gate_alert.failed_send_alert",
+                error=e,
+            )
             return False
 
     def _send_notification(self, title: str, message: str, severity: str) -> None:
@@ -137,12 +149,22 @@ class GateAlertManager:
                 severity=severity,
                 tags=["error_budget_gate", "fail_open"],
             )
-            logger.info(f"[GateAlert] Sent alert: {title}")
+            logger.info(
+                "gate_alert.sent_alert",
+                title=title,
+            )
         except ImportError:
             # Notification 서비스가 없으면 로그만
-            logger.warning(f"[GateAlert] {title}: {message}")
+            logger.warning(
+                "gate_alert.event",
+                title=title,
+                message=message,
+            )
         except Exception as e:
-            logger.warning(f"[GateAlert] Notification failed: {e}")
+            logger.warning(
+                "gate_alert.notification_failed",
+                error=e,
+            )
 
     def get_status(self) -> dict[str, Any]:
         """알림 상태 조회."""
@@ -158,7 +180,7 @@ class GateAlertManager:
         """알림 쿨다운 리셋."""
         with self._lock:
             self._last_alert_times.clear()
-            logger.info("[GateAlert] Alert cooldowns reset")
+            logger.info("gate_alert.alert_cooldowns_reset")
 
 
 __all__ = [

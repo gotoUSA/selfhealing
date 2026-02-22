@@ -24,7 +24,7 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import logging
+import structlog
 from typing import Any
 
 from django.utils import timezone
@@ -43,7 +43,7 @@ from .scenarios import (
     list_available_scenarios,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -157,7 +157,11 @@ class RunScenarioView(XTestModeMixin, APIView):
             )
 
         except Exception as e:
-            logger.error(f"[X-Test Integration] Scenario {scenario_name} error: {e}")
+            logger.error(
+                "test_integration_scenario_error",
+                scenario_name=scenario_name,
+                error=e,
+            )
             return Response(
                 {
                     "status": "error",
@@ -289,7 +293,10 @@ class FullSnapshotView(XTestModeMixin, APIView):
             else:
                 snapshot["circuit_breakers"] = cb_service.get_all_states()
         except Exception as e:
-            logger.warning(f"[X-Test Integration] CB snapshot failed: {e}")
+            logger.warning(
+                "test_integration_cb_snapshot",
+                error=e,
+            )
             snapshot["circuit_breakers"] = {"error": str(e)}
 
         # Error Budget 상태
@@ -310,7 +317,10 @@ class FullSnapshotView(XTestModeMixin, APIView):
             else:
                 snapshot["error_budget"] = {"status": "available"}
         except Exception as e:
-            logger.warning(f"[X-Test Integration] EB snapshot failed: {e}")
+            logger.warning(
+                "test_integration_eb_snapshot",
+                error=e,
+            )
             snapshot["error_budget"] = {"error": str(e)}
 
         # DLQ 상태
@@ -322,7 +332,10 @@ class FullSnapshotView(XTestModeMixin, APIView):
             stats = dlq_service.get_stats(domain=service_name)
             snapshot["dlq"] = stats
         except Exception as e:
-            logger.warning(f"[X-Test Integration] DLQ snapshot failed: {e}")
+            logger.warning(
+                "test_integration_dlq_snapshot",
+                error=e,
+            )
             snapshot["dlq"] = {"error": str(e)}
 
         # Rate Limiter 상태
@@ -345,7 +358,10 @@ class FullSnapshotView(XTestModeMixin, APIView):
                 },
             }
         except Exception as e:
-            logger.warning(f"[X-Test Integration] Rate Limiter snapshot failed: {e}")
+            logger.warning(
+                "test_integration_rate_limiter",
+                error=e,
+            )
             snapshot["rate_limiter"] = {"error": str(e)}
 
         # Idempotency 상태
@@ -359,7 +375,10 @@ class FullSnapshotView(XTestModeMixin, APIView):
                 "cache_available": idempotency_service._cache is not None,
             }
         except Exception as e:
-            logger.warning(f"[X-Test Integration] Idempotency snapshot failed: {e}")
+            logger.warning(
+                "test_integration_idempotency_snapshot",
+                error=e,
+            )
             snapshot["idempotency"] = {"error": str(e)}
 
         # Retry 상태
@@ -375,7 +394,10 @@ class FullSnapshotView(XTestModeMixin, APIView):
                 "rate_limit_aware": config.rate_limit_aware,
             }
         except Exception as e:
-            logger.warning(f"[X-Test Integration] Retry snapshot failed: {e}")
+            logger.warning(
+                "test_integration_retry_snapshot",
+                error=e,
+            )
             snapshot["retry"] = {"error": str(e)}
 
         # 시스템 스냅샷 추가

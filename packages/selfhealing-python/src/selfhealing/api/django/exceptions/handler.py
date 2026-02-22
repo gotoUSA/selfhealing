@@ -20,7 +20,7 @@ Django REST Framework의 예외 처리를 확장하여 표준화된 에러 응�
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from selfhealing.audit.event_buffer import AuditEventType
     from selfhealing.core.exception_classifier import ClassifiedError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -93,10 +93,10 @@ def _init_metrics():
             )
 
         _METRICS_INITIALIZED = True
-        logger.debug("[ExceptionHandler] Prometheus metrics initialized")
+        logger.debug("exception_handler.prometheus_metrics_initialized")
 
     except ImportError:
-        logger.debug("[ExceptionHandler] prometheus_client not available, metrics disabled")
+        logger.debug("exception_handler.available_metrics_disabled")
         _METRICS_INITIALIZED = True
 
 
@@ -125,7 +125,10 @@ def _record_metrics(
             _api_exception_by_category.labels(category=category).inc()
 
     except Exception as e:
-        logger.debug(f"[ExceptionHandler] Failed to record metrics: {e}")
+        logger.debug(
+            "adaptive_throttle.metrics_failed",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -191,7 +194,11 @@ def selfhealing_exception_handler(
 
     # Pool Timeout 우선 처리 (SQLAlchemy 연동)
     if _is_pool_timeout(exc):
-        logger.error(f"[ExceptionHandler] Pool Timeout detected: {type(exc).__name__}: {exc}")
+        logger.error(
+            "exception_handler.pool_timeout_detected",
+            value=type(exc).__name__,
+            error=exc,
+        )
 
         # 표준 응답 생성 (SERVICE_UNAVAILABLE)
         from .classifier import ClassifiedError, ExceptionCategory
@@ -318,14 +325,21 @@ def _init_causation_context(request_id: str | None) -> str | None:
 
         _current_causation.set(info)
 
-        logger.debug(f"[ExceptionHandler] Initialized CausationContext: " f"cascade_id={cascade_id}, trigger={trigger_id}")
+        logger.debug(
+            "exception_handler.initialized_causationcontext",
+            cascade_id=cascade_id,
+            trigger_id=trigger_id,
+        )
 
         return cascade_id
 
     except ImportError:
         return None
     except Exception as e:
-        logger.debug(f"[ExceptionHandler] Failed to init CausationContext: {e}")
+        logger.debug(
+            "exception_handler.failed_init_causationcontext",
+            error=e,
+        )
         return None
 
 
@@ -437,7 +451,10 @@ def _record_audit_event(
 
     except Exception as e:
         # Audit 실패가 응답을 막지 않음
-        logger.debug(f"[ExceptionHandler] Failed to record audit event: {e}")
+        logger.debug(
+            "exception_handler.failed_record_audit_event",
+            error=e,
+        )
 
 
 def _get_audit_event_type(classified: ClassifiedError) -> AuditEventType:

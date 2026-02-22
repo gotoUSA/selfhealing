@@ -8,13 +8,13 @@ Enums, dataclasses, and configuration for security notifications.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from enum import Enum
 
 from selfhealing.settings import get_config
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

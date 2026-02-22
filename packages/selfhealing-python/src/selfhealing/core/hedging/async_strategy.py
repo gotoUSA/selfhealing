@@ -7,7 +7,7 @@ Bulkhead/Backpressure 연동 및 동적 설정 변경을 지원합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Awaitable, Callable, TypeVar
 
 from selfhealing.core.fallback_strategy import (
@@ -32,7 +32,7 @@ from selfhealing.core.hedging.metrics import (
 )
 from selfhealing.core.hedging.otel import hedging_span, record_hedging_result
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -98,7 +98,7 @@ class AsyncHedgingStrategy:
 
                 self._bulkhead_registry = get_bulkhead_registry()
             except ImportError:
-                logger.debug("[AsyncHedgingStrategy] Bulkhead registry not available")
+                logger.debug("async_hedging_strategy.bulkhead_registry_available")
 
         # 현재 Backpressure 레벨
         self._current_load_level: str = "none"
@@ -119,11 +119,14 @@ class AsyncHedgingStrategy:
                 EventType.CONFIG_UPDATED,
                 self._on_config_updated,
             )
-            logger.debug("[AsyncHedgingStrategy] Subscribed to CONFIG_UPDATED")
+            logger.debug("async_hedging_strategy.subscribed")
         except ImportError:
-            logger.debug("[AsyncHedgingStrategy] EventBus not available")
+            logger.debug("async_hedging_strategy.eventbus_available")
         except Exception as e:
-            logger.warning(f"[AsyncHedgingStrategy] Failed to subscribe: {e}")
+            logger.warning(
+                "async_hedging_strategy.failed_subscribe",
+                error=e,
+            )
 
     def _on_config_updated(self, event: any) -> None:
         """설정 변경 이벤트 처리."""
@@ -137,19 +140,34 @@ class AsyncHedgingStrategy:
 
                 try:
                     self._config.mode = HedgingMode(config_value)
-                    logger.info(f"[AsyncHedgingStrategy] Mode changed to: {config_value}")
+                    logger.info(
+                        "async_hedging_strategy.mode_changed",
+                        config_value=config_value,
+                    )
                 except ValueError:
-                    logger.warning(f"[AsyncHedgingStrategy] Invalid mode: {config_value}")
+                    logger.warning(
+                        "async_hedging_strategy.invalid_mode",
+                        config_value=config_value,
+                    )
 
             elif config_key == "hedging.delay" and config_value is not None:
                 self._config.delay = float(config_value)
-                logger.info(f"[AsyncHedgingStrategy] Delay changed to: {config_value}")
+                logger.info(
+                    "async_hedging_strategy.delay_changed",
+                    config_value=config_value,
+                )
 
             elif config_key == "backpressure.level" and config_value:
                 self._current_load_level = config_value.lower()
-                logger.info(f"[AsyncHedgingStrategy] Load level updated: " f"{self._current_load_level}")
+                logger.info(
+                    "async_hedging_strategy.load_level_updated",
+                    self=self._current_load_level,
+                )
         except Exception as e:
-            logger.warning(f"[AsyncHedgingStrategy] Config update error: {e}")
+            logger.warning(
+                "async_hedging_strategy.config_update_error",
+                error=e,
+            )
 
     def _get_effective_delay(self) -> float:
         """현재 부하 레벨에 따른 실제 delay 반환."""
@@ -183,7 +201,10 @@ class AsyncHedgingStrategy:
                     return await bulkhead.try_acquire_async()
                 return bulkhead.try_acquire()
         except Exception as e:
-            logger.warning(f"[AsyncHedgingStrategy] Bulkhead acquire error: {e}")
+            logger.warning(
+                "async_hedging_strategy.bulkhead_acquire_error",
+                error=e,
+            )
         return True
 
     def _release_bulkhead(self) -> None:
@@ -196,7 +217,10 @@ class AsyncHedgingStrategy:
             if bulkhead:
                 bulkhead.release()
         except Exception as e:
-            logger.warning(f"[AsyncHedgingStrategy] Bulkhead release error: {e}")
+            logger.warning(
+                "async_hedging_strategy.bulkhead_release_error",
+                error=e,
+            )
 
     async def execute(
         self,
@@ -217,14 +241,17 @@ class AsyncHedgingStrategy:
         """
         # Backpressure 체크: 높은 부하 시 헷징 비활성화
         if self._should_disable_hedging():
-            logger.warning(f"[AsyncHedgingStrategy] Hedging disabled due to load: " f"{self._current_load_level}")
+            logger.warning(
+                "async_hedging_strategy.hedging_disabled_due_load",
+                self=self._current_load_level,
+            )
             record_hedging_disabled(self._current_load_level)
             return await self._execute_single(primary_fn, default_value)
 
         # Bulkhead 획득
         if not self._config.acquire_bulkhead_per_candidate:
             if not await self._acquire_bulkhead_async():
-                logger.warning("[AsyncHedgingStrategy] Bulkhead full, fallback to single")
+                logger.warning("async_hedging_strategy.bulkhead_full_fallback_single")
                 return await self._execute_single(primary_fn, default_value)
 
         original_delay = self._config.delay
@@ -275,7 +302,10 @@ class AsyncHedgingStrategy:
                 )
 
         except HedgingError as e:
-            logger.warning(f"[AsyncHedgingStrategy] All candidates failed: {e}")
+            logger.warning(
+                "async_hedging_strategy.all_candidates_failed",
+                error=e,
+            )
             record_hedging_failure()
 
             final_default = default_value or self._default_value

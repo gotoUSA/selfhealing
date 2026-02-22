@@ -18,7 +18,7 @@ Apply Strategies:
 - graceful: Wait for in-progress operations to complete
 """
 
-import logging
+import structlog
 
 from django.http import Http404
 from django.utils import timezone
@@ -48,7 +48,7 @@ from selfhealing.api.django.serializers.config import (
 )
 from selfhealing.services.runtime_config import get_runtime_config_manager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AllConfigView(APIView):
@@ -104,7 +104,10 @@ class ResetConfigView(APIView):
         manager = get_runtime_config_manager()
         config = manager.reset_to_defaults()
 
-        logger.info(f"[ConfigAPI] All config reset to defaults by {request.user}")
+        logger.info(
+            "config_api.all_config_reset_defaults",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -276,7 +279,10 @@ class BaseConfigView(APIView):
             )
         except Exception as log_err:
             # Fallback to basic logging - never let logging failure affect the API
-            logger.warning(f"[ConfigAPI] Semantic log formatting failed: {log_err}. " f"Falling back to basic log.")
+            logger.warning(
+                "config_api.semantic_log_formatting_failed",
+                log_err=log_err,
+            )
             logger.info(
                 f"[ConfigAPI] {self.config_name} config updated by {request.user}: "
                 f"changes={config_changes}, strategy={result.get('applied_strategy')}"
@@ -439,7 +445,10 @@ class SLOConfigView(BaseConfigView):
             slos=validated.get("slos"),
         )
 
-        logger.info(f"[ConfigAPI] SLO config updated by {request.user}")
+        logger.info(
+            "config_api.slo_config_updated",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -461,7 +470,11 @@ class SLOConfigView(BaseConfigView):
         result = manager.delete_slo(slo_name)
 
         if result.get("status") == "deleted":
-            logger.info(f"[ConfigAPI] SLO '{slo_name}' deleted by {request.user}")
+            logger.info(
+                "config_api.slo_deleted",
+                slo_name=slo_name,
+                request=request.user,
+            )
             return Response(
                 {
                     **result,

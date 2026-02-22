@@ -22,14 +22,14 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -562,7 +562,10 @@ class EscalationAuditTrail:
             fallback = CriticalPathFallback()
             fallback.append_audit_log(entry.to_dict())
         except Exception as e:
-            logger.debug(f"[EscalationAudit] Fallback persist skipped: {e}")
+            logger.debug(
+                "escalation_audit.fallback_persist_skipped",
+                error=e,
+            )
 
 
 # =============================================================================

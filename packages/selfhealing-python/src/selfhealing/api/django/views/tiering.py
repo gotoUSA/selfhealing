@@ -16,7 +16,7 @@ Endpoints:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from django.utils import timezone
@@ -44,7 +44,7 @@ from selfhealing.api.django.tiering.models import (
 )
 from selfhealing.api.django.tiering.registry import get_tier_registry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -247,7 +247,10 @@ class TierDefinitionsView(APIView):
                 user=request.user.username,
             )
         except Exception as e:
-            logger.warning(f"[TierAPI] Failed to log change: {e}")
+            logger.warning(
+                "tier_api.failed_log_change",
+                error=e,
+            )
 
 
 class TierMappingsView(APIView):
@@ -321,7 +324,10 @@ class TierMappingsView(APIView):
                 user=request.user.username,
             )
         except Exception as e:
-            logger.warning(f"[TierAPI] Failed to log change: {e}")
+            logger.warning(
+                "tier_api.failed_log_change",
+                error=e,
+            )
 
 
 class TierOverridesView(APIView):
@@ -405,7 +411,10 @@ class TierOverridesView(APIView):
                 user=request.user.username,
             )
         except Exception as e:
-            logger.warning(f"[TierAPI] Failed to log change: {e}")
+            logger.warning(
+                "tier_api.failed_log_change",
+                error=e,
+            )
 
 
 class TierDryRunView(APIView):
@@ -507,7 +516,10 @@ class TierResetView(APIView):
                 user=request.user.username,
             )
         except Exception as e:
-            logger.warning(f"[TierAPI] Failed to log reset: {e}")
+            logger.warning(
+                "tier_api.failed_log_reset",
+                error=e,
+            )
 
         return Response(
             {
@@ -587,7 +599,10 @@ class TierImportView(APIView):
                 user=request.user.username,
             )
         except Exception as e:
-            logger.warning(f"[TierAPI] Failed to log import: {e}")
+            logger.warning(
+                "tier_api.failed_log_import",
+                error=e,
+            )
 
         return Response(
             {

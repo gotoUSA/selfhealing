@@ -6,12 +6,12 @@ Throttle EventBus 연동 핸들러.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from . import SelfHealingEvent, EventType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _on_emergency_level_changed_throttle(event: SelfHealingEvent) -> None:
@@ -47,9 +47,12 @@ def _on_emergency_level_changed_throttle(event: SelfHealingEvent) -> None:
             f"[Throttle] Emergency level {previous_level} → {level}, " f"limit: {previous_limit} → {throttle.current_limit}"
         )
     except ImportError:
-        logger.debug("[EventHandler] Throttle module not available")
+        logger.debug("event_handler.throttle_module_available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to adjust throttle for emergency: {e}")
+        logger.warning(
+            "event_handler.failed_adjust_throttle_emergency",
+            error=e,
+        )
 
 
 def _on_emergency_deactivated_throttle(event: SelfHealingEvent) -> None:
@@ -72,11 +75,18 @@ def _on_emergency_deactivated_throttle(event: SelfHealingEvent) -> None:
         # level 0으로 복구
         throttle.adjust_for_emergency(0)
 
-        logger.info(f"[Throttle] Emergency deactivated, " f"limit restored: {previous_limit} → {throttle.current_limit}")
+        logger.info(
+            "throttle.emergency_deactivated_limit_restored",
+            previous_limit=previous_limit,
+            throttle=throttle.current_limit,
+        )
     except ImportError:
-        logger.debug("[EventHandler] Throttle module not available")
+        logger.debug("event_handler.throttle_module_available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to restore throttle after emergency: {e}")
+        logger.warning(
+            "event_handler.failed_restore_throttle_after",
+            error=e,
+        )
 
 
 def _on_circuit_breaker_opened_throttle(event: SelfHealingEvent) -> None:
@@ -121,11 +131,19 @@ def _on_circuit_breaker_opened_throttle(event: SelfHealingEvent) -> None:
             cb_state="open",
         )
 
-        logger.info(f"[Throttle] CB OPEN for {service_name}, " f"limit: {previous_limit} → {throttle.current_limit}")
+        logger.info(
+            "throttle.cb_open_limit",
+            service_name=service_name,
+            previous_limit=previous_limit,
+            throttle=throttle.current_limit,
+        )
     except ImportError:
-        logger.debug("[EventHandler] Throttle module not available")
+        logger.debug("event_handler.throttle_module_available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to adjust throttle for CB OPEN: {e}")
+        logger.warning(
+            "event_handler.failed_adjust_throttle_cb",
+            error=e,
+        )
 
 
 def _on_circuit_breaker_half_opened_throttle(event: SelfHealingEvent) -> None:
@@ -168,9 +186,12 @@ def _on_circuit_breaker_half_opened_throttle(event: SelfHealingEvent) -> None:
             f"limit: {previous_limit} → {throttle.current_limit} (recovery test mode)"
         )
     except ImportError:
-        logger.debug("[EventHandler] Throttle module not available")
+        logger.debug("event_handler.throttle_module_available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to adjust throttle for CB HALF_OPEN: {e}")
+        logger.warning(
+            "event_handler.failed_adjust_throttle_cb",
+            error=e,
+        )
 
 
 def _on_circuit_breaker_closed_throttle(event: SelfHealingEvent) -> None:
@@ -211,9 +232,12 @@ def _on_circuit_breaker_closed_throttle(event: SelfHealingEvent) -> None:
             f"[Throttle] CB CLOSED for {service_name}, " f"limit: {previous_limit} → {throttle.current_limit} (recovery mode)"
         )
     except ImportError:
-        logger.debug("[EventHandler] Throttle module not available")
+        logger.debug("event_handler.throttle_module_available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to adjust throttle for CB CLOSED: {e}")
+        logger.warning(
+            "event_handler.failed_adjust_throttle_cb",
+            error=e,
+        )
 
 
 def _on_error_budget_critical_throttle(event: SelfHealingEvent) -> None:
@@ -244,9 +268,12 @@ def _on_error_budget_critical_throttle(event: SelfHealingEvent) -> None:
             f"limit: {previous_limit} → {throttle.current_limit} (×0.5)"
         )
     except ImportError:
-        logger.debug("[EventHandler] Throttle module not available")
+        logger.debug("event_handler.throttle_module_available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to adjust throttle for error budget: {e}")
+        logger.warning(
+            "event_handler.failed_adjust_throttle_error",
+            error=e,
+        )
 
 
 def _on_error_budget_recovered_throttle(event: SelfHealingEvent) -> None:
@@ -269,11 +296,17 @@ def _on_error_budget_recovered_throttle(event: SelfHealingEvent) -> None:
         # Recovery Dampening 시작 (Jitter 적용)
         throttle.start_recovery_dampening(apply_jitter=True)
 
-        logger.info(f"[Throttle] Error budget recovered, " f"starting recovery dampening from {throttle.current_limit}")
+        logger.info(
+            "throttle.error_budget_recovered_starting",
+            throttle=throttle.current_limit,
+        )
     except ImportError:
-        logger.debug("[EventHandler] Throttle module not available")
+        logger.debug("event_handler.throttle_module_available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to start recovery dampening: {e}")
+        logger.warning(
+            "event_handler.failed_start_recovery_dampening",
+            error=e,
+        )
 
 
 def _on_kill_switch_activated_throttle(event: SelfHealingEvent) -> None:
@@ -296,8 +329,15 @@ def _on_kill_switch_activated_throttle(event: SelfHealingEvent) -> None:
         # min_limit으로 고정
         throttle.current_limit = throttle.config.min_limit
 
-        logger.warning(f"[Throttle] Kill switch activated, " f"limit: {previous_limit} → {throttle.current_limit}")
+        logger.warning(
+            "throttle.kill_switch_activated_limit",
+            previous_limit=previous_limit,
+            throttle=throttle.current_limit,
+        )
     except ImportError:
-        logger.debug("[EventHandler] Throttle module not available")
+        logger.debug("event_handler.throttle_module_available")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to adjust throttle for kill switch: {e}")
+        logger.warning(
+            "event_handler.failed_adjust_throttle_kill",
+            error=e,
+        )

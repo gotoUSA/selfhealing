@@ -4,9 +4,9 @@ L2 Storage API Common Utilities.
 Shared utility functions for L2 storage API views.
 """
 
-import logging
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def get_layered_repository():
@@ -26,7 +26,10 @@ def get_layered_repository():
             return repo
         return None
     except Exception as e:
-        logger.warning(f"[L2StorageAPI] Failed to get layered repository: {e}")
+        logger.warning(
+            "l2_storage_api.failed_get_layered_repository",
+            error=e,
+        )
         return None
 
 
@@ -37,5 +40,8 @@ def get_shadow_logger():
 
         return get_shadow_logger()
     except Exception as e:
-        logger.warning(f"[L2StorageAPI] Failed to get shadow logger: {e}")
+        logger.warning(
+            "l2_storage_api.failed_get_shadow_logger",
+            error=e,
+        )
         return None

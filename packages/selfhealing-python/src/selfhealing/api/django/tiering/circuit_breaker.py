@@ -7,11 +7,11 @@ When RegEx evaluation is slow or failing, bypass tiering and use static fallback
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class TieringCircuitBreaker:
@@ -60,7 +60,7 @@ class TieringCircuitBreaker:
                     and time.time() - self._last_failure_time > self.HALF_OPEN_DELAY_SEC
                 ):
                     self._state = "HALF_OPEN"
-                    logger.info("[TieringCB] Transitioning to HALF_OPEN")
+                    logger.info("tiering_cb.transitioning")
                     return False
                 return True
             return False
@@ -76,7 +76,7 @@ class TieringCircuitBreaker:
         with self._state_lock:
             if self._state == "HALF_OPEN":
                 self._state = "CLOSED"
-                logger.info("[TieringCB] CLOSED - recovered")
+                logger.info("tiering_cb.closed_recovered")
                 self._record_metrics(is_open=False)
 
             self._failure_count = 0
@@ -103,7 +103,10 @@ class TieringCircuitBreaker:
         """Open the circuit breaker."""
         self._state = "OPEN"
         self._last_failure_time = time.time()
-        logger.critical(f"[TieringCB] OPEN - {reason}")
+        logger.critical(
+            "tiering_cb.open",
+            reason=reason,
+        )
         self._record_metrics(is_open=True)
         self._log_shadow_audit(reason)
 
@@ -141,7 +144,10 @@ class TieringCircuitBreaker:
                 user="system",
             )
         except Exception as e:
-            logger.error(f"[TieringCB] Shadow audit failed: {e}")
+            logger.error(
+                "tiering_cb.shadow_audit_failed",
+                error=e,
+            )
 
     def reset(self):
         """Reset circuit breaker (for testing)."""

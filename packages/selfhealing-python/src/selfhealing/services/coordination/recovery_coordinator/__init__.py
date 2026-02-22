@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
-import logging
+import structlog
 import threading
 import uuid
 from collections.abc import Callable
@@ -61,7 +61,7 @@ if TYPE_CHECKING:
     from ..idempotent_step_handlers import IdempotentStepHandlerRegistry
     from ..regional_recovery_policy import RegionalRecoveryPolicyEngine
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -290,7 +290,7 @@ class RecoveryCoordinator(
             self._regional_policy_engine = get_regional_recovery_policy_engine()
             return self._regional_policy_engine
         except ImportError:
-            logger.warning("[Recovery] RegionalRecoveryPolicyEngine not available")
+            logger.warning("recovery.regionalrecoverypolicyengine_available")
             return None
     def _get_idempotent_registry(self) -> IdempotentStepHandlerRegistry | None:
         """멱등성 핸들러 레지스트리 획득 (Phase 2.7)."""
@@ -306,7 +306,7 @@ class RecoveryCoordinator(
             self._idempotent_registry = get_idempotent_step_handler_registry()
             return self._idempotent_registry
         except ImportError:
-            logger.warning("[Recovery] IdempotentStepHandlerRegistry not available")
+            logger.warning("recovery.idempotentstephandlerregistry_available")
             return None
     def _get_audit_recorder(self) -> RecoveryAuditRecorder:
         """
@@ -334,7 +334,7 @@ class RecoveryCoordinator(
 
             return get_cascade_event_auditor()
         except ImportError:
-            logger.debug("[Recovery] CascadeEventAuditor not available")
+            logger.debug("recovery.cascadeeventauditor_available")
             return None
     def _record_cascade_event(
         self,
@@ -361,7 +361,11 @@ class RecoveryCoordinator(
         """
         cascade_auditor = self._get_cascade_auditor()
         if not cascade_auditor:
-            logger.debug(f"[Recovery] CascadeEvent skipped: no auditor, " f"trigger={trigger_type}, session={session.id}")
+            logger.debug(
+                "recovery.cascadeevent_skipped_no_auditor",
+                trigger_type=trigger_type,
+                session=session.id,
+            )
             return None
 
         try:
@@ -389,7 +393,12 @@ class RecoveryCoordinator(
             return cascade_event.id
 
         except Exception as e:
-            logger.warning(f"[Recovery] CascadeEvent recording failed: {e}, " f"trigger={trigger_type}, session={session.id}")
+            logger.warning(
+                "recovery.cascadeevent_recording_failed",
+                error=e,
+                trigger_type=trigger_type,
+                session=session.id,
+            )
             return None
     def _get_backend(self) -> StateBackend:
         """StateBackend 인스턴스 획득."""
@@ -649,7 +658,12 @@ class RecoveryCoordinator(
 
                 self._fail_session(session, step.error_message)
 
-                logger.error(f"[Recovery] Step timeout: {step.step_type.value}, " f"session={session.id}, timeout={timeout}s")
+                logger.error(
+                    "recovery.step_timeout",
+                    step_type=step.step_type.value,
+                    session=session.id,
+                    timeout=timeout,
+                )
 
             except Exception as e:
                 step.status = RecoveryStatus.FAILED
@@ -659,7 +673,11 @@ class RecoveryCoordinator(
 
                 self._fail_session(session, str(e))
 
-                logger.exception(f"[Recovery] Step exception: {step.step_type.value}, " f"session={session.id}")
+                logger.exception(
+                    "recovery.step_exception",
+                    step_type=step.step_type.value,
+                    session=session.id,
+                )
 
             self._save_session(session)
             return step
@@ -783,7 +801,11 @@ class RecoveryCoordinator(
             # 락 해제
             self._recovery_lock.release(namespace, session.id)
 
-            logger.warning(f"[Recovery] Aborted: id={session.id}, reason={reason}")
+            logger.warning(
+                "recovery.aborted",
+                session=session.id,
+                reason=reason,
+            )
 
             return session
     def get_active_session(

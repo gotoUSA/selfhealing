@@ -24,7 +24,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.settings.audit_reconciler import AuditReconcilerSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -254,7 +254,10 @@ class AuditReconciler:
 
             return _get_wal()
         except Exception as e:
-            logger.warning(f"[AuditReconciler] Failed to get WAL: {e}")
+            logger.warning(
+                "audit_reconciler.failed_get_wal",
+                error=e,
+            )
             return None
 
     def _get_adapter(self) -> Any:
@@ -267,7 +270,10 @@ class AuditReconciler:
 
             return ProviderRegistry.get_audit_adapter()
         except Exception as e:
-            logger.debug(f"[AuditReconciler] Adapter not available: {e}")
+            logger.debug(
+                "audit_reconciler.adapter_available",
+                error=e,
+            )
             return None
 
     def start(self) -> bool:
@@ -290,7 +296,7 @@ class AuditReconciler:
                 daemon=True,
             )
             self._thread.start()
-            logger.info("[AuditReconciler] Started")
+            logger.info("audit_reconciler.started")
             return True
 
     def stop(self, timeout: float = 1.0) -> None:
@@ -310,9 +316,9 @@ class AuditReconciler:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
-                logger.warning("[AuditReconciler] Thread did not stop gracefully")
+                logger.warning("audit_reconciler.thread_stop_gracefully")
 
-        logger.info("[AuditReconciler] Stopped")
+        logger.info("audit_reconciler.stopped")
 
     def _run_loop(self) -> None:
         """메인 검증 루프."""
@@ -343,7 +349,10 @@ class AuditReconciler:
                 )
 
             except Exception as e:
-                logger.error(f"[AuditReconciler] Reconcile loop error: {e}")
+                logger.error(
+                    "audit_reconciler.reconcile_loop_error",
+                    error=e,
+                )
                 with self._lock:
                     self._stats.consecutive_failures += 1
 
@@ -393,7 +402,10 @@ class AuditReconciler:
 
         except Exception as e:
             result.error = str(e)
-            logger.error(f"[AuditReconciler] Reconcile error: {e}")
+            logger.error(
+                "audit_reconciler.reconcile_error",
+                error=e,
+            )
 
         result.duration_ms = (time.time() - start_time) * 1000
         return result
@@ -484,7 +496,10 @@ class AuditReconciler:
                 except Exception as e:
                     if attempt == self._config.max_resend_attempts - 1:
                         failed += 1
-                        logger.warning(f"[AuditReconciler] Failed to resend entry: {e}")
+                        logger.warning(
+                            "audit_reconciler.failed_resend_entry",
+                            error=e,
+                        )
                     else:
                         time.sleep(0.1 * (attempt + 1))  # 간단한 백오프
 
@@ -507,7 +522,10 @@ class AuditReconciler:
             try:
                 self._on_alert(alert_type, details)
             except Exception as e:
-                logger.warning(f"[AuditReconciler] Failed to send alert: {e}")
+                logger.warning(
+                    "audit_reconciler.failed_send_alert",
+                    error=e,
+                )
 
         # 메트릭에도 기록
         try:
@@ -518,7 +536,11 @@ class AuditReconciler:
         except Exception:
             pass
 
-        logger.warning(f"[AuditReconciler] ALERT: {alert_type} - {details}")
+        logger.warning(
+            "audit_reconciler.alert",
+            alert_type=alert_type,
+            details=details,
+        )
 
     def reconcile_now(self) -> ReconcileResult:
         """

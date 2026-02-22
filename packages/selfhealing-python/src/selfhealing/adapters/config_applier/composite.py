@@ -5,10 +5,10 @@ appliers 리스트를 순서대로 순회하며, 첫 번째로 처리 가능한
 applier가 요청을 수행한다. 어떤 applier도 처리하지 못하면 False를 반환한다.
 """
 
-import logging
+import structlog
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ConfigApplierProtocol(Protocol):
@@ -50,7 +50,11 @@ class CompositeConfigApplier:
         for applier in self._appliers:
             if applier.apply(parameter, value):
                 return True
-        logger.warning(f"[CompositeConfigApplier] No applier handled: {parameter}={value}")
+        logger.warning(
+            "composite_config_applier.no_applier_handled",
+            parameter=parameter,
+            value=value,
+        )
         return False
 
     def rollback(self, parameter: str, value: float) -> bool:

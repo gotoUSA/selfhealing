@@ -16,7 +16,7 @@ Region Replicator - 리전 간 데이터 복제.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import queue
 import re
 import threading
@@ -31,7 +31,7 @@ from selfhealing.multiregion.config import (
     get_multiregion_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ReplicationEventType(str, Enum):
@@ -260,7 +260,7 @@ class RedisReplicationTarget:
                     decode_responses=True,
                 )
             except ImportError:
-                logger.error("[Replicator] redis package not installed")
+                logger.error("replicator.redis_package_installed")
                 raise
         return self._client
 
@@ -297,7 +297,11 @@ class RedisReplicationTarget:
 
             return True
         except Exception as e:
-            logger.error(f"[Replicator] Apply event error to {self.endpoint.region}: {e}")
+            logger.error(
+                "replicator.apply_event_error",
+                self=self.endpoint.region,
+                error=e,
+            )
             return False
 
     def is_connected(self) -> bool:
@@ -384,7 +388,10 @@ class RegionReplicator:
         """
         # 필터링
         if not self._filter.should_replicate(event.key):
-            logger.debug(f"[Replicator] Filtered out: {event.key}")
+            logger.debug(
+                "replicator.filtered_out",
+                event=event.key,
+            )
             with self._stats_lock:
                 self._stats["filtered"] += 1
             return True  # 필터링됨 (성공으로 처리)
@@ -402,7 +409,7 @@ class RegionReplicator:
                     self._stats["enqueued"] += 1
                 return True
             except queue.Full:
-                logger.warning("[Replicator] Queue full, dropping event")
+                logger.warning("replicator.queue_full_dropping_event")
                 with self._stats_lock:
                     self._stats["dropped"] += 1
                 return False
@@ -450,7 +457,10 @@ class RegionReplicator:
                     batch = []
 
             except Exception as e:
-                logger.error(f"[Replicator] Worker error: {e}")
+                logger.error(
+                    "replicator.worker_error",
+                    error=e,
+                )
 
     def _replicate_batch(self, events: list[ReplicationEvent]) -> None:
         """배치 복제."""
@@ -464,7 +474,11 @@ class RegionReplicator:
                         with self._stats_lock:
                             self._stats["failed"] += 1
                 except Exception as e:
-                    logger.error(f"[Replicator] Batch apply error to {target.endpoint.region}: {e}")
+                    logger.error(
+                        "replicator.batch_apply_error",
+                        target=target.endpoint.region,
+                        error=e,
+                    )
                     with self._stats_lock:
                         self._stats["failed"] += 1
 
@@ -491,7 +505,10 @@ class RegionReplicator:
         resolved_event = resolver.resolve(event)
 
         if resolved_event is None:
-            logger.debug(f"[Replicator] Event dropped by conflict resolver: {event.key}")
+            logger.debug(
+                "replicator.event_dropped_conflict_resolver",
+                event=event.key,
+            )
             return True
 
         # 로컬 적용
@@ -523,13 +540,16 @@ class RegionReplicator:
 
             return True
         except Exception as e:
-            logger.error(f"[Replicator] Local apply error: {e}")
+            logger.error(
+                "replicator.local_apply_error",
+                error=e,
+            )
             return False
 
     def start(self) -> None:
         """복제 시작."""
         if not self._settings.enabled:
-            logger.info("[Replicator] Multi-region disabled")
+            logger.info("replicator.multi_region_disabled")
             return
 
         if self._running:
@@ -548,7 +568,11 @@ class RegionReplicator:
                 worker.start()
                 self._workers.append(worker)
 
-        logger.info(f"[Replicator] Started (mode={self._settings.replication_mode}, " f"workers={len(self._workers)})")
+        logger.info(
+            "replicator.started",
+            self=self._settings.replication_mode,
+            count=len(self._workers),
+        )
 
     def stop(self) -> None:
         """복제 중지."""
@@ -556,7 +580,7 @@ class RegionReplicator:
         for worker in self._workers:
             worker.join(timeout=5.0)
         self._workers.clear()
-        logger.info("[Replicator] Stopped")
+        logger.info("replicator.stopped")
 
     def get_queue_size(self) -> int:
         """큐 크기 반환."""
@@ -581,14 +605,20 @@ class RegionReplicator:
         for endpoint in new_endpoints:
             if endpoint.region not in current_regions:
                 self._targets.append(RedisReplicationTarget(endpoint))
-                logger.info(f"[Replicator] Added target: {endpoint.region}")
+                logger.info(
+                    "replicator.added_target",
+                    endpoint=endpoint.region,
+                )
 
         # 제거된 리전
         removed = current_regions - new_regions
         if removed:
             self._targets = [t for t in self._targets if t.endpoint.region in new_regions]
             for region in removed:
-                logger.info(f"[Replicator] Removed target: {region}")
+                logger.info(
+                    "replicator.removed_target",
+                    region=region,
+                )
 
         return len(self._targets)
 

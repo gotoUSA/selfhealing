@@ -22,7 +22,7 @@ HTTP 헤더 규약:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import re
 import time
@@ -30,7 +30,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Generator
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Deadline 기능 활성화 여부 (환경변수: SELFHEALING_DEADLINE_ENABLED)
 DEADLINE_ENABLED: bool = os.environ.get("SELFHEALING_DEADLINE_ENABLED", "true").lower() in (
@@ -145,7 +145,10 @@ def parse_deadline_header(header_value: str) -> float | None:
     if match:
         return float(match.group(1))
 
-    logger.debug("[DeadlineContext] Failed to parse header: %s", header_value)
+    logger.debug(
+        "deadline_context.failed_parse_header",
+        header_value=header_value,
+    )
     return None
 
 

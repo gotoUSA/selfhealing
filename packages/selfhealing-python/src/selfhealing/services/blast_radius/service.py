@@ -10,7 +10,7 @@ Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1):
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from threading import Lock
 
@@ -23,7 +23,7 @@ from .models import (
     ServiceDependencyEdge,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class BlastRadiusService:
@@ -55,7 +55,7 @@ class BlastRadiusService:
         self._enabled = True
         self._initialized = True
 
-        logger.info("BlastRadiusService initialized")
+        logger.info("blastradiusservice_initialized")
 
     def set_policy(
         self,
@@ -88,7 +88,11 @@ class BlastRadiusService:
             auto_isolate=auto_isolate,
         )
         self._policies[stage_name] = policy
-        logger.info(f"Blast radius policy set for {stage_name}: {level.value}")
+        logger.info(
+            "blast_radius_policy_set",
+            stage_name=stage_name,
+            level=level.value,
+        )
 
         # === Audit 기록: 정책 설정 (85_AUDIT_INTEGRATION Phase 1) ===
         log_blast_radius_audit(
@@ -216,7 +220,12 @@ class BlastRadiusService:
         )
 
         self._assessments.append(assessment)
-        logger.info(f"Impact assessed: {assessment_id}, level={level.value}, " f"affected={len(all_affected)} services")
+        logger.info(
+            "impact_assessed_services",
+            assessment_id=assessment_id,
+            level=level.value,
+            count=len(all_affected),
+        )
 
         # 자동 격리 체크
         self._check_and_auto_isolate(stage_name, level, failing_services)
@@ -380,7 +389,10 @@ class BlastRadiusService:
         for service in services:
             if service not in self._isolated_services:
                 self._isolated_services.add(service)
-                logger.warning(f"Service auto-isolated: {service}")
+                logger.warning(
+                    "service_auto_isolated",
+                    service=service,
+                )
 
                 # === Audit 기록: 자동 격리 (85_AUDIT_INTEGRATION Phase 1) ===
                 log_blast_radius_audit(
@@ -396,7 +408,10 @@ class BlastRadiusService:
         """수동 격리"""
         if service not in self._isolated_services:
             self._isolated_services.add(service)
-            logger.info(f"Service isolated: {service}")
+            logger.info(
+                "service_isolated",
+                service=service,
+            )
 
             # === Audit 기록: 수동 격리 (85_AUDIT_INTEGRATION Phase 1) ===
             log_blast_radius_audit(
@@ -415,7 +430,10 @@ class BlastRadiusService:
         """격리 해제"""
         if service in self._isolated_services:
             self._isolated_services.discard(service)
-            logger.info(f"Service isolation released: {service}")
+            logger.info(
+                "service_isolation_released",
+                service=service,
+            )
 
             # === Audit 기록: 격리 해제 (85_AUDIT_INTEGRATION Phase 1) ===
             log_blast_radius_audit(

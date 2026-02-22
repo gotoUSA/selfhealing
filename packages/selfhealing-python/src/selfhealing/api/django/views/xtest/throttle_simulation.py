@@ -16,7 +16,7 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import logging
+import structlog
 import time
 
 from django.utils import timezone
@@ -27,7 +27,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ThrottleEmergencySimulationView(XTestModeMixin, APIView):
@@ -412,7 +412,7 @@ class ThrottleStatusView(XTestModeMixin, APIView):
         settings = get_throttle_settings()
         stats = throttle.get_stats()
 
-        logger.info("[X-Test-Mode] Throttle status query")
+        logger.info("test_mode_throttle_status")
 
         self.log_xtest_audit(
             request=request,
@@ -491,7 +491,12 @@ class ThrottleResetView(XTestModeMixin, APIView):
         new_throttle = get_adaptive_throttle()
         new_limit = new_throttle.current_limit
 
-        logger.info(f"[X-Test-Mode] Throttle reset: " f"limit {previous_limit} → {new_limit}, level {previous_level} → 0")
+        logger.info(
+            "test_mode_throttle_reset",
+            previous_limit=previous_limit,
+            new_limit=new_limit,
+            previous_level=previous_level,
+        )
 
         self.log_xtest_audit(
             request=request,

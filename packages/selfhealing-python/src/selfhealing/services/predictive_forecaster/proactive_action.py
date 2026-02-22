@@ -30,13 +30,13 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -298,16 +298,24 @@ class ProactiveActionTrigger:
             learning = LearningService()
 
             if learning.is_manual_only_mode("predictive_forecaster"):
-                logger.warning("[ProactiveActionTrigger] Forecaster is in MANUAL ONLY mode")
+                logger.warning("proactive_action_trigger.forecaster_manual_only_mode")
                 return False
 
             is_blocked, entry = learning.is_parameter_blocked(module, parameter, value)
             if is_blocked:
-                logger.warning(f"[ProactiveActionTrigger] Blocked by blacklist: " f"{module}:{parameter}={value}")
+                logger.warning(
+                    "proactive_action_trigger.blocked_blacklist",
+                    module=module,
+                    parameter=parameter,
+                    value=value,
+                )
                 return False
 
         except Exception as e:
-            logger.debug(f"[ProactiveActionTrigger] LearningService check skipped: {e}")
+            logger.debug(
+                "proactive_action_trigger.learningservice_check_skipped",
+                error=e,
+            )
 
         return True
 
@@ -347,7 +355,11 @@ class ProactiveActionTrigger:
         # HEALTHY_SURGE는 조치 불필요 (정상적인 트래픽 급증)
         intensity = self.ADJUSTMENT_INTENSITY.get(spike_type, 0.0)
         if intensity == 0.0:
-            logger.info(f"[ProactiveActionTrigger] {spike_type.value}: " f"no action needed for {metric_name}")
+            logger.info(
+                "proactive_action_trigger.no_action_needed",
+                spike_type=spike_type.value,
+                metric_name=metric_name,
+            )
             return None
 
         # LearningService 블랙리스트 확인

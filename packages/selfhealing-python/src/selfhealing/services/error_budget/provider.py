@@ -25,7 +25,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,7 +36,7 @@ from selfhealing.services.error_budget.constants import (
     MAX_COMBINED_MULTIPLIER,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -149,7 +149,7 @@ class CheckOnUseMultiplierProvider:
 
                 self._emergency_tracker = get_namespaced_emergency_tracker()
             except ImportError:
-                logger.warning("[Provider] NamespacedEmergencyTracker not available")
+                logger.warning("provider.namespacedemergencytracker_available")
         return self._emergency_tracker
 
     def _get_precedence_resolver(self) -> Any:
@@ -162,7 +162,7 @@ class CheckOnUseMultiplierProvider:
 
                 self._precedence_resolver = MultiplierPrecedenceResolver()
             except ImportError:
-                logger.debug("[Provider] MultiplierPrecedenceResolver not available, using max")
+                logger.debug("provider.multiplierprecedenceresolver_available_using_max")
         return self._precedence_resolver
 
     def get_current_multiplier(
@@ -226,7 +226,10 @@ class CheckOnUseMultiplierProvider:
                 state = tracker.get_effective_state(namespace=namespace)
                 return state.emergency_level
             except Exception as e:
-                logger.warning(f"[Provider] Failed to get level: {e}")
+                logger.warning(
+                    "provider.failed_get_level",
+                    error=e,
+                )
 
         return EmergencyLevel.NORMAL
 
@@ -284,7 +287,11 @@ class CheckOnUseMultiplierProvider:
             sensitivity: 민감도 가중치 (1.0 이상 권장)
         """
         if sensitivity < 1.0:
-            logger.warning(f"[Provider] Sensitivity < 1.0 not recommended: {domain}={sensitivity}")
+            logger.warning(
+                "provider.sensitivity_recommended",
+                domain=domain,
+                sensitivity=sensitivity,
+            )
         self._domain_sensitivity[domain.lower()] = sensitivity
 
     def get_all_multipliers(self) -> dict[str, float]:

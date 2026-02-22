@@ -22,7 +22,7 @@ LMDB가 설치되지 않은 환경에서 대안으로 사용합니다.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import mmap
 import os
 import struct
@@ -31,7 +31,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class MmapBufferError(Exception):
@@ -112,7 +112,10 @@ class MmapBuffer:
             f.write(b"\x00" * (self._size_bytes - self.HEADER_SIZE))
 
         self._open_existing_file()
-        logger.info(f"[MmapBuffer] Created new file: {self._file_path}")
+        logger.info(
+            "mmap_buffer.created_new_file",
+            self=self._file_path,
+        )
 
     def _open_existing_file(self) -> None:
         """기존 파일 열기."""
@@ -124,7 +127,10 @@ class MmapBuffer:
         if magic != self.MAGIC:
             raise MmapBufferError(f"Invalid magic: {magic!r}")
 
-        logger.info(f"[MmapBuffer] Opened: {self._file_path}")
+        logger.info(
+            "mmap_buffer.opened",
+            self=self._file_path,
+        )
 
     def _read_header(self) -> tuple[int, int]:
         """헤더 읽기: (entry_count, write_pos)."""
@@ -169,7 +175,7 @@ class MmapBuffer:
 
             # 공간 확인 (순환 버퍼 방식)
             if write_pos + record_size > self._size_bytes:
-                logger.warning("[MmapBuffer] Buffer full, wrapping around")
+                logger.warning("mmap_buffer.buffer_full_wrapping_around")
                 write_pos = self.HEADER_SIZE
                 entry_count = 0
 
@@ -211,7 +217,10 @@ class MmapBuffer:
                     entry = json.loads(data.decode("utf-8"))
                     entries.append(entry)
                 except json.JSONDecodeError:
-                    logger.warning(f"[MmapBuffer] Invalid JSON at pos {pos}")
+                    logger.warning(
+                        "mmap_buffer.invalid_json_pos",
+                        pos=pos,
+                    )
 
                 pos += 4 + length
 
@@ -248,7 +257,7 @@ class MmapBuffer:
         if self._file:
             self._file.close()
             self._file = None
-        logger.info("[MmapBuffer] Closed")
+        logger.info("mmap_buffer.closed")
 
     def __enter__(self) -> "MmapBuffer":
         """Context manager 진입."""

@@ -18,7 +18,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
         LoadSheddingManager,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LoadSheddingDashboard:

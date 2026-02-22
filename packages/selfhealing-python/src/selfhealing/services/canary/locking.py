@@ -21,11 +21,11 @@ Usage:
         lock.release("circuit_breaker", "rollout-123")
 """
 
-import logging
+import structlog
 from datetime import timedelta
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ConfigLockError(Exception):
@@ -201,7 +201,10 @@ class CanaryConfigLock:
                 return False
 
         except Exception as e:
-            logger.error(f"[CanaryLock] Release error: {e}")
+            logger.error(
+                "canary_lock.release_error",
+                error=e,
+            )
             return False
 
     def is_locked(self, config_type: str) -> bool:
@@ -302,7 +305,10 @@ class CanaryConfigLock:
                 return False
 
         except Exception as e:
-            logger.error(f"[CanaryLock] Extend error: {e}")
+            logger.error(
+                "canary_lock.extend_error",
+                error=e,
+            )
             return False
 
     def force_release(self, config_type: str) -> bool:
@@ -337,5 +343,8 @@ class CanaryConfigLock:
             return result > 0
 
         except Exception as e:
-            logger.error(f"[CanaryLock] Force release error: {e}")
+            logger.error(
+                "canary_lock.force_release_error",
+                error=e,
+            )
             return False

@@ -21,7 +21,7 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import logging
+import structlog
 from typing import Any
 
 from django.core.cache import cache
@@ -33,7 +33,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin, collect_system_snapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # X-Test-Mode로 생성된 키 식별용 상수
@@ -60,7 +60,10 @@ def _track_xtest_key(cache_key: str) -> None:
             keys.append(cache_key)
             cache.set(XTEST_METADATA_KEY, keys, timeout=86400)  # 24시간
     except Exception as e:
-        logger.warning(f"[X-Test Idempotency] Failed to track key: {e}")
+        logger.warning(
+            "test_idempotency_failed_track",
+            error=e,
+        )
 
 
 def _untrack_xtest_key(cache_key: str) -> None:
@@ -71,7 +74,10 @@ def _untrack_xtest_key(cache_key: str) -> None:
             keys.remove(cache_key)
             cache.set(XTEST_METADATA_KEY, keys, timeout=86400)
     except Exception as e:
-        logger.warning(f"[X-Test Idempotency] Failed to untrack key: {e}")
+        logger.warning(
+            "test_idempotency_failed_untrack",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -209,7 +215,10 @@ class GenerateKeyView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"[X-Test Idempotency] Key generation failed: {e}")
+            logger.error(
+                "test_idempotency_key_generation",
+                error=e,
+            )
             return Response(
                 {
                     "status": "error",
@@ -316,7 +325,10 @@ class CheckDuplicateView(XTestModeMixin, APIView):
                     except (AttributeError, Exception):
                         ttl_remaining = None
             except Exception as e:
-                logger.warning(f"[X-Test Idempotency] Cache check failed: {e}")
+                logger.warning(
+                    "test_idempotency_cache_check",
+                    error=e,
+                )
 
             # 등록 수행 여부
             registered = False
@@ -332,7 +344,10 @@ class CheckDuplicateView(XTestModeMixin, APIView):
                     registered = True
                     ttl_remaining = service.cache_ttl
                 except Exception as e:
-                    logger.warning(f"[X-Test Idempotency] Registration failed: {e}")
+                    logger.warning(
+                        "test_idempotency_registration_failed",
+                        error=e,
+                    )
 
             response_data = {
                 "status": "success",
@@ -362,7 +377,10 @@ class CheckDuplicateView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"[X-Test Idempotency] Duplicate check failed: {e}")
+            logger.error(
+                "test_idempotency_duplicate_check",
+                error=e,
+            )
             return Response(
                 {
                     "status": "error",
@@ -541,7 +559,10 @@ class IdempotencyStatusView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"[X-Test Idempotency] Status retrieval failed: {e}")
+            logger.error(
+                "test_idempotency_status_retrieval",
+                error=e,
+            )
             return Response(
                 {
                     "status": "error",
@@ -678,7 +699,10 @@ class RegisterKeyView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
 
         except Exception as e:
-            logger.error(f"[X-Test Idempotency] Registration failed: {e}")
+            logger.error(
+                "test_idempotency_registration_failed",
+                error=e,
+            )
             return Response(
                 {
                     "status": "error",
@@ -806,7 +830,10 @@ class ClearKeysView(XTestModeMixin, APIView):
             return Response(response_data, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"[X-Test Idempotency] Clear failed: {e}")
+            logger.error(
+                "test_idempotency_clear_failed",
+                error=e,
+            )
             return Response(
                 {
                     "status": "error",

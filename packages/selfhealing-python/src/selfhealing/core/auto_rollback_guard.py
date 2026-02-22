@@ -32,7 +32,7 @@ Architecture:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -42,7 +42,7 @@ from typing import Any, Protocol
 
 from selfhealing.settings.auto_rollback import get_auto_rollback_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class GuardState(str, Enum):
@@ -197,7 +197,7 @@ class AutoRollbackGuard:
         # 설정 스냅샷 (롤백용)
         self._config_snapshots: dict[str, list[dict[str, Any]]] = {}
 
-        logger.info("[AutoRollbackGuard] Initialized")
+        logger.info("auto_rollback_guard.initialized")
 
     @property
     def state(self) -> GuardState:
@@ -215,7 +215,7 @@ class AutoRollbackGuard:
             self._state = GuardState.MONITORING
             self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
             self._thread.start()
-            logger.info("[AutoRollbackGuard] Started monitoring")
+            logger.info("auto_rollback_guard.started_monitoring")
             return True
 
     def stop(self) -> bool:
@@ -229,7 +229,7 @@ class AutoRollbackGuard:
             self._thread.join(timeout=1)  # 1초면 충분 (Event로 즉시 깨어남)
             self._thread = None
 
-        logger.info("[AutoRollbackGuard] Stopped")
+        logger.info("auto_rollback_guard.stopped")
         return True
 
     def _monitor_loop(self):
@@ -239,7 +239,10 @@ class AutoRollbackGuard:
                 try:
                     self._perform_health_check()
                 except Exception as e:
-                    logger.error(f"[AutoRollbackGuard] Health check error: {e}")
+                    logger.error(
+                        "auto_rollback_guard.health_check_error",
+                        error=e,
+                    )
                     self._consecutive_failures += 1
 
             # Event.wait()는 set() 시 즉시 반환 (time.sleep 대신 사용)
@@ -253,7 +256,10 @@ class AutoRollbackGuard:
             latency_p99 = self.metrics_provider.get_latency_p99()
             throughput = self.metrics_provider.get_throughput()
         except Exception as e:
-            logger.warning(f"[AutoRollbackGuard] Metrics fetch failed: {e}")
+            logger.warning(
+                "auto_rollback_guard.metrics_fetch_failed",
+                error=e,
+            )
             self._consecutive_failures += 1
             self._check_failure_threshold()
             return
@@ -305,7 +311,7 @@ class AutoRollbackGuard:
                 self._consecutive_failures = 0
                 if self._state in (GuardState.ALERT, GuardState.RECOVERING):
                     self._state = GuardState.MONITORING
-                    logger.info("[AutoRollbackGuard] System recovered")
+                    logger.info("auto_rollback_guard.system_recovered")
                 return
 
             # 저하 감지됨
@@ -367,11 +373,14 @@ class AutoRollbackGuard:
         if self._last_rollback_time:
             elapsed = datetime.now(timezone.utc) - self._last_rollback_time
             if elapsed < timedelta(minutes=5):
-                logger.warning("[AutoRollbackGuard] Rollback skipped (cooldown)")
+                logger.warning("auto_rollback_guard.rollback_skipped_cooldown")
                 return
 
         self._state = GuardState.RECOVERING
-        logger.warning(f"[AutoRollbackGuard] Executing rollback: {reason}")
+        logger.warning(
+            "auto_rollback_guard.executing_rollback",
+            reason=reason,
+        )
 
         # 최근 스냅샷으로 롤백
         for param, snapshots in self._config_snapshots.items():
@@ -379,9 +388,17 @@ class AutoRollbackGuard:
                 last_good = snapshots[-1]
                 try:
                     self.config_applier.rollback(param, last_good["value"])
-                    logger.info(f"[AutoRollbackGuard] Rolled back {param} to {last_good['value']}")
+                    logger.info(
+                        "auto_rollback_guard.rolled_back",
+                        param=param,
+                        last_good=last_good['value'],
+                    )
                 except Exception as e:
-                    logger.error(f"[AutoRollbackGuard] Rollback failed for {param}: {e}")
+                    logger.error(
+                        "auto_rollback_guard.rollback_failed",
+                        param=param,
+                        error=e,
+                    )
 
         self._last_rollback_time = datetime.now(timezone.utc)
 
@@ -400,7 +417,7 @@ class AutoRollbackGuard:
         - 시스템 기본값: 어떤 서비스에도 적용 가능한 보수적 값
         """
         self._state = GuardState.EMERGENCY
-        logger.critical("[AutoRollbackGuard] EMERGENCY RECOVERY - Starting tiered recovery")
+        logger.critical("auto_rollback_guard.emergency_recovery_starting_tiered")
 
         self._send_alert("emergency_recovery", "🆘 긴급 복구 모드 활성화! 단계별 복구를 시작합니다.")
 
@@ -440,28 +457,52 @@ class AutoRollbackGuard:
 
             try:
                 self.config_applier.apply(parameter, last_good_value)
-                logger.info(f"[AutoRollbackGuard] Recovered {parameter} to " f"last known good: {last_good_value}")
+                logger.info(
+                    "auto_rollback_guard.recovered_last_known_good",
+                    parameter=parameter,
+                    last_good_value=last_good_value,
+                )
                 return f"last_known_good:{last_good_value}"
             except Exception as e:
-                logger.warning(f"[AutoRollbackGuard] Last known good failed for {parameter}: {e}")
+                logger.warning(
+                    "auto_rollback_guard.last_known_good_failed",
+                    parameter=parameter,
+                    error=e,
+                )
 
         # 2단계: DNA Declared (DNA 선언값)
         dna_value = self._get_dna_declared_value(parameter)
         if dna_value is not None:
             try:
                 self.config_applier.apply(parameter, dna_value)
-                logger.info(f"[AutoRollbackGuard] Recovered {parameter} to " f"DNA declared: {dna_value}")
+                logger.info(
+                    "auto_rollback_guard.recovered_dna_declared",
+                    parameter=parameter,
+                    dna_value=dna_value,
+                )
                 return f"dna_declared:{dna_value}"
             except Exception as e:
-                logger.warning(f"[AutoRollbackGuard] DNA declared failed for {parameter}: {e}")
+                logger.warning(
+                    "auto_rollback_guard.dna_declared_failed",
+                    parameter=parameter,
+                    error=e,
+                )
 
         # 3단계: System Defaults (최후 수단)
         try:
             self.config_applier.apply(parameter, system_default)
-            logger.info(f"[AutoRollbackGuard] Recovered {parameter} to " f"system default: {system_default}")
+            logger.info(
+                "auto_rollback_guard.recovered_system_default",
+                parameter=parameter,
+                system_default=system_default,
+            )
             return f"system_default:{system_default}"
         except Exception as e:
-            logger.error(f"[AutoRollbackGuard] ALL RECOVERY FAILED for {parameter}: {e}")
+            logger.error(
+                "auto_rollback_guard.all_recovery_failed",
+                parameter=parameter,
+                error=e,
+            )
             return "FAILED"
 
     def _get_dna_declared_value(self, parameter: str) -> float | None:
@@ -501,7 +542,10 @@ class AutoRollbackGuard:
 
     def trigger_manual_emergency(self, reason: str = "manual") -> bool:
         """수동 긴급 복구 트리거"""
-        logger.warning(f"[AutoRollbackGuard] Manual emergency triggered: {reason}")
+        logger.warning(
+            "auto_rollback_guard.manual_emergency_triggered",
+            reason=reason,
+        )
         self._execute_emergency_recovery()
         return True
 
@@ -511,10 +555,17 @@ class AutoRollbackGuard:
             try:
                 self.alert_callback(alert_type, message)
             except Exception as e:
-                logger.warning(f"[AutoRollbackGuard] Alert callback failed: {e}")
+                logger.warning(
+                    "auto_rollback_guard.alert_callback_failed",
+                    error=e,
+                )
 
         # 항상 로그에도 기록
-        logger.warning(f"[AutoRollbackGuard] {alert_type}: {message}")
+        logger.warning(
+            "auto_rollback_guard.event",
+            alert_type=alert_type,
+            message=message,
+        )
 
     def get_status(self) -> dict[str, Any]:
         """상태 조회"""
@@ -555,7 +606,11 @@ class AutoRollbackGuard:
                 sd.safe_value = safe_value
                 if description:
                     sd.description = description
-                logger.info(f"[AutoRollbackGuard] Updated safe default: {parameter}={safe_value}")
+                logger.info(
+                    "auto_rollback_guard.updated_safe_default",
+                    parameter=parameter,
+                    safe_value=safe_value,
+                )
                 return True
 
         # 새로운 파라미터 추가

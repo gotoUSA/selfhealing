@@ -4,12 +4,12 @@ Pending Sequence Watchdog (Self-Cleanup).
 Provides background monitoring and cleanup of stale pending sequences.
 """
 
-import logging
+import structlog
 import threading
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class PendingSequenceWatchdog:
@@ -88,7 +88,7 @@ class PendingSequenceWatchdog:
                 name="PendingSequenceWatchdog",
             )
             self._thread.start()
-            logger.info("[PendingWatchdog] Started")
+            logger.info("pending_watchdog.started")
 
     def stop(self, timeout: float = 1.0) -> None:
         """Stop watchdog thread."""
@@ -102,7 +102,10 @@ class PendingSequenceWatchdog:
                 self._thread.join(timeout=timeout)
 
             self._is_running = False
-            logger.info(f"[PendingWatchdog] Stopped. Cleaned: {self._cleaned_count}")
+            logger.info(
+                "pending_watchdog.stopped_cleaned",
+                self=self._cleaned_count,
+            )
 
     def register_pending(self, sequence: int) -> None:
         """Register a pending sequence for tracking."""
@@ -128,9 +131,16 @@ class PendingSequenceWatchdog:
             pending_key = f"{self._key_prefix}audit:hash_chain:pending:{sequence}"
             self._redis.delete(pending_key)
             self._cleaned_count += 1
-            logger.debug(f"[PendingWatchdog] Immediately cleaned seq {sequence}")
+            logger.debug(
+                "pending_watchdog.immediately_cleaned_seq",
+                sequence=sequence,
+            )
         except Exception as e:
-            logger.warning(f"[PendingWatchdog] Cleanup failed for seq {sequence}: {e}")
+            logger.warning(
+                "pending_watchdog.cleanup_failed_seq",
+                sequence=sequence,
+                error=e,
+            )
 
     def _cleanup_loop(self) -> None:
         """Background cleanup loop."""
@@ -138,7 +148,10 @@ class PendingSequenceWatchdog:
             try:
                 self._cleanup_stale_local()
             except Exception as e:
-                logger.error(f"[PendingWatchdog] Cleanup error: {e}")
+                logger.error(
+                    "pending_watchdog.cleanup_error",
+                    error=e,
+                )
 
             self._stop_event.wait(timeout=self._check_interval)
 
@@ -159,9 +172,16 @@ class PendingSequenceWatchdog:
                 deleted = self._redis.delete(pending_key)
                 if deleted:
                     self._cleaned_count += 1
-                    logger.info(f"[PendingWatchdog] Cleaned stale seq {seq}")
+                    logger.info(
+                        "pending_watchdog.cleaned_stale_seq",
+                        seq=seq,
+                    )
             except Exception as e:
-                logger.warning(f"[PendingWatchdog] Stale cleanup failed for {seq}: {e}")
+                logger.warning(
+                    "pending_watchdog.stale_cleanup_failed",
+                    seq=seq,
+                    error=e,
+                )
 
     def get_stats(self) -> dict[str, Any]:
         """Get watchdog statistics."""

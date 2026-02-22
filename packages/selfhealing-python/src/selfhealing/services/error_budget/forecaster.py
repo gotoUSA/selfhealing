@@ -8,14 +8,14 @@ ErrorBudgetStatus의 burn_rate_1h, burn_rate_6h를 사용하여
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.services.error_budget.models import ErrorBudgetStatus
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -93,7 +93,7 @@ class BudgetDepletionForecaster:
 
                 self._burn_rate_smoother = EWMAForecaster(alpha=ewma_alpha)
             except ImportError:
-                logger.debug("[BudgetDepletionForecaster] EWMAForecaster not available, " "falling back to raw burn rate")
+                logger.debug("budget_depletion_forecaster.ewmaforecaster_available_falling_back")
                 self._use_ewma_smoothing = False
 
     def forecast(self, status: ErrorBudgetStatus) -> DepletionForecast:

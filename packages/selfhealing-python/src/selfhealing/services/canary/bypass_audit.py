@@ -14,7 +14,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.services.canary.override import EmergencyOverrideRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

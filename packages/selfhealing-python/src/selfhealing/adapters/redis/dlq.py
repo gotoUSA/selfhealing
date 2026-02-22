@@ -13,7 +13,7 @@ Redis Key Structure:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
@@ -27,7 +27,7 @@ from selfhealing.interfaces.repositories import (
 if TYPE_CHECKING:
     from selfhealing.adapters.resilient.backend import ResilientStorageBackend
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RedisDLQRepository(FailedOperationRepository):
@@ -468,7 +468,10 @@ class RedisDLQRepository(FailedOperationRepository):
                     break
 
         except Exception as e:
-            logger.error(f"[RedisDLQ] get_by_status error: {e}")
+            logger.error(
+                "redis_dlq.error",
+                error=e,
+            )
 
         return results
 

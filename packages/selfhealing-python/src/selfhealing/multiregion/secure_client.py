@@ -9,7 +9,7 @@ mTLS로 암호화 및 상호 인증을 적용합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import ssl
 from typing import Any
 
@@ -19,7 +19,7 @@ from selfhealing.multiregion.config import (
     get_multiregion_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SecureRedisClient:
@@ -90,13 +90,22 @@ class SecureRedisClient:
 
             return context
         except FileNotFoundError as e:
-            logger.warning(f"[SecureRedis] Certificate file not found: {e}")
+            logger.warning(
+                "secure_redis.certificate_file_found",
+                error=e,
+            )
             return None
         except ssl.SSLError as e:
-            logger.error(f"[SecureRedis] SSL context creation failed: {e}")
+            logger.error(
+                "secure_redis.ssl_context_creation_failed",
+                error=e,
+            )
             raise
         except Exception as e:
-            logger.error(f"[SecureRedis] Unexpected error creating SSL context: {e}")
+            logger.error(
+                "secure_redis.unexpected_error_creating_ssl",
+                error=e,
+            )
             raise
 
     def get_client(self) -> Any:
@@ -112,7 +121,7 @@ class SecureRedisClient:
             try:
                 import redis
             except ImportError:
-                logger.error("[SecureRedis] redis package not installed")
+                logger.error("secure_redis.redis_package_installed")
                 raise
 
             ssl_context = self._create_ssl_context()
@@ -153,7 +162,10 @@ class SecureRedisClient:
             client.ping()
             return True
         except Exception as e:
-            logger.debug(f"[SecureRedis] Connection check failed: {e}")
+            logger.debug(
+                "secure_redis.connection_check_failed",
+                error=e,
+            )
             return False
 
     def close(self) -> None:
@@ -162,7 +174,10 @@ class SecureRedisClient:
             try:
                 self._client.close()
             except Exception as e:
-                logger.debug(f"[SecureRedis] Close error: {e}")
+                logger.debug(
+                    "secure_redis.close_error",
+                    error=e,
+                )
             finally:
                 self._client = None
 

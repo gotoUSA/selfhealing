@@ -6,11 +6,11 @@ Pre-computed JSON storage in Redis for low-latency access.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from .constants import _get_l2_ttl_seconds
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -41,7 +41,10 @@ class L2RedisCache:
                 self._redis = caches["default"]
                 self._initialized = True
             except Exception as e:
-                logger.warning(f"[PrecomputedCache] Redis not available: {e}")
+                logger.warning(
+                    "precomputed_cache.redis_available",
+                    error=e,
+                )
                 self._redis = None
         return self._redis
 
@@ -55,7 +58,10 @@ class L2RedisCache:
                     return value.decode("utf-8")
                 return value
         except Exception as e:
-            logger.debug(f"[PrecomputedCache] Redis get failed: {e}")
+            logger.debug(
+                "precomputed_cache.redis_get_failed",
+                error=e,
+            )
         return None
 
     def set(self, key: str, value: str, ttl: float | None = None) -> bool:
@@ -68,7 +74,10 @@ class L2RedisCache:
                 redis.set(key, value, timeout=int(ttl))
                 return True
         except Exception as e:
-            logger.debug(f"[PrecomputedCache] Redis set failed: {e}")
+            logger.debug(
+                "precomputed_cache.redis_set_failed",
+                error=e,
+            )
         return False
 
     def is_available(self) -> bool:

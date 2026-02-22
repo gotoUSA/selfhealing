@@ -6,7 +6,7 @@ Unified Pydantic Settings replacing core/config.py:SelfHealingConfig.
 All sub-settings are composed here for single-point access.
 """
 
-import logging
+import structlog
 import os
 from typing import Any
 
@@ -32,7 +32,7 @@ from selfhealing.settings.retry import RetrySettings
 from selfhealing.settings.security import SecuritySettings
 from selfhealing.settings.sla import SLASettings
 
-_root_logger = logging.getLogger(__name__)
+_root_logger = structlog.get_logger()
 
 
 class SelfHealingSettings(BaseSettings):

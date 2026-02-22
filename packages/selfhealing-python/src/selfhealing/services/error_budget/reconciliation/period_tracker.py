@@ -6,7 +6,7 @@ Tracks fail-safe activation periods for reconciliation.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import uuid
 from datetime import datetime
@@ -16,7 +16,7 @@ from selfhealing.core.timezone import now
 
 from .models import FailSafePeriod
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class FailSafePeriodTracker:

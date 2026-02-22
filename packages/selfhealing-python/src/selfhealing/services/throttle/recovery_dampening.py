@@ -12,14 +12,14 @@ CB CLOSE 또는 Emergency NORMAL 복귀 시 즉시 100% 복구하지 않고
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RecoveryPhase(str, Enum):
@@ -191,13 +191,21 @@ class RecoveryDampeningManager:
                     self.config.phase_2_duration_seconds,
                 )
 
-                logger.info(f"[RecoveryDampening] Phase 2: " f"service={service_name}, limit={new_limit}")
+                logger.info(
+                    "recovery_dampening.phase",
+                    service_name=service_name,
+                    new_limit=new_limit,
+                )
 
             elif next_phase == RecoveryPhase.COMPLETE:
                 new_limit = state.target_limit
                 state.is_active = False
 
-                logger.info(f"[RecoveryDampening] Complete: " f"service={service_name}, limit={new_limit}")
+                logger.info(
+                    "recovery_dampening.complete",
+                    service_name=service_name,
+                    new_limit=new_limit,
+                )
 
             else:
                 return
@@ -207,7 +215,10 @@ class RecoveryDampeningManager:
                 try:
                     self._on_limit_change(service_name, new_limit)
                 except Exception as e:
-                    logger.error(f"[RecoveryDampening] Callback failed: {e}")
+                    logger.error(
+                        "recovery_dampening.callback_failed",
+                        error=e,
+                    )
 
     def cancel_recovery(self, service_name: str) -> None:
         """복구 취소 (새 장애 발생 시)."""
@@ -217,7 +228,10 @@ class RecoveryDampeningManager:
             state = self._recovery_states.get(service_name)
             if state:
                 state.is_active = False
-                logger.info(f"[RecoveryDampening] Cancelled: service={service_name}")
+                logger.info(
+                    "recovery_dampening.cancelled",
+                    service_name=service_name,
+                )
 
     def _cancel_timer(self, service_name: str) -> None:
         """타이머 취소."""

@@ -6,10 +6,10 @@ WAL 디스크 관리 모듈.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class WALDiskManagerMixin:
@@ -22,12 +22,12 @@ class WALDiskManagerMixin:
         # 우선순위 기반 Purge 시도
         if self._config.priority_based_purge:
             if self._purge_by_priority():
-                logger.info("[WAL] Priority-based purge succeeded, continuing normal operation")
+                logger.info("wal.priority_based_purge_succeeded")
                 return
 
         # Purge 실패 또는 비활성화 시 Fail-Open 모드 전환
         self._state = WALState.DISK_FULL_FAILOPEN
-        logger.critical("[WAL] DISK FULL - Switching to fail-open mode")
+        logger.critical("wal.disk_full_switching_fail")
 
         # 메트릭 기록
         try:
@@ -56,7 +56,10 @@ class WALDiskManagerMixin:
             )
             UnifiedNotificationManager().notify(payload)
         except Exception as e:
-            logger.error(f"[WAL] Failed to send disk full notification: {e}")
+            logger.error(
+                "wal.failed_send_disk_full",
+                error=e,
+            )
 
     def _purge_by_priority(self) -> bool:
         """
@@ -81,7 +84,10 @@ class WALDiskManagerMixin:
 
             for wal_file in priority_files:
                 if freed_bytes >= target_free:
-                    logger.info(f"[WAL] Priority purge complete, freed {freed_bytes} bytes")
+                    logger.info(
+                        "wal.priority_purge_complete_freed",
+                        freed_bytes=freed_bytes,
+                    )
                     return True
 
                 try:
@@ -92,7 +98,11 @@ class WALDiskManagerMixin:
                         f"[WAL] Priority purge: deleted {wal_file.name} " f"(priority={priority}, size={file_size})"
                     )
                 except Exception as e:
-                    logger.error(f"[WAL] Failed to delete {wal_file}: {e}")
+                    logger.error(
+                        "wal.failed_delete",
+                        wal_file=wal_file,
+                        error=e,
+                    )
 
         # 우선순위 파일 없으면 일반 파일 중 오래된 것부터 삭제
         if freed_bytes < target_free:
@@ -118,12 +128,23 @@ class WALDiskManagerMixin:
                     file_size = wal_file.stat().st_size
                     wal_file.unlink()
                     freed_bytes += file_size
-                    logger.warning(f"[WAL] General purge: deleted {wal_file.name} (size={file_size})")
+                    logger.warning(
+                        "wal.general_purge_deleted",
+                        wal_file=wal_file.name,
+                        file_size=file_size,
+                    )
                 except Exception as e:
-                    logger.error(f"[WAL] Failed to delete {wal_file}: {e}")
+                    logger.error(
+                        "wal.failed_delete",
+                        wal_file=wal_file,
+                        error=e,
+                    )
 
         if freed_bytes >= target_free:
-            logger.info(f"[WAL] Priority purge complete, freed {freed_bytes} bytes")
+            logger.info(
+                "wal.priority_purge_complete_freed",
+                freed_bytes=freed_bytes,
+            )
             return True
 
         logger.critical(
@@ -153,9 +174,12 @@ class WALDiskManagerMixin:
 
             if free_ratio > self._config.disk_recovery_threshold:
                 self._state = WALState.ACTIVE
-                logger.info("[WAL] Disk space recovered, resuming normal operation")
+                logger.info("wal.disk_space_recovered_resuming")
                 return True
         except Exception as e:
-            logger.debug(f"[WAL] Disk recovery check failed: {e}")
+            logger.debug(
+                "wal.disk_recovery_check_failed",
+                error=e,
+            )
 
         return False

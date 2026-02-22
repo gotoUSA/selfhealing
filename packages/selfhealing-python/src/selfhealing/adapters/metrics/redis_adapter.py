@@ -6,7 +6,7 @@ Provides metrics from Redis cache using Write-Through pattern.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 from selfhealing.adapters.metrics.base import BaseMetricSourceAdapter
@@ -14,7 +14,7 @@ from selfhealing.adapters.metrics.base import BaseMetricSourceAdapter
 if TYPE_CHECKING:
     import redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
@@ -68,7 +68,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
             value = self.redis.get(key)
             return int(value) if value else 0
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to get DLQ pending count: {e}")
+            logger.warning(
+                "redis_adapter.failed_get_dlq_pending",
+                error=e,
+            )
             return 0
 
     def get_dlq_count_by_status(self, status: str) -> int:
@@ -86,7 +89,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
             value = self.redis.get(key)
             return int(value) if value else 0
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to get DLQ count by status: {e}")
+            logger.warning(
+                "redis_adapter.failed_get_dlq_count",
+                error=e,
+            )
             return 0
 
     def get_circuit_breaker_state(self, service: str) -> str:
@@ -109,7 +115,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
                 return str(value)
             return "closed"
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to get CB state: {e}")
+            logger.warning(
+                "redis_adapter.failed_get_cb_state",
+                error=e,
+            )
             return "closed"
 
     def get_retry_success_rate(self, domain: str) -> float:
@@ -127,7 +136,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
             value = self.redis.get(key)
             return float(value) if value else 0.0
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to get retry success rate: {e}")
+            logger.warning(
+                "redis_adapter.failed_get_retry_success",
+                error=e,
+            )
             return 0.0
 
     # =========================================================================
@@ -148,7 +160,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
             key = self._make_key("dlq", "pending", domain)
             return self.redis.incr(key)
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to increment DLQ pending: {e}")
+            logger.warning(
+                "redis_adapter.failed_increment_dlq_pending",
+                error=e,
+            )
             return 0
 
     def decrement_dlq_pending(self, domain: str) -> int:
@@ -165,7 +180,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
             key = self._make_key("dlq", "pending", domain)
             return self.redis.decr(key)
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to decrement DLQ pending: {e}")
+            logger.warning(
+                "redis_adapter.failed_decrement_dlq_pending",
+                error=e,
+            )
             return 0
 
     def set_circuit_breaker_state(
@@ -189,7 +207,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
             else:
                 self.redis.set(key, state)
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to set CB state: {e}")
+            logger.warning(
+                "redis_adapter.failed_set_cb_state",
+                error=e,
+            )
 
     def set_retry_success_rate(self, domain: str, rate: float) -> None:
         """
@@ -203,7 +224,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
             key = self._make_key("retry", "success_rate", domain)
             self.redis.set(key, str(rate))
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to set retry success rate: {e}")
+            logger.warning(
+                "redis_adapter.failed_set_retry_success",
+                error=e,
+            )
 
     def set_dlq_pending_count(self, domain: str, count: int) -> None:
         """
@@ -217,7 +241,10 @@ class RedisMetricSourceAdapter(BaseMetricSourceAdapter):
             key = self._make_key("dlq", "pending", domain)
             self.redis.set(key, str(count))
         except Exception as e:
-            logger.warning(f"[RedisAdapter] Failed to set DLQ pending count: {e}")
+            logger.warning(
+                "redis_adapter.failed_set_dlq_pending",
+                error=e,
+            )
 
 
 __all__ = ["RedisMetricSourceAdapter"]

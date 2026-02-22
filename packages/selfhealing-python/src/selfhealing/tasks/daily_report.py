@@ -11,11 +11,11 @@ Thin Task, Fat Service Pattern:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -82,7 +82,7 @@ try:
         return generate_daily_autonomous_report(date=date, channels=channels)
 
 except ImportError:
-    logger.debug("[DailyReport] Celery not available, skipping task registration")
+    logger.debug("daily_report.celery_available_skipping_task")
 
 
 # =============================================================================

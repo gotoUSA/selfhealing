@@ -7,11 +7,11 @@ prometheus_client 라이브러리가 없으면 no-op으로 동작합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.scaling.config import BackpressureSettings, get_backpressure_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # prometheus_client가 있으면 사용
 try:
@@ -47,7 +47,7 @@ class BackpressureMetrics:
         self._prefix = self._settings.metrics_prefix
 
         if not HAS_PROMETHEUS:
-            logger.warning("[BackpressureMetrics] prometheus_client not installed")
+            logger.warning("backpressure_metrics.installed")
             return
 
         if not self._settings.metrics_enabled:

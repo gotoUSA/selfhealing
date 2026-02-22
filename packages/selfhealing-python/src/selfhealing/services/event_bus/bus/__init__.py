@@ -37,7 +37,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import traceback
 from collections.abc import Callable
@@ -47,7 +47,7 @@ from enum import Enum, IntEnum
 from typing import Any
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -337,9 +337,18 @@ class SelfHealingEventBus:
                     key=lambda s: s.priority.value,
                     reverse=True,
                 )
-                logger.debug(f"[EventBus] Subscribed {handler_name} to {event_type.value} " f"(priority={priority.name})")
+                logger.debug(
+                    "event_bus.subscribed",
+                    handler_name=handler_name,
+                    event_type=event_type.value,
+                    priority=priority.name,
+                )
             else:
-                logger.debug(f"[EventBus] Handler {handler_name} already subscribed to {event_type.value}")
+                logger.debug(
+                    "event_bus.handler_already_subscribed",
+                    handler_name=handler_name,
+                    event_type=event_type.value,
+                )
                 return existing[0]
 
         return subscription
@@ -370,7 +379,11 @@ class SelfHealingEventBus:
 
             removed = original_count > len(self._subscriptions[event_type])
             if removed:
-                logger.debug(f"[EventBus] Unsubscribed {handler_name} from {event_type.value}")
+                logger.debug(
+                    "event_bus.unsubscribed",
+                    handler_name=handler_name,
+                    event_type=event_type.value,
+                )
 
             return removed
 
@@ -411,10 +424,13 @@ class SelfHealingEventBus:
         with self._subscription_lock:
             if event_type is None:
                 self._subscriptions.clear()
-                logger.info("[EventBus] All subscriptions cleared")
+                logger.info("event_bus.all_subscriptions_cleared")
             elif event_type in self._subscriptions:
                 del self._subscriptions[event_type]
-                logger.info(f"[EventBus] Subscriptions cleared for {event_type.value}")
+                logger.info(
+                    "event_bus.subscriptions_cleared",
+                    event_type=event_type.value,
+                )
 
     # -------------------------------------------------------------------------
     # Event Publishing
@@ -431,7 +447,10 @@ class SelfHealingEventBus:
             int: 호출된 핸들러 수
         """
         if not self._enabled:
-            logger.debug(f"[EventBus] Event bus disabled, ignoring {event.event_type.value}")
+            logger.debug(
+                "event_bus.event_bus_disabled_ignoring",
+                event_type=event.event_type.value,
+            )
             return 0
 
         # 히스토리에 기록
@@ -442,7 +461,10 @@ class SelfHealingEventBus:
         with self._subscription_lock:
             subscriptions = self._subscriptions.get(event.event_type, [])
             if not subscriptions:
-                logger.debug(f"[EventBus] No subscribers for {event.event_type.value}")
+                logger.debug(
+                    "event_bus.no_subscribers",
+                    event_type=event.event_type.value,
+                )
                 return 0
 
             # 복사본으로 작업 (실행 중 구독 변경 방지)
@@ -455,7 +477,11 @@ class SelfHealingEventBus:
             try:
                 subscription.handler(event)
                 handlers_called += 1
-                logger.debug(f"[EventBus] Handler {subscription.handler_name} " f"executed for {event.event_type.value}")
+                logger.debug(
+                    "event_bus.handler_executed",
+                    subscription=subscription.handler_name,
+                    event_type=event.event_type.value,
+                )
             except Exception as e:
                 logger.error(
                     f"[EventBus] Handler {subscription.handler_name} failed "
@@ -553,12 +579,12 @@ class SelfHealingEventBus:
     def enable(self):
         """이벤트 버스 활성화."""
         self._enabled = True
-        logger.info("[EventBus] Enabled")
+        logger.info("event_bus.enabled")
 
     def disable(self):
         """이벤트 버스 비활성화."""
         self._enabled = False
-        logger.info("[EventBus] Disabled")
+        logger.info("event_bus.disabled")
 
     def is_enabled(self) -> bool:
         """활성화 여부."""
@@ -618,7 +644,7 @@ class SelfHealingEventBus:
             self._event_history.clear()
         self._enabled = True
         self._handlers_registered = False
-        logger.info("[EventBus] Reset to defaults")
+        logger.info("event_bus.reset_defaults")
 
 
 # =============================================================================
@@ -637,11 +663,16 @@ def _on_emergency_level_changed(event: SelfHealingEvent):
     previous_level = event.data.get("previous_level", 0)
     is_escalation = level > previous_level
 
-    logger.info(f"[EventHandler] Emergency level changed: {previous_level} → {level} " f"(escalation={is_escalation})")
+    logger.info(
+        "event_handler.emergency_level_changed",
+        previous_level=previous_level,
+        level=level,
+        is_escalation=is_escalation,
+    )
 
     # LEVEL_3 이상이면 추가 조치
     if level >= 3 and is_escalation:
-        logger.warning("[EventHandler] LEVEL_3 emergency - blocking non-essential automation")
+        logger.warning("event_handler.emergency_blocking_non_essential")
         # Circuit Breaker 자동 Open은 개별 서비스에서 처리
         # 여기서는 로깅만 수행
 
@@ -656,7 +687,11 @@ def _on_error_budget_critical(event: SelfHealingEvent):
     budget_percent = event.data.get("budget_percent", 0)
     threshold = event.data.get("threshold", 20)
 
-    logger.warning(f"[EventHandler] Error budget critical: {budget_percent:.1f}% < {threshold}% threshold")
+    logger.warning(
+        "event_handler.error_budget_critical_threshold",
+        budget_percent=budget_percent,
+        threshold=threshold,
+    )
 
 
 # =============================================================================
@@ -834,7 +869,7 @@ def register_default_handlers():
     )
 
     bus._handlers_registered = True
-    logger.info("[EventBus] Default handlers registered")
+    logger.info("event_bus.default_handlers_registered")
 
 
 # =============================================================================

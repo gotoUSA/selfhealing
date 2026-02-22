@@ -16,7 +16,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
         SheddingDecision,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LoadSheddingMiddleware:
@@ -80,7 +80,10 @@ class LoadSheddingMiddleware:
             try:
                 self._on_shed_callback(service_id, decision)
             except Exception as e:
-                logger.error(f"[LoadSheddingMiddleware] Callback failed: {e}")
+                logger.error(
+                    "load_shedding_middleware.callback_failed",
+                    error=e,
+                )
 
         return decision
 

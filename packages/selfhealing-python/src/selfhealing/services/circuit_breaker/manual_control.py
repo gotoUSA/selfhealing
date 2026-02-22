@@ -6,7 +6,7 @@ Provides manual force open/close and TTL management functionality.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from .config import CircuitBreakerConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _is_system_enabled() -> bool:
@@ -158,7 +158,10 @@ class ManualControlMixin:
                             ),
                         )
                     except Exception as e:
-                        logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+                        logger.debug(
+                            "circuit_breaker.audit_log_failed",
+                            error=e,
+                        )
                     # Push 이벤트 - CB 상태 변경 메트릭 기록
                     try:
                         from selfhealing.metrics.event_handlers import (
@@ -184,7 +187,10 @@ class ManualControlMixin:
                     error="Failed to force open circuit breaker",
                 )
         except Exception as e:
-            logger.error(f"[CircuitBreaker] Failed to force open: {e}")
+            logger.error(
+                "circuit_breaker.failed_force_open",
+                error=e,
+            )
             return CircuitBreakerResult.failed(
                 service_name=service_name,
                 error=str(e),
@@ -260,7 +266,10 @@ class ManualControlMixin:
                     error="Failed to force close circuit breaker",
                 )
         except Exception as e:
-            logger.error(f"[CircuitBreaker] Failed to force close: {e}")
+            logger.error(
+                "circuit_breaker.failed_force_close",
+                error=e,
+            )
             return CircuitBreakerResult.failed(
                 service_name=service_name,
                 error=str(e),
@@ -305,7 +314,10 @@ class ManualControlMixin:
                 controlled_by_id=controlled_by_id,
             )
         except Exception as e:
-            logger.debug(f"[CircuitBreaker] Kill Switch override audit failed: {e}")
+            logger.debug(
+                "circuit_breaker.kill_switch_override_audit",
+                error=e,
+            )
 
         return None
 
@@ -319,7 +331,10 @@ class ManualControlMixin:
     ) -> CircuitBreakerResult:
         """Force close 성공 시 처리."""
         if previous_state == new_state:
-            logger.info(f"[CircuitBreaker] Circuit '{service_name}' already closed")
+            logger.info(
+                "circuit_breaker.circuit_already_closed",
+                service_name=service_name,
+            )
             return CircuitBreakerResult.succeeded(
                 service_name=service_name,
                 previous_state=previous_state,
@@ -368,7 +383,10 @@ class ManualControlMixin:
                 reason=f"{action}: {reason}" if reason else f"{action}: manual",
             )
         except Exception as e:
-            logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+            logger.debug(
+                "circuit_breaker.audit_log_failed",
+                error=e,
+            )
 
     def _emit_state_change_metric(
         self,
@@ -439,7 +457,10 @@ class ManualControlMixin:
                             reason=f"reset: {reason}" if reason else "reset: manual",
                         )
                     except Exception as e:
-                        logger.debug(f"[CircuitBreaker] Audit log failed: {e}")
+                        logger.debug(
+                            "circuit_breaker.audit_log_failed",
+                            error=e,
+                        )
                 # Push 이벤트 - CB 상태 변경 메트릭 기록
                 if previous_state != new_state:
                     try:
@@ -466,7 +487,10 @@ class ManualControlMixin:
                     error=f"Circuit breaker for '{service_name}' does not exist",
                 )
         except Exception as e:
-            logger.error(f"[CircuitBreaker] Failed to reset: {e}")
+            logger.error(
+                "circuit_breaker.failed_reset",
+                error=e,
+            )
             return CircuitBreakerResult.failed(
                 service_name=service_name,
                 error=str(e),
@@ -522,7 +546,10 @@ class ManualControlMixin:
                         f"{previous_state} -> half_open"
                     )
         except Exception as e:
-            logger.error(f"[CircuitBreaker] Failed to check expired overrides: {e}")
+            logger.error(
+                "circuit_breaker.failed_check_expired_overrides",
+                error=e,
+            )
 
         return expired_services
 
@@ -596,7 +623,10 @@ class ManualControlMixin:
                 message=f"Manual override extended by {additional_minutes} minutes",
             )
         except Exception as e:
-            logger.error(f"[CircuitBreaker] Failed to extend override: {e}")
+            logger.error(
+                "circuit_breaker.failed_extend_override",
+                error=e,
+            )
             return CircuitBreakerResult.failed(
                 service_name=service_name,
                 error=str(e),

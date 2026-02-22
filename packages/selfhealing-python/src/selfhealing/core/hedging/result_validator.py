@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
+import structlog
 import random
 import threading
 from collections.abc import Callable
@@ -25,7 +25,7 @@ from typing import Any, Literal, TypeVar
 
 from selfhealing.core.hedging.metrics import record_result_mismatch
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -171,7 +171,7 @@ class HedgingResultValidator:
 
         # 부하 체크
         if self._should_skip_due_to_load():
-            logger.debug("[HedgingValidator] Skipped due to high load")
+            logger.debug("hedging_validator.skipped_due_high_load")
             return False
 
         if self._sample_rate >= 1.0:
@@ -259,7 +259,10 @@ class HedgingResultValidator:
                     self._record_mismatch(record)
 
             except Exception as e:
-                logger.warning(f"[HedgingValidator] Comparison failed: {e}")
+                logger.warning(
+                    "hedging_validator.comparison_failed",
+                    error=e,
+                )
 
     def _hash_value(self, value: Any) -> str:
         """
@@ -318,7 +321,10 @@ class HedgingResultValidator:
             try:
                 self._on_mismatch(record)
             except Exception as e:
-                logger.warning(f"[HedgingValidator] Callback error: {e}")
+                logger.warning(
+                    "hedging_validator.callback_error",
+                    error=e,
+                )
 
         # 5. 구조적 불일치 시 추가 처리
         if record.mismatch_type in ("type", "structure"):
@@ -351,11 +357,17 @@ class HedgingResultValidator:
                         "other_region": record.other_region,
                     },
                 )
-                logger.info(f"[HedgingValidator] Escalated to Meta-Watchdog: " f"{record.operation_id}")
+                logger.info(
+                    "hedging_validator.escalated_meta_watchdog",
+                    record=record.operation_id,
+                )
             except ImportError:
                 pass  # 에스컬레이션 모듈 없음
             except Exception as e:
-                logger.warning(f"[HedgingValidator] Escalation failed: {e}")
+                logger.warning(
+                    "hedging_validator.escalation_failed",
+                    error=e,
+                )
 
         # 영속적 저장 시도 (선택적)
         if self._persist_critical:
@@ -375,11 +387,17 @@ class HedgingResultValidator:
                         "detected_at": record.detected_at.isoformat(),
                     }
                 )
-                logger.debug(f"[HedgingValidator] Persisted to DiskBuffer: " f"{record.operation_id}")
+                logger.debug(
+                    "hedging_validator.persisted_diskbuffer",
+                    record=record.operation_id,
+                )
             except ImportError:
                 pass  # 영속화 모듈 없음
             except Exception as e:
-                logger.warning(f"[HedgingValidator] DiskBuffer write failed: {e}")
+                logger.warning(
+                    "hedging_validator.diskbuffer_write_failed",
+                    error=e,
+                )
 
     def get_mismatch_stats(self) -> dict:
         """

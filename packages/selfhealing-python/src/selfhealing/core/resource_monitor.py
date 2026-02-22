@@ -12,12 +12,12 @@ Chaos Experiment의 Resource Exhaustion이 안전 한계 내에서 동작하도�
 
 from __future__ import annotations
 
-import logging
+import structlog
 from pathlib import Path
 
 from selfhealing.settings.resource_monitor import get_resource_monitor_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CgroupResourceMonitor:
@@ -72,7 +72,10 @@ class CgroupResourceMonitor:
 
             return None
         except Exception as e:
-            logger.debug(f"[CgroupResourceMonitor] Failed to read memory max: {e}")
+            logger.debug(
+                "cgroup_resource_monitor.failed_read_memory_max",
+                error=e,
+            )
             return None
 
     @classmethod
@@ -92,7 +95,10 @@ class CgroupResourceMonitor:
 
             return None
         except Exception as e:
-            logger.debug(f"[CgroupResourceMonitor] Failed to read memory current: {e}")
+            logger.debug(
+                "cgroup_resource_monitor.failed_read_memory_current",
+                error=e,
+            )
             return None
 
     @classmethod
@@ -187,7 +193,7 @@ class CgroupResourceMonitor:
 
         if available is None:
             # cgroup 감지 불가 - 제한 없이 허용
-            logger.warning("[CgroupResourceMonitor] Cannot detect cgroup limits, " "allowing full requested amount")
+            logger.warning("cgroup_resource_monitor.cannot_detect_cgroup_limits")
             return True, requested_bytes
 
         if requested_bytes <= available:
@@ -280,7 +286,10 @@ class CgroupResourceMonitor:
 
             return max(0.0, minutes_to_oom)
         except Exception as e:
-            logger.debug(f"[CgroupResourceMonitor] OOM prediction failed: {e}")
+            logger.debug(
+                "cgroup_resource_monitor.oom_prediction_failed",
+                error=e,
+            )
             return None
 
 

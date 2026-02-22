@@ -21,7 +21,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -31,7 +31,7 @@ from typing import Any
 # HealthStatus: 단일 소스는 meta/health_probe.py (Item 9 중복 제거)
 from selfhealing.meta.health_probe import HealthStatus
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -131,7 +131,7 @@ class SidecarIPCProbe:
         self._cb_state_cache: Any | None = None
         self._event_stream_proxy: Any | None = None
 
-        logger.debug("[SidecarIPCProbe] Initialized")
+        logger.debug("sidecar_ipc_probe.initialized")
 
     def _get_uds_server(self) -> Any | None:
         """UDS 서버 가져오기 (lazy loading)."""
@@ -197,7 +197,10 @@ class SidecarIPCProbe:
                 metrics.total_requests += stats.get("total_requests", 0)
                 metrics.error_count += stats.get("error_count", 0)
             except Exception as e:
-                logger.warning(f"[SidecarIPCProbe] UDS server metrics error: {e}")
+                logger.warning(
+                    "sidecar_ipc_probe.uds_server_metrics_error",
+                    error=e,
+                )
 
         # gRPC 서버 메트릭
         grpc_server = self._get_grpc_server()
@@ -205,7 +208,10 @@ class SidecarIPCProbe:
             try:
                 metrics.grpc_active_connections = getattr(grpc_server, "connection_count", 0)
             except Exception as e:
-                logger.warning(f"[SidecarIPCProbe] gRPC server metrics error: {e}")
+                logger.warning(
+                    "sidecar_ipc_probe.grpc_server_metrics_error",
+                    error=e,
+                )
 
         # 캐시 메트릭
         cache = self._get_cb_state_cache()
@@ -218,7 +224,10 @@ class SidecarIPCProbe:
                 if total > 0:
                     metrics.cache_hit_ratio = hits / total
             except Exception as e:
-                logger.warning(f"[SidecarIPCProbe] Cache metrics error: {e}")
+                logger.warning(
+                    "sidecar_ipc_probe.cache_metrics_error",
+                    error=e,
+                )
 
         # 이벤트 스트림 메트릭
         proxy = self._get_event_stream_proxy()
@@ -226,7 +235,10 @@ class SidecarIPCProbe:
             try:
                 metrics.event_stream_count = getattr(proxy, "subscriber_count", 0)
             except Exception as e:
-                logger.warning(f"[SidecarIPCProbe] Event stream metrics error: {e}")
+                logger.warning(
+                    "sidecar_ipc_probe.event_stream_metrics_error",
+                    error=e,
+                )
 
         self._metrics = metrics
         return metrics
@@ -255,7 +267,10 @@ class SidecarIPCProbe:
 
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000
-            logger.error(f"[SidecarIPCProbe] Health check error: {e}")
+            logger.error(
+                "sidecar_ipc_probe.health_check_error",
+                error=e,
+            )
 
             result = SidecarProbeResult(
                 status=HealthStatus.UNKNOWN,

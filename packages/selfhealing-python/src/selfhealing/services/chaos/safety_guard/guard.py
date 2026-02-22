@@ -16,7 +16,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from datetime import datetime, timedelta
 from typing import Any
@@ -26,7 +26,7 @@ from selfhealing.core.timezone import now
 from .enums import ChaosBlockReason, SafetyStatus
 from .models import SafetyCheckResult, SafetyConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SafetyGuard:
@@ -87,7 +87,11 @@ class SafetyGuard:
             for key, value in kwargs.items():
                 if hasattr(self._config, key):
                     setattr(self._config, key, value)
-                    logger.info(f"[SafetyGuard] Updated config.{key} = {value}")
+                    logger.info(
+                        "safety_guard.updated_config",
+                        key=key,
+                        value=value,
+                    )
 
             self._persist_config()
             return self._config
@@ -100,7 +104,10 @@ class SafetyGuard:
             manager = get_runtime_config_manager()
             manager.update_chaos_config(safety_guard_config=self._config.to_dict())
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not persist config: {e}")
+            logger.warning(
+                "safety_guard.persist_config",
+                error=e,
+            )
 
     def _load_config(self) -> None:
         """Load configuration from storage."""
@@ -116,7 +123,10 @@ class SafetyGuard:
                     if hasattr(self._config, key):
                         setattr(self._config, key, value)
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not load config: {e}")
+            logger.warning(
+                "safety_guard.load_config",
+                error=e,
+            )
 
     # =========================================================================
     # Main Safety Check
@@ -273,7 +283,10 @@ class SafetyGuard:
             result.checks_passed.append("freeze_mode")
             return False
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Freeze mode check failed: {e}")
+            logger.warning(
+                "safety_guard.freeze_mode_check_failed",
+                error=e,
+            )
             if self._config.fail_safe_on_error:
                 result.freeze_mode_active = True
                 result.status = SafetyStatus.BLOCKED.value
@@ -356,7 +369,10 @@ class SafetyGuard:
     def _log_check_result(self, result: SafetyCheckResult, experiment_id: str) -> None:
         """Log the result of safety checks."""
         if result.status == SafetyStatus.SAFE.value:
-            logger.info(f"[SafetyGuard] All checks passed for {experiment_id}")
+            logger.info(
+                "safety_guard.all_checks_passed",
+                experiment_id=experiment_id,
+            )
         else:
             logger.warning(
                 f"[SafetyGuard] Checks passed with warnings for {experiment_id}: "
@@ -365,7 +381,10 @@ class SafetyGuard:
 
     def _handle_check_error(self, e: Exception) -> SafetyCheckResult:
         """Handle errors during safety check."""
-        logger.exception(f"[SafetyGuard] Error during safety check: {e}")
+        logger.exception(
+            "safety_guard.error_during_safety_check",
+            error=e,
+        )
 
         if self._config.fail_safe_on_error:
             return SafetyCheckResult(
@@ -443,7 +462,10 @@ class SafetyGuard:
                 "is_healthy": status.get("is_healthy", True),
             }
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not check error budget: {e}")
+            logger.warning(
+                "safety_guard.check_error_budget",
+                error=e,
+            )
             # Fail-safe: assume budget is available
             return {
                 "remaining_percent": 100.0,
@@ -459,7 +481,10 @@ class SafetyGuard:
             control = get_system_control()
             return not control.is_selfhealing_enabled()
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not check kill switch: {e}")
+            logger.warning(
+                "safety_guard.check_kill_switch",
+                error=e,
+            )
             return False
 
     def _check_system_health(self) -> dict[str, Any]:
@@ -475,7 +500,10 @@ class SafetyGuard:
                 "message": status.message if hasattr(status, "message") else "",
             }
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not check system health: {e}")
+            logger.warning(
+                "safety_guard.check_system_health",
+                error=e,
+            )
             # Fail-safe: assume healthy
             return {"healthy": True, "message": ""}
 
@@ -494,7 +522,10 @@ class SafetyGuard:
                 "items": [],
             }
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not check active incidents: {e}")
+            logger.warning(
+                "safety_guard.check_active_incidents",
+                error=e,
+            )
             return {"count": 0, "items": []}
 
     def _check_deployment_freeze(self) -> dict[str, Any]:
@@ -514,7 +545,10 @@ class SafetyGuard:
                 "reason": verdict.get("reason", ""),
             }
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not check deployment freeze: {e}")
+            logger.warning(
+                "safety_guard.check_deployment_freeze",
+                error=e,
+            )
             return {"active": False, "reason": ""}
 
     def _check_emergency_mode(self) -> dict[str, Any]:
@@ -532,7 +566,10 @@ class SafetyGuard:
                 "level_value": level.value,
             }
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not check emergency mode: {e}")
+            logger.warning(
+                "safety_guard.check_emergency_mode",
+                error=e,
+            )
             # Fail-open: 비상 모드 확인 실패 시 허용
             return {"active": False, "level": "UNKNOWN", "level_value": 0}
 
@@ -585,7 +622,10 @@ class SafetyGuard:
             )
         except Exception as e:
             # Audit 실패는 실험 차단에 영향을 주지 않음 (non-critical)
-            logger.debug(f"[SafetyGuard] Audit logging failed (non-critical): {e}")
+            logger.debug(
+                "safety_guard.audit_logging_failed_non",
+                error=e,
+            )
 
     # =========================================================================
     # Panic Threshold Check
@@ -621,7 +661,10 @@ class SafetyGuard:
                 "open_circuits": result.open_circuits,
             }
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not check panic threshold: {e}")
+            logger.warning(
+                "safety_guard.check_panic_threshold",
+                error=e,
+            )
             # Fail-open: panic threshold 확인 실패 시 허용
             return {
                 "triggered": False,
@@ -696,7 +739,10 @@ class SafetyGuard:
             )
         except Exception as e:
             # Audit 실패는 실험 차단에 영향을 주지 않음 (non-critical)
-            logger.debug(f"[SafetyGuard] Audit logging failed (non-critical): {e}")
+            logger.debug(
+                "safety_guard.audit_logging_failed_non",
+                error=e,
+            )
 
     # =========================================================================
     # Chaos Budget Check
@@ -758,7 +804,10 @@ class SafetyGuard:
             return False
 
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not check chaos budget: {e}")
+            logger.warning(
+                "safety_guard.check_chaos_budget",
+                error=e,
+            )
             result.checks_passed.append("chaos_budget")
             return False
 
@@ -851,14 +900,17 @@ class SafetyGuard:
         with self._lock:
             self._global_block = True
             self._global_block_reason = reason
-            logger.warning(f"[SafetyGuard] Global block activated: {reason}")
+            logger.warning(
+                "safety_guard.global_block_activated",
+                reason=reason,
+            )
 
     def unblock_globally(self) -> None:
         """Remove global block."""
         with self._lock:
             self._global_block = False
             self._global_block_reason = ""
-            logger.info("[SafetyGuard] Global block removed")
+            logger.info("safety_guard.global_block_removed")
 
     def is_globally_blocked(self) -> tuple[bool, str]:
         """Check if globally blocked."""
@@ -894,4 +946,7 @@ class SafetyGuard:
                     tags=["chaos", "safety", "error_budget"],
                 )
         except Exception as e:
-            logger.warning(f"[SafetyGuard] Could not send notification: {e}")
+            logger.warning(
+                "safety_guard.send_notification",
+                error=e,
+            )

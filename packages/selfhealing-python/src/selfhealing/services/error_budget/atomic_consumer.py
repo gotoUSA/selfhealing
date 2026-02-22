@@ -32,7 +32,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -41,7 +41,7 @@ from typing import Any
 
 from selfhealing.core.timezone import now as utc_now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -156,7 +156,7 @@ class AtomicBudgetConsumer:
 
                 self._redis_client = get_redis_client()
             except ImportError:
-                logger.warning("[AtomicConsumer] Redis client not available")
+                logger.warning("atomic_consumer.redis_client_available")
         return self._redis_client
 
     def consume_atomic(
@@ -279,7 +279,10 @@ class AtomicBudgetConsumer:
             )
 
         except Exception as e:
-            logger.error(f"[AtomicConsumer] Consume failed: {e}")
+            logger.error(
+                "atomic_consumer.consume_failed",
+                error=e,
+            )
             return AtomicConsumeResult(
                 success=False,
                 error_message=str(e),
@@ -303,7 +306,10 @@ class AtomicBudgetConsumer:
             """
             redis.eval(lua_script, 1, lock_key, lock_value)
         except Exception as e:
-            logger.warning(f"[AtomicConsumer] Lock release failed: {e}")
+            logger.warning(
+                "atomic_consumer.lock_release_failed",
+                error=e,
+            )
 
     def _consume_degraded(
         self,

@@ -19,7 +19,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -35,7 +35,7 @@ from .models import AlertInfo, DashboardSummary, Distribution
 if TYPE_CHECKING:
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -134,10 +134,16 @@ class DashboardService:
             full_key = f"{self.CACHE_PREFIX}{key}"
             cached = self.cache.get(full_key)
             if cached:
-                logger.debug(f"[Dashboard] Cache hit: {key}")
+                logger.debug(
+                    "dashboard.cache_hit",
+                    key=key,
+                )
                 return cached
         except Exception as e:
-            logger.warning(f"[Dashboard] Cache read error: {e}")
+            logger.warning(
+                "dashboard.cache_read_error",
+                error=e,
+            )
         return None
 
     def _set_cached(self, key: str, value: dict[str, Any], ttl_seconds: int = None) -> None:
@@ -148,9 +154,16 @@ class DashboardService:
             full_key = f"{self.CACHE_PREFIX}{key}"
             ttl = ttl_seconds or self.CACHE_TTL_SECONDS
             self.cache.set(full_key, value, ttl=timedelta(seconds=ttl))
-            logger.debug(f"[Dashboard] Cache set: {key}, ttl={ttl}s")
+            logger.debug(
+                "dashboard.cache_set",
+                key=key,
+                ttl=ttl,
+            )
         except Exception as e:
-            logger.warning(f"[Dashboard] Cache write error: {e}")
+            logger.warning(
+                "dashboard.cache_write_error",
+                error=e,
+            )
 
     def get_summary(self, skip_cache: bool = False) -> DashboardSummary:
         """
@@ -269,10 +282,13 @@ class DashboardService:
             recovery_service = get_recovery_dashboard_service()
             return recovery_service.get_recovery_summary()
         except ImportError:
-            logger.debug("[Dashboard] RecoveryDashboardService not available")
+            logger.debug("dashboard.recoverydashboardservice_available")
             return None
         except Exception as e:
-            logger.warning(f"[Dashboard] Failed to get recovery summary: {e}")
+            logger.warning(
+                "dashboard.failed_get_recovery_summary",
+                error=e,
+            )
             return None
 
     def get_status_counts(self) -> StatusCounts:
@@ -295,7 +311,10 @@ class DashboardService:
                 archived=stats.archived,
             )
         except Exception as e:
-            logger.error(f"[Dashboard] get_status_counts error: {e}")
+            logger.error(
+                "dashboard.error",
+                error=e,
+            )
             return StatusCounts()
 
     def get_recent_activity(self, hours: int = 24, days: int = 7) -> RecentActivity:
@@ -320,7 +339,10 @@ class DashboardService:
                 resolved_in_7d=activity.resolved_in_7d,
             )
         except Exception as e:
-            logger.error(f"[Dashboard] get_recent_activity error: {e}")
+            logger.error(
+                "dashboard.error",
+                error=e,
+            )
             return RecentActivity()
 
     def get_distribution(self, limit: int = 10) -> Distribution:
@@ -344,7 +366,10 @@ class DashboardService:
                 by_failure_type=[{"failure_type": f.failure_type, "count": f.count} for f in failure_dist],
             )
         except Exception as e:
-            logger.error(f"[Dashboard] get_distribution error: {e}")
+            logger.error(
+                "dashboard.error",
+                error=e,
+            )
             return Distribution()
 
     def get_alerts(self, high_retry_threshold: int = 5) -> AlertInfo:
@@ -374,7 +399,10 @@ class DashboardService:
                 avg_retry_count=round(avg_retry, 2),
             )
         except Exception as e:
-            logger.error(f"[Dashboard] get_alerts error: {e}")
+            logger.error(
+                "dashboard.error",
+                error=e,
+            )
             return AlertInfo()
 
     def calculate_resolution_rate(
@@ -460,6 +488,9 @@ def invalidate_dashboard_cache() -> None:
             for key in ["summary", "status", "activity", "distribution", "alerts"]:
                 full_key = f"{DashboardService.CACHE_PREFIX}{key}"
                 service.cache.delete(full_key)
-            logger.info("[Dashboard] Cache invalidated")
+            logger.info("dashboard.cache_invalidated")
         except Exception as e:
-            logger.warning(f"[Dashboard] Cache invalidation error: {e}")
+            logger.warning(
+                "dashboard.cache_invalidation_error",
+                error=e,
+            )

@@ -8,7 +8,7 @@ WAL 실패 시 메모리 폴백 버퍼.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -16,7 +16,7 @@ from typing import Any
 
 from selfhealing.settings.resilient_recorder import get_resilient_recorder_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_max_entries() -> int:
@@ -142,13 +142,19 @@ class InMemoryAuditBuffer:
                     else:
                         remaining.append(entry)
                 except Exception as e:
-                    logger.debug(f"[InMemoryAuditBuffer] Flush entry failed: {e}")
+                    logger.debug(
+                        "in_memory_audit_buffer.flush_entry_failed",
+                        error=e,
+                    )
                     remaining.append(entry)
 
             self._buffer = remaining
 
             if flushed > 0:
-                logger.info(f"[InMemoryAuditBuffer] Flushed {flushed} entries to WAL")
+                logger.info(
+                    "in_memory_audit_buffer.flushed_entries_wal",
+                    flushed=flushed,
+                )
 
             if remaining:
                 self._flush_failures += 1

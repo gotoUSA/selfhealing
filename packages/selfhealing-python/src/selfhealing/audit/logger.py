@@ -7,7 +7,7 @@ with privacy protection, tamper detection, and multi-backend support.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -25,7 +25,7 @@ from selfhealing.audit.masking import (
 )
 from selfhealing.audit.trace import get_trace_id, get_trace_id_full
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ConfigAuditAction(str, Enum):
@@ -173,7 +173,10 @@ class AuditLogger:
             return success
 
         except Exception as e:
-            logger.error(f"[AuditLogger] Failed to log change: {e}")
+            logger.error(
+                "audit_logger.failed_log_change",
+                error=e,
+            )
             return False
 
     def log_config_update(

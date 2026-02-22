@@ -32,7 +32,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any, ClassVar
 
@@ -42,7 +42,7 @@ from selfhealing.tasks.notification_policy import (
     NotificationTiming,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class BaseNotifyingTask:
@@ -110,7 +110,11 @@ class BaseNotifyingTask:
                 "error": str(e),
                 "error_type": type(e).__name__,
             }
-            logger.exception(f"[BaseNotifyingTask] Task {self.name} failed: {e}")
+            logger.exception(
+                "celery_task.task_failed",
+                self=self.name,
+                error=e,
+            )
 
         # 3. Post-execution hook
         self._on_post_execute(result, *args, **kwargs)
@@ -227,9 +231,12 @@ class BaseNotifyingTask:
                 return NotificationTiming.REALTIME
 
         except ImportError:
-            logger.debug("[BaseNotifyingTask] EmergencyModeManager not available")
+            logger.debug("celery_task.emergencymodemanager_available")
         except Exception as e:
-            logger.warning(f"[BaseNotifyingTask] Error checking emergency level: {e}")
+            logger.warning(
+                "celery_task.error_checking_emergency_level",
+                error=e,
+            )
 
         return policy.timing
 
@@ -297,7 +304,10 @@ class BaseNotifyingTask:
             )
 
         except Exception as e:
-            logger.error(f"[BaseNotifyingTask] Failed to send notification: {e}")
+            logger.error(
+                "celery_task.failed_send_notification",
+                error=e,
+            )
 
     def _send_pre_notification(self, *args: Any, **kwargs: Any) -> None:
         """Send pre-execution notification for high-risk tasks."""
@@ -322,7 +332,10 @@ class BaseNotifyingTask:
             )
 
         except Exception as e:
-            logger.error(f"[BaseNotifyingTask] Failed to send pre-notification: {e}")
+            logger.error(
+                "celery_task.failed_send_pre_notification",
+                error=e,
+            )
 
     def _request_approval(self, *args: Any, **kwargs: Any) -> bool:
         """
@@ -361,7 +374,10 @@ class BaseNotifyingTask:
             )
 
         except Exception as e:
-            logger.error(f"[BaseNotifyingTask] Failed to send approval request: {e}")
+            logger.error(
+                "celery_task.failed_send_approval_request",
+                error=e,
+            )
 
         # Block execution
         return False
@@ -389,7 +405,10 @@ class BaseNotifyingTask:
             # cache.set(key, current, timeout=86400)
 
         except Exception as e:
-            logger.error(f"[BaseNotifyingTask] Failed to add to daily report: {e}")
+            logger.error(
+                "celery_task.failed_add_daily_report",
+                error=e,
+            )
 
     def _record_audit_trail(self, result: dict[str, Any]) -> None:
         """Record notification event in Audit Trail."""
@@ -417,9 +436,12 @@ class BaseNotifyingTask:
             )
 
         except ImportError:
-            logger.debug("[BaseNotifyingTask] Audit logger not available")
+            logger.debug("celery_task.audit_logger_available")
         except Exception as e:
-            logger.warning(f"[BaseNotifyingTask] Failed to record audit trail: {e}")
+            logger.warning(
+                "celery_task.failed_record_audit_trail",
+                error=e,
+            )
 
     # ==========================================================================
     # Override these methods in subclass for custom behavior

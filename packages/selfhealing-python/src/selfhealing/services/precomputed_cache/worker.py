@@ -6,7 +6,7 @@ Threading.Timer based lightweight scheduling without Celery dependency.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -26,7 +26,7 @@ from .l1_cache import _l1_cache
 from .l2_cache import _l2_cache
 from .multi_tier import check_l1_l2_drift
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -58,7 +58,7 @@ class PrecomputedCacheWorker:
             if self._running:
                 return
             self._running = True
-            logger.info("[PrecomputedCache] Starting background worker")
+            logger.info("precomputed_cache.starting_background_worker")
             self._schedule_refresh()
 
     def stop(self) -> None:
@@ -68,7 +68,7 @@ class PrecomputedCacheWorker:
             if self._timer:
                 self._timer.cancel()
                 self._timer = None
-            logger.info("[PrecomputedCache] Stopped background worker")
+            logger.info("precomputed_cache.stopped_background_worker")
 
     def _schedule_refresh(self) -> None:
         """Schedule the next refresh."""
@@ -99,12 +99,19 @@ class PrecomputedCacheWorker:
                 record_cache_refresh(cache_key, success=True)
 
             except Exception as e:
-                logger.warning(f"[PrecomputedCache] Refresh failed for {cache_key}: {e}")
+                logger.warning(
+                    "precomputed_cache.refresh_failed",
+                    cache_key=cache_key,
+                    error=e,
+                )
                 # Prometheus 메트릭: refresh 실패
                 record_cache_refresh(cache_key, success=False)
 
         elapsed_ms = (time.perf_counter() - start_time) * 1000
-        logger.debug(f"[PrecomputedCache] Refresh completed in {elapsed_ms:.1f}ms")
+        logger.debug(
+            "precomputed_cache.refresh_completed_ms",
+            elapsed_ms=elapsed_ms,
+        )
 
         # Schedule next refresh
         self._schedule_refresh()

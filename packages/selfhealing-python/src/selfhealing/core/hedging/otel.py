@@ -12,12 +12,12 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from contextlib import contextmanager
 from typing import Any, Generator
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _is_otel_enabled() -> bool:
@@ -96,7 +96,10 @@ def hedging_span(
                     },
                 )
         except Exception as e:
-            logger.debug(f"[HedgingOTel] Failed to create span: {e}")
+            logger.debug(
+                "hedging_o_tel.failed_create_span",
+                error=e,
+            )
 
     if span is None:
         span = _NoOpSpan()
@@ -154,4 +157,7 @@ def record_hedging_result(
         if benefit_ms is not None:
             span.set_attribute("hedging.benefit_ms", benefit_ms)
     except Exception as e:
-        logger.debug(f"[HedgingOTel] Failed to record result: {e}")
+        logger.debug(
+            "hedging_o_tel.failed_record_result",
+            error=e,
+        )

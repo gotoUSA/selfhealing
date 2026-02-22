@@ -27,7 +27,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from celery.signals import before_task_publish
@@ -40,7 +40,7 @@ from selfhealing.context.causation_context import (
     get_causation_for_celery,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -74,7 +74,10 @@ def on_before_task_publish(
 
     # 이미 causation 헤더가 있으면 덮어쓰지 않음 (명시적 설정 우선)
     if headers.get(CELERY_HEADER_CASCADE_ID):
-        logger.debug(f"[CausationPropagation] Causation headers already set for task: {sender}")
+        logger.debug(
+            "causation_propagation.causation_headers_already_set",
+            sender=sender,
+        )
         return
 
     # 현재 CausationContext에서 헤더 생성
@@ -201,14 +204,14 @@ def setup_celery_causation_propagation() -> None:
     global _before_task_publish_connected
 
     if _before_task_publish_connected:
-        logger.debug("[CausationPropagation] Already connected")
+        logger.debug("causation_propagation.already_connected")
         return
 
     # before_task_publish는 @before_task_publish.connect 데코레이터로 이미 연결됨
     # 여기서는 연결 상태만 표시
     _before_task_publish_connected = True
 
-    logger.info("[CausationPropagation] Celery causation propagation enabled")
+    logger.info("causation_propagation.celery_causation_propagation_enabled")
 
 
 __all__ = [

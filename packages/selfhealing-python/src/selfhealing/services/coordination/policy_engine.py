@@ -12,7 +12,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -21,7 +21,7 @@ from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from .enums import ActionType, EmergencyScope
 from .models import CoordinationAction
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -260,7 +260,10 @@ class CoordinationPolicyEngine:
         """
         self._policies.append(policy)
         self._policies.sort(key=lambda p: p.priority, reverse=True)
-        logger.info(f"[PolicyEngine] Policy added: {policy.name}")
+        logger.info(
+            "policy_engine.policy_added",
+            policy=policy.name,
+        )
 
     def remove_policy(self, name: str) -> bool:
         """
@@ -276,7 +279,10 @@ class CoordinationPolicyEngine:
         self._policies = [p for p in self._policies if p.name != name]
 
         if len(self._policies) < original_count:
-            logger.info(f"[PolicyEngine] Policy removed: {name}")
+            logger.info(
+                "policy_engine.policy_removed",
+                name=name,
+            )
             return True
         return False
 
@@ -285,7 +291,10 @@ class CoordinationPolicyEngine:
         policy = self.get_policy_by_name(name)
         if policy:
             policy.enabled = True
-            logger.info(f"[PolicyEngine] Policy enabled: {name}")
+            logger.info(
+                "policy_engine.policy_enabled",
+                name=name,
+            )
             return True
         return False
 
@@ -294,7 +303,10 @@ class CoordinationPolicyEngine:
         policy = self.get_policy_by_name(name)
         if policy:
             policy.enabled = False
-            logger.info(f"[PolicyEngine] Policy disabled: {name}")
+            logger.info(
+                "policy_engine.policy_disabled",
+                name=name,
+            )
             return True
         return False
 

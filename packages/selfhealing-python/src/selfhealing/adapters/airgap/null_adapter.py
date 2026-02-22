@@ -7,12 +7,12 @@ All operations are pass-through with no side effects.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.adapters.airgap.base import BaseAirGapAdapter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class NullAirGapAdapter(BaseAirGapAdapter):
@@ -35,7 +35,7 @@ class NullAirGapAdapter(BaseAirGapAdapter):
 
     def __init__(self) -> None:
         """Initialize NullAirGapAdapter."""
-        logger.debug("[AirGap] NullAirGapAdapter initialized (Air-Gap disabled)")
+        logger.debug("air_gap.nullairgapadapter_initialized_air_gap")
 
     def write_summary(self, key: str, value: Any, ttl: int | None = None) -> bool:
         """

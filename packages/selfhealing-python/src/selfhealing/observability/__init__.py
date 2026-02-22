@@ -7,9 +7,9 @@ and compatibility layer with existing trace_id system.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Module-level state
 _initialized: bool = False
@@ -49,7 +49,7 @@ def initialize_opentelemetry() -> bool:
 
     # Check if OTEL is available
     if not _is_otel_available():
-        logger.debug("OpenTelemetry SDK not installed. Skipping initialization.")
+        logger.debug("opentelemetry_sdk_installed_skipping")
         _initialized = True
         return False
 
@@ -59,7 +59,7 @@ def initialize_opentelemetry() -> bool:
     settings = get_otel_settings()
 
     if not settings.enabled:
-        logger.debug("OpenTelemetry disabled via OTEL_ENABLED=false")
+        logger.debug("opentelemetry_disabled_via")
         _initialized = True
         return False
 
@@ -139,7 +139,10 @@ def initialize_opentelemetry() -> bool:
         return True
 
     except Exception as e:
-        logger.warning("Failed to initialize OpenTelemetry: %s", e)
+        logger.warning(
+            "failed_initialize_opentelemetry",
+            error=e,
+        )
         _initialized = True
         return False
 
@@ -253,17 +256,23 @@ def shutdown_opentelemetry() -> None:
     if _logger_provider is not None:
         try:
             _logger_provider.shutdown()
-            logger.debug("OpenTelemetry LoggerProvider shutdown completed")
+            logger.debug("opentelemetry_loggerprovider_shutdown_completed")
         except Exception as e:
-            logger.warning("Error during LoggerProvider shutdown: %s", e)
+            logger.warning(
+                "error_during_loggerprovider_shutdown",
+                error=e,
+            )
         _logger_provider = None
 
     if _tracer_provider is not None:
         try:
             _tracer_provider.shutdown()
-            logger.debug("OpenTelemetry TracerProvider shutdown completed")
+            logger.debug("opentelemetry_tracerprovider_shutdown_completed")
         except Exception as e:
-            logger.warning("Error during TracerProvider shutdown: %s", e)
+            logger.warning(
+                "error_during_tracerprovider_shutdown",
+                error=e,
+            )
 
     _tracer_provider = None
     _tracer = None
@@ -311,14 +320,17 @@ def instrument_requests() -> bool:
 
         RequestsInstrumentor().instrument()
         _requests_instrumented = True
-        logger.info("OpenTelemetry requests instrumentation enabled")
+        logger.info("opentelemetry_requests_instrumentation_enabled")
         return True
 
     except ImportError:
-        logger.debug("opentelemetry-instrumentation-requests not installed")
+        logger.debug("opentelemetry_instrumentation_requests_installed")
         return False
     except Exception as e:
-        logger.warning("Failed to instrument requests: %s", e)
+        logger.warning(
+            "failed_instrument_requests",
+            error=e,
+        )
         return False
 
 
@@ -338,7 +350,7 @@ def uninstrument_requests() -> None:
 
         RequestsInstrumentor().uninstrument()
         _requests_instrumented = False
-        logger.debug("OpenTelemetry requests instrumentation disabled")
+        logger.debug("opentelemetry_requests_instrumentation_disabled")
     except Exception:
         pass
 
@@ -366,14 +378,17 @@ def instrument_celery() -> bool:
 
         CeleryInstrumentor().instrument()
         _celery_instrumented = True
-        logger.info("OpenTelemetry Celery instrumentation enabled")
+        logger.info("opentelemetry_celery_instrumentation_enabled")
         return True
 
     except ImportError:
-        logger.debug("opentelemetry-instrumentation-celery not installed")
+        logger.debug("opentelemetry_instrumentation_celery_installed")
         return False
     except Exception as e:
-        logger.warning("Failed to instrument Celery: %s", e)
+        logger.warning(
+            "failed_instrument_celery",
+            error=e,
+        )
         return False
 
 
@@ -393,7 +408,7 @@ def uninstrument_celery() -> None:
 
         CeleryInstrumentor().uninstrument()
         _celery_instrumented = False
-        logger.debug("OpenTelemetry Celery instrumentation disabled")
+        logger.debug("opentelemetry_celery_instrumentation_disabled")
     except Exception:
         pass
 
@@ -447,7 +462,7 @@ def instrument_django() -> bool:
         settings = get_otel_settings()
 
         if not settings.django_instrument_enabled:
-            logger.debug("Django instrumentation disabled via OTEL_DJANGO_INSTRUMENT_ENABLED=false")
+            logger.debug("django_instrumentation_disabled_via")
             return False
 
         # excluded_urls 설정 적용 — 환경변수 OTEL_PYTHON_DJANGO_EXCLUDED_URLS 사용
@@ -464,10 +479,13 @@ def instrument_django() -> bool:
         return True
 
     except ImportError:
-        logger.debug("opentelemetry-instrumentation-django not installed")
+        logger.debug("opentelemetry_instrumentation_django_installed")
         return False
     except Exception as e:
-        logger.warning("Failed to instrument Django: %s", e)
+        logger.warning(
+            "failed_instrument_django",
+            error=e,
+        )
         return False
 
 
@@ -487,7 +505,7 @@ def uninstrument_django() -> None:
 
         DjangoInstrumentor().uninstrument()
         _django_instrumented = False
-        logger.debug("OpenTelemetry Django instrumentation disabled")
+        logger.debug("opentelemetry_django_instrumentation_disabled")
     except Exception:
         pass
 
@@ -527,7 +545,7 @@ def initialize_logger_provider() -> bool:
         return False
 
     if not _is_otel_logging_available():
-        logger.debug("OpenTelemetry logging SDK not installed. Skipping LoggerProvider initialization.")
+        logger.debug("opentelemetry_logging_sdk_installed")
         return False
 
     try:
@@ -573,7 +591,10 @@ def initialize_logger_provider() -> bool:
         return True
 
     except Exception as e:
-        logger.warning("Failed to initialize OpenTelemetry LoggerProvider: %s", e)
+        logger.warning(
+            "failed_initialize_opentelemetry_loggerprovider",
+            error=e,
+        )
         return False
 
 
@@ -622,14 +643,17 @@ def instrument_logging() -> bool:
         )
 
         _logging_instrumented = True
-        logger.info("OpenTelemetry logging instrumentation enabled with trace context injection")
+        logger.info("opentelemetry_logging_instrumentation_enabled")
         return True
 
     except ImportError:
-        logger.debug("opentelemetry-instrumentation-logging not installed")
+        logger.debug("opentelemetry_instrumentation_logging_installed")
         return False
     except Exception as e:
-        logger.warning("Failed to instrument logging: %s", e)
+        logger.warning(
+            "failed_instrument_logging",
+            error=e,
+        )
         return False
 
 
@@ -649,7 +673,7 @@ def uninstrument_logging() -> None:
 
         LoggingInstrumentor().uninstrument()
         _logging_instrumented = False
-        logger.debug("OpenTelemetry logging instrumentation disabled")
+        logger.debug("opentelemetry_logging_instrumentation_disabled")
     except Exception:
         pass
 
@@ -665,8 +689,11 @@ def shutdown_logger_provider() -> None:
     if _logger_provider is not None:
         try:
             _logger_provider.shutdown()
-            logger.debug("OpenTelemetry LoggerProvider shutdown completed")
+            logger.debug("opentelemetry_loggerprovider_shutdown_completed")
         except Exception as e:
-            logger.warning("Error during LoggerProvider shutdown: %s", e)
+            logger.warning(
+                "error_during_loggerprovider_shutdown",
+                error=e,
+            )
 
     _logger_provider = None

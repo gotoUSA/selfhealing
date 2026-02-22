@@ -17,7 +17,7 @@ Ingress spec.rules의 backend.service.name을 직접 교체하여
 from __future__ import annotations
 
 import copy
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -26,7 +26,7 @@ from selfhealing.interfaces.traffic_routing import (
     TrafficRoutingAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
@@ -73,9 +73,12 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
             self._networking_v1 = client.NetworkingV1Api()
             self._is_available = True
         except ImportError:
-            logger.warning("[K8sIngressTrafficRouter] kubernetes package not installed")
+            logger.warning("k8s_ingress_traffic_router.kubernetes_package_installed")
         except Exception as e:
-            logger.warning(f"[K8sIngressTrafficRouter] Init failed: {e}")
+            logger.warning(
+                "k8s_ingress_traffic_router.init_failed",
+                error=e,
+            )
 
     def switch_primary(self, from_region: str, to_region: str) -> RoutingChange:
         """
@@ -192,7 +195,10 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
             )
 
         except Exception as e:
-            logger.error(f"[K8sIngressTrafficRouter] Switch failed: {e}")
+            logger.error(
+                "k8s_ingress_traffic_router.switch_failed",
+                error=e,
+            )
             return RoutingChange(
                 success=False,
                 from_region=from_region,
@@ -257,4 +263,7 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
                 )
             )
         except Exception as e:
-            logger.error(f"[K8sIngressTrafficRouter] Event publish failed: {e}")
+            logger.error(
+                "k8s_ingress_traffic_router.event_publish_failed",
+                error=e,
+            )

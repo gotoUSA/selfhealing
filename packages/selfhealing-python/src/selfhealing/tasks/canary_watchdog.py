@@ -30,7 +30,7 @@ Celery Beat 설정 예시:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from selfhealing.services.canary import CanaryRollout
     from selfhealing.settings.canary_watchdog import CanaryWatchdogSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -255,7 +255,7 @@ class RolloutWatchdog:
             )
 
         except Exception as e:
-            logger.exception("[Watchdog] Scan failed")
+            logger.exception("watchdog.scan_failed")
             result.success = False
             result.errors.append(str(e))
 
@@ -304,7 +304,11 @@ class RolloutWatchdog:
 
             if triggered_by in ZOMBIE_EXEMPT_TRIGGERS:
                 # 정상적인 대기 상태 - Zombie 아님
-                logger.debug(f"[Watchdog] Rollout {rollout.id} excluded from zombie check: " f"triggered_by={triggered_by}")
+                logger.debug(
+                    "watchdog.rollout_excluded_zombie_check",
+                    rollout=rollout.id,
+                    triggered_by=triggered_by,
+                )
                 return None
 
             # 그 외 PAUSED는 기존 로직 적용
@@ -356,10 +360,17 @@ class RolloutWatchdog:
                 )
                 if success:
                     self._send_notification(zombie, "auto_rolled_back")
-                    logger.warning(f"[Watchdog] Auto rolled back: {rollout.id} - {zombie.reason}")
+                    logger.warning(
+                        "watchdog.auto_rolled_back",
+                        rollout=rollout.id,
+                        zombie=zombie.reason,
+                    )
                     return "auto_rolled_back"
             except Exception as e:
-                logger.error(f"[Watchdog] Auto rollback failed: {e}")
+                logger.error(
+                    "watchdog.auto_rollback_failed",
+                    error=e,
+                )
                 return "rollback_failed"
 
         # 알림만 전송
@@ -415,7 +426,10 @@ class RolloutWatchdog:
             )
 
         except Exception as e:
-            logger.warning(f"[Watchdog] Notification failed: {e}")
+            logger.warning(
+                "watchdog.notification_failed",
+                error=e,
+            )
 
     def auto_promote_eligible(self) -> WatchdogResult:
         """
@@ -451,7 +465,10 @@ class RolloutWatchdog:
             )
 
             if not governance.allowed:
-                logger.warning(f"[Watchdog] Auto promotion blocked by governance: " f"{governance.block_message}")
+                logger.warning(
+                    "watchdog.auto_promotion_blocked_governance",
+                    governance=governance.block_message,
+                )
 
                 # Prometheus 메트릭 기록
                 self._record_governance_blocked_metrics(governance)
@@ -461,13 +478,16 @@ class RolloutWatchdog:
                 return result
 
         except ImportError:
-            logger.debug("[Watchdog] GovernanceChecks not available, skipping")
+            logger.debug("watchdog.governancechecks_available_skipping")
             # Fail-Closed: Import 실패 시에도 차단 (보수적 정책)
             result.governance_blocked = True
             result.governance_block_reason = "GovernanceChecks module not available"
             return result
         except Exception as e:
-            logger.warning(f"[Watchdog] Governance check failed: {e}")
+            logger.warning(
+                "watchdog.governance_check_failed",
+                error=e,
+            )
             # Fail-Closed: 에러 시에도 차단 (변경 작업은 보수적으로)
             result.governance_blocked = True
             result.governance_block_reason = f"Governance check error: {e}"
@@ -498,12 +518,16 @@ class RolloutWatchdog:
                     success = self.service.promote(rollout.id, force=False)
                     if success:
                         result.promote_count += 1
-                        logger.info(f"[Watchdog] Auto promoted: {rollout.id} " f"(stage: {stage.name})")
+                        logger.info(
+                            "watchdog.auto_promoted_stage",
+                            rollout=rollout.id,
+                            stage=stage.name,
+                        )
                 except Exception as e:
                     result.errors.append(f"{rollout.id}: {e}")
 
         except Exception as e:
-            logger.exception("[Watchdog] Auto promote scan failed")
+            logger.exception("watchdog.auto_promote_scan_failed")
             result.success = False
             result.errors.append(str(e))
 
@@ -523,7 +547,10 @@ class RolloutWatchdog:
             pending_count = len(self.service.get_active_rollouts())
             canary_pending_promotion_gauge.labels(reason=block_reason).set(pending_count)
         except Exception as e:
-            logger.debug(f"[Watchdog] Metrics recording failed: {e}")
+            logger.debug(
+                "watchdog.metrics_recording_failed",
+                error=e,
+            )
 
 
 # =============================================================================

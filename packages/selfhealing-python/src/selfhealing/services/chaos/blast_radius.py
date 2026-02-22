@@ -12,7 +12,7 @@ Levels:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
@@ -21,7 +21,7 @@ from typing import Any
 from selfhealing.core.timezone import now
 from selfhealing.settings import ChaosBlastRadiusSettings, get_layered_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -196,9 +196,15 @@ class ChaosBlastRadiusPolicy:
         excluded_domains = parse_list("CHAOS_EXCLUDED_DOMAINS")
 
         if excluded_services:
-            logger.info(f"[BlastRadius] Loaded excluded services from env: {excluded_services}")
+            logger.info(
+                "blast_radius.loaded_excluded_services_env",
+                excluded_services=excluded_services,
+            )
         if excluded_domains:
-            logger.info(f"[BlastRadius] Loaded excluded domains from env: {excluded_domains}")
+            logger.info(
+                "blast_radius.loaded_excluded_domains_env",
+                excluded_domains=excluded_domains,
+            )
 
         return cls(
             excluded_services=excluded_services,
@@ -219,13 +225,20 @@ class ChaosBlastRadiusPolicy:
             True if 서비스가 실험 대상으로 허용됨
         """
         if service_name in self.excluded_services:
-            logger.warning(f"[BlastRadius] Service '{service_name}' is in excluded list")
+            logger.warning(
+                "blast_radius.service_excluded_list",
+                service_name=service_name,
+            )
             return False
 
         # 도메인 패턴 매칭 (서비스명에 도메인이 포함된 경우)
         for domain in self.excluded_domains:
             if domain.lower() in service_name.lower():
-                logger.warning(f"[BlastRadius] Service '{service_name}' matches " f"excluded domain '{domain}'")
+                logger.warning(
+                    "blast_radius.service_matches_excluded_domain",
+                    service_name=service_name,
+                    domain=domain,
+                )
                 return False
 
         return True
@@ -380,7 +393,10 @@ class BlastRadiusManager:
                 reason=reason,
             )
         except Exception as e:
-            logger.debug(f"[BlastRadiusManager] Audit logging failed: {e}")
+            logger.debug(
+                "blast_radius_manager.audit_logging_failed",
+                error=e,
+            )
 
     # =========================================================================
     # Policy Management
@@ -404,7 +420,11 @@ class BlastRadiusManager:
             for key, value in kwargs.items():
                 if hasattr(self._policy, key):
                     setattr(self._policy, key, value)
-                    logger.info(f"[BlastRadius] Updated policy.{key} = {value}")
+                    logger.info(
+                        "blast_radius.updated_policy",
+                        key=key,
+                        value=value,
+                    )
 
             self._persist_policy()
             return self._policy
@@ -417,7 +437,10 @@ class BlastRadiusManager:
             manager = get_runtime_config_manager()
             manager.update_chaos_config(blast_radius_policy=self._policy.to_dict())
         except Exception as e:
-            logger.warning(f"[BlastRadius] Could not persist policy: {e}")
+            logger.warning(
+                "blast_radius.persist_policy",
+                error=e,
+            )
 
     def _load_policy(self) -> None:
         """Load policy from storage."""
@@ -433,7 +456,10 @@ class BlastRadiusManager:
                     if hasattr(self._policy, key):
                         setattr(self._policy, key, value)
         except Exception as e:
-            logger.warning(f"[BlastRadius] Could not load policy: {e}")
+            logger.warning(
+                "blast_radius.load_policy",
+                error=e,
+            )
 
     # =========================================================================
     # Blast Radius Validation
@@ -633,7 +659,11 @@ class BlastRadiusManager:
                 "target_domain": target_domain,
                 "started_at": now().isoformat(),
             }
-            logger.info(f"[BlastRadius] Registered experiment {experiment_id} at {blast_radius.value} level")
+            logger.info(
+                "cell_registry.bulkheads_registered",
+                experiment_id=experiment_id,
+                blast_radius=blast_radius.value,
+            )
             return True
 
     def unregister_experiment(self, experiment_id: str) -> bool:
@@ -649,7 +679,10 @@ class BlastRadiusManager:
         with self._lock:
             if experiment_id in self._active_experiments:
                 del self._active_experiments[experiment_id]
-                logger.info(f"[BlastRadius] Unregistered experiment {experiment_id}")
+                logger.info(
+                    "blast_radius.unregistered_experiment",
+                    experiment_id=experiment_id,
+                )
                 return True
             return False
 
@@ -740,7 +773,11 @@ class BlastRadiusManager:
 
             self._approved_experiments.add(experiment_id)
 
-            logger.info(f"[BlastRadius] Experiment {experiment_id} approved by {approved_by}")
+            logger.info(
+                "blast_radius.experiment_approved",
+                experiment_id=experiment_id,
+                approved_by=approved_by,
+            )
 
             # Audit record
             self._record_approval_decision(request)
@@ -774,7 +811,12 @@ class BlastRadiusManager:
             request.approved_at = now().isoformat()
             request.denial_reason = reason
 
-            logger.info(f"[BlastRadius] Experiment {experiment_id} denied by {denied_by}: {reason}")
+            logger.info(
+                "blast_radius.experiment_denied",
+                experiment_id=experiment_id,
+                denied_by=denied_by,
+                reason=reason,
+            )
 
             # Audit record
             self._record_approval_decision(request)
@@ -843,7 +885,10 @@ class BlastRadiusManager:
                     tags=["chaos", "approval", request.blast_radius],
                 )
         except Exception as e:
-            logger.warning(f"[BlastRadius] Could not send approval notification: {e}")
+            logger.warning(
+                "blast_radius.send_approval_notification",
+                error=e,
+            )
 
     def _record_approval_decision(self, request: ChaosApprovalRequest) -> None:
         """Record approval decision to audit trail."""
@@ -855,7 +900,10 @@ class BlastRadiusManager:
                 f"by={request.approved_by}"
             )
         except Exception as e:
-            logger.warning(f"[BlastRadius] Could not record decision: {e}")
+            logger.warning(
+                "blast_radius.record_decision",
+                error=e,
+            )
 
 
 # =============================================================================

@@ -10,12 +10,12 @@ Tasks:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -62,7 +62,7 @@ def flush_redis_audit_to_db(
         redis_buffer = create_redis_audit_buffer(redis_url)
 
         if redis_buffer is None:
-            logger.warning("[flush_redis_audit_to_db] Redis buffer unavailable")
+            logger.warning("flush_redis_audit_to_db.redis_buffer_unavailable")
             return {
                 "success": False,
                 "flushed_count": 0,
@@ -83,7 +83,11 @@ def flush_redis_audit_to_db(
 
         duration_ms = (time.time() - start) * 1000
 
-        logger.info(f"[flush_redis_audit_to_db] Flushed {flushed_count} entries " f"in {duration_ms:.1f}ms")
+        logger.info(
+            "flush_redis_audit_to_db.flushed_entries_ms",
+            flushed_count=flushed_count,
+            duration_ms=duration_ms,
+        )
 
         return {
             "success": True,
@@ -122,7 +126,7 @@ def retry_audit_fallback_buffer() -> dict[str, Any]:
         redis_buffer = create_redis_audit_buffer(redis_url)
 
         if redis_buffer is None:
-            logger.warning("[retry_audit_fallback_buffer] Redis buffer unavailable")
+            logger.warning("retry_audit_fallback_buffer.redis_buffer_unavailable")
             return {
                 "success": False,
                 "recovered_count": 0,
@@ -133,7 +137,11 @@ def retry_audit_fallback_buffer() -> dict[str, Any]:
         recovered_count = redis_buffer.retry_fallback_buffer()
         remaining_count = redis_buffer.get_fallback_buffer_size()
 
-        logger.info(f"[retry_audit_fallback_buffer] Recovered {recovered_count} entries, " f"{remaining_count} remaining")
+        logger.info(
+            "retry_audit_fallback_buffer.recovered_entries_remaining",
+            recovered_count=recovered_count,
+            remaining_count=remaining_count,
+        )
 
         return {
             "success": True,
@@ -170,7 +178,10 @@ def get_redis_audit_buffer_stats() -> dict[str, Any]:
         return redis_buffer.get_buffer_stats()
 
     except Exception as e:
-        logger.error(f"[get_redis_audit_buffer_stats] Failed: {e}")
+        logger.error(
+            "get_redis_audit_buffer_stats.failed",
+            error=e,
+        )
         return {"error": str(e)}
 
 
@@ -236,7 +247,7 @@ def register_audit_flush_tasks_with_celery(app) -> None:
         acks_late=True,
     )(lambda self: retry_audit_fallback_buffer())
 
-    logger.info("[AuditFlush] Registered audit flush tasks with Celery")
+    logger.info("cell_registry.bulkheads_registered")
 
 
 __all__ = [

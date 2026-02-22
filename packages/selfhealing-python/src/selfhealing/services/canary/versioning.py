@@ -23,10 +23,13 @@ Usage:
         )
     except VersionConflictError as e:
         # 충돌 처리
-        logger.warning(f"Conflict: {e.conflicting_operator} modified config")
+        logger.warning(
+            "conflict_modified_config",
+            e=e.conflicting_operator,
+        )
 """
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 from selfhealing.utils.time import utc_now
@@ -34,7 +37,7 @@ from selfhealing.utils.time import utc_now
 if TYPE_CHECKING:
     from selfhealing.services.config_history import ConfigVersion
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class VersionConflictError(Exception):
@@ -252,6 +255,9 @@ def _log_version_conflict(
             details=conflict_details,
         )
     except ImportError:
-        logger.debug("[VersionConflict] Audit system not available")
+        logger.debug("version_conflict.audit_system_available")
     except Exception as e:
-        logger.debug(f"[VersionConflict] Audit log failed: {e}")
+        logger.debug(
+            "version_conflict.audit_log_failed",
+            error=e,
+        )

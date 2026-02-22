@@ -4,7 +4,7 @@ Rollback DNA Service - 롤백 관리 서비스
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 import uuid
 from collections.abc import Callable
@@ -19,7 +19,7 @@ from .models import (
     RollbackStrategy,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RollbackService:
@@ -51,7 +51,7 @@ class RollbackService:
         self._enabled = True
         self._initialized = True
 
-        logger.info("RollbackService initialized")
+        logger.info("rollbackservice_initialized")
 
     def set_policy(
         self,
@@ -84,7 +84,11 @@ class RollbackService:
             require_approval=require_approval,
         )
         self._policies[stage_name] = policy
-        logger.info(f"Rollback policy set for {stage_name}: {strategy.value}")
+        logger.info(
+            "rollback_policy_set",
+            stage_name=stage_name,
+            strategy=strategy.value,
+        )
         return policy
 
     def get_policy(self, stage_name: str) -> RollbackPolicy | None:
@@ -104,7 +108,10 @@ class RollbackService:
             handler: 롤백 실행 함수
         """
         self._rollback_handlers[component] = handler
-        logger.info(f"Rollback handler registered: {component}")
+        logger.info(
+            "rollback_handler_registered",
+            component=component,
+        )
 
     def _log_audit(
         self,
@@ -141,7 +148,10 @@ class RollbackService:
             )
         except Exception as e:
             # Fail-Open: Audit 실패가 롤백을 중단시키지 않음
-            logger.debug(f"[RollbackService] Audit logging failed (ignored): {e}")
+            logger.debug(
+                "rollback_service.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def request_rollback(
         self,
@@ -184,7 +194,11 @@ class RollbackService:
             state=RollbackState.PENDING,
         )
 
-        logger.info(f"Rollback requested: {request_id} for {stage_name}")
+        logger.info(
+            "rollback_requested",
+            request_id=request_id,
+            stage_name=stage_name,
+        )
 
         # Audit 기록: 롤백 요청
         self._log_audit(
@@ -235,7 +249,10 @@ class RollbackService:
         policy = self._policies.get(request.stage_name)
         timeout = policy.timeout_seconds if policy else 120
 
-        logger.info(f"Executing rollback: {request_id}")
+        logger.info(
+            "executing_rollback",
+            request_id=request_id,
+        )
 
         try:
             start_time = time.time()
@@ -280,7 +297,10 @@ class RollbackService:
             result.state = RollbackState.FAILED
             result.message = str(e)
             result.errors.append(str(e))
-            logger.error(f"Rollback failed: {e}")
+            logger.error(
+                "rollback_failed",
+                error=e,
+            )
 
         finally:
             result.completed_at = datetime.now(timezone.utc)
@@ -316,7 +336,10 @@ class RollbackService:
             result.state = RollbackState.CANCELLED
             result.message = "Rollback cancelled"
             result.completed_at = datetime.now(timezone.utc)
-            logger.info(f"Rollback cancelled: {request_id}")
+            logger.info(
+                "rollback_cancelled",
+                request_id=request_id,
+            )
             return True
         return False
 

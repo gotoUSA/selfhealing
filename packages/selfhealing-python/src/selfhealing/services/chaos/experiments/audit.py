@@ -8,7 +8,7 @@ Includes:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.services.chaos.base import (
@@ -21,7 +21,7 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     REPLAY_FLOOD_HYPOTHESIS,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditStorageFailureExperiment(ChaosExperiment):
@@ -83,17 +83,23 @@ class AuditStorageFailureExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[AuditStorageFailure] Failed to inject: {e}")
+            logger.error(
+                "audit_storage_failure.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
         """Remove audit storage failure injection."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info("[AuditStorageFailure] Rollback already completed")
+                logger.info("audit_storage_failure.rollback_already_completed")
                 return
 
-            logger.info(f"[AuditStorageFailure] Rolling back {self.experiment_id}")
+            logger.info(
+                "audit_storage_failure.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -107,7 +113,10 @@ class AuditStorageFailureExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[AuditStorageFailure] Rollback failed: {e}")
+                logger.error(
+                    "audit_storage_failure.rollback_failed",
+                    error=e,
+                )
 
     # =========================================================================
     # Resilience 검증 헬퍼 메서드
@@ -135,10 +144,13 @@ class AuditStorageFailureExperiment(ChaosExperiment):
                 "circuit_breaker_state": status.circuit_breaker_state,
             }
         except ImportError:
-            logger.debug("[AuditStorageFailure] Resilience manager not available")
+            logger.debug("audit_storage_failure.resilience_manager_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[AuditStorageFailure] Fallback verification failed: {e}")
+            logger.warning(
+                "audit_storage_failure.fallback_verification_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def verify_buffer_behavior(self) -> dict[str, Any]:
@@ -164,10 +176,13 @@ class AuditStorageFailureExperiment(ChaosExperiment):
                 "oldest_entry_age_seconds": buffer_status.oldest_entry_age_seconds,
             }
         except ImportError:
-            logger.debug("[AuditStorageFailure] Resilience manager not available")
+            logger.debug("audit_storage_failure.resilience_manager_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[AuditStorageFailure] Buffer verification failed: {e}")
+            logger.warning(
+                "audit_storage_failure.buffer_verification_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
 
@@ -236,17 +251,23 @@ class ReplayFloodExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[ReplayFlood] Failed to inject: {e}")
+            logger.error(
+                "replay_flood.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
         """Stop replay flood simulation."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info("[ReplayFlood] Rollback already completed")
+                logger.info("replay_flood.rollback_already_completed")
                 return
 
-            logger.info(f"[ReplayFlood] Rolling back {self.experiment_id}")
+            logger.info(
+                "replay_flood.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -260,7 +281,10 @@ class ReplayFloodExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[ReplayFlood] Rollback failed: {e}")
+                logger.error(
+                    "replay_flood.rollback_failed",
+                    error=e,
+                )
 
     # =========================================================================
     # Flood 시뮬레이션 헬퍼
@@ -324,10 +348,13 @@ class ReplayFloodExperiment(ChaosExperiment):
                     else:
                         results["rejected"] += 1
         except ImportError:
-            logger.debug("[ReplayFlood] Replay queue service not available")
+            logger.debug("replay_flood.replay_queue_service_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[ReplayFlood] Flood batch failed: {e}")
+            logger.warning(
+                "replay_flood.flood_batch_failed",
+                error=e,
+            )
             results["error"] = str(e)
 
         return results
@@ -355,10 +382,13 @@ class ReplayFloodExperiment(ChaosExperiment):
                 "window_seconds": status.window_seconds,
             }
         except ImportError:
-            logger.debug("[ReplayFlood] Replay queue service not available")
+            logger.debug("replay_flood.replay_queue_service_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[ReplayFlood] Rate limit verification failed: {e}")
+            logger.warning(
+                "replay_flood.rate_limit_verification_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def verify_backpressure(self) -> dict[str, Any]:
@@ -384,10 +414,13 @@ class ReplayFloodExperiment(ChaosExperiment):
                 "throttle_percent": status.throttle_percent,
             }
         except ImportError:
-            logger.debug("[ReplayFlood] Replay queue service not available")
+            logger.debug("replay_flood.replay_queue_service_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[ReplayFlood] Backpressure verification failed: {e}")
+            logger.warning(
+                "replay_flood.backpressure_verification_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
 

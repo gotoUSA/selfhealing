@@ -6,7 +6,7 @@ Collects and aggregates task results from cache/storage.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -14,7 +14,7 @@ from selfhealing.settings.daily_report import get_daily_report_settings
 
 from .models import DailyAutonomousReport, TaskResultEntry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 DAILY_REPORT_CACHE_KEY_PREFIX = "selfhealing:daily_report"
 
@@ -70,7 +70,10 @@ class DailyReportCollector:
                 self._memory_storage[date_key] = []
             self._memory_storage[date_key].append(entry)
         except Exception as e:
-            logger.warning(f"[DailyReportCollector] Cache error: {e}")
+            logger.warning(
+                "daily_report_collector.cache_error",
+                error=e,
+            )
             if date_key not in self._memory_storage:
                 self._memory_storage[date_key] = []
             self._memory_storage[date_key].append(entry)
@@ -107,7 +110,10 @@ class DailyReportCollector:
             for entry in self._memory_storage.get(date_key, []):
                 report.add_entry(entry)
         except Exception as e:
-            logger.warning(f"[DailyReportCollector] Cache read error: {e}")
+            logger.warning(
+                "daily_report_collector.cache_read_error",
+                error=e,
+            )
             for entry in self._memory_storage.get(date_key, []):
                 report.add_entry(entry)
 

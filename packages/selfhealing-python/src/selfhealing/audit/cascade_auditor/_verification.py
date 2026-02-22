@@ -7,10 +7,10 @@ Cascade Auditor - 무결성 검증 모듈.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _verify_event_chain(events: list) -> list[dict[str, Any]]:

@@ -6,13 +6,13 @@ ApprovalMixin for RecoveryCoordinator.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 from ..enums import RecoveryStatus
 from ..recovery_state import RecoverySession
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ApprovalMixin:
@@ -41,7 +41,11 @@ class ApprovalMixin:
             # 승인 요청 생성
             self._create_approval_request(session)
 
-            logger.info(f"[Recovery] Waiting for approval: id={session.id}, " f"namespace={session.namespace}")
+            logger.info(
+                "recovery.waiting_approval",
+                session=session.id,
+                session_1=session.namespace,
+            )
         else:
             # 일반 완료 처리
             self._complete_session(session)
@@ -63,9 +67,12 @@ class ApprovalMixin:
                 trigger_level=session.trigger_level,
             )
         except ImportError:
-            logger.warning("[Recovery] PendingRecoveryApprovalManager not available")
+            logger.warning("recovery.pendingrecoveryapprovalmanager_available")
         except Exception as e:
-            logger.error(f"[Recovery] Failed to create approval request: {e}")
+            logger.error(
+                "recovery.failed_create_approval_request",
+                error=e,
+            )
 
     def approve_recovery(
         self,
@@ -124,7 +131,11 @@ class ApprovalMixin:
             # EMERGENCY_RECOVERY_COMPLETED 이벤트 발행 (Postmortem 자동 생성 트리거)
             self._publish_emergency_recovery_completed_event(session, approved_by)
 
-            logger.info(f"[Recovery] Approved: id={session.id}, " f"approved_by={approved_by}")
+            logger.info(
+                "recovery.approved",
+                session=session.id,
+                approved_by=approved_by,
+            )
 
             return session
 
@@ -172,7 +183,7 @@ class ApprovalMixin:
                 "budget_used_minutes": budget_info.get("used_minutes", 0),
             }
         except ImportError:
-            logger.warning("[Recovery] CrisisMultiplierProvider not available for " "weighted budget verification")
+            logger.warning("recovery.crisismultiplierprovider_available_weighted_budget")
             return {
                 "stable": True,
                 "current_multiplier": 1.0,
@@ -180,7 +191,10 @@ class ApprovalMixin:
                 "assumed": True,
             }
         except Exception as e:
-            logger.error(f"[Recovery] Weighted budget verification error: {e}")
+            logger.error(
+                "recovery.weighted_budget_verification_error",
+                error=e,
+            )
             return {
                 "stable": False,
                 "error": str(e),

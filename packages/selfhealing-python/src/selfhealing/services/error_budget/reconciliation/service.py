@@ -6,7 +6,7 @@ Main service orchestrating reconciliation workflow.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import uuid
 from collections.abc import Callable
@@ -20,7 +20,7 @@ from .models import ExcludedPeriod, FailSafePeriod, ReconciliationConfig, Shadow
 from .period_tracker import FailSafePeriodTracker
 from .shadow_calculator import ShadowBudgetCalculator
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ErrorBudgetReconciliationService:
@@ -189,7 +189,10 @@ class ErrorBudgetReconciliationService:
             try:
                 return self._get_current_budget()
             except Exception as e:
-                logger.error(f"[Reconciliation] Failed to get current budget: {e}")
+                logger.error(
+                    "reconciliation.failed_get_current_budget",
+                    error=e,
+                )
 
         # 기본값
         return {
@@ -301,9 +304,15 @@ class ErrorBudgetReconciliationService:
             try:
                 self._apply_adjustment(adjustment)
                 shadow.status = ReconciliationStatus.APPLIED
-                logger.info(f"[Reconciliation] Applied adjustment: {adjustment:.2f}%")
+                logger.info(
+                    "reconciliation.applied_adjustment",
+                    adjustment=adjustment,
+                )
             except Exception as e:
-                logger.error(f"[Reconciliation] Failed to apply adjustment: {e}")
+                logger.error(
+                    "reconciliation.failed_apply_adjustment",
+                    error=e,
+                )
         else:
             shadow.status = ReconciliationStatus.APPLIED
             logger.info(
@@ -354,7 +363,10 @@ class ErrorBudgetReconciliationService:
             )
         except Exception as e:
             # Graceful Degradation - 히스토리 저장 실패해도 설정 변경은 성공
-            logger.warning(f"[Reconciliation] Failed to save history: {e}")
+            logger.warning(
+                "reconciliation.failed_save_history",
+                error=e,
+            )
 
     def reject_shadow_budget(
         self,
@@ -468,7 +480,10 @@ class ErrorBudgetReconciliationService:
         with self._lock:
             if exclusion_id in self._excluded_periods:
                 del self._excluded_periods[exclusion_id]
-                logger.info(f"[Reconciliation] Exclusion removed: {exclusion_id}")
+                logger.info(
+                    "reconciliation.exclusion_removed",
+                    exclusion_id=exclusion_id,
+                )
                 return True
             return False
 
@@ -552,4 +567,7 @@ class ErrorBudgetReconciliationService:
                 recorder.record(event)
 
         except Exception as e:
-            logger.debug(f"[Reconciliation] Audit recording failed (non-critical): {e}")
+            logger.debug(
+                "reconciliation.audit_recording_failed_non",
+                error=e,
+            )

@@ -7,11 +7,11 @@ Redis 기반 예산 소진 상태 글로벌 플래그 관리.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Redis 키 패턴
@@ -89,7 +89,10 @@ class BudgetExhaustedFlagManager:
                 else:
                     self._redis.delete(key)
             except Exception as e:
-                logger.warning(f"[BudgetFlag] Redis write failed: {e}")
+                logger.warning(
+                    "budget_flag.redis_write_failed",
+                    error=e,
+                )
 
         # 로컬 캐시 업데이트
         self._local_cache[cache_key] = exhausted
@@ -129,7 +132,10 @@ class BudgetExhaustedFlagManager:
                 self._local_cache_time[cache_key] = now
                 return result
             except Exception as e:
-                logger.warning(f"[BudgetFlag] Redis read failed: {e}")
+                logger.warning(
+                    "budget_flag.redis_read_failed",
+                    error=e,
+                )
 
         # 3. Fail-Open: 소진되지 않은 것으로 가정
         return False
@@ -149,7 +155,10 @@ class BudgetExhaustedFlagManager:
                     key = BUDGET_EXHAUSTED_BY_SLO_KEY.format(slo_name=slo_name)
                     self._redis.delete(key)
                 except Exception as e:
-                    logger.warning(f"[BudgetFlag] Redis delete failed: {e}")
+                    logger.warning(
+                        "budget_flag.redis_delete_failed",
+                        error=e,
+                    )
         else:
             self._local_cache.clear()
             self._local_cache_time.clear()

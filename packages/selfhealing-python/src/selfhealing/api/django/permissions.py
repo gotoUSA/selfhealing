@@ -11,7 +11,7 @@ Provides role-based access control for the Self-Healing system:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from typing import TYPE_CHECKING
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from rest_framework.request import Request
     from rest_framework.views import APIView
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _is_auth_disabled() -> bool:
@@ -217,7 +217,10 @@ class IsSelfHealingAdmin(BasePermission):
 
         except Exception as e:
             # Fail-Secure: 오류 시 거부
-            logger.warning(f"[RBAC] Permission check failed (deny): {e}")
+            logger.warning(
+                "rbac.permission_check_failed_deny",
+                error=e,
+            )
             return False
 
 
@@ -280,7 +283,10 @@ class EmergencyEscalationPermission(BasePermission):
             # 강제 Audit: 사유 필수 검증
             if not reason:
                 self.message = "STRICT 모드 전환 시 reason(사유)은 필수입니다. 사후 감사를 위해 전환 사유를 입력해주세요."
-                logger.warning(f"[RBAC] STRICT escalation denied - reason required: " f"user={request.user}")
+                logger.warning(
+                    "rbac.strict_escalation_denied_reason",
+                    request=request.user,
+                )
                 return False
 
             has_perm = IsOperator().has_permission(request, view)
@@ -371,7 +377,10 @@ class ThresholdBasedPermission(BasePermission):
                     "dual_approval": governance.get("threshold_dual_approval", 0.50),
                 }
         except Exception as e:
-            logger.debug(f"[RBAC] RuntimeConfigManager unavailable, using Settings: {e}")
+            logger.debug(
+                "rbac.runtimeconfigmanager_unavailable_using_settings",
+                error=e,
+            )
 
         # Settings 폴백 (환경변수 대신)
         try:
@@ -543,11 +552,17 @@ class ThresholdBasedPermission(BasePermission):
 
             # approval_id를 찾지 못함
             self.message = f"승인 요청 '{approval_id}'을(를) 찾을 수 없습니다."
-            logger.warning(f"[RBAC] Approval request not found: approval_id={approval_id}")
+            logger.warning(
+                "rbac.approval_request_found",
+                approval_id=approval_id,
+            )
             return False
 
         except Exception as e:
-            logger.error(f"[RBAC] Failed to verify dual approval: {e}")
+            logger.error(
+                "rbac.failed_verify_dual_approval",
+                error=e,
+            )
             self.message = f"듀얼 승인 검증 중 오류가 발생했습니다: {e}"
             return False
 
@@ -584,11 +599,17 @@ class ThresholdBasedPermission(BasePermission):
                 source_ip=self._get_client_ip(request),
                 action_taken="awaiting_dual_approval",
             )
-            logger.info(f"[RBAC] Dual approval notification sent for user={actor}")
+            logger.info(
+                "rbac.dual_approval_notification_sent",
+                actor=actor,
+            )
 
         except Exception as e:
             # Best-effort: 알림 실패해도 권한 체크는 계속
-            logger.warning(f"[RBAC] Failed to send dual approval notification: {e}")
+            logger.warning(
+                "rbac.failed_send_dual_approval",
+                error=e,
+            )
 
     def _get_client_ip(self, request: Request) -> str | None:
         """클라이언트 IP 추출."""
@@ -641,12 +662,19 @@ class IsPanicRollbackAuthorized(BasePermission):
         reason = request.data.get("reason", "").strip()
         if not reason:
             self.message = "긴급 롤백 시 reason(사유)은 필수입니다. " "사후 감사를 위해 롤백 사유를 입력해주세요."
-            logger.warning(f"[RBAC] Panic rollback denied - reason required: " f"user={request.user}")
+            logger.warning(
+                "rbac.panic_rollback_denied_reason",
+                request=request.user,
+            )
             return False
 
         # Admin은 항상 허용
         if IsSelfHealingAdmin().has_permission(request, view):
-            logger.warning(f"[RBAC] Panic rollback authorized (Admin): " f"user={request.user}, reason={reason[:50]}")
+            logger.warning(
+                "rbac.panic_rollback_authorized_admin",
+                request=request.user,
+                reason=reason[:50],
+            )
             return True
 
         # Operator + Emergency Escalation (Break Glass)
@@ -731,14 +759,21 @@ class HasChaosTestPermission(BasePermission):
 
             # 4. Django superuser 자동 허용
             if request.user.is_superuser:
-                logger.debug(f"[RBAC] X-Test permission granted (superuser): " f"user={request.user}")
+                logger.debug(
+                    "rbac.test_permission_granted_superuser",
+                    request=request.user,
+                )
                 return True
 
             # 5. 그룹 기반 권한 체크 (selfhealing_admin 또는 selfhealing_chaos_tester)
             allowed_groups = ["selfhealing_admin", "selfhealing_chaos_tester"]
             if request.user.groups.filter(name__in=allowed_groups).exists():
                 user_groups = list(request.user.groups.filter(name__in=allowed_groups).values_list("name", flat=True))
-                logger.debug(f"[RBAC] X-Test permission granted (group): " f"user={request.user}, groups={user_groups}")
+                logger.debug(
+                    "rbac.test_permission_granted_group",
+                    request=request.user,
+                    user_groups=user_groups,
+                )
                 return True
 
             # 6. 권한 없음 - 거부

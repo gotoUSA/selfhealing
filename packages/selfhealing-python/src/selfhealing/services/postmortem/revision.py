@@ -28,7 +28,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -36,7 +36,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RevisionChangeType(str, Enum):
@@ -471,7 +471,10 @@ class PostmortemRevisionManager:
             integrity_info = hashed_entry.get("integrity", {})
             revision.integrity_hash = integrity_info.get("current_hash", "")
         except Exception as e:
-            logger.warning(f"[RevisionManager] Failed to add integrity hash: {e}")
+            logger.warning(
+                "revision_manager.failed_add_integrity_hash",
+                error=e,
+            )
 
         # 저장
         self._save_revision(revision)
@@ -684,7 +687,11 @@ class PostmortemRevisionManager:
         else:
             self._memory_sealed[incident_id] = True
 
-        logger.info(f"[RevisionManager] Postmortem sealed: incident_id={incident_id}, " f"sealed_by={sealed_by}")
+        logger.info(
+            "revision_manager.postmortem_sealed",
+            incident_id=incident_id,
+            sealed_by=sealed_by,
+        )
 
         return seal_revision
 
@@ -848,7 +855,7 @@ def migrate_existing_postmortems(
     try:
         from selfhealing.services.postmortem.store import get_healing_incidents
     except ImportError:
-        logger.warning("[Migration] postmortem.store not available")
+        logger.warning("migration.postmortem_store_available")
         return result
 
     offset = 0
@@ -867,7 +874,7 @@ def migrate_existing_postmortems(
             incident_id = incident.get("incident_id")
 
             if not incident_id:
-                logger.warning("[Migration] Postmortem missing incident_id, skipping")
+                logger.warning("migration.postmortem_missing_skipping")
                 result["failed"] += 1
                 continue
 
@@ -887,9 +894,16 @@ def migrate_existing_postmortems(
                     change_type=RevisionChangeType.INITIAL,
                 )
                 result["migrated"] += 1
-                logger.debug(f"[Migration] Created initial revision: {incident_id}")
+                logger.debug(
+                    "migration.created_initial_revision",
+                    incident_id=incident_id,
+                )
             except Exception as e:
-                logger.warning(f"[Migration] Failed to migrate {incident_id}: {e}")
+                logger.warning(
+                    "migration.failed_migrate",
+                    incident_id=incident_id,
+                    error=e,
+                )
                 result["failed"] += 1
 
         offset += batch_size

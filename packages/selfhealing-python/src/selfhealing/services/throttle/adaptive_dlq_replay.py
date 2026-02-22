@@ -12,7 +12,7 @@ Throttle 거부 요청을 DLQ에 저장하고, Recovery 시 자동 Replay하는 
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 import threading
 import time
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from selfhealing.services.dlq import DLQService
     from selfhealing.services.throttle.config import ThrottleConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -107,7 +107,7 @@ class ThrottleDLQReplayMixin:
             self._dlq_service = get_dlq_service()
         except Exception:
             self._dlq_service = None
-            logger.debug("[AdaptiveThrottle] DLQ service not available, " "rejection storage disabled")
+            logger.debug("adaptive_throttle.dlq_service_available_rejection")
 
     # =========================================================================
     # Throttle 거부 시 DLQ 저장
@@ -136,7 +136,7 @@ class ThrottleDLQReplayMixin:
 
         # Hedging 보조 요청 필터 (HedgingResult.hedged=True인 보조 요청 제외)
         if context.get("hedged", False):
-            logger.debug("[AdaptiveThrottle] Skipping DLQ store for hedged request")
+            logger.debug("adaptive_throttle.skipping_dlq_store_hedged")
             _record_dlq_replay_metric(
                 _throttle_rejection_hedged_skipped_total,
                 {"domain": context.get("domain", "throttle_rejection")},
@@ -147,7 +147,7 @@ class ThrottleDLQReplayMixin:
         tier_id = context.get("tier_id", "standard")
 
         if tier_id == "non_essential":
-            logger.debug("[AdaptiveThrottle] Skipping DLQ store for non_essential tier")
+            logger.debug("adaptive_throttle.skipping_dlq_store_tier")
             _record_dlq_replay_metric(
                 _throttle_rejection_sampled_out_total,
                 {"tier_id": "non_essential", "reason": "non_essential"},
@@ -157,7 +157,10 @@ class ThrottleDLQReplayMixin:
         if tier_id == "standard":
             sampling_rate = getattr(self.config, "dlq_store_sampling_rate", 1.0)
             if random.random() > sampling_rate:
-                logger.debug(f"[AdaptiveThrottle] Sampled out DLQ store " f"(rate={sampling_rate})")
+                logger.debug(
+                    "adaptive_throttle.sampled_out_dlq_store",
+                    sampling_rate=sampling_rate,
+                )
                 _record_dlq_replay_metric(
                     _throttle_rejection_sampled_out_total,
                     {"tier_id": "standard", "reason": "sampling_rate"},
@@ -204,7 +207,10 @@ class ThrottleDLQReplayMixin:
             )
 
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to store rejection to DLQ: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_store_rejection_dlq",
+                error=e,
+            )
 
     def _emit_rejection_stored_event(
         self,
@@ -251,11 +257,14 @@ class ThrottleDLQReplayMixin:
                 EventType.THROTTLE_LIMIT_RECOVERED,
                 self._on_recovery_trigger_dlq_replay,
             )
-            logger.info("[AdaptiveThrottle] Subscribed to THROTTLE_LIMIT_RECOVERED " "for DLQ auto-replay")
+            logger.info("adaptive_throttle.subscribed_dlq_auto_replay")
         except ImportError:
-            logger.debug("[AdaptiveThrottle] EventBus not available, " "auto-replay subscription skipped")
+            logger.debug("adaptive_throttle.eventbus_available_auto_replay")
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to subscribe recovery for replay: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_subscribe_recovery_replay",
+                error=e,
+            )
 
     def _on_recovery_trigger_dlq_replay(self, event) -> None:
         """
@@ -331,7 +340,10 @@ class ThrottleDLQReplayMixin:
         for entry in pending_entries:
             # Throttle 건강 상태 재확인
             if not self._is_healthy_for_dlq_replay():
-                logger.warning(f"[AdaptiveThrottle] Throttle health degraded, " f"pausing DLQ replay (replayed={replayed})")
+                logger.warning(
+                    "adaptive_throttle.throttle_health_degraded_pausing",
+                    replayed=replayed,
+                )
                 break
 
             # can_retry 소진 확인 (FailedOperationData.can_retry)

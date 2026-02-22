@@ -34,7 +34,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -160,7 +160,10 @@ class BypassRegistry:
             # Check for duplicate registration
             existing = [h for h in cls._hooks if h.name == hook_name]
             if existing:
-                logger.warning(f"[BypassRegistry] Hook '{hook_name}' already registered, skipping")
+                logger.warning(
+                    "bypass_registry.hook_already_registered_skipping",
+                    hook_name=hook_name,
+                )
                 return
 
             hook_info = HookInfo(
@@ -192,7 +195,10 @@ class BypassRegistry:
             removed = len(cls._hooks) < original_count
 
             if removed:
-                logger.info(f"[BypassRegistry] Unregistered hook: {name}")
+                logger.info(
+                    "bypass_registry.unregistered_hook",
+                    name=name,
+                )
 
             return removed
 
@@ -234,7 +240,11 @@ class BypassRegistry:
                     return result
 
             except Exception as e:
-                logger.error(f"[BypassRegistry] Hook '{hook.name}' raised exception: {e}")
+                logger.error(
+                    "bypass_registry.hook_raised_exception",
+                    hook=hook.name,
+                    error=e,
+                )
                 # Continue to next hook on error (fail-open for hooks)
 
         # No bypass
@@ -268,7 +278,10 @@ class BypassRegistry:
                 cls._audit_logger.log(result.to_audit_dict())
         except Exception as e:
             # Audit failure should not block bypass
-            logger.warning(f"[BypassRegistry] Audit log failed: {e}")
+            logger.warning(
+                "bypass_registry.audit_log_failed",
+                error=e,
+            )
 
     @classmethod
     def get_registered_hooks(cls) -> list[dict[str, Any]]:
@@ -297,7 +310,10 @@ class BypassRegistry:
         with cls._lock:
             count = len(cls._hooks)
             cls._hooks = []
-            logger.warning(f"[BypassRegistry] Cleared all {count} hooks")
+            logger.warning(
+                "bypass_registry.cleared_all_hooks",
+                count=count,
+            )
             return count
 
     @classmethod
@@ -440,7 +456,7 @@ def register_error_budget_bypass_hooks() -> None:
         description="Bypass Error Budget restrictions for critical path requests (health, probes)",
     )
 
-    logger.info("[ErrorBudgetBypass] Registered admin and critical path bypass hooks")
+    logger.info("cell_registry.bulkheads_registered")
 
 
 # =============================================================================

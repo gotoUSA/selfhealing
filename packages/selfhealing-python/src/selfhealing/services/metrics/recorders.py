@@ -9,7 +9,7 @@ and set gauge values for specific events.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from datetime import datetime
 
@@ -46,7 +46,7 @@ from .definitions import (  # DLQ; Retry; Recovery; Circuit Breaker; L2 Storage;
     sla_breach_total,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -70,9 +70,17 @@ def record_dlq_item_created(domain: str, failure_type: str) -> None:
             is_synthetic=is_synthetic,
         ).inc()
         dlq_created_total.labels(domain=domain).inc()
-        logger.debug(f"[Metrics] DLQ item created: domain={domain}, type={failure_type}, " f"is_synthetic={is_synthetic}")
+        logger.debug(
+            "metrics.dlq_item_created",
+            domain=domain,
+            failure_type=failure_type,
+            is_synthetic=is_synthetic,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record DLQ creation metric: {e}")
+        logger.warning(
+            "metrics.failed_record_dlq_creation",
+            error=e,
+        )
 
 
 def record_sla_breach(domain: str) -> None:
@@ -84,9 +92,15 @@ def record_sla_breach(domain: str) -> None:
     """
     try:
         sla_breach_total.labels(domain=domain).inc()
-        logger.info(f"[Metrics] SLA breach recorded: domain={domain}")
+        logger.info(
+            "metrics.sla_breach_recorded",
+            domain=domain,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record SLA breach metric: {e}")
+        logger.warning(
+            "metrics.failed_record_sla_breach",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -119,7 +133,10 @@ def record_retry_attempt(domain: str, attempt_count: int, outcome: str) -> None:
             f"outcome={outcome}, is_synthetic={is_synthetic}"
         )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record retry metric: {e}")
+        logger.warning(
+            "metrics.failed_record_retry_metric",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -145,9 +162,17 @@ def record_recovery_time(
     try:
         duration = (resolved_at - created_at).total_seconds()
         recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
-        logger.debug(f"[Metrics] Recovery time recorded: domain={domain}, " f"type={resolution_type}, duration={duration}s")
+        logger.debug(
+            "metrics.recovery_time_recorded",
+            domain=domain,
+            resolution_type=resolution_type,
+            duration=duration,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record recovery time metric: {e}")
+        logger.warning(
+            "metrics.failed_record_recovery_time",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -186,7 +211,10 @@ def record_circuit_breaker_state_change(
             f"[Metrics] Circuit breaker transition: {service} {from_state} -> {to_state}, " f"is_synthetic={is_synthetic}"
         )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record circuit breaker metric: {e}")
+        logger.warning(
+            "metrics.failed_record_circuit_breaker",
+            error=e,
+        )
 
 
 def record_circuit_breaker_open_duration(service: str, duration_seconds: float) -> None:
@@ -199,9 +227,16 @@ def record_circuit_breaker_open_duration(service: str, duration_seconds: float) 
     """
     try:
         circuit_breaker_open_duration.labels(service=service).observe(duration_seconds)
-        logger.debug(f"[Metrics] CB open duration recorded: {service}={duration_seconds}s")
+        logger.debug(
+            "metrics.cb_open_duration_recorded",
+            service=service,
+            duration_seconds=duration_seconds,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record CB duration metric: {e}")
+        logger.warning(
+            "metrics.failed_record_cb_duration",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -215,7 +250,10 @@ def record_l2_timeout(adapter_type: str, operation: str) -> None:
         l2_timeout_total.labels(adapter_type=adapter_type, operation=operation).inc()
         l2_connection_status.labels(adapter_type=adapter_type).set(0)
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record L2 timeout: {e}")
+        logger.warning(
+            "metrics.failed_record_timeout",
+            error=e,
+        )
 
 
 def record_l2_sync_failure(adapter_type: str, operation: str) -> None:
@@ -223,7 +261,10 @@ def record_l2_sync_failure(adapter_type: str, operation: str) -> None:
     try:
         l2_sync_failure_total.labels(adapter_type=adapter_type, operation=operation).inc()
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record L2 sync failure: {e}")
+        logger.warning(
+            "metrics.failed_record_sync_failure",
+            error=e,
+        )
 
 
 def record_l2_latency(adapter_type: str, latency_seconds: float) -> None:
@@ -232,7 +273,10 @@ def record_l2_latency(adapter_type: str, latency_seconds: float) -> None:
         l2_latency_seconds.labels(adapter_type=adapter_type).observe(latency_seconds)
         l2_connection_status.labels(adapter_type=adapter_type).set(1)
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record L2 latency: {e}")
+        logger.warning(
+            "metrics.failed_record_latency",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -267,7 +311,10 @@ def record_replay_attempt(domain: str, replay_type: str, success: bool) -> None:
             f"success={success}, is_synthetic={is_synthetic}"
         )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record replay metric: {e}")
+        logger.warning(
+            "metrics.failed_record_replay_metric",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -318,7 +365,10 @@ def record_error_budget_status(
             f"is_synthetic={is_synthetic}, region={region}, tier={tier}"
         )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record error budget metric: {e}")
+        logger.warning(
+            "metrics.failed_record_error_budget",
+            error=e,
+        )
 
 
 def record_deployment_freeze_status(status: str) -> None:
@@ -337,9 +387,16 @@ def record_deployment_freeze_status(status: str) -> None:
         }
         status_value = status_mapping.get(status, 0)
         deployment_freeze_status.set(status_value)
-        logger.debug(f"[Metrics] Deployment freeze status: {status} ({status_value})")
+        logger.debug(
+            "metrics.deployment_freeze_status",
+            status=status,
+            status_value=status_value,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record freeze status metric: {e}")
+        logger.warning(
+            "metrics.failed_record_freeze_status",
+            error=e,
+        )
 
 
 def record_freeze_decision(decision_type: str) -> None:
@@ -351,9 +408,15 @@ def record_freeze_decision(decision_type: str) -> None:
     """
     try:
         freeze_decision_total.labels(decision_type=decision_type).inc()
-        logger.info(f"[Metrics] Freeze decision recorded: {decision_type}")
+        logger.info(
+            "metrics.freeze_decision_recorded",
+            decision_type=decision_type,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record freeze decision metric: {e}")
+        logger.warning(
+            "metrics.failed_record_freeze_decision",
+            error=e,
+        )
 
 
 def record_active_override(has_override: bool) -> None:
@@ -365,9 +428,15 @@ def record_active_override(has_override: bool) -> None:
     """
     try:
         active_override_gauge.set(1 if has_override else 0)
-        logger.debug(f"[Metrics] Active override: {has_override}")
+        logger.debug(
+            "metrics.active_override",
+            has_override=has_override,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record active override metric: {e}")
+        logger.warning(
+            "metrics.failed_record_active_override",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -388,9 +457,15 @@ def record_failsafe_triggered(component: str) -> None:
     try:
         failsafe_triggered_total.labels(component=component).inc()
         failsafe_mode_active.labels(component=component).set(1)
-        logger.critical(f"[Metrics] FAIL-SAFE TRIGGERED: component={component}. " "Alerting rules should fire.")
+        logger.critical(
+            "metrics.fail_safe_triggered_alerting",
+            component=component,
+        )
     except Exception as e:
-        logger.error(f"[Metrics] Failed to record fail-safe metric: {e}")
+        logger.error(
+            "metrics.failed_record_fail_safe",
+            error=e,
+        )
 
 
 def record_failsafe_recovered(component: str) -> None:
@@ -402,9 +477,15 @@ def record_failsafe_recovered(component: str) -> None:
     """
     try:
         failsafe_mode_active.labels(component=component).set(0)
-        logger.info(f"[Metrics] Fail-safe recovered: component={component}")
+        logger.info(
+            "metrics.fail_safe_recovered",
+            component=component,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record fail-safe recovery: {e}")
+        logger.warning(
+            "metrics.failed_record_fail_safe",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -439,9 +520,16 @@ def emit_heartbeat(component: str = "error_budget") -> None:
         current_time = time.time()
         selfhealing_heartbeat_timestamp.labels(component=component).set(current_time)
         selfhealing_heartbeat_count.labels(component=component).inc()
-        logger.debug(f"[Metrics] Heartbeat emitted: component={component}, time={current_time}")
+        logger.debug(
+            "metrics.heartbeat_emitted",
+            component=component,
+            current_time=current_time,
+        )
     except Exception as e:
-        logger.error(f"[Metrics] Failed to emit heartbeat: {e}")
+        logger.error(
+            "metrics.failed_emit_heartbeat",
+            error=e,
+        )
 
 
 def record_override_escalation(override_type: str) -> None:
@@ -453,9 +541,15 @@ def record_override_escalation(override_type: str) -> None:
     """
     try:
         override_escalation_total.labels(override_type=override_type).inc()
-        logger.info(f"[Metrics] Override escalation recorded: type={override_type}")
+        logger.info(
+            "metrics.override_escalation_recorded",
+            override_type=override_type,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record override escalation: {e}")
+        logger.warning(
+            "metrics.failed_record_override_escalation",
+            error=e,
+        )
 
 
 def record_recovery_alert(component: str) -> None:
@@ -467,9 +561,15 @@ def record_recovery_alert(component: str) -> None:
     """
     try:
         recovery_alert_total.labels(component=component).inc()
-        logger.info(f"[Metrics] Recovery alert recorded: component={component}")
+        logger.info(
+            "metrics.recovery_alert_recorded",
+            component=component,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record recovery alert: {e}")
+        logger.warning(
+            "metrics.failed_record_recovery_alert",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -497,9 +597,16 @@ def record_xtest_cross_region_denied(
             current_region=current_region,
             target_region=target_region,
         ).inc()
-        logger.warning(f"[Metrics] Cross-region X-Test denied: " f"current={current_region}, target={target_region}")
+        logger.warning(
+            "metrics.cross_region_test_denied",
+            current_region=current_region,
+            target_region=target_region,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record cross-region denial: {e}")
+        logger.warning(
+            "metrics.failed_record_cross_region",
+            error=e,
+        )
 
 
 def record_xtest_global_scope_request(
@@ -523,6 +630,14 @@ def record_xtest_global_scope_request(
             region=region,
             result=result,
         ).inc()
-        logger.debug(f"[Metrics] GLOBAL scope request: " f"pattern={endpoint_pattern}, region={region}, result={result}")
+        logger.debug(
+            "metrics.global_scope_request",
+            endpoint_pattern=endpoint_pattern,
+            region=region,
+            result=result,
+        )
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to record global scope request: {e}")
+        logger.warning(
+            "metrics.failed_record_global_scope",
+            error=e,
+        )

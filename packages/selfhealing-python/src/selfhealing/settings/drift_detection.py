@@ -13,12 +13,12 @@ Environment Variables:
     SELFHEALING_DRIFT_DETECTION_PENDING_AT_RISK_THRESHOLD=5
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DriftDetectionSettings(BaseSettings):

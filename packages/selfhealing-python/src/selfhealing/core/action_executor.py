@@ -26,7 +26,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -41,7 +41,7 @@ from selfhealing.core.decision_logger import (
 from selfhealing.core.execution_mode import ExecutionMode, get_execution_mode
 from selfhealing.core.timezone import now
 
-logger = logging.getLogger("selfhealing.action_executor")
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -194,7 +194,10 @@ class ActionExecutor:
                 )
                 decision_logged = True
             except Exception as e:
-                logger.warning(f"Failed to log decision: {e}")
+                logger.warning(
+                    "failed_log_decision",
+                    error=e,
+                )
 
         # Validation (for evaluation mode)
         validation_result = None
@@ -202,7 +205,11 @@ class ActionExecutor:
             try:
                 validation_result = action.validate_fn()
             except Exception as e:
-                logger.warning(f"Validation failed for {action.name}: {e}")
+                logger.warning(
+                    "validation_failed",
+                    action=action.name,
+                    error=e,
+                )
                 validation_result = False
 
         # Execute if in active mode

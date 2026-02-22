@@ -23,12 +23,12 @@ Environment Variables:
     SELFHEALING_DECISION_STABILITY_FACTOR_STABLE=1.0
 """
 
-import logging
+import structlog
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DecisionEngineSettings(BaseSettings):
@@ -257,7 +257,7 @@ def get_decision_engine_settings() -> DecisionEngineSettings:
     global _settings
     if _settings is None:
         _settings = DecisionEngineSettings()
-        logger.debug("[DecisionEngineSettings] Loaded: " f"min_change_ratio={_settings.min_change_ratio}")
+        logger.debug("decision_engine_settings.loaded")
     return _settings
 
 
@@ -267,4 +267,4 @@ def reset_decision_engine_settings() -> None:
     """
     global _settings
     _settings = None
-    logger.debug("[DecisionEngineSettings] Reset")
+    logger.debug("decision_engine_settings.reset")

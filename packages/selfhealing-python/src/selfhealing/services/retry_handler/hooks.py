@@ -7,12 +7,12 @@ Fail-Open 원칙: Hook 실패가 비즈니스 로직을 중단시키지 않는�
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.interfaces.resilience_policy import PolicyResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditHook:
@@ -42,7 +42,10 @@ class AuditHook:
                 success=True,
             )
         except Exception as e:
-            logger.debug("[AuditHook] Audit logging failed (ignored): %s", e)
+            logger.debug(
+                "audit_hook.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def on_failure(self, policy_name: str, error: Exception, attempt: int) -> None:
         """재시도 실패 시 Audit 기록."""
@@ -58,7 +61,10 @@ class AuditHook:
                 error_message=str(error)[:500],
             )
         except Exception as e:
-            logger.debug("[AuditHook] Audit logging failed (ignored): %s", e)
+            logger.debug(
+                "audit_hook.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def on_retry(self, policy_name: str, attempt: int, delay: float) -> None:
         """재시도 예정 시 Audit 기록."""
@@ -73,7 +79,10 @@ class AuditHook:
                 wait_time=delay,
             )
         except Exception as e:
-            logger.debug("[AuditHook] Audit logging failed (ignored): %s", e)
+            logger.debug(
+                "audit_hook.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def on_reject(self, policy_name: str, reason: str) -> None:
         """Policy 거부 시 Audit 기록."""
@@ -89,7 +98,10 @@ class AuditHook:
                 error_message=reason[:500],
             )
         except Exception as e:
-            logger.debug("[AuditHook] Audit logging failed (ignored): %s", e)
+            logger.debug(
+                "audit_hook.audit_logging_failed_ignored",
+                error=e,
+            )
 
 
 class MetricsHook:

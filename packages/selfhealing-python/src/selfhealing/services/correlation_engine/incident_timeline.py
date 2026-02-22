@@ -20,7 +20,7 @@ CB 이벤트뿐 아니라 45개 전체 EventType을 포함하는 통합 타임�
 from __future__ import annotations
 
 import enum
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -35,7 +35,7 @@ from selfhealing.services.correlation_engine.root_cause_ranker import (
     RootCauseCandidate,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -731,7 +731,7 @@ class IncidentTimelineBuilder:
             IncidentTimeline 인스턴스
         """
         if not dag.nodes:
-            logger.warning("[IncidentTimeline] Empty DAG — returning minimal timeline")
+            logger.warning("incident_timeline.empty_dag_returning_minimal")
             return IncidentTimeline(
                 incident_id=dag.incident_id,
                 started_at=0.0,

@@ -5,12 +5,12 @@ Continuous Audit Configuration.
 보안에 민감한 값(해시 시드)은 반드시 환경변수로 설정.
 """
 
-import logging
+import structlog
 import os
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -199,7 +199,10 @@ class AuditConfig:
 
             return redis.from_url(self.hash_chain_redis_url)
         except Exception as e:
-            logger.warning(f"[AuditConfig] Failed to create Redis client: {e}")
+            logger.warning(
+                "audit_config.failed_create_redis_client",
+                error=e,
+            )
             return None
 
 

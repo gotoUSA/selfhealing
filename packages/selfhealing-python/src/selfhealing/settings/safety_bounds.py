@@ -11,12 +11,12 @@ Environment Variables (각 파라미터별):
     ... (다른 파라미터도 동일 패턴)
 """
 
-import logging
+import structlog
 
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ParameterBoundConfig(BaseModel):
@@ -314,4 +314,4 @@ def reset_safety_bounds_settings() -> None:
     """
     global _settings
     _settings = None
-    logger.debug("[SafetyBoundsSettings] Reset")
+    logger.debug("safety_bounds_settings.reset")

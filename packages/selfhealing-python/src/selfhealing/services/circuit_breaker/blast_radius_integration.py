@@ -39,7 +39,7 @@ CRITICAL 수준이면 OPEN을 보류합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -47,7 +47,7 @@ from typing import Any
 
 from selfhealing.services.chaos.blast_radius_analyzer import BlastRadiusLevel
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -274,7 +274,7 @@ class BlastRadiusIntegration:
         self._last_assessment: BlastRadiusAssessment | None = None
         self._initialized = True
 
-        logger.debug("[BlastRadiusIntegration] Initialized")
+        logger.debug("blast_radius_integration.initialized")
 
     @classmethod
     def reset_instance(cls) -> None:
@@ -310,7 +310,10 @@ class BlastRadiusIntegration:
             block_on_critical=block_on_critical,
             alert_on_extensive=alert_on_extensive,
         )
-        logger.info(f"[BlastRadiusIntegration] Configured: critical_threshold={critical_threshold}")
+        logger.info(
+            "blast_radius_integration.configured",
+            critical_threshold=critical_threshold,
+        )
 
     # =========================================================================
     # Dependency Management
@@ -544,7 +547,10 @@ class BlastRadiusIntegration:
                 f"reason=blast_radius_critical | affected={assessment.affected_count}"
             )
         except Exception as e:
-            logger.debug(f"[BlastRadiusIntegration] Audit log failed: {e}")
+            logger.debug(
+                "blast_radius_integration.audit_log_failed",
+                error=e,
+            )
 
     # =========================================================================
     # Status

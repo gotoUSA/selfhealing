@@ -5,8 +5,8 @@ FullStopMixin for AdaptiveThrottle.
 """
 
 import selfhealing.services.throttle.adaptive as _adaptive_mod
-import logging
-logger = logging.getLogger(__name__)
+import structlog
+logger = structlog.get_logger()
 
 
 
@@ -77,7 +77,10 @@ class FullStopMixin:
                 try:
                     state = cb_service.get_state(service_name)
                     if state == "open":
-                        logger.debug(f"[AdaptiveThrottle] DB CB OPEN detected: {service_name}")
+                        logger.debug(
+                            "adaptive_throttle.db_cb_open_detected",
+                            service_name=service_name,
+                        )
                         return True
                 except Exception:
                     # 서비스가 존재하지 않으면 스킵
@@ -85,10 +88,13 @@ class FullStopMixin:
 
             return False
         except ImportError:
-            logger.debug("[AdaptiveThrottle] CircuitBreakerService not available")
+            logger.debug("adaptive_throttle.circuitbreakerservice_available")
             return False
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to check DB CB: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_check_db_cb",
+                error=e,
+            )
             return False
 
     def _check_error_budget_exhausted(self) -> bool:
@@ -108,13 +114,19 @@ class FullStopMixin:
 
             is_exhausted = status.budget_remaining_percent <= 0
             if is_exhausted:
-                logger.debug(f"[AdaptiveThrottle] Budget exhausted: " f"{status.budget_remaining_percent:.1f}%")
+                logger.debug(
+                    "adaptive_throttle.budget_exhausted",
+                    status=status.budget_remaining_percent,
+                )
             return is_exhausted
         except ImportError:
-            logger.debug("[AdaptiveThrottle] ErrorBudgetService not available")
+            logger.debug("adaptive_throttle.errorbudgetservice_available")
             return False
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to check error budget: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_check_error_budget",
+                error=e,
+            )
             return False
 
     def activate_full_stop(self, reason: str) -> None:
@@ -169,7 +181,10 @@ class FullStopMixin:
                 priority=EventPriority.CRITICAL,
             )
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to emit KILL_SWITCH: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_emit",
+                error=e,
+            )
 
         # 감사 로깅 (Full Stop 활성화 → CascadeEvent 포함)
         _adaptive_mod._record_audit_safe(
@@ -192,7 +207,9 @@ class FullStopMixin:
         # Recovery Dampening으로 복구 시작
         self.start_recovery_dampening()
 
-        logger.warning(f"[AdaptiveThrottle] FULL STOP DEACTIVATED, " f"starting recovery dampening")
+        logger.warning(
+            "adaptive_throttle.full_stop_deactivated_starting",
+        )
 
         # 감사 로깅 (Full Stop 비활성화 → CascadeEvent 포함)
         _adaptive_mod._record_audit_safe(

@@ -6,7 +6,7 @@ Provides metrics from Django models for the self-healing system.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -15,7 +15,7 @@ from selfhealing.adapters.metrics.base import BaseMetricSourceAdapter
 if TYPE_CHECKING:
     from django.db.models import Model
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
@@ -80,7 +80,7 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
             대기 중인 DLQ 항목 수
         """
         if self.dlq_model is None:
-            logger.debug("[DjangoAdapter] DLQ model not configured")
+            logger.debug("django_adapter.dlq_model_configured")
             return 0
 
         try:
@@ -90,7 +90,10 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
             }
             return self.dlq_model.objects.filter(**filter_kwargs).count()
         except Exception as e:
-            logger.warning(f"[DjangoAdapter] Failed to get DLQ pending count: {e}")
+            logger.warning(
+                "django_adapter.failed_get_dlq_pending",
+                error=e,
+            )
             return 0
 
     def get_dlq_count_by_status(self, status: str) -> int:
@@ -104,14 +107,17 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
             해당 상태의 DLQ 항목 수
         """
         if self.dlq_model is None:
-            logger.debug("[DjangoAdapter] DLQ model not configured")
+            logger.debug("django_adapter.dlq_model_configured")
             return 0
 
         try:
             filter_kwargs = {self.status_field: status}
             return self.dlq_model.objects.filter(**filter_kwargs).count()
         except Exception as e:
-            logger.warning(f"[DjangoAdapter] Failed to get DLQ count by status: {e}")
+            logger.warning(
+                "django_adapter.failed_get_dlq_count",
+                error=e,
+            )
             return 0
 
     def get_circuit_breaker_state(self, service: str) -> str:
@@ -125,7 +131,7 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
             상태 문자열 (closed, open, half_open)
         """
         if self.cb_model is None:
-            logger.debug("[DjangoAdapter] Circuit breaker model not configured")
+            logger.debug("django_adapter.circuit_breaker_model_configured")
             return "closed"
 
         try:
@@ -135,7 +141,10 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
                 return getattr(cb, self.state_field, "closed")
             return "closed"
         except Exception as e:
-            logger.warning(f"[DjangoAdapter] Failed to get CB state: {e}")
+            logger.warning(
+                "django_adapter.failed_get_cb_state",
+                error=e,
+            )
             return "closed"
 
     def get_retry_success_rate(self, domain: str) -> float:
@@ -149,7 +158,7 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
             성공률 (0.0 ~ 100.0)
         """
         if self.dlq_model is None:
-            logger.debug("[DjangoAdapter] DLQ model not configured")
+            logger.debug("django_adapter.dlq_model_configured")
             return 0.0
 
         try:
@@ -177,7 +186,10 @@ class DjangoMetricSourceAdapter(BaseMetricSourceAdapter):
             return 0.0
 
         except Exception as e:
-            logger.warning(f"[DjangoAdapter] Failed to get retry success rate: {e}")
+            logger.warning(
+                "django_adapter.failed_get_retry_success",
+                error=e,
+            )
             return 0.0
 
 

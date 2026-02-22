@@ -8,7 +8,7 @@ asyncio를 사용하여 코루틴 후보들을 병렬 실행하고,
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 import time
 from typing import Awaitable, Callable, TypeVar
 
@@ -25,7 +25,7 @@ from selfhealing.core.hedging.exceptions import (
 from selfhealing.core.hedging.latency_tracker import HedgingLatencyTracker
 from selfhealing.core.hedging.result import HedgingResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -187,7 +187,11 @@ class AsyncHedgingExecutor:
 
         except Exception as e:
             # Primary가 delay 내에 실패함 → Secondary 추가
-            logger.debug(f"[Hedging] Primary '{primary.name}' failed within delay: {e}")
+            logger.debug(
+                "hedging.primary_failed_within_delay",
+                primary=primary.name,
+                error=e,
+            )
             tasks: dict[asyncio.Task, HedgingCandidate] = {primary_task: primary}
 
             for candidate in candidates[1:]:
@@ -213,7 +217,11 @@ class AsyncHedgingExecutor:
                 # 기존 delay를 P50 기반으로 대체
                 original_delay = self._config.delay
                 self._config.delay = adaptive_delay
-                logger.debug(f"[Hedging] ADAPTIVE delay: {original_delay}s -> " f"{adaptive_delay}s (P50)")
+                logger.debug(
+                    "hedging.adaptive_delay",
+                    original_delay=original_delay,
+                    adaptive_delay=adaptive_delay,
+                )
 
         return await self._execute_delayed(candidates)
 
@@ -266,7 +274,11 @@ class AsyncHedgingExecutor:
 
         except Exception as e:
             error_msg = f"{candidate.name}: {e}"
-            logger.warning(f"[Hedging] {candidate.name} failed: {e}")
+            logger.warning(
+                "hedging.failed",
+                candidate=candidate.name,
+                error=e,
+            )
 
             # 확정적 에러 시 즉시 중단 표시
             if self._is_non_retryable(e):

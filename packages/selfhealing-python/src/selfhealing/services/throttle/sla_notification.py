@@ -8,10 +8,10 @@ Celery 미사용 환경에서는 동기 폴백으로 동작합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_region_safe() -> str | None:
@@ -27,10 +27,13 @@ def _get_region_safe() -> str | None:
         identity = get_cluster_identity(skip_validation=True)
         return identity.region
     except ImportError:
-        logger.debug("[SLANotification] ClusterIdentity not available")
+        logger.debug("sla_notification.clusteridentity_available")
         return None
     except Exception as e:
-        logger.debug(f"[SLANotification] Failed to get region: {e}")
+        logger.debug(
+            "sla_notification.failed_get_region",
+            error=e,
+        )
         return None
 
 
@@ -58,11 +61,14 @@ def _subscribe_sla_events() -> None:
             _handle_limit_recovered,
         )
 
-        logger.info("[SLANotification] Subscribed to throttle SLA events")
+        logger.info("sla_notification.subscribed_throttle_sla_events")
     except ImportError:
-        logger.debug("[SLANotification] EventBus not available")
+        logger.debug("sla_notification.eventbus_available")
     except Exception as e:
-        logger.warning(f"[SLANotification] Failed to subscribe: {e}")
+        logger.warning(
+            "sla_notification.failed_subscribe",
+            error=e,
+        )
 
 
 def _handle_sla_warning(event) -> None:
@@ -81,10 +87,13 @@ def _handle_sla_warning(event) -> None:
             },
         )
     except ImportError:
-        logger.debug("[SLANotification] Celery not available, using sync fallback")
+        logger.debug("sla_notification.celery_available_using_sync")
         _send_sla_warning_sync(event.data)
     except Exception as e:
-        logger.warning(f"[SLANotification] Failed to dispatch warning: {e}")
+        logger.warning(
+            "sla_notification.failed_dispatch_warning",
+            error=e,
+        )
         _send_sla_warning_sync(event.data)
 
 
@@ -100,10 +109,13 @@ def _handle_sla_critical(event) -> None:
             },
         )
     except ImportError:
-        logger.debug("[SLANotification] Celery not available, using sync fallback")
+        logger.debug("sla_notification.celery_available_using_sync")
         _send_sla_critical_sync(event.data)
     except Exception as e:
-        logger.warning(f"[SLANotification] Failed to dispatch critical: {e}")
+        logger.warning(
+            "sla_notification.failed_dispatch_critical",
+            error=e,
+        )
         _send_sla_critical_sync(event.data)
 
 
@@ -171,16 +183,28 @@ def _send_sla_warning_sync(event_data: dict[str, Any]) -> None:
         )
 
         if result.success:
-            logger.info(f"[SLANotification] Warning sent: channels={result.channels_sent}")
+            logger.info(
+                "sla_notification.warning_sent",
+                result=result.channels_sent,
+            )
         elif result.suppressed:
-            logger.debug(f"[SLANotification] Warning suppressed: {result.suppression_reason}")
+            logger.debug(
+                "sla_notification.warning_suppressed",
+                result=result.suppression_reason,
+            )
         else:
-            logger.warning(f"[SLANotification] Warning failed: {result.error}")
+            logger.warning(
+                "sla_notification.warning_failed",
+                result=result.error,
+            )
 
     except ImportError:
-        logger.debug("[SLANotification] UnifiedNotification not available")
+        logger.debug("sla_notification.unifiednotification_available")
     except Exception as e:
-        logger.warning(f"[SLANotification] Failed to send warning: {e}")
+        logger.warning(
+            "sla_notification.failed_send_warning",
+            error=e,
+        )
 
 
 def _send_sla_critical_sync(event_data: dict[str, Any]) -> None:
@@ -228,14 +252,23 @@ def _send_sla_critical_sync(event_data: dict[str, Any]) -> None:
         )
 
         if result.success:
-            logger.warning(f"[SLANotification] CRITICAL sent: channels={result.channels_sent}")
+            logger.warning(
+                "sla_notification.critical_sent",
+                result=result.channels_sent,
+            )
         else:
-            logger.error(f"[SLANotification] CRITICAL failed: {result.error}")
+            logger.error(
+                "sla_notification.critical_failed",
+                result=result.error,
+            )
 
     except ImportError:
-        logger.debug("[SLANotification] UnifiedNotification not available")
+        logger.debug("sla_notification.unifiednotification_available")
     except Exception as e:
-        logger.error(f"[SLANotification] Failed to send critical: {e}")
+        logger.error(
+            "sla_notification.failed_send_critical",
+            error=e,
+        )
 
 
 def _send_limit_recovered_sync(event_data: dict[str, Any]) -> None:
@@ -271,12 +304,18 @@ def _send_limit_recovered_sync(event_data: dict[str, Any]) -> None:
         )
 
         if result.success:
-            logger.info(f"[SLANotification] Recovery sent: channels={result.channels_sent}")
+            logger.info(
+                "sla_notification.recovery_sent",
+                result=result.channels_sent,
+            )
 
     except ImportError:
-        logger.debug("[SLANotification] UnifiedNotification not available")
+        logger.debug("sla_notification.unifiednotification_available")
     except Exception as e:
-        logger.debug(f"[SLANotification] Failed to send recovery: {e}")
+        logger.debug(
+            "sla_notification.failed_send_recovery",
+            error=e,
+        )
 
 
 # 모듈 초기화 시 자동 구독

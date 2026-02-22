@@ -10,13 +10,13 @@ RateLimitCoordinator._should_emit_event() 패턴을 차용한다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 
 from selfhealing.services.event_bus.bus import EventType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Critical 이벤트 → DAG 빌드를 트리거하는 이벤트 목록

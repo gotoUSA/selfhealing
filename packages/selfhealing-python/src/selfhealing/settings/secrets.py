@@ -15,13 +15,13 @@ Security Hardening (214_SECURITY_VULNERABILITY_FIXES):
 - validate_required_secrets() 추가: 핵심 시크릿 미설정 시 경고/에러
 """
 
-import logging
+import structlog
 import os
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SecretsSettings(BaseSettings):
@@ -244,13 +244,19 @@ def validate_required_secrets(secrets: SecretsSettings | None = None) -> dict:
     for name, secret in important_secrets.items():
         if not secret.get_secret_value():
             result["warning"].append(name)
-            logger.warning(f"[Security] Important secret '{name}' is not set. " "Some features may not work correctly.")
+            logger.warning(
+                "security.important_secret_set_some",
+                name=name,
+            )
 
     # OPTIONAL 시크릿 검증
     for name, secret in optional_secrets.items():
         if not secret.get_secret_value():
             result["info"].append(name)
-            logger.info(f"[Security] Optional secret '{name}' is not set.")
+            logger.info(
+                "security.optional_secret_set",
+                name=name,
+            )
 
     # 프로덕션 환경에서 CRITICAL 시크릿 미설정 시 에러
     is_production = (

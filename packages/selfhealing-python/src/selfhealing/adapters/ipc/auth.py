@@ -28,12 +28,12 @@ Usage:
 from __future__ import annotations
 
 import hmac
-import logging
+import structlog
 import os
 from dataclasses import dataclass
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -102,11 +102,11 @@ class SidecarAuthenticator:
                 self._enabled = bool(self._token)
 
         if self._enabled and not self._token:
-            logger.warning("[SidecarAuth] Authentication enabled but no token configured. " "All requests will fail.")
+            logger.warning("sidecar_auth.authentication_enabled_no_token")
         elif self._enabled:
-            logger.info("[SidecarAuth] Bearer token authentication enabled")
+            logger.info("sidecar_auth.bearer_token_authentication_enabled")
         else:
-            logger.debug("[SidecarAuth] Authentication disabled")
+            logger.debug("sidecar_auth.authentication_disabled")
 
     @property
     def is_enabled(self) -> bool:

@@ -12,11 +12,11 @@ Race Condition을 방지하기 위해 Lua 스크립트를 사용합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ThrottleLuaScripts:
@@ -248,9 +248,12 @@ class RedisThrottleLimitManager:
             self._script_shas["load_safe"] = self._redis.script_load(ThrottleLuaScripts.LUA_LOAD_SAFE_LIMIT)
             self._script_shas["add_rtt"] = self._redis.script_load(ThrottleLuaScripts.LUA_ADD_RTT_SAMPLE)
             self._scripts_loaded = True
-            logger.debug("[RedisThrottleLimitManager] Scripts loaded")
+            logger.debug("redis_throttle_limit_manager.scripts_loaded")
         except Exception as e:
-            logger.warning(f"[RedisThrottleLimitManager] Script load failed: {e}")
+            logger.warning(
+                "redis_throttle_limit_manager.script_load_failed",
+                error=e,
+            )
 
     def _run_script(
         self,
@@ -317,7 +320,12 @@ class RedisThrottleLimitManager:
         )
 
         prev_limit, actual_new = result
-        logger.debug(f"[RedisThrottleLimitManager] Updated: " f"service={service_name}, {prev_limit} → {actual_new}")
+        logger.debug(
+            "redis_throttle_limit_manager.updated",
+            service_name=service_name,
+            prev_limit=prev_limit,
+            actual_new=actual_new,
+        )
         return (int(prev_limit), int(actual_new))
 
     def update_limit_cas(
@@ -423,7 +431,10 @@ class RedisThrottleLimitManager:
             self._redis.expire(key, self._default_ttl * 24)  # 24시간 유지
             return True
         except Exception as e:
-            logger.error(f"[RedisThrottleLimitManager] Save safe limit failed: {e}")
+            logger.error(
+                "redis_throttle_limit_manager.save_safe_limit_failed",
+                error=e,
+            )
             return False
 
     def get_current_limit(self, service_name: str) -> int | None:
@@ -432,7 +443,10 @@ class RedisThrottleLimitManager:
             value = self._redis.get(self._get_limit_key(service_name))
             return int(value) if value else None
         except Exception as e:
-            logger.error(f"[RedisThrottleLimitManager] Get limit failed: {e}")
+            logger.error(
+                "redis_throttle_limit_manager.get_limit_failed",
+                error=e,
+            )
             return None
 
     def add_rtt_sample(
@@ -500,5 +514,8 @@ class RedisThrottleLimitManager:
 
             return rtt_values
         except Exception as e:
-            logger.error(f"[RedisThrottleLimitManager] Get RTT samples failed: {e}")
+            logger.error(
+                "redis_throttle_limit_manager.get_rtt_samples_failed",
+                error=e,
+            )
             return []

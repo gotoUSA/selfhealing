@@ -11,13 +11,13 @@ To activate this backend:
 4. Uncomment the actual implementation
 """
 
-import logging
+import structlog
 from datetime import datetime
 from typing import Any
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CloudWatchBackend(AuditBackend):
@@ -112,7 +112,10 @@ class CloudWatchBackend(AuditBackend):
             )
             return False
         except Exception as e:
-            logger.error(f"[CloudWatchBackend] Failed to enable: {e}")
+            logger.error(
+                "cloud_watch_backend.failed_enable",
+                error=e,
+            )
             return False
 
     def write(self, entry: dict[str, Any]) -> bool:

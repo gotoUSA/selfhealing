@@ -21,7 +21,7 @@ Usage:
 
 import hashlib
 import json
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.utils.time import utc_now
@@ -29,7 +29,7 @@ from selfhealing.utils.time import utc_now
 if TYPE_CHECKING:
     from selfhealing.services.canary.models import CanaryRollout
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # 지원하는 Canary 액션 유형
@@ -154,7 +154,13 @@ def log_canary_error(
         "timestamp": utc_now().isoformat(),
     }
 
-    logger.error(f"[CanaryAudit] Error: action={action}, rollout={rollout_id}, " f"error={type(error).__name__}: {error}")
+    logger.error(
+        "canary_audit.error",
+        action=action,
+        rollout_id=rollout_id,
+        value=type(error).__name__,
+        error=error,
+    )
 
     try:
         from selfhealing.services.audit import log_system_control_audit
@@ -167,7 +173,10 @@ def log_canary_error(
             details=audit_entry,
         )
     except Exception as e:
-        logger.debug(f"[CanaryAudit] Audit system error: {e}")
+        logger.debug(
+            "canary_audit.audit_system_error",
+            error=e,
+        )
 
 
 def log_canary_metrics_check(
@@ -215,7 +224,10 @@ def log_canary_metrics_check(
             },
         )
     except Exception as e:
-        logger.debug(f"[CanaryAudit] Audit system error: {e}")
+        logger.debug(
+            "canary_audit.audit_system_error",
+            error=e,
+        )
 
 
 def _compute_hash(values: dict[str, Any]) -> str:
@@ -261,6 +273,9 @@ def _send_to_audit_system(
             details=audit_entry,
         )
     except ImportError:
-        logger.debug("[CanaryAudit] Audit system not available")
+        logger.debug("canary_audit.audit_system_available")
     except Exception as e:
-        logger.debug(f"[CanaryAudit] Audit log failed: {e}")
+        logger.debug(
+            "canary_audit.audit_log_failed",
+            error=e,
+        )

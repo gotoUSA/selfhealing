@@ -11,14 +11,14 @@ To activate this backend:
 4. Set AWS credentials
 """
 
-import logging
+import structlog
 from datetime import datetime
 from typing import Any
 
 from selfhealing.audit.backends.base import AuditBackend, BackendHealth, BackendStatus
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_default_retention_days() -> int:
@@ -100,7 +100,10 @@ class S3WORMBackend(AuditBackend):
             )
             return False
         except Exception as e:
-            logger.error(f"[S3WORMBackend] Failed to enable: {e}")
+            logger.error(
+                "s3_worm_backend.failed_enable",
+                error=e,
+            )
             return False
 
     def write(self, entry: dict[str, Any]) -> bool:

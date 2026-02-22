@@ -42,7 +42,7 @@ Audit Logging 연동:
 from __future__ import annotations
 
 import functools
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -53,7 +53,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 if TYPE_CHECKING:
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -132,7 +132,12 @@ def _log_governance_blocked(
     adapter = _get_audit_adapter()
     if adapter is None:
         # Audit adapter not configured - just log to standard logger
-        logger.info(f"[GovernanceAudit] BLOCKED | reason={block_reason} | " f"operation={operation_name} | details={details}")
+        logger.info(
+            "governance_audit.blocked",
+            block_reason=block_reason,
+            operation_name=operation_name,
+            details=details,
+        )
         return
 
     try:
@@ -145,7 +150,10 @@ def _log_governance_blocked(
         )
     except Exception as e:
         # Audit logging should never break the main flow
-        logger.warning(f"[GovernanceAudit] Failed to log: {e}")
+        logger.warning(
+            "governance_audit.failed_log",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -320,7 +328,7 @@ def invalidate_governance_cache() -> None:
         event_bus.subscribe("SystemControlChanged", invalidate_governance_cache)
     """
     _governance_cache.invalidate_all()
-    logger.debug("[GovernanceChecks] Cache invalidated")
+    logger.debug("governance_checks.cache_invalidated")
 
 
 # =============================================================================
@@ -347,7 +355,10 @@ def is_system_enabled() -> bool:
         _governance_cache.set("system_enabled", result)
         return result
     except Exception as e:
-        logger.warning(f"[GovernanceChecks] Could not check system status: {e}")
+        logger.warning(
+            "governance_checks.check_system_status",
+            error=e,
+        )
         # Fail-open: 시스템 상태 확인 실패 시 활성화 가정
         return True
 
@@ -383,7 +394,10 @@ def is_emergency_blocking(min_level: int | None = None) -> tuple[bool, str]:
         _governance_cache.set(cache_key, result)
         return result
     except Exception as e:
-        logger.warning(f"[GovernanceChecks] Could not check emergency mode: {e}")
+        logger.warning(
+            "governance_checks.check_emergency_mode",
+            error=e,
+        )
         # Fail-open: 비상 모드 확인 실패 시 허용
         return False, "UNKNOWN"
 
@@ -419,7 +433,10 @@ def is_error_budget_blocking(
         _governance_cache.set(cache_key, result)
         return result
     except Exception as e:
-        logger.warning(f"[GovernanceChecks] Could not check error budget: {e}")
+        logger.warning(
+            "governance_checks.check_error_budget",
+            error=e,
+        )
         # Fail-open: 에러 예산 확인 실패 시 허용
         return False, 100.0, 0.0
 
@@ -470,7 +487,10 @@ def check_all_governance(
         settings = get_governance_settings()
 
         if settings.break_glass_enabled:
-            logger.warning(f"[GovernanceChecks] BREAK GLASS ACTIVE - " f"bypassing all checks for {operation_name}")
+            logger.warning(
+                "governance_checks.break_glass_active_bypassing",
+                operation_name=operation_name,
+            )
 
             # Audit 기록 (필수)
             if settings.break_glass_audit_required:
@@ -487,7 +507,10 @@ def check_all_governance(
 
             return GovernanceCheckResult.allowed_result()
     except Exception as e:
-        logger.debug(f"[GovernanceChecks] Break glass check failed: {e}")
+        logger.debug(
+            "governance_checks.break_glass_check_failed",
+            error=e,
+        )
 
     # emergency_min_level이 None이면 Settings에서 로드
     if emergency_min_level is None:
@@ -497,7 +520,7 @@ def check_all_governance(
 
     # 1. Kill Switch
     if check_kill_switch and not is_system_enabled():
-        logger.warning("[GovernanceChecks] Blocked by Kill Switch")
+        logger.warning("governance_checks.blocked_kill_switch")
 
         if audit_on_block:
             _log_governance_blocked(
@@ -514,7 +537,10 @@ def check_all_governance(
     if check_emergency:
         is_blocked, level_name = is_emergency_blocking(min_level=emergency_min_level)
         if is_blocked:
-            logger.warning(f"[GovernanceChecks] Blocked by Emergency Mode: {level_name}")
+            logger.warning(
+                "governance_checks.blocked_emergency_mode",
+                level_name=level_name,
+            )
 
             if audit_on_block:
                 _log_governance_blocked(
@@ -537,7 +563,10 @@ def check_all_governance(
     if check_error_budget:
         is_blocked, budget_pct, threshold_pct = is_error_budget_blocking(tier_id=tier_id, region=region)
         if is_blocked:
-            logger.warning(f"[GovernanceChecks] Blocked by Error Budget: {budget_pct:.1f}%")
+            logger.warning(
+                "governance_checks.blocked_error_budget",
+                budget_pct=budget_pct,
+            )
 
             if audit_on_block:
                 _log_governance_blocked(
@@ -583,7 +612,10 @@ def require_system_enabled(func: F) -> F:
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if not is_system_enabled():
-            logger.warning(f"[GovernanceChecks] {func.__name__} blocked: Kill Switch active")
+            logger.warning(
+                "governance_checks.blocked_kill_switch_active",
+                func=func.__name__,
+            )
             result = GovernanceCheckResult.blocked_by_kill_switch()
             _log_governance_blocked(
                 block_reason=result.block_reason,
@@ -617,7 +649,11 @@ def require_not_emergency(min_level: int = 2) -> Callable[[F], F]:
         def wrapper(*args, **kwargs):
             is_blocked, level_name = is_emergency_blocking(min_level=min_level)
             if is_blocked:
-                logger.warning(f"[GovernanceChecks] {func.__name__} blocked: " f"Emergency mode {level_name}")
+                logger.warning(
+                    "governance_checks.blocked_emergency_mode",
+                    func=func.__name__,
+                    level_name=level_name,
+                )
                 result = GovernanceCheckResult.blocked_by_emergency(
                     level_name=level_name,
                     message=f"Emergency mode {level_name} blocks this operation",
@@ -657,7 +693,11 @@ def require_error_budget() -> Callable[[F], F]:
         def wrapper(*args, **kwargs):
             is_blocked, budget_pct, threshold_pct = is_error_budget_blocking()
             if is_blocked:
-                logger.warning(f"[GovernanceChecks] {func.__name__} blocked: " f"Error budget {budget_pct:.1f}%")
+                logger.warning(
+                    "governance_checks.blocked_error_budget",
+                    func=func.__name__,
+                    budget_pct=budget_pct,
+                )
                 result = GovernanceCheckResult.blocked_by_error_budget(
                     budget_percent=budget_pct,
                     threshold_percent=threshold_pct,

@@ -6,10 +6,10 @@ Provides methods for monitoring, metrics, and health checks.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class MonitoringMixin:
@@ -76,7 +76,7 @@ class MonitoringMixin:
         self._l2_was_unhealthy = False
         self._l2_consecutive_failures = 0
         self._l2_last_error_time = None
-        logger.info("[LayeredRepo] L2 health status reset manually")
+        logger.info("layered_repo.health_status_reset_manually")
 
     def get_metrics(self) -> dict[str, Any]:
         """내부 메트릭 조회."""

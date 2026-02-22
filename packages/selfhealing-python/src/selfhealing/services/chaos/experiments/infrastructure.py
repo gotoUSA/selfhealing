@@ -11,7 +11,7 @@ Includes:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.services.chaos.base import (
     ChaosExperiment,
@@ -26,7 +26,7 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     SIMULATED_TLS_FAILURE_HYPOTHESIS,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CertificateExpiryExperiment(ChaosExperiment):
@@ -79,17 +79,23 @@ class CertificateExpiryExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[CertificateExpiry] Failed to inject: {e}")
+            logger.error(
+                "certificate_expiry.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
         """Remove certificate expiry simulation."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info("[CertificateExpiry] Rollback already completed")
+                logger.info("certificate_expiry.rollback_already_completed")
                 return
 
-            logger.info(f"[CertificateExpiry] Rolling back {self.experiment_id}")
+            logger.info(
+                "certificate_expiry.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -103,7 +109,10 @@ class CertificateExpiryExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[CertificateExpiry] Rollback failed: {e}")
+                logger.error(
+                    "certificate_expiry.rollback_failed",
+                    error=e,
+                )
 
 
 class ClockSkewExperiment(ChaosExperiment):
@@ -163,17 +172,23 @@ class ClockSkewExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[ClockSkew] Failed to inject: {e}")
+            logger.error(
+                "clock_skew.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
         """Remove clock skew injection."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info("[ClockSkew] Rollback already completed")
+                logger.info("clock_skew.rollback_already_completed")
                 return
 
-            logger.info(f"[ClockSkew] Rolling back {self.experiment_id}")
+            logger.info(
+                "clock_skew.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -187,7 +202,10 @@ class ClockSkewExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[ClockSkew] Rollback failed: {e}")
+                logger.error(
+                    "clock_skew.rollback_failed",
+                    error=e,
+                )
 
 
 class DNSFailureExperiment(ChaosExperiment):
@@ -246,17 +264,23 @@ class DNSFailureExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[DNSFailure] Failed to inject: {e}")
+            logger.error(
+                "dns_failure.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
         """Remove DNS failure injection."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info("[DNSFailure] Rollback already completed")
+                logger.info("dns_failure.rollback_already_completed")
                 return
 
-            logger.info(f"[DNSFailure] Rolling back {self.experiment_id}")
+            logger.info(
+                "dns_failure.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -270,7 +294,10 @@ class DNSFailureExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[DNSFailure] Rollback failed: {e}")
+                logger.error(
+                    "dns_failure.rollback_failed",
+                    error=e,
+                )
 
 
 class SimulatedDiskIOExperiment(ChaosExperiment):
@@ -329,17 +356,23 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[SimulatedDiskIO] Failed to inject: {e}")
+            logger.error(
+                "simulated_disk_io.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
         """Remove disk I/O injection."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info("[SimulatedDiskIO] Rollback already completed")
+                logger.info("simulated_disk_io.rollback_already_completed")
                 return
 
-            logger.info(f"[SimulatedDiskIO] Rolling back {self.experiment_id}")
+            logger.info(
+                "simulated_disk_io.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -353,7 +386,10 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[SimulatedDiskIO] Rollback failed: {e}")
+                logger.error(
+                    "simulated_disk_io.rollback_failed",
+                    error=e,
+                )
 
 
 class SimulatedTLSFailureExperiment(ChaosExperiment):
@@ -412,17 +448,23 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[SimulatedTLS] Failed to inject: {e}")
+            logger.error(
+                "simulated_tls.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
         """Remove TLS failure injection."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info("[SimulatedTLS] Rollback already completed")
+                logger.info("simulated_tls.rollback_already_completed")
                 return
 
-            logger.info(f"[SimulatedTLS] Rolling back {self.experiment_id}")
+            logger.info(
+                "simulated_tls.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -436,7 +478,10 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[SimulatedTLS] Rollback failed: {e}")
+                logger.error(
+                    "simulated_tls.rollback_failed",
+                    error=e,
+                )
 
 
 __all__ = [

@@ -8,12 +8,12 @@ Contains:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class StartupHashChainSync:
@@ -125,12 +125,18 @@ class StartupHashChainSync:
             result["pending_cleaned"] = pending_cleaned
 
             self._sync_completed = True
-            logger.info(f"[StartupSync] Completed: action={result['action']}")
+            logger.info(
+                "startup_sync.completed",
+                result=result['action'],
+            )
 
             return result
 
         except Exception as e:
-            logger.error(f"[StartupSync] Failed: {e}")
+            logger.error(
+                "startup_sync.failed",
+                error=e,
+            )
             result["status"] = "error"
             result["error"] = str(e)
             return result
@@ -194,7 +200,11 @@ class StartupHashChainSync:
                         continue
 
             except Exception as e:
-                logger.debug(f"[StartupSync] Error reading {log_file}: {e}")
+                logger.debug(
+                    "startup_sync.error_reading",
+                    log_file=log_file,
+                    error=e,
+                )
                 continue
 
         return last_seq, last_hash
@@ -223,7 +233,10 @@ class StartupHashChainSync:
             return seq, prev_hash
 
         except Exception as e:
-            logger.error(f"[StartupSync] Failed to get Redis state: {e}")
+            logger.error(
+                "startup_sync.failed_get_redis_state",
+                error=e,
+            )
             return 0, ""
 
     def _sync_redis_to_file(self, file_seq: int, file_hash: str) -> None:
@@ -254,10 +267,16 @@ class StartupHashChainSync:
             )
             pipe.execute()
 
-            logger.info(f"[StartupSync] Redis synced to file: seq={file_seq}")
+            logger.info(
+                "startup_sync.redis_synced_file",
+                file_seq=file_seq,
+            )
 
         except Exception as e:
-            logger.error(f"[StartupSync] Failed to sync Redis to file: {e}")
+            logger.error(
+                "startup_sync.failed_sync_redis_file",
+                error=e,
+            )
             raise
 
     def _cleanup_pending_sequences(self) -> int:
@@ -298,12 +317,18 @@ class StartupHashChainSync:
                     continue
 
             if cleaned:
-                logger.info(f"[StartupSync] Cleaned up {cleaned} pending sequences")
+                logger.info(
+                    "startup_sync.cleaned_up_pending_sequences",
+                    cleaned=cleaned,
+                )
 
             return cleaned
 
         except Exception as e:
-            logger.error(f"[StartupSync] Failed to cleanup pending: {e}")
+            logger.error(
+                "startup_sync.failed_cleanup_pending",
+                error=e,
+            )
             return 0
 
 

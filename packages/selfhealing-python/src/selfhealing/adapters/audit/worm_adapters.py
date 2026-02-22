@@ -24,7 +24,7 @@ WORM (Write Once Read Many) Storage Adapters.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import urllib.error
 import urllib.request
 from abc import abstractmethod
@@ -36,7 +36,7 @@ from typing import Any
 
 from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -143,7 +143,10 @@ class WORMAdapter(AuditLogAdapter):
             with open(self._fallback_path, "a", encoding="utf-8") as f:
                 f.write(entry.to_json() + "\n")
         except Exception as e:
-            logger.error(f"[WORM] Fallback write failed: {e}")
+            logger.error(
+                "worm.fallback_write_failed",
+                error=e,
+            )
 
     def query(
         self,
@@ -434,13 +437,19 @@ class SidecarFileWatcher:
         self._running = True
         watch_dir = Path(self._config.watch_dir)
 
-        logger.info(f"[Sidecar] Watching {watch_dir} for audit files...")
+        logger.info(
+            "sidecar.watching_audit_files",
+            watch_dir=watch_dir,
+        )
 
         while self._running:
             try:
                 self._process_files(watch_dir)
             except Exception as e:
-                logger.error(f"[Sidecar] Error processing files: {e}")
+                logger.error(
+                    "sidecar.error_processing_files",
+                    error=e,
+                )
 
             time.sleep(self._config.poll_interval_seconds)
 
@@ -459,7 +468,11 @@ class SidecarFileWatcher:
                 if self._on_success:
                     self._on_success(file_path)
             except Exception as e:
-                logger.error(f"[Sidecar] Failed to process {file_path}: {e}")
+                logger.error(
+                    "sidecar.failed_process",
+                    file_path=file_path,
+                    error=e,
+                )
                 if self._on_error:
                     self._on_error(file_path, e)
 

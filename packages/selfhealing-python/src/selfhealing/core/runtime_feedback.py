@@ -13,7 +13,7 @@ Netflix Hystrix, Google Autopilot 스타일의 자율 조정 시스템
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
@@ -23,7 +23,7 @@ from typing import Any, Protocol
 
 from selfhealing.settings.runtime_feedback import get_runtime_feedback_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class FeedbackLoopState(str, Enum):
@@ -145,7 +145,7 @@ class RuntimeFeedbackLoop:
         # 메트릭 베이스라인 (조정 전 baseline)
         self._baseline_metrics: dict[str, float] | None = None
 
-        logger.info("[RuntimeFeedback] Initialized")
+        logger.info("runtime_feedback.initialized")
 
     @property
     def state(self) -> FeedbackLoopState:
@@ -156,7 +156,7 @@ class RuntimeFeedbackLoop:
         """피드백 루프 시작"""
         with self._lock:
             if self._running:
-                logger.warning("[RuntimeFeedback] Already running")
+                logger.warning("runtime_feedback.already_running")
                 return False
 
             self._running = True
@@ -164,7 +164,7 @@ class RuntimeFeedbackLoop:
             self._state = FeedbackLoopState.RUNNING
             self._thread = threading.Thread(target=self._run_loop, daemon=True)
             self._thread.start()
-            logger.info("[RuntimeFeedback] Started")
+            logger.info("runtime_feedback.started")
             return True
 
     def stop(self) -> bool:
@@ -178,14 +178,17 @@ class RuntimeFeedbackLoop:
             self._thread.join(timeout=1)  # 1초면 충분 (Event로 즉시 깨어남)
             self._thread = None
 
-        logger.info("[RuntimeFeedback] Stopped")
+        logger.info("runtime_feedback.stopped")
         return True
 
     def pause(self, reason: str = "manual") -> bool:
         """피드백 루프 일시 정지"""
         with self._lock:
             self._state = FeedbackLoopState.PAUSED
-            logger.warning(f"[RuntimeFeedback] Paused: {reason}")
+            logger.warning(
+                "runtime_feedback.paused",
+                reason=reason,
+            )
             self._send_alert(
                 "feedback_loop_paused", f"RuntimeFeedback 일시 정지됨: {reason}"
             )
@@ -195,12 +198,12 @@ class RuntimeFeedbackLoop:
         """피드백 루프 재개"""
         with self._lock:
             if not self._running:
-                logger.warning("[RuntimeFeedback] Not running, cannot resume")
+                logger.warning("runtime_feedback.running_cannot_resume")
                 return False
 
             self._state = FeedbackLoopState.RUNNING
             self._consecutive_failures = 0
-            logger.info("[RuntimeFeedback] Resumed")
+            logger.info("runtime_feedback.resumed")
             return True
 
     def _run_loop(self):
@@ -210,7 +213,10 @@ class RuntimeFeedbackLoop:
                 if self._state == FeedbackLoopState.RUNNING and self.enabled:
                     self.observe_and_adjust()
             except Exception as e:
-                logger.error(f"[RuntimeFeedback] Loop error: {e}")
+                logger.error(
+                    "runtime_feedback.loop_error",
+                    error=e,
+                )
                 self._handle_loop_error(e)
 
             # Event.wait()는 set() 시 즉시 반환 (time.sleep 대신 사용)
@@ -241,7 +247,10 @@ class RuntimeFeedbackLoop:
         try:
             metrics = self.metrics_adapter.fetch_current_metrics()
         except Exception as e:
-            logger.error(f"[RuntimeFeedback] Metrics fetch failed: {e}")
+            logger.error(
+                "runtime_feedback.metrics_fetch_failed",
+                error=e,
+            )
             return {
                 "adjusted": False,
                 "reason": "metrics_fetch_failed",
@@ -299,7 +308,10 @@ class RuntimeFeedbackLoop:
                 decision.parameter, decision.suggested_value
             )
         except Exception as e:
-            logger.error(f"[RuntimeFeedback] Apply failed: {e}")
+            logger.error(
+                "runtime_feedback.apply_failed",
+                error=e,
+            )
             return AdjustmentResult(
                 success=False,
                 parameter=decision.parameter,
@@ -353,7 +365,10 @@ class RuntimeFeedbackLoop:
                     )
                     self._rollback_adjustments(adjustments)
             except Exception as e:
-                logger.error(f"[RuntimeFeedback] Health check failed: {e}")
+                logger.error(
+                    "runtime_feedback.health_check_failed",
+                    error=e,
+                )
 
         thread = threading.Thread(target=_health_check, daemon=True)
         thread.start()
@@ -418,7 +433,10 @@ class RuntimeFeedbackLoop:
                     self._record_rollback_audit(result)
                     self._send_rollback_alert(result)
             except Exception as e:
-                logger.error(f"[RuntimeFeedback] Rollback failed: {e}")
+                logger.error(
+                    "runtime_feedback.rollback_failed",
+                    error=e,
+                )
 
         # 롤백 쿨다운 시작
         with self._lock:
@@ -456,7 +474,10 @@ class RuntimeFeedbackLoop:
             )
             self.audit_adapter.log(entry)
         except Exception as e:
-            logger.warning(f"[RuntimeFeedback] Audit log failed: {e}")
+            logger.warning(
+                "runtime_feedback.audit_log_failed",
+                error=e,
+            )
 
     def _record_rollback_audit(self, result: AdjustmentResult):
         """롤백 감사 로그 기록"""
@@ -479,7 +500,10 @@ class RuntimeFeedbackLoop:
             )
             self.audit_adapter.log(entry)
         except Exception as e:
-            logger.warning(f"[RuntimeFeedback] Rollback audit log failed: {e}")
+            logger.warning(
+                "runtime_feedback.rollback_audit_log_failed",
+                error=e,
+            )
 
     def _send_auto_tuning_alert(self, result: AdjustmentResult):
         """자율 조정 알림"""
@@ -497,7 +521,10 @@ class RuntimeFeedbackLoop:
                     f"자동 조정: {result.parameter} {result.old_value} → {result.new_value}",
                 )
         except Exception as e:
-            logger.warning(f"[RuntimeFeedback] Alert failed: {e}")
+            logger.warning(
+                "runtime_feedback.alert_failed",
+                error=e,
+            )
 
     def _send_rollback_alert(self, result: AdjustmentResult):
         """롤백 알림"""
@@ -517,9 +544,16 @@ class RuntimeFeedbackLoop:
                     severity="warning",
                 )
             else:
-                logger.info(f"[RuntimeFeedback] {alert_type}: {message}")
+                logger.info(
+                    "runtime_feedback.event",
+                    alert_type=alert_type,
+                    message=message,
+                )
         except Exception as e:
-            logger.warning(f"[RuntimeFeedback] Alert failed: {e}")
+            logger.warning(
+                "runtime_feedback.alert_failed",
+                error=e,
+            )
 
     def _result_to_dict(self, result: AdjustmentResult) -> dict[str, Any]:
         """결과를 딕셔너리로 변환"""
@@ -553,7 +587,10 @@ class RuntimeFeedbackLoop:
         """수동 롤백"""
         with self._lock:
             if parameter not in self._snapshot_before_adjustment:
-                logger.warning(f"[RuntimeFeedback] No snapshot for {parameter}")
+                logger.warning(
+                    "runtime_feedback.no_snapshot",
+                    parameter=parameter,
+                )
                 return False
 
             old_value = self._snapshot_before_adjustment[parameter]
@@ -566,7 +603,10 @@ class RuntimeFeedbackLoop:
                     )
                 return success
             except Exception as e:
-                logger.error(f"[RuntimeFeedback] Manual rollback failed: {e}")
+                logger.error(
+                    "runtime_feedback.manual_rollback_failed",
+                    error=e,
+                )
                 return False
 
 

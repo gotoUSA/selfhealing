@@ -41,7 +41,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -63,7 +63,7 @@ from selfhealing.utils.time import utc_now
 if TYPE_CHECKING:
     from selfhealing.services.config_history import ConfigVersion
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CanaryRolloutService:
@@ -137,7 +137,10 @@ class CanaryRolloutService:
                 if cache:
                     self._redis_client = cache.client.get_client()
             except Exception as e:
-                logger.warning(f"[CanaryRollout] Redis not available: {e}")
+                logger.warning(
+                    "canary_rollout.redis_available",
+                    error=e,
+                )
         return self._redis_client
 
     @property
@@ -256,7 +259,12 @@ class CanaryRolloutService:
             },
         )
 
-        logger.info(f"[CanaryRollout] Created: id={rollout.id}, " f"config={config_type}, stages={len(stages)}")
+        logger.info(
+            "canary_rollout.created",
+            rollout=rollout.id,
+            config_type=config_type,
+            count=len(stages),
+        )
 
         return rollout
 
@@ -277,11 +285,17 @@ class CanaryRolloutService:
         """
         rollout = self.get_rollout(rollout_id)
         if not rollout:
-            logger.warning(f"[CanaryRollout] Not found: {rollout_id}")
+            logger.warning(
+                "canary_rollout.found",
+                rollout_id=rollout_id,
+            )
             return False
 
         if rollout.state != CanaryState.CREATED:
-            logger.warning(f"[CanaryRollout] Cannot start: state={rollout.state}")
+            logger.warning(
+                "canary_rollout.cannot_start",
+                rollout=rollout.state,
+            )
             return False
 
         # 카오스 충돌 검사
@@ -292,7 +306,10 @@ class CanaryRolloutService:
         )
 
         if not chaos_result.can_proceed:
-            logger.warning(f"[CanaryRollout] Start blocked by chaos guard: " f"{chaos_result.warning_message}")
+            logger.warning(
+                "canary_rollout.start_blocked_chaos_guard",
+                chaos_result=chaos_result.warning_message,
+            )
             return False
 
         # 첫 번째 단계 클러스터에 적용 (안전한 클러스터만)
@@ -346,7 +363,10 @@ class CanaryRolloutService:
             return False
 
         if rollout.state not in (CanaryState.CANARY, CanaryState.PAUSED):
-            logger.warning(f"[CanaryRollout] Cannot promote: state={rollout.state}")
+            logger.warning(
+                "canary_rollout.cannot_promote",
+                rollout=rollout.state,
+            )
             return False
 
         # 거버넌스 체크 (수동 프로모션에도 적용)
@@ -365,19 +385,25 @@ class CanaryRolloutService:
                 )
 
                 if not governance.allowed:
-                    logger.warning(f"[CanaryRollout] Promotion blocked by governance: " f"{governance.block_message}")
+                    logger.warning(
+                        "canary_rollout.promotion_blocked_governance",
+                        governance=governance.block_message,
+                    )
                     return False
 
             except ImportError:
-                logger.debug("[CanaryRollout] GovernanceChecks not available, skipping")
+                logger.debug("canary_rollout.governancechecks_available_skipping")
             except Exception as e:
-                logger.warning(f"[CanaryRollout] Governance check failed: {e}")
+                logger.warning(
+                    "canary_rollout.governance_check_failed",
+                    error=e,
+                )
                 # Fail-Closed: 체크 실패 시 차단
                 return False
         else:
             # bypass_governance=True: Audit 로그 필수
             if not bypass_reason or len(bypass_reason) < 10:
-                logger.error("[CanaryRollout] bypass_reason required (min 10 chars)")
+                logger.error("canary_rollout.required_min_chars")
                 return False
 
             log_canary_action(
@@ -403,7 +429,10 @@ class CanaryRolloutService:
             )
 
             if not is_healthy:
-                logger.warning(f"[CanaryRollout] Promotion blocked: {failure_reason}")
+                logger.warning(
+                    "canary_rollout.promotion_blocked",
+                    failure_reason=failure_reason,
+                )
                 return False
 
         # 다음 단계로 이동
@@ -433,7 +462,11 @@ class CanaryRolloutService:
         # Audit 로그
         log_canary_action(action=action, rollout=rollout)
 
-        logger.info(f"[CanaryRollout] Promoted: id={rollout_id}, " f"stage_index={rollout.current_stage_index}")
+        logger.info(
+            "canary_rollout.promoted",
+            rollout_id=rollout_id,
+            rollout=rollout.current_stage_index,
+        )
 
         return True
 
@@ -459,7 +492,10 @@ class CanaryRolloutService:
             return False
 
         if rollout.is_terminal:
-            logger.warning(f"[CanaryRollout] Cannot rollback terminal state: " f"{rollout.state}")
+            logger.warning(
+                "canary_rollout.cannot_rollback_terminal_state",
+                rollout=rollout.state,
+            )
             return False
 
         # 적용된 모든 클러스터에 이전 설정 복원
@@ -487,7 +523,11 @@ class CanaryRolloutService:
             additional_context={"rollback_reason": reason},
         )
 
-        logger.warning(f"[CanaryRollout] Rolled back: id={rollout_id}, reason={reason}")
+        logger.warning(
+            "canary_rollout.rolled_back",
+            rollout_id=rollout_id,
+            reason=reason,
+        )
 
         return True
 
@@ -544,7 +584,12 @@ class CanaryRolloutService:
             },
         )
 
-        logger.info(f"[CanaryRollout] Paused: id={rollout_id}, " f"triggered_by={triggered_by}, reason={reason}")
+        logger.info(
+            "canary_rollout.paused",
+            rollout_id=rollout_id,
+            triggered_by=triggered_by,
+            reason=reason,
+        )
         return True
 
     def resume(self, rollout_id: str) -> bool:
@@ -570,7 +615,10 @@ class CanaryRolloutService:
 
         log_canary_action(action="resume", rollout=rollout)
 
-        logger.info(f"[CanaryRollout] Resumed: id={rollout_id}")
+        logger.info(
+            "canary_rollout.resumed",
+            rollout_id=rollout_id,
+        )
         return True
 
     def resume_paused_rollouts(
@@ -682,7 +730,11 @@ class CanaryRolloutService:
                 )
                 time.sleep(interval_seconds)
 
-        logger.info(f"[CanaryRollout] Staggered resume complete: " f"{len(resumed)}/{len(candidates)} rollouts resumed")
+        logger.info(
+            "canary_rollout.staggered_resume_complete_rollouts",
+            count=len(resumed),
+            count_1=len(candidates),
+        )
 
         return resumed
 
@@ -702,7 +754,10 @@ class CanaryRolloutService:
             return False
 
         if rollout.state != CanaryState.CREATED:
-            logger.warning(f"[CanaryRollout] Cannot cancel after start: state={rollout.state}")
+            logger.warning(
+                "canary_rollout.cannot_cancel_after_start",
+                rollout=rollout.state,
+            )
             return False
 
         rollout.state = CanaryState.CANCELLED
@@ -721,7 +776,10 @@ class CanaryRolloutService:
             additional_context={"cancel_reason": reason},
         )
 
-        logger.info(f"[CanaryRollout] Cancelled: id={rollout_id}")
+        logger.info(
+            "canary_rollout.cancelled",
+            rollout_id=rollout_id,
+        )
         return True
 
     # =========================================================================
@@ -834,7 +892,10 @@ class CanaryRolloutService:
                 if cursor == 0:
                     break
         except Exception as e:
-            logger.warning(f"[CanaryRollout] Failed to scan completed rollouts: {e}")
+            logger.warning(
+                "canary_rollout.failed_scan_completed_rollouts",
+                error=e,
+            )
             return []
 
         # 완료 시간 역순 정렬
@@ -907,7 +968,10 @@ class CanaryRolloutService:
         try:
             return self.config_history.get_current_version(config_type)
         except Exception as e:
-            logger.warning(f"[CanaryRollout] Failed to get config: {e}")
+            logger.warning(
+                "canary_rollout.failed_get_config",
+                error=e,
+            )
             return None
 
     def _apply_to_clusters(
@@ -938,7 +1002,10 @@ class CanaryRolloutService:
         - API 기반: 클러스터 API 호출
         """
         if not self.redis_client:
-            logger.warning(f"[CanaryRollout] Redis not available, skipping apply to {cluster}")
+            logger.warning(
+                "canary_rollout.redis_available_skipping_apply",
+                cluster=cluster,
+            )
             return
 
         # 클러스터별 설정 키에 저장
@@ -954,7 +1021,11 @@ class CanaryRolloutService:
             ex=86400 * self.rollout_ttl_days,
         )
 
-        logger.info(f"[CanaryRollout] Applied to cluster={cluster}, config={config_type}")
+        logger.info(
+            "canary_rollout.applied",
+            cluster=cluster,
+            config_type=config_type,
+        )
 
     # =========================================================================
     # Private Methods - Metrics & Health

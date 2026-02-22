@@ -12,7 +12,7 @@ Provides zero-data-loss and integrity guarantees for distributed hash chain:
 """
 
 import json
-import logging
+import structlog
 import os
 import threading
 import time
@@ -23,7 +23,7 @@ from typing import Any
 
 from selfhealing.settings.hash_chain import get_hash_chain_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_merge_swap_timeout() -> int:
@@ -285,7 +285,10 @@ class HashChainWAL:
                     except json.JSONDecodeError:
                         continue
         except Exception as e:
-            logger.warning(f"[HashChainWAL] Failed to load sequence: {e}")
+            logger.warning(
+                "hash_chain_wal.failed_load_sequence",
+                error=e,
+            )
 
     def _ensure_file_open(self) -> None:
         """Ensure WAL file is open for writing."""
@@ -427,7 +430,10 @@ class HashChainWAL:
             return uncommitted
 
         except Exception as e:
-            logger.error(f"[HashChainWAL] Failed to get uncommitted entries: {e}")
+            logger.error(
+                "hash_chain_wal.failed_get_uncommitted_entries",
+                error=e,
+            )
             return []
 
     def compact(self, keep_sequences_after: int = 0) -> int:
@@ -472,7 +478,10 @@ class HashChainWAL:
             with open(wal_file, "w", encoding="utf-8") as f:
                 f.writelines(kept_lines)
 
-            logger.info(f"[HashChainWAL] Compacted: removed {removed_count} entries")
+            logger.info(
+                "hash_chain_wal.compacted_removed_entries",
+                removed_count=removed_count,
+            )
             return removed_count
 
     def close(self) -> None:
@@ -569,7 +578,7 @@ class AtomicMergeSwap:
 
                 if result:
                     self.acquired = True
-                    logger.info("[AtomicMergeSwap] Global lock acquired")
+                    logger.info("atomic_merge_swap.global_lock_acquired")
                     return self
 
                 time.sleep(0.1)
@@ -582,7 +591,10 @@ class AtomicMergeSwap:
             return self
 
         except Exception as e:
-            logger.error(f"[AtomicMergeSwap] Lock acquisition error: {e}")
+            logger.error(
+                "atomic_merge_swap.lock_acquisition_error",
+                error=e,
+            )
             self.acquired = False
             return self
 
@@ -606,12 +618,15 @@ class AtomicMergeSwap:
             result = self._redis.eval(lua_script, 1, lock_key, self._lock_token)
 
             if result:
-                logger.info("[AtomicMergeSwap] Global lock released")
+                logger.info("atomic_merge_swap.global_lock_released")
             else:
-                logger.warning("[AtomicMergeSwap] Lock was already released or stolen")
+                logger.warning("atomic_merge_swap.lock_already_released_stolen")
 
         except Exception as e:
-            logger.error(f"[AtomicMergeSwap] Lock release error: {e}")
+            logger.error(
+                "atomic_merge_swap.lock_release_error",
+                error=e,
+            )
 
         self.acquired = False
         self._lock_token = None
@@ -700,7 +715,10 @@ class ShardedDateLock:
 
                 if result:
                     self.acquired = True
-                    logger.debug(f"[ShardedDateLock] Lock acquired for {self._date}")
+                    logger.debug(
+                        "sharded_date_lock.lock_acquired",
+                        self=self._date,
+                    )
                     return self
 
                 time.sleep(0.05)
@@ -710,7 +728,11 @@ class ShardedDateLock:
             return self
 
         except Exception as e:
-            logger.error(f"[ShardedDateLock] Lock error for {self._date}: {e}")
+            logger.error(
+                "sharded_date_lock.lock_error",
+                self=self._date,
+                error=e,
+            )
             self.acquired = False
             return self
 
@@ -730,10 +752,17 @@ class ShardedDateLock:
             end
             """
             self._redis.eval(lua_script, 1, lock_key, self._lock_token)
-            logger.debug(f"[ShardedDateLock] Lock released for {self._date}")
+            logger.debug(
+                "sharded_date_lock.lock_released",
+                self=self._date,
+            )
 
         except Exception as e:
-            logger.error(f"[ShardedDateLock] Release error for {self._date}: {e}")
+            logger.error(
+                "sharded_date_lock.release_error",
+                self=self._date,
+                error=e,
+            )
 
         self.acquired = False
         self._lock_token = None
@@ -851,7 +880,10 @@ class IntegrityAuditTrail:
                     self._redis.lpush(redis_key, json.dumps(event))
                     self._redis.ltrim(redis_key, 0, self._max_redis_entries - 1)
                 except Exception as e:
-                    logger.warning(f"[IntegrityTrail] Redis write failed: {e}")
+                    logger.warning(
+                        "integrity_trail.redis_write_failed",
+                        error=e,
+                    )
 
             # Write to file
             if self._log_dir:
@@ -860,7 +892,10 @@ class IntegrityAuditTrail:
                     with open(log_file, "a", encoding="utf-8") as f:
                         f.write(json.dumps(event) + "\n")
                 except Exception as e:
-                    logger.warning(f"[IntegrityTrail] File write failed: {e}")
+                    logger.warning(
+                        "integrity_trail.file_write_failed",
+                        error=e,
+                    )
 
         # Also log to standard logger
         log_method = getattr(logger, severity.lower(), logger.info)
@@ -888,7 +923,10 @@ class IntegrityAuditTrail:
             return events
 
         except Exception as e:
-            logger.error(f"[IntegrityTrail] Failed to get events: {e}")
+            logger.error(
+                "integrity_trail.failed_get_events",
+                error=e,
+            )
             return []
 
     def get_events_by_type(

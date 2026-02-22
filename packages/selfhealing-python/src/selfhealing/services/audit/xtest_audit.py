@@ -15,12 +15,12 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.services.audit.base import _write_to_wal
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def log_xtest_operation_audit(

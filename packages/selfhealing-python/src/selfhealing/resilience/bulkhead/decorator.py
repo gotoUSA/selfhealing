@@ -26,14 +26,14 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 import warnings
 from functools import wraps
 from typing import Any, Callable, TypeVar
 
 from selfhealing.core.connection_health import ConnectionType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 

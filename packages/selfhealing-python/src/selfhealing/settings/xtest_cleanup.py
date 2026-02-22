@@ -16,12 +16,12 @@ Environment Variables:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class XTestCleanupSettings(BaseSettings):
@@ -117,7 +117,10 @@ class XTestCleanupSettings(BaseSettings):
     def validate_session_ttl(cls, v: int) -> int:
         """세션 TTL 검증."""
         if v < 1:
-            logger.warning(f"[XTestCleanup] session_ttl_hours={v} is too low, using 1")
+            logger.warning(
+                "x_test_cleanup.too_low_using",
+                v=v,
+            )
             return 1
         return v
 
@@ -126,7 +129,10 @@ class XTestCleanupSettings(BaseSettings):
     def validate_cleanup_interval(cls, v: int) -> int:
         """정리 주기 검증."""
         if v < 5:
-            logger.warning(f"[XTestCleanup] cleanup_interval_minutes={v} is too low, using 5")
+            logger.warning(
+                "x_test_cleanup.too_low_using",
+                v=v,
+            )
             return 5
         return v
 

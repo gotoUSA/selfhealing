@@ -12,7 +12,7 @@ HALF_OPEN 상태에서 즉시 100% 트래픽을 보내는 대신,
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 import threading
 from collections.abc import Callable
@@ -26,7 +26,7 @@ from selfhealing.services.circuit_breaker.models import (
     RecoveryStrategy,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -416,7 +416,10 @@ class CanaryRecoveryManager:
 
             # immediate 전략이면 Canary 사용 안 함
             if effective_strategy.type == "immediate":
-                logger.info(f"[CanaryRecovery] {service_id}: immediate strategy, skipping canary")
+                logger.info(
+                    "canary_recovery.immediate_strategy_skipping_canary",
+                    service_id=service_id,
+                )
                 return CanaryRecoveryState(service_id=service_id)
 
             # Canary 복구 상태 생성
@@ -449,7 +452,11 @@ class CanaryRecoveryManager:
                 return False
 
             state.reset()
-            logger.info(f"[CanaryRecovery] {service_id}: Stopped canary recovery, reason={reason}")
+            logger.info(
+                "canary_recovery.stopped_canary_recovery",
+                service_id=service_id,
+                reason=reason,
+            )
             return True
 
     def get_recovery_state(self, service_id: str) -> CanaryRecoveryState | None:
@@ -671,7 +678,11 @@ class CanaryRecoveryManager:
                     completed=True,
                 )
 
-                logger.info(f"[CanaryRecovery] {service_id}: Recovery COMPLETED, " f"final success_rate={success_rate:.1f}%")
+                logger.info(
+                    "canary_recovery.recovery_completed_final",
+                    service_id=service_id,
+                    success_rate=success_rate,
+                )
 
                 if self._on_recovery_completed:
                     self._on_recovery_completed(service_id, state.to_dict())
@@ -716,7 +727,7 @@ class CanaryRecoveryManager:
         with self._state_lock:
             self._recovery_states.clear()
             self._service_strategies.clear()
-            logger.info("[CanaryRecovery] All states reset")
+            logger.info("canary_recovery.all_states_reset")
 
 
 # =============================================================================

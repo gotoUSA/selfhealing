@@ -14,12 +14,12 @@ Environment Variables:
     SELFHEALING_ROLLBACK_FAILURES_EMERGENCY=5
 """
 
-import logging
+import structlog
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AutoRollbackSettings(BaseSettings):
@@ -146,4 +146,4 @@ def reset_auto_rollback_settings() -> None:
     """
     global _settings
     _settings = None
-    logger.debug("[AutoRollbackSettings] Reset")
+    logger.debug("auto_rollback_settings.reset")

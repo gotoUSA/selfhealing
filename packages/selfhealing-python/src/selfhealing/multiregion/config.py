@@ -14,14 +14,14 @@ Multi-Region 설정 관리.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RegionEndpoint:
@@ -299,7 +299,10 @@ class MultiRegionSettings(BaseSettings):
                 for r in data
             ]
         except Exception as e:
-            logger.warning(f"[MultiRegion] Failed to parse peer_regions: {e}")
+            logger.warning(
+                "multi_region.failed_parse",
+                error=e,
+            )
             return []
 
     def _load_dynamic_peers(self) -> list[RegionEndpoint] | None:
@@ -336,7 +339,10 @@ class MultiRegionSettings(BaseSettings):
                     for r in data["endpoints"]
                 ]
         except Exception as e:
-            logger.debug(f"[MultiRegion] Dynamic peer lookup failed: {e}")
+            logger.debug(
+                "multi_region.dynamic_peer_lookup_failed",
+                error=e,
+            )
         return None
 
     def is_primary(self) -> bool:

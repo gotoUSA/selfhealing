@@ -5,7 +5,7 @@ Error Budget 관련 테스트 API:
 - InjectErrorBudgetView: Error Budget 차감 주입
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework import status
@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class InjectErrorBudgetView(XTestModeMixin, APIView):

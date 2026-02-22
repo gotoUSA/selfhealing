@@ -6,7 +6,7 @@ Handles Slack-specific notification sending and formatting.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 import requests
@@ -17,7 +17,7 @@ from .models import (
     _get_notification_limits,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SlackHandlerMixin:
@@ -44,7 +44,11 @@ class SlackHandlerMixin:
             )
 
         if self.config.dry_run:
-            logger.info(f"[DRY RUN] Slack to {channel}: {message['title']}")
+            logger.info(
+                "dry_run_slack",
+                channel=channel,
+                message=message['title'],
+            )
             return ChannelDeliveryResult(
                 channel="slack",
                 success=True,
@@ -76,7 +80,10 @@ class SlackHandlerMixin:
                 )
 
         except Exception as e:
-            logger.error(f"[Security Notification] Slack error: {e}")
+            logger.error(
+                "security_notification_slack_error",
+                error=e,
+            )
             return ChannelDeliveryResult(
                 channel="slack",
                 success=False,
@@ -176,7 +183,11 @@ class SlackHandlerMixin:
             )
 
         if self.config.dry_run:
-            logger.info(f"[DRY RUN] Slack alert to {channel}: {message['title']}")
+            logger.info(
+                "dry_run_slack_alert",
+                channel=channel,
+                message=message['title'],
+            )
             return ChannelDeliveryResult(
                 channel="slack",
                 success=True,
@@ -207,7 +218,10 @@ class SlackHandlerMixin:
                 )
 
         except Exception as e:
-            logger.error(f"[Security Notification] Slack alert error: {e}")
+            logger.error(
+                "security_notification_slack_alert",
+                error=e,
+            )
             return ChannelDeliveryResult(
                 channel="slack",
                 success=False,

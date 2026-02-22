@@ -17,13 +17,13 @@ Environment Variables:
     SELFHEALING_CRITICAL_WORKER_POOL_ENTERPRISE_WORKER_COUNT=8
 """
 
-import logging
+import structlog
 from enum import Enum
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DeploymentEnvironment(str, Enum):

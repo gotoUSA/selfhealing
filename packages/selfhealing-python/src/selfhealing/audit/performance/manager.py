@@ -4,7 +4,7 @@ Performance Manager (Unified Access).
 Provides unified management for all performance optimization components.
 """
 
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -20,7 +20,7 @@ from selfhealing.audit.performance.lua_atomic import LuaAtomicHashChain
 from selfhealing.audit.performance.sampling import SamplingVerifier
 from selfhealing.audit.performance.watchdog import PendingSequenceWatchdog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HashChainPerformanceManager:

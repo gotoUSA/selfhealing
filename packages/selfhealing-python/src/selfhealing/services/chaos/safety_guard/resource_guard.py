@@ -26,7 +26,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 
 import psutil
@@ -34,7 +34,7 @@ import psutil
 from selfhealing.core.resource_monitor import CgroupResourceMonitor
 from selfhealing.settings.resource_guard import get_resource_guard_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -131,7 +131,10 @@ class ResourceGuard:
         try:
             return psutil.cpu_percent(interval=0.1)
         except Exception as e:
-            logger.warning(f"[ResourceGuard] Failed to get CPU percent: {e}")
+            logger.warning(
+                "resource_guard.failed_get_cpu_percent",
+                error=e,
+            )
             return 0.0
 
     def _get_memory_percent_cgroup(self) -> float | None:
@@ -159,7 +162,10 @@ class ResourceGuard:
             memory = psutil.virtual_memory()
             return memory.percent
         except Exception as e:
-            logger.warning(f"[ResourceGuard] Failed to get memory percent: {e}")
+            logger.warning(
+                "resource_guard.failed_get_memory_percent",
+                error=e,
+            )
             return 0.0
 
     def get_resource_status(self) -> ResourceStatus:
@@ -207,7 +213,7 @@ class ResourceGuard:
 
         # 리소스 체크 비활성화 시 항상 허용
         if not settings.resource_check_enabled:
-            logger.debug("[ResourceGuard] Resource check disabled, allowing")
+            logger.debug("resource_guard.resource_check_disabled_allowing")
             return ResourceCheckResult(
                 is_safe=True,
                 cpu_threshold=settings.cpu_threshold,
@@ -229,7 +235,10 @@ class ResourceGuard:
         if status.cpu_percent > settings.cpu_threshold:
             result.is_safe = False
             result.block_reason = f"CPU usage {status.cpu_percent:.1f}% exceeds threshold " f"{settings.cpu_threshold}%"
-            logger.warning(f"[ResourceGuard] X-Test blocked: {result.block_reason}")
+            logger.warning(
+                "resource_guard.test_blocked",
+                result=result.block_reason,
+            )
             return result
 
         # 메모리 임계값 체크
@@ -238,7 +247,10 @@ class ResourceGuard:
             result.block_reason = (
                 f"Memory usage {status.memory_percent:.1f}% exceeds threshold " f"{settings.memory_threshold}%"
             )
-            logger.warning(f"[ResourceGuard] X-Test blocked: {result.block_reason}")
+            logger.warning(
+                "resource_guard.test_blocked",
+                result=result.block_reason,
+            )
             return result
 
         logger.debug(
@@ -275,7 +287,7 @@ def get_resource_guard() -> ResourceGuard:
     global _resource_guard
     if _resource_guard is None:
         _resource_guard = ResourceGuard()
-        logger.debug("[ResourceGuard] Initialized singleton instance")
+        logger.debug("resource_guard.initialized_singleton_instance")
     return _resource_guard
 
 
@@ -285,4 +297,4 @@ def reset_resource_guard() -> None:
     """
     global _resource_guard
     _resource_guard = None
-    logger.debug("[ResourceGuard] Reset singleton")
+    logger.debug("resource_guard.reset_singleton")

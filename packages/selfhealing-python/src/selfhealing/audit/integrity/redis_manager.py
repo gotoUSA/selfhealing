@@ -7,7 +7,7 @@ Contains:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import threading
 from datetime import datetime, timezone
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from selfhealing.audit.integrity.local_manager import HashChainManager
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RedisHashChainManager:
@@ -104,7 +104,10 @@ class RedisHashChainManager:
             try:
                 return self._add_integrity_redis(entry)
             except Exception as e:
-                logger.warning(f"[RedisHashChain] Redis failed, using fallback: {e}")
+                logger.warning(
+                    "redis_hash_chain.redis_failed_using_fallback",
+                    error=e,
+                )
                 self._stats["fallback_writes"] += 1
                 return self._add_integrity_fallback(entry)
 
@@ -237,7 +240,10 @@ class RedisHashChainManager:
             }
 
         except Exception as e:
-            logger.warning(f"[RedisHashChain] Failed to get state from Redis: {e}")
+            logger.warning(
+                "redis_hash_chain.failed_get_state_redis",
+                error=e,
+            )
 
             if self._fallback:
                 state = self._fallback.get_state()
@@ -289,10 +295,13 @@ class RedisHashChainManager:
             self._redis.delete(seq_key)
             self._redis.delete(state_key)
 
-            logger.warning("[RedisHashChain] Chain state reset in Redis")
+            logger.warning("redis_hash_chain.chain_state_reset_redis")
 
         except Exception as e:
-            logger.error(f"[RedisHashChain] Failed to reset: {e}")
+            logger.error(
+                "redis_hash_chain.failed_reset",
+                error=e,
+            )
 
         if self._fallback:
             self._fallback.reset()

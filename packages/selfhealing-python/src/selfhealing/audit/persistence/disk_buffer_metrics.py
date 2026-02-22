@@ -14,14 +14,14 @@ DiskPersistentBuffer Prometheus 메트릭.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import shutil
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from selfhealing.audit.persistence.disk_buffer import DiskPersistentBuffer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 METRICS_AVAILABLE = False
 
@@ -147,7 +147,7 @@ try:
     )
 
 except ImportError:
-    logger.debug("[DiskBufferMetrics] prometheus_client not available")
+    logger.debug("disk_buffer_metrics.available")
 
 
 # 이전 카운터 값 저장 (증분 계산용)
@@ -199,7 +199,10 @@ def update_disk_buffer_metrics(
         _update_counter_increments(stats, instance)
 
     except Exception as e:
-        logger.debug(f"[DiskBufferMetrics] Update failed: {e}")
+        logger.debug(
+            "disk_buffer_metrics.update_failed",
+            error=e,
+        )
 
 
 def _update_counter_increments(stats: dict[str, Any], instance: str) -> None:

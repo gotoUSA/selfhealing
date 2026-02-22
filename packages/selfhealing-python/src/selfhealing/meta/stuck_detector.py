@@ -15,14 +15,14 @@ Zero-variance Stuck 조건:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

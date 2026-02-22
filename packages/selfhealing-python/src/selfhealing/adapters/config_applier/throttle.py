@@ -8,11 +8,11 @@ model_copy() Atomic Swap으로 Thread-Safety를 보장한다.
 비허용 파라미터(rate_limit_rps 등)는 No-op + 로그로 하위 호환성 유지.
 """
 
-import logging
+import structlog
 
 from selfhealing.services.throttle.adaptive import get_adaptive_throttle
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ThrottleConfigApplier:

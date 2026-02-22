@@ -30,12 +30,12 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # ContextVar 정의: 현재 요청이 합성(테스트) 요청인지 여부
 _is_synthetic_request: ContextVar[bool] = ContextVar(
@@ -141,7 +141,7 @@ class TestModeContext:
             _synthetic_session_id.reset(cls._token_session)
             cls._token_session = None
 
-        logger.debug("[TestModeContext] Manual exit synthetic mode")
+        logger.debug("test_mode_context.manual_exit_synthetic_mode")
 
     @classmethod
     def is_synthetic(cls) -> bool:

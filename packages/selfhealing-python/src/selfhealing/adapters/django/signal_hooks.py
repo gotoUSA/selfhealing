@@ -16,7 +16,7 @@ Architecture:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 from selfhealing.services.security.session_registry import get_user_session_registry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 _connected = False
 
@@ -80,7 +80,7 @@ def connect_session_signals() -> None:
         dispatch_uid="selfhealing_session_unregister",
     )
     _connected = True
-    logger.debug("[SelfHealing] Session signal handlers connected")
+    logger.debug("self_healing.session_signal_handlers_connected")
 
 
 def disconnect_session_signals() -> None:

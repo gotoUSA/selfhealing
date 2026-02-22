@@ -24,7 +24,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import select
 import socket
@@ -51,7 +51,7 @@ from selfhealing.adapters.ipc.protocol.json_rpc import (
     parse_request,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -158,7 +158,10 @@ class UDSServer:
 
                 self._cb_service = get_circuit_breaker_service()
             except ImportError as e:
-                logger.warning(f"[UDSServer] CircuitBreakerService not available: {e}")
+                logger.warning(
+                    "uds_server.circuitbreakerservice_available",
+                    error=e,
+                )
         return self._cb_service
 
     @property
@@ -170,7 +173,10 @@ class UDSServer:
 
                 self._dlq_service = get_dlq_service()
             except ImportError as e:
-                logger.warning(f"[UDSServer] DLQService not available: {e}")
+                logger.warning(
+                    "uds_server.dlqservice_available",
+                    error=e,
+                )
         return self._dlq_service
 
     @property
@@ -182,7 +188,10 @@ class UDSServer:
 
                 self._learning_service = LearningService()
             except ImportError as e:
-                logger.warning(f"[UDSServer] LearningService not available: {e}")
+                logger.warning(
+                    "uds_server.learningservice_available",
+                    error=e,
+                )
         return self._learning_service
 
     # =========================================================================
@@ -197,7 +206,7 @@ class UDSServer:
             background: 백그라운드 스레드로 실행 여부
         """
         if self._running:
-            logger.warning("[UDSServer] Server already running")
+            logger.warning("uds_server.server_already_running")
             return
 
         # 기존 소켓 파일 제거
@@ -215,7 +224,10 @@ class UDSServer:
             os.chmod(self._socket_path, 0o660)
 
         self._running = True
-        logger.info(f"[UDSServer] Started on {self._socket_path}")
+        logger.info(
+            "uds_server.started",
+            self=self._socket_path,
+        )
 
         if background:
             self._thread = threading.Thread(
@@ -247,7 +259,7 @@ class UDSServer:
             self._thread.join(timeout=timeout)
 
         self._cleanup_socket_file()
-        logger.info("[UDSServer] Stopped")
+        logger.info("uds_server.stopped")
 
     def _cleanup_socket_file(self) -> None:
         """소켓 파일 정리."""
@@ -283,7 +295,10 @@ class UDSServer:
                 # 소켓 종료됨
                 break
             except Exception as e:
-                logger.error(f"[UDSServer] Accept error: {e}")
+                logger.error(
+                    "uds_server.accept_error",
+                    error=e,
+                )
 
     def _handle_connection(self, conn: socket.socket) -> None:
         """개별 연결 처리."""
@@ -305,7 +320,10 @@ class UDSServer:
         except socket.timeout:
             pass
         except Exception as e:
-            logger.debug(f"[UDSServer] Connection error: {e}")
+            logger.debug(
+                "uds_server.connection_error",
+                error=e,
+            )
         finally:
             self._stats.active_connections -= 1
             try:
@@ -386,7 +404,10 @@ class UDSServer:
             )
         except Exception as e:
             self._stats.failed_requests += 1
-            logger.error(f"[UDSServer] Request error: {e}")
+            logger.error(
+                "uds_server.request_error",
+                error=e,
+            )
             return create_error_response(
                 None,
                 JSONRPCErrorCode.INTERNAL_ERROR,

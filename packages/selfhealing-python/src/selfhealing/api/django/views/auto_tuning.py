@@ -4,7 +4,7 @@ Auto Tuning API Views
 자율 조정 제어 API 엔드포인트
 """
 
-import logging
+import structlog
 from datetime import datetime
 
 from rest_framework import status
@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_auto_tuning_service():
@@ -94,7 +94,7 @@ def _create_default_service():
 
         metrics_adapter = InternalMetricsAdapter()
     except ImportError:
-        logger.warning("[AutoTuning] InternalMetricsAdapter import failed, " "falling back to DummyMetricsAdapter")
+        logger.warning("auto_tuning.internalmetricsadapter_import_failed_falling")
         metrics_adapter = DummyMetricsAdapter()
 
     # CompositeConfigApplier: ThrottleConfigApplier(SLA 전용) + DummyConfigApplier(fallback)
@@ -113,7 +113,7 @@ def _create_default_service():
             ]
         )
     except ImportError:
-        logger.warning("[AutoTuning] ThrottleConfigApplier import failed, " "falling back to DummyConfigApplier")
+        logger.warning("auto_tuning.throttleconfigapplier_import_failed_falling")
         config_applier = DummyConfigApplier()
 
     service = AutoTuningService(
@@ -131,7 +131,7 @@ def _create_default_service():
 
         service.decision_engine.rules.extend(THROTTLE_SLA_RULES)
     except ImportError:
-        logger.warning("[AutoTuning] THROTTLE_SLA_RULES import failed, " "SLA auto-tuning rules not loaded")
+        logger.warning("auto_tuning.import_failed_sla_auto")
 
     return service
 

@@ -11,7 +11,7 @@ implement the required abstract methods: inject_chaos() and rollback().
 from __future__ import annotations
 
 import abc
-import logging
+import structlog
 import threading
 import time
 import uuid
@@ -25,7 +25,7 @@ from .enums import ExperimentStatus
 from .models import ExperimentConfig, ExperimentResult, SteadyStateHypothesis
 from .ttl_helper import MonotonicTTLHelper
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ChaosExperiment(abc.ABC):
@@ -134,7 +134,11 @@ class ChaosExperiment(abc.ABC):
         self._monotonic_ttl_helper = MonotonicTTLHelper(ttl_seconds=float(self._effective_ttl))
         self._monotonic_ttl_helper.start()
 
-        logger.debug(f"[ChaosExperiment] Monotonic timer started for {self.experiment_id}: " f"ttl={self._effective_ttl}s")
+        logger.debug(
+            "chaos_experiment.monotonic_timer_started",
+            self=self.experiment_id,
+            self_1=self._effective_ttl,
+        )
 
     def _is_expired_monotonic(self) -> bool:
         """
@@ -220,7 +224,10 @@ class ChaosExperiment(abc.ABC):
             },
         )
 
-        logger.info(f"[ChaosExperiment] {self.experiment_id} - " f"Recovery monitoring completed, status changed to COMPLETED")
+        logger.info(
+            "chaos_experiment.recovery_monitoring_completed_status",
+            self=self.experiment_id,
+        )
 
     def force_complete(self, reason: str = "hard_ttl_expired") -> None:
         """
@@ -244,7 +251,11 @@ class ChaosExperiment(abc.ABC):
             },
         )
 
-        logger.warning(f"[ChaosExperiment] {self.experiment_id} - " f"Force completed due to: {reason}")
+        logger.warning(
+            "chaos_experiment.force_completed_due",
+            self=self.experiment_id,
+            reason=reason,
+        )
 
     def transition_to_recovery_monitoring(self) -> None:
         """
@@ -301,10 +312,13 @@ class ChaosExperiment(abc.ABC):
                 "in_canary": state != CanaryRecoveryStage.NOT_IN_CANARY,
             }
         except ImportError:
-            logger.debug("[ChaosExperiment] CanaryRecoveryManager not available")
+            logger.debug("chaos_experiment.canaryrecoverymanager_available")
             return {"in_canary": False, "canary_state": "not_available"}
         except Exception as e:
-            logger.warning(f"[ChaosExperiment] Canary verification failed: {e}")
+            logger.warning(
+                "chaos_experiment.canary_verification_failed",
+                error=e,
+            )
             return {"in_canary": False, "error": str(e)}
 
     # =========================================================================
@@ -335,7 +349,10 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except Exception as e:
-            logger.warning(f"[Chaos] Pool state snapshot failed: {e}")
+            logger.warning(
+                "chaos.pool_state_snapshot_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def _get_cert_state_snapshot(self) -> dict[str, Any]:
@@ -355,10 +372,13 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("[Chaos] CertificateExpiryMonitor not available")
+            logger.debug("chaos.certificateexpirymonitor_available")
             return {"check_performed": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[Chaos] Cert state snapshot failed: {e}")
+            logger.warning(
+                "chaos.cert_state_snapshot_failed",
+                error=e,
+            )
             return {"check_performed": False, "error": str(e)}
 
     def _get_connection_health_snapshot(self) -> dict[str, Any]:
@@ -384,10 +404,13 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("[Chaos] ConnectionHealthMonitor not available")
+            logger.debug("chaos.connectionhealthmonitor_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[Chaos] Connection health snapshot failed: {e}")
+            logger.warning(
+                "chaos.connection_health_snapshot_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     # =========================================================================
@@ -409,7 +432,10 @@ class ChaosExperiment(abc.ABC):
 
     def _run_dry(self) -> ExperimentResult:
         """Execute experiment in dry run mode."""
-        logger.info(f"[DryRun] Starting dry run for {self.experiment_id}")
+        logger.info(
+            "dry_run.starting_dry_run",
+            self=self.experiment_id,
+        )
 
         self._calculate_expires_at()
 
@@ -462,7 +488,10 @@ class ChaosExperiment(abc.ABC):
         )
 
         self._audit("experiment_completed", {"result": self.result.to_dict(), "dry_run": True})
-        logger.info(f"[DryRun] Completed dry run for {self.experiment_id} - no actual chaos injected")
+        logger.info(
+            "dry_run.completed_dry_run_no",
+            self=self.experiment_id,
+        )
 
         return self.result
 
@@ -573,7 +602,11 @@ class ChaosExperiment(abc.ABC):
             return self.result
 
         except Exception as e:
-            logger.exception(f"[ChaosExperiment] Error in {self.experiment_id}: {e}")
+            logger.exception(
+                "chaos_experiment.error",
+                self=self.experiment_id,
+                error=e,
+            )
             self.rollback()
             return self._create_failed_result(str(e))
 
@@ -598,7 +631,10 @@ class ChaosExperiment(abc.ABC):
     def pre_flight_check(self) -> bool:
         """Validate preconditions before starting experiment."""
         if self._kill_requested:
-            logger.warning(f"[ChaosExperiment] {self.experiment_id} - Kill requested before start")
+            logger.warning(
+                "chaos_experiment.kill_requested_before_start",
+                self=self.experiment_id,
+            )
             return False
         return True
 
@@ -637,7 +673,10 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except Exception as e:
-            logger.warning(f"[Chaos] CB state snapshot failed: {e}")
+            logger.warning(
+                "chaos.cb_state_snapshot_failed",
+                error=e,
+            )
             return {}
 
     def capture_steady_state_with_cb(self) -> dict[str, Any]:
@@ -670,10 +709,13 @@ class ChaosExperiment(abc.ABC):
             shield = get_corruption_shield()
             return shield.get_stats()
         except ImportError:
-            logger.debug("[Chaos] Corruption shield not available (import failed)")
+            logger.debug("chaos.corruption_shield_available_import")
             return {}
         except Exception as e:
-            logger.warning(f"[Chaos] Corruption shield stats failed: {e}")
+            logger.warning(
+                "chaos.corruption_shield_stats_failed",
+                error=e,
+            )
             return {}
 
     def _get_dlq_stats(self) -> dict[str, Any]:
@@ -691,10 +733,13 @@ class ChaosExperiment(abc.ABC):
                 "pending_count": (service.get_pending_count() if hasattr(service, "get_pending_count") else 0),
             }
         except ImportError:
-            logger.debug("[Chaos] DLQ service not available (import failed)")
+            logger.debug("chaos.dlq_service_available_import")
             return {}
         except Exception as e:
-            logger.warning(f"[Chaos] DLQ stats failed: {e}")
+            logger.warning(
+                "chaos.dlq_stats_failed",
+                error=e,
+            )
             return {}
 
     def _get_throttle_stats(self) -> dict[str, Any]:
@@ -710,10 +755,13 @@ class ChaosExperiment(abc.ABC):
             throttle = get_adaptive_throttle()
             return throttle.get_stats() if hasattr(throttle, "get_stats") else {}
         except ImportError:
-            logger.debug("[Chaos] Adaptive throttle not available (import failed)")
+            logger.debug("chaos.adaptive_throttle_available_import")
             return {}
         except Exception as e:
-            logger.warning(f"[Chaos] Throttle stats failed: {e}")
+            logger.warning(
+                "chaos.throttle_stats_failed",
+                error=e,
+            )
             return {}
 
     # =========================================================================
@@ -737,10 +785,13 @@ class ChaosExperiment(abc.ABC):
             state = manager.get_state()
             return state.to_dict()
         except ImportError:
-            logger.debug("[Chaos] EmergencyModeManager not available (import failed)")
+            logger.debug("chaos.emergencymodemanager_available_import_failed")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[Chaos] Emergency state snapshot failed: {e}")
+            logger.warning(
+                "chaos.emergency_state_snapshot_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def _get_tiering_cb_snapshot(self) -> dict[str, Any]:
@@ -765,10 +816,13 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("[Chaos] TieringCircuitBreaker not available (import failed)")
+            logger.debug("chaos.tieringcircuitbreaker_available_import_failed")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[Chaos] Tiering CB snapshot failed: {e}")
+            logger.warning(
+                "chaos.tiering_cb_snapshot_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def _get_rate_limit_snapshot(self) -> dict[str, Any]:
@@ -785,10 +839,13 @@ class ChaosExperiment(abc.ABC):
 
             return get_current_state()
         except ImportError:
-            logger.debug("[Chaos] Rate limit module not available (import failed)")
+            logger.debug("chaos.rate_limit_module_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[Chaos] Rate limit snapshot failed: {e}")
+            logger.warning(
+                "chaos.rate_limit_snapshot_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def _get_tiering_registry_snapshot(self) -> dict[str, Any]:
@@ -817,10 +874,13 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("[Chaos] TierRegistry not available (import failed)")
+            logger.debug("chaos.tierregistry_available_import_failed")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[Chaos] Tiering registry snapshot failed: {e}")
+            logger.warning(
+                "chaos.tiering_registry_snapshot_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def capture_comprehensive_snapshot(self) -> dict[str, Any]:
@@ -889,7 +949,10 @@ class ChaosExperiment(abc.ABC):
         """
         # failure_hypothesis가 없으면 스킵
         if not hasattr(self, "failure_hypothesis") or self.failure_hypothesis is None:
-            logger.debug(f"[Chaos] No failure_hypothesis defined for {self.experiment_id}")
+            logger.debug(
+                "chaos.no_defined",
+                self=self.experiment_id,
+            )
             return
 
         # Validate hypothesis
@@ -957,7 +1020,11 @@ class ChaosExperiment(abc.ABC):
 
             # 복구 시간 추세 분석 요청 (실패 시)
             if not passed and violations:
-                logger.warning(f"[Chaos] Hypothesis validation FAILED for {self.experiment_id}: {violations}")
+                logger.warning(
+                    "chaos.hypothesis_validation_failed",
+                    self=self.experiment_id,
+                    violations=violations,
+                )
 
                 # LearningService에 추세 분석 트리거
                 if hasattr(learning, "analyze_trend"):
@@ -967,12 +1034,21 @@ class ChaosExperiment(abc.ABC):
                         window_days=30,
                     )
             else:
-                logger.info(f"[Chaos] Hypothesis validation PASSED for {self.experiment_id}")
+                logger.info(
+                    "chaos.hypothesis_validation_passed",
+                    self=self.experiment_id,
+                )
 
         except ImportError as e:
-            logger.debug(f"[Chaos] LearningService not available: {e}")
+            logger.debug(
+                "chaos.learningservice_available",
+                error=e,
+            )
         except Exception as e:
-            logger.warning(f"[Chaos] Failed to record hypothesis validation: {e}")
+            logger.warning(
+                "chaos.failed_record_hypothesis_validation",
+                error=e,
+            )
 
     def record_finops_cost(self) -> None:
         """
@@ -990,7 +1066,10 @@ class ChaosExperiment(abc.ABC):
                 dry_run=self.config.dry_run,
             )
         except Exception as e:
-            logger.debug(f"[Chaos] FinOps recording skipped: {e}")
+            logger.debug(
+                "chaos.finops_recording_skipped",
+                error=e,
+            )
 
     # =========================================================================
     # Kill Switch Integration
@@ -1000,7 +1079,11 @@ class ChaosExperiment(abc.ABC):
         """Request experiment termination."""
         self._kill_requested = True
         self._audit("kill_requested", {"reason": reason})
-        logger.warning(f"[ChaosExperiment] Kill requested for {self.experiment_id}: {reason}")
+        logger.warning(
+            "chaos_experiment.kill_requested",
+            self=self.experiment_id,
+            reason=reason,
+        )
 
     def is_killed(self) -> bool:
         """Check if kill was requested."""
@@ -1015,7 +1098,10 @@ class ChaosExperiment(abc.ABC):
         if not self.is_expired():
             return False
 
-        logger.warning(f"[ChaosExperiment] {self.experiment_id} - TTL expired, auto-stopping")
+        logger.warning(
+            "chaos_experiment.ttl_expired_auto_stopping",
+            self=self.experiment_id,
+        )
         self._kill_requested = True
         self._stop_condition_violation = "TTL expired"
         self._audit(
@@ -1037,7 +1123,11 @@ class ChaosExperiment(abc.ABC):
             return False
 
         violation_messages = [v.message for v in stop_result.violations]
-        logger.error(f"[ChaosExperiment] {self.experiment_id} - Stop condition violated: {violation_messages}")
+        logger.error(
+            "chaos_experiment.stop_condition_violated",
+            self=self.experiment_id,
+            violation_messages=violation_messages,
+        )
         self._kill_requested = True
         self._stop_condition_violation = "; ".join(violation_messages)
         self._audit(
@@ -1121,7 +1211,10 @@ class ChaosExperiment(abc.ABC):
             return None
 
         except Exception as e:
-            logger.warning(f"[ChaosExperiment] SLA check failed: {e}")
+            logger.warning(
+                "chaos_experiment.sla_check_failed",
+                error=e,
+            )
             return None
 
     def _audit(self, event_type: str, data: dict[str, Any]) -> None:

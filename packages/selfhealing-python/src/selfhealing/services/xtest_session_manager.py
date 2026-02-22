@@ -12,12 +12,12 @@ Redis 키 구조:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -106,7 +106,7 @@ class XTestSessionManager:
 
                 self._redis = get_redis_client()
             except ImportError:
-                logger.warning("[XTestSession] Redis adapter not available")
+                logger.warning("x_test_session.redis_adapter_available")
                 self._redis = None
         return self._redis
 
@@ -169,10 +169,18 @@ class XTestSessionManager:
                 # 활성 세션 목록에 추가
                 self.redis.sadd(active_key, session_id)
 
-                logger.info(f"[XTestSession] Created session: {session_id} " f"(user={user}, ttl={ttl_hours}h)")
+                logger.info(
+                    "x_test_session.created_session",
+                    session_id=session_id,
+                    user=user,
+                    ttl_hours=ttl_hours,
+                )
 
             except Exception as e:
-                logger.error(f"[XTestSession] Failed to create session: {e}")
+                logger.error(
+                    "x_test_session.failed_create_session",
+                    error=e,
+                )
 
         return metadata
 
@@ -213,7 +221,11 @@ class XTestSessionManager:
             )
 
         except Exception as e:
-            logger.error(f"[XTestSession] Failed to get session {session_id}: {e}")
+            logger.error(
+                "x_test_session.failed_get_session",
+                session_id=session_id,
+                error=e,
+            )
             return None
 
     def update_session(
@@ -254,7 +266,11 @@ class XTestSessionManager:
             return True
 
         except Exception as e:
-            logger.error(f"[XTestSession] Failed to update session {session_id}: {e}")
+            logger.error(
+                "x_test_session.failed_update_session",
+                session_id=session_id,
+                error=e,
+            )
             return False
 
     def register_artifact(
@@ -305,7 +321,10 @@ class XTestSessionManager:
             return [sid.decode() if isinstance(sid, bytes) else sid for sid in session_ids]
 
         except Exception as e:
-            logger.error(f"[XTestSession] Failed to get active sessions: {e}")
+            logger.error(
+                "x_test_session.failed_get_active_sessions",
+                error=e,
+            )
             return []
 
     def get_expired_sessions(self) -> list[XTestSessionMetadata]:
@@ -323,7 +342,11 @@ class XTestSessionManager:
             if session and session.is_expired:
                 expired_sessions.append(session)
 
-        logger.debug(f"[XTestSession] Found {len(expired_sessions)} expired sessions " f"out of {len(active_ids)} active")
+        logger.debug(
+            "x_test_session.found_expired_sessions_out",
+            count=len(expired_sessions),
+            count_1=len(active_ids),
+        )
 
         return expired_sessions
 
@@ -350,11 +373,18 @@ class XTestSessionManager:
             # 활성 목록에서 제거
             self.redis.srem(active_key, session_id)
 
-            logger.info(f"[XTestSession] Deleted session: {session_id}")
+            logger.info(
+                "x_test_session.deleted_session",
+                session_id=session_id,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[XTestSession] Failed to delete session {session_id}: {e}")
+            logger.error(
+                "x_test_session.failed_delete_session",
+                session_id=session_id,
+                error=e,
+            )
             return False
 
     def get_sessions_count(self) -> int:

@@ -6,12 +6,12 @@ Emergency Postmortem 자동 생성 핸들러.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from . import SelfHealingEvent, EventType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _handle_incident_group(event: SelfHealingEvent, service_name: str, settings) -> None:
@@ -35,9 +35,17 @@ def _handle_incident_group(event: SelfHealingEvent, service_name: str, settings)
     if is_new_group:
         # 새 그룹 생성 시 종료 타이머 스케줄링
         _schedule_group_close(group_id, namespace, settings)
-        logger.info(f"[EventHandler] New incident group created: {group_id} " f"(service={service_name})")
+        logger.info(
+            "event_handler.new_incident_group_created",
+            group_id=group_id,
+            service_name=service_name,
+        )
     else:
-        logger.info(f"[EventHandler] Incident added to existing group: {group_id} " f"(service={service_name})")
+        logger.info(
+            "event_handler.incident_added_existing_group",
+            group_id=group_id,
+            service_name=service_name,
+        )
 
 
 def _schedule_group_close(group_id: str, namespace: str, settings) -> None:
@@ -56,12 +64,19 @@ def _schedule_group_close(group_id: str, namespace: str, settings) -> None:
             countdown=window_seconds,
         )
 
-        logger.debug(f"[EventHandler] Scheduled group close: {group_id} " f"(delay={window_seconds}s)")
+        logger.debug(
+            "event_handler.scheduled_group_close",
+            group_id=group_id,
+            window_seconds=window_seconds,
+        )
 
     except ImportError:
-        logger.debug("[EventHandler] Celery tasks not available, skipping group close scheduling")
+        logger.debug("event_handler.celery_tasks_available_skipping")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to schedule group close: {e}")
+        logger.warning(
+            "event_handler.failed_schedule_group_close",
+            error=e,
+        )
 
 
 def _create_individual_postmortem(
@@ -124,12 +139,19 @@ def _create_individual_postmortem(
             sealer = get_integrity_sealer()
             postmortem = sealer.seal(postmortem)
         except Exception as seal_error:
-            logger.warning(f"[EventHandler] Integrity seal failed: {seal_error}")
+            logger.warning(
+                "event_handler.integrity_seal_failed",
+                seal_error=seal_error,
+            )
 
         # 저장
         add_healing_incident(postmortem)
 
-        logger.info(f"[EventHandler] Auto postmortem generated: {incident_id} " f"(duration={duration}s)")
+        logger.info(
+            "event_handler.auto_postmortem_generated",
+            incident_id=incident_id,
+            duration=duration,
+        )
 
         # Post-mortem 알림 발송
         from ._cb_handlers import _send_postmortem_notification
@@ -155,12 +177,18 @@ def _create_individual_postmortem(
                 target_id=incident_id,
             )
         except Exception as audit_error:
-            logger.warning(f"[EventHandler] Failed to log postmortem audit: {audit_error}")
+            logger.warning(
+                "event_handler.failed_log_postmortem_audit",
+                audit_error=audit_error,
+            )
 
     except ImportError:
-        logger.debug("[EventHandler] Postmortem module not available, skipping auto generation")
+        logger.debug("event_handler.postmortem_module_available_skipping")
     except Exception as e:
-        logger.error(f"[EventHandler] Failed to generate auto postmortem: {e}")
+        logger.error(
+            "event_handler.failed_generate_auto_postmortem",
+            error=e,
+        )
 
 
 def _build_emergency_timeline(event_bus_history: list) -> list:
@@ -280,7 +308,10 @@ def _collect_emergency_cascade_event_data(namespace: str) -> tuple[str | None, l
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"Failed to collect cascade event data: {e}")
+        logger.debug(
+            "failed_collect_cascade_event",
+            error=e,
+        )
     return cascade_event_id, causation_chain, evidence_hash
 
 
@@ -310,7 +341,10 @@ def _build_emergency_deep_links(
     except ImportError:
         pass
     except Exception as e:
-        logger.debug(f"Failed to build deep links: {e}")
+        logger.debug(
+            "failed_build_deep_links",
+            error=e,
+        )
     return {}
 
 
@@ -414,13 +448,19 @@ def _on_emergency_recovery_completed_postmortem(event: SelfHealingEvent):
         settings = get_postmortem_settings()
 
         if not settings.auto_enabled:
-            logger.debug(f"[EventHandler] Auto postmortem disabled, " f"skipping for Emergency session {session_id}")
+            logger.debug(
+                "event_handler.auto_postmortem_disabled_skipping",
+                session_id=session_id,
+            )
             return
 
         min_duration = settings.auto_min_duration
         history_limit = settings.history_limit
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to get postmortem settings: {e}")
+        logger.warning(
+            "event_handler.failed_get_postmortem_settings",
+            error=e,
+        )
         return
 
     # 최소 duration 확인 (빠른 체크, I/O 없음)
@@ -453,7 +493,10 @@ def _on_emergency_recovery_completed_postmortem(event: SelfHealingEvent):
         # Celery 미설치 환경: 기존 동기 방식 fallback
         _create_emergency_postmortem_sync(event, namespace, history_limit)
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to enqueue emergency postmortem: {e}")
+        logger.warning(
+            "event_handler.failed_enqueue_emergency_postmortem",
+            error=e,
+        )
 
 
 def _create_emergency_postmortem_sync(
@@ -513,7 +556,10 @@ def _create_emergency_postmortem_sync(
                 target_id=incident_id,
             )
         except Exception as audit_error:
-            logger.warning(f"[EventHandler] Failed to log emergency postmortem audit: {audit_error}")
+            logger.warning(
+                "event_handler.failed_log_emergency_postmortem",
+                audit_error=audit_error,
+            )
 
         # Postmortem 알림 발송
         try:
@@ -530,9 +576,18 @@ def _create_emergency_postmortem_sync(
                 affected_services=[],
             )
         except Exception as notify_error:
-            logger.warning(f"[EventHandler] Failed to send emergency postmortem notification: " f"{notify_error}")
+            logger.warning(
+                "event_handler.failed_send_emergency_postmortem",
+                notify_error=notify_error,
+            )
 
     except ImportError as e:
-        logger.debug(f"[EventHandler] Module not available for Emergency postmortem: {e}")
+        logger.debug(
+            "event_handler.module_available_emergency_postmortem",
+            error=e,
+        )
     except Exception as e:
-        logger.error(f"[EventHandler] Failed to generate Emergency postmortem: {e}")
+        logger.error(
+            "event_handler.failed_generate_emergency_postmortem",
+            error=e,
+        )

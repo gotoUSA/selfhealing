@@ -6,14 +6,14 @@ Provides methods for drift detection and reconciliation.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
 
 from selfhealing.adapters.memory.drift_reconciliation import DriftReconciliationResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DriftOperationsMixin:
@@ -34,7 +34,10 @@ class DriftOperationsMixin:
 
                 self._reconcile_all_drift()
             except Exception as e:
-                logger.error(f"[LayeredRepo] Drift reconciliation error: {e}")
+                logger.error(
+                    "layered_repo.drift_reconciliation_error",
+                    error=e,
+                )
 
         try:
             executor = self._get_executor()
@@ -155,7 +158,7 @@ class DriftOperationsMixin:
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}
 
-        logger.info("[LayeredRepo] Manual drift reconciliation triggered")
+        logger.info("layered_repo.manual_drift_reconciliation_triggered")
         return self._reconcile_all_drift()
 
     def get_drift_reconciler_stats(self) -> dict[str, Any]:

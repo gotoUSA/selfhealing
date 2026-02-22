@@ -4,7 +4,7 @@ Chaos Engineering Safety Views.
 API views for kill switch, safety checks, and blast radius verification.
 """
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.permissions import BasePermission
@@ -24,7 +24,7 @@ from selfhealing.api.django.serializers.chaos import (
     TTLConfigSerializer,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class KillSwitchView(APIView):
@@ -101,7 +101,12 @@ class KillSwitchView(APIView):
         else:
             message = "Unknown action"
 
-        logger.warning(f"[ChaosAPI] Kill switch: {action} by {request.user} - {reason}")
+        logger.warning(
+            "chaos_api.kill_switch",
+            action=action,
+            request=request.user,
+            reason=reason,
+        )
 
         return Response(
             {
@@ -227,7 +232,10 @@ class StopConditionsConfigView(APIView):
             **serializer.validated_data
         )
 
-        logger.info(f"[ChaosAPI] Stop Conditions config updated by {request.user}")
+        logger.info(
+            "chaos_api.stop_conditions_config_updated",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -280,7 +288,10 @@ class TTLConfigView(APIView):
         manager = get_runtime_config_manager()
         updated_config = manager.update_chaos_ttl_config(**serializer.validated_data)
 
-        logger.info(f"[ChaosAPI] TTL config updated by {request.user}")
+        logger.info(
+            "chaos_api.ttl_config_updated",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -335,7 +346,10 @@ class DryRunConfigView(APIView):
             **serializer.validated_data
         )
 
-        logger.info(f"[ChaosAPI] Dry Run config updated by {request.user}")
+        logger.info(
+            "chaos_api.dry_run_config_updated",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -389,7 +403,10 @@ class KillAllView(APIView):
                 ttl_configs_cleared = len(chaos_config.get("active_ttl_configs", []))
                 manager.clear_active_ttl_configs()
         except Exception as e:
-            logger.warning(f"[ChaosAPI] Failed to clear TTL configs: {e}")
+            logger.warning(
+                "chaos_api.failed_clear_ttl_configs",
+                error=e,
+            )
 
         logger.warning(
             f"[ChaosAPI] KILL ALL executed by {operator}: "

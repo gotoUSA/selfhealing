@@ -9,13 +9,13 @@ FAIL-SECURE Design:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class FailSecureIsAuthenticated:

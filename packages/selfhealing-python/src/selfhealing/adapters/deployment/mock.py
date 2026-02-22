@@ -7,7 +7,7 @@ Mock Deployment Adapter.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
@@ -20,7 +20,7 @@ from .base import (
     ExternalDeploymentAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class MockDeploymentAdapter:
@@ -57,7 +57,7 @@ class MockDeploymentAdapter:
         self._mock_deployments = mock_deployments or []
         self._mock_config_changes = mock_config_changes or []
         self._is_available = True
-        logger.debug("[MockDeploymentAdapter] Initialized with mock data")
+        logger.debug("mock_deployment_adapter.initialized_mock_data")
 
     def set_mock_deployments(self, deployments: list[DeploymentEvent]) -> None:
         """테스트용 배포 데이터 설정."""
@@ -91,7 +91,7 @@ class MockDeploymentAdapter:
             배포 이벤트 목록 (시간순 정렬)
         """
         if not self._is_available:
-            logger.warning("[MockDeploymentAdapter] Adapter not available")
+            logger.warning("mock_deployment_adapter.adapter_available")
             return []
 
         result = []
@@ -113,7 +113,11 @@ class MockDeploymentAdapter:
         # 시간순 정렬
         result.sort(key=lambda d: d.deployed_at)
 
-        logger.debug(f"[MockDeploymentAdapter] Found {len(result)} deployments " f"for {service_name} in range")
+        logger.debug(
+            "mock_deployment_adapter.found_deployments_range",
+            count=len(result),
+            service_name=service_name,
+        )
         return result
 
     def get_deployment_by_version(
@@ -242,7 +246,11 @@ class MockDeploymentAdapter:
         # 시간순 정렬
         result.sort(key=lambda c: c.changed_at)
 
-        logger.debug(f"[MockDeploymentAdapter] Found {len(result)} config changes " f"for {service_name} in range")
+        logger.debug(
+            "mock_deployment_adapter.found_config_changes_range",
+            count=len(result),
+            service_name=service_name,
+        )
         return result
 
     def is_available(self) -> bool:

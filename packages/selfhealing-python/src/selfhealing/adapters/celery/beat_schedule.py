@@ -18,10 +18,10 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -112,12 +112,23 @@ def _load_schedule_module(
         module = importlib.import_module(module_path)
         getter_func = getattr(module, getter_func_name)
         schedule = getter_func()
-        logger.debug(f"[BeatSchedule] Added {debug_message} schedules")
+        logger.debug(
+            "beat_schedule.added_schedules",
+            debug_message=debug_message,
+        )
         return schedule
     except ImportError as e:
-        logger.warning(f"[BeatSchedule] Could not load {debug_message} tasks: {e}")
+        logger.warning(
+            "beat_schedule.load_tasks",
+            debug_message=debug_message,
+            error=e,
+        )
     except AttributeError as e:
-        logger.warning(f"[BeatSchedule] Function not found in {module_path}: {e}")
+        logger.warning(
+            "beat_schedule.function_found",
+            module_path=module_path,
+            error=e,
+        )
     return {}
 
 
@@ -182,7 +193,7 @@ def get_selfhealing_beat_schedule(
     # 레거시 스케줄
     if include_legacy:
         schedule.update(_get_legacy_beat_schedule())
-        logger.debug("[BeatSchedule] Added legacy schedules")
+        logger.debug("beat_schedule.added_legacy_schedules")
 
     return schedule
 
@@ -326,7 +337,7 @@ def register_all_tasks_with_celery(app) -> None:
     register_compliance_tasks_with_celery(app)
     register_traffic_aware_tasks_with_celery(app)
 
-    logger.info("[BeatSchedule] All self-healing tasks registered (including Track 3)")
+    logger.info("beat_schedule.all_self_healing_tasks")
 
 
 __all__ = [

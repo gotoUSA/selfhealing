@@ -6,7 +6,7 @@ OS별 최적 성능 자동 선택
 추상화 레이어 + 자동 Fallback
 """
 
-import logging
+import structlog
 import platform
 import socket
 import struct
@@ -23,7 +23,7 @@ __all__ = [
     "PortableHealthChecker",
 ]
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HealthCheckStrategy(ABC):
@@ -105,7 +105,11 @@ class TTLCacheStrategy(HealthCheckStrategy):
         try:
             healthy = self._check_callback(target)
         except Exception as e:
-            logger.debug(f"[TTLCacheStrategy] Health check failed for {target}: {e}")
+            logger.debug(
+                "ttl_cache_strategy.health_check_failed",
+                target=target,
+                error=e,
+            )
             healthy = False
 
         with self._lock:

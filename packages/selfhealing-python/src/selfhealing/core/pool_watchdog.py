@@ -8,7 +8,7 @@ Automatic recovery actions for pool issues:
 - Circuit breaker for new connections
 """
 
-import logging
+import structlog
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,7 +21,7 @@ from .pool_monitor import (
     PoolStats,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class PoolRecoveryAction(str, Enum):
@@ -245,4 +245,7 @@ class PoolWatchdog:
             try:
                 self._alert_callback(message, status)
             except Exception as e:
-                logger.error(f"Failed to send alert: {e}")
+                logger.error(
+                    "failed_send_alert",
+                    error=e,
+                )

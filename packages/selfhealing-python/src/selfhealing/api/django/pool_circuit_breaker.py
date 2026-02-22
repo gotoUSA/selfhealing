@@ -22,7 +22,7 @@ v6.2.1 (2026-01-02): 엔터프라이즈급 안정성 강화
 - 새로운 통계 카운터: stale_cache_fallbacks, stale_cache_warnings, background_thread_restarts
 """
 
-import logging
+import structlog
 import os
 import threading
 import time
@@ -38,7 +38,7 @@ from selfhealing.metrics.drift_metrics import (
     update_pool_cb_hit_rate,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class PoolCircuitBreaker:
@@ -171,7 +171,11 @@ class PoolCircuitBreaker:
                     }
                 )
 
-                logger.warning(f"[PoolCircuitBreaker] State: {old_state} → {new_state}")
+                logger.warning(
+                    "pool_circuit_breaker.state",
+                    old_state=old_state,
+                    new_state=new_state,
+                )
 
                 if new_state == self.OPEN:
                     self._open_time = timestamp
@@ -195,14 +199,14 @@ class PoolCircuitBreaker:
             daemon=True,  # 메인 스레드 종료 시 자동 종료
         )
         self._background_thread.start()
-        logger.debug("[PoolCircuitBreaker] Background refresh thread started")
+        logger.debug("pool_circuit_breaker.background_refresh_thread_started")
 
     def _stop_background_refresh(self):
         """백그라운드 갱신 스레드 중지"""
         self._stop_background.set()
         if self._background_thread:
             self._background_thread.join(timeout=1.0)
-            logger.debug("[PoolCircuitBreaker] Background refresh thread stopped")
+            logger.debug("pool_circuit_breaker.background_refresh_thread_stopped")
 
     def _background_refresh_loop(self):
         """백그라운드에서 주기적으로 Pool 상태 갱신"""
@@ -262,7 +266,7 @@ class PoolCircuitBreaker:
 
         # v6.2.1: 백그라운드 스레드 상태 확인 및 자동 재시작
         if not self._background_thread or not self._background_thread.is_alive():
-            logger.error("[PoolCircuitBreaker] Background thread died! Restarting...")
+            logger.error("pool_circuit_breaker.background_thread_died_restarting")
             self._stats["background_thread_restarts"] += 1
             # v6.2.2: Prometheus 메트릭 기록
             record_pool_cb_background_restart()
@@ -476,7 +480,7 @@ class PoolCircuitBreaker:
 
             # Fallback: pool_container가 없고 import도 실패한 경우
             # 연결 시도 없이 바로 반환 (ensure_connection 제거!)
-            logger.debug("[PoolCircuitBreaker] No pool_container available")
+            logger.debug("pool_circuit_breaker.no_available")
             return {
                 "available": False,
                 "reason": "No pool available",
@@ -485,7 +489,10 @@ class PoolCircuitBreaker:
             }
 
         except Exception as e:
-            logger.error(f"[PoolCircuitBreaker] Pool status check failed: {e}")
+            logger.error(
+                "pool_circuit_breaker.pool_status_check_failed",
+                error=e,
+            )
             return {
                 "available": False,
                 "reason": str(e),
@@ -603,7 +610,7 @@ class PoolCircuitBreaker:
                     self._set_state(self.CLOSED)
                     self._failure_count = 0
                     self._success_count = 0
-                    logger.info("[PoolCircuitBreaker] 🎉 RECOVERED! Circuit CLOSED")
+                    logger.info("pool_circuit_breaker.recovered_circuit_closed")
 
             elif self._state == self.CLOSED:
                 # 정상 상태에서 성공 - 실패 카운터 리셋
@@ -617,7 +624,7 @@ class PoolCircuitBreaker:
             if self._state == self.HALF_OPEN:
                 # 복구 테스트 실패 - 다시 OPEN
                 self._set_state(self.OPEN)
-                logger.warning("[PoolCircuitBreaker] Recovery failed - back to OPEN")
+                logger.warning("watchdog.recovery_failed")
 
             elif self._state == self.CLOSED:
                 self._failure_count += 1
@@ -646,7 +653,7 @@ class PoolCircuitBreaker:
             # v6.2.0: 캐시 통계도 리셋
             self._stats["cache_hits"] = 0
             self._stats["cache_refreshes"] = 0
-            logger.info("[PoolCircuitBreaker] Reset to CLOSED")
+            logger.info("pool_circuit_breaker.reset_closed")
 
 
 # 전역 인스턴스
@@ -810,7 +817,10 @@ class PoolCircuitBreakerMiddleware:
             )
         except Exception as e:
             # Audit 실패가 요청 처리를 막지 않음 (Fail-Open)
-            logger.debug(f"[PoolCircuitBreakerMiddleware] Audit recording failed: {e}")
+            logger.debug(
+                "pool_circuit_breaker_middleware.audit_recording_failed",
+                error=e,
+            )
 
     def __call__(self, request):
         # 미들웨어 비활성화 시 바이패스
@@ -945,7 +955,10 @@ class PoolCircuitBreakerMiddleware:
             else:
                 # 일반 오류
                 cb.record_failure()
-                logger.error(f"[PoolCircuitBreakerMiddleware] Request failed: {e}")
+                logger.error(
+                    "pool_circuit_breaker_middleware.request_failed",
+                    error=e,
+                )
                 raise
 
 
@@ -974,7 +987,10 @@ def circuit_breaker_status(request):
             )
             cb_service_failure_count = getattr(state_data, "failure_count", 0)
     except Exception as e:
-        logger.debug(f"[circuit_breaker_status] CB service state lookup failed: {e}")
+        logger.debug(
+            "circuit_breaker_status.cb_service_state_lookup",
+            error=e,
+        )
 
     # 두 CB 중 하나라도 OPEN이면 OPEN으로 표시
     combined_state = stats["state"]

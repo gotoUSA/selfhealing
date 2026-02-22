@@ -10,12 +10,12 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class InMemoryRateLimiter:
@@ -102,7 +102,7 @@ class InMemoryRateLimiter:
         """Rate limiter 초기화 (테스트/관리용)."""
         with self._lock:
             self._timestamps.clear()
-            logger.info("[RateLimiter] Reset - all timestamps cleared")
+            logger.info("rate_limiter.reset_all_timestamps_cleared")
 
 
 __all__ = [

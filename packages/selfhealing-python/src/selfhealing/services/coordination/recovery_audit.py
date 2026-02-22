@@ -24,7 +24,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -32,7 +32,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -331,7 +331,10 @@ class RecoveryAuditRecorder:
                 wal.write(entry)
                 return True
         except (ImportError, Exception) as e:
-            logger.warning(f"[RecoveryAuditRecorder] WAL write failed: {e}")
+            logger.warning(
+                "recovery_audit_recorder.wal_write_failed",
+                error=e,
+            )
         return False
 
     def record_recovery_event(
@@ -468,7 +471,10 @@ class RecoveryAuditRecorder:
             try:
                 self._notification_callback(entry)
             except Exception as e:
-                logger.error(f"[RecoveryAuditRecorder] Notification failed: {e}")
+                logger.error(
+                    "recovery_audit_recorder.notification_failed",
+                    error=e,
+                )
 
         logger.critical(
             f"[RecoveryAuditRecorder] DANGEROUS_FORCE_RECOVERY recorded: "
@@ -499,7 +505,10 @@ class RecoveryAuditRecorder:
             backend.set(key, existing)
 
         except Exception as e:
-            logger.error(f"[RecoveryAuditRecorder] Persist failed: {e}")
+            logger.error(
+                "recovery_audit_recorder.persist_failed",
+                error=e,
+            )
 
     def get_force_recovery_history(
         self,
@@ -531,7 +540,10 @@ class RecoveryAuditRecorder:
             return entries
 
         except Exception as e:
-            logger.error(f"[RecoveryAuditRecorder] Get history failed: {e}")
+            logger.error(
+                "recovery_audit_recorder.get_history_failed",
+                error=e,
+            )
             return self._force_entries[-limit:]
 
     def get_recent_events(

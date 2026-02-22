@@ -7,12 +7,12 @@ Controls traffic based on API tier during emergency mode.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 
 from .registry import get_tier_registry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class TieringMiddleware:
@@ -64,9 +64,9 @@ class TieringMiddleware:
         self._enabled = self._check_enabled()
 
         if self._enabled:
-            logger.info("[TieringMiddleware] Initialized and enabled")
+            logger.info("tiering_middleware.initialized_enabled")
         else:
-            logger.info("[TieringMiddleware] Initialized but DISABLED")
+            logger.info("tiering_middleware.initialized_disabled")
 
     def _check_enabled(self) -> bool:
         """Check if middleware is enabled via settings."""
@@ -154,7 +154,10 @@ class TieringMiddleware:
             return self.get_response(request)
 
         except Exception as e:
-            logger.error(f"[TieringMiddleware] Error: {e}, allowing request")
+            logger.error(
+                "tiering_middleware.error_allowing_request",
+                error=e,
+            )
             return self.get_response(request)
 
     def _get_client_ip(self, request) -> str | None:

@@ -30,7 +30,7 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from typing import Any
@@ -43,7 +43,7 @@ from selfhealing.adapters.kafka.consumer import (
 )
 from selfhealing.adapters.kafka.producer import DeliveryReport, KafkaAuditProducer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class KafkaEventBus:
@@ -167,7 +167,10 @@ class KafkaEventBus:
                 self._handlers[topic] = []
             self._handlers[topic].append(handler)
 
-            logger.info(f"[KafkaEventBus] 핸들러 등록: {topic}")
+            logger.info(
+                "kafka_event_bus.핸들러_등록",
+                topic=topic,
+            )
 
     def _create_consumer_for_topic(self, topic: str) -> KafkaAuditConsumer:
         """토픽용 Consumer 생성."""
@@ -180,7 +183,10 @@ class KafkaEventBus:
                 try:
                     results.append(handler(event))
                 except Exception as e:
-                    logger.error(f"[KafkaEventBus] 핸들러 오류: {e}")
+                    logger.error(
+                        "kafka_event_bus.핸들러_오류",
+                        error=e,
+                    )
                     results.append(False)
             # 모든 핸들러가 성공해야 성공
             return all(results)
@@ -194,7 +200,7 @@ class KafkaEventBus:
     def start(self) -> None:
         """Event Bus 시작."""
         if self._running:
-            logger.warning("[KafkaEventBus] 이미 실행 중")
+            logger.warning("kafka_event_bus.이미_실행")
             return
 
         self._running = True
@@ -207,7 +213,7 @@ class KafkaEventBus:
                     consumer.start_background()
                     self._consumers[topic] = consumer
 
-        logger.info("[KafkaEventBus] 시작됨")
+        logger.info("kafka_event_bus.시작됨")
 
     def stop(self) -> None:
         """Event Bus 정지."""
@@ -219,7 +225,7 @@ class KafkaEventBus:
                 consumer.stop()
             self._consumers.clear()
 
-        logger.info("[KafkaEventBus] 정지됨")
+        logger.info("kafka_event_bus.정지됨")
 
     def close(self) -> None:
         """Event Bus 종료."""
@@ -229,7 +235,7 @@ class KafkaEventBus:
             self._producer.close()
             self._producer = None
 
-        logger.info("[KafkaEventBus] 종료됨")
+        logger.info("kafka_event_bus.종료됨")
 
     def flush(self, timeout: float = 10.0) -> None:
         """

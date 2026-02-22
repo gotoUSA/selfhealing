@@ -11,10 +11,10 @@ Loki Label Best Practice:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # CASCADE_EVENT 대상 이벤트 집합 (throttle/audit.py에서 import)
 CASCADE_EVENT_ACTIONS: set[str] = {

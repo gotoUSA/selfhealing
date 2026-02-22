@@ -9,11 +9,11 @@ Fail-Open 원칙: prometheus_client import 실패 시 메트릭 수집을 건너
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from selfhealing.interfaces.resilience_policy import PolicyResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Lazy-initialized Prometheus instruments
 _metrics_initialized = False
@@ -58,7 +58,7 @@ def _ensure_metrics() -> bool:
         )
         return True
     except ImportError:
-        logger.debug("prometheus_client not available, metrics disabled")
+        logger.debug("available_metrics_disabled")
         return False
 
 

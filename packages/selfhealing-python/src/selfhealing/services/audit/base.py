@@ -10,7 +10,7 @@ WAL 기반 누락 0 보장 (20_AUDIT_UNIFICATION_PLAN.md ADR-005):
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import time
 import uuid
@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.audit.event_buffer import AuditEventType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -59,10 +59,16 @@ def _get_wal():
         )
 
         _wal_instance = WriteAheadLog(config=config)
-        logger.info(f"[AuditHelpers] WAL initialized at {wal_dir}")
+        logger.info(
+            "audit_helpers.wal_initialized",
+            wal_dir=wal_dir,
+        )
         return _wal_instance
     except Exception as e:
-        logger.warning(f"[AuditHelpers] WAL initialization failed: {e}")
+        logger.warning(
+            "audit_helpers.wal_initialization_failed",
+            error=e,
+        )
         _wal_enabled = False  # 실패 시 비활성화
         return None
 
@@ -136,13 +142,16 @@ def _save_to_fallback_buffer(entry: dict) -> None:
 
         buffer = DiskPersistentBuffer.get_instance()
         buffer.put(entry)
-        logger.debug("[AuditHelpers] Saved to DiskPersistentBuffer")
+        logger.debug("audit_helpers.saved_diskpersistentbuffer")
         return
 
     except ImportError:
-        logger.debug("[AuditHelpers] DiskPersistentBuffer not available")
+        logger.debug("audit_helpers.diskpersistentbuffer_available")
     except Exception as e:
-        logger.warning(f"[AuditHelpers] DiskPersistentBuffer failed: {e}")
+        logger.warning(
+            "audit_helpers.diskpersistentbuffer_failed",
+            error=e,
+        )
 
     # 2차: InMemoryAuditBuffer (레거시 호환)
     try:
@@ -150,11 +159,14 @@ def _save_to_fallback_buffer(entry: dict) -> None:
 
         buffer = InMemoryAuditBuffer.get_instance()
         buffer.add(entry)
-        logger.warning("[AuditHelpers] Entry saved to in-memory buffer (fallback)")
+        logger.warning("audit_helpers.entry_saved_memory_buffer")
         return
 
     except Exception as e:
-        logger.warning(f"[AuditHelpers] InMemoryAuditBuffer failed: {e}")
+        logger.warning(
+            "audit_helpers.inmemoryauditbuffer_failed",
+            error=e,
+        )
 
     # 3차: stderr (최후의 수단)
     import json
@@ -163,9 +175,12 @@ def _save_to_fallback_buffer(entry: dict) -> None:
     try:
         sys.stderr.write(f"[AUDIT_FALLBACK] {json.dumps(entry)}\n")
         sys.stderr.flush()
-        logger.error("[AuditHelpers] Entry written to stderr (last resort)")
+        logger.error("audit_helpers.entry_written_stderr_last")
     except Exception as e:
-        logger.critical(f"[AuditHelpers] All fallback buffers failed: {e}")
+        logger.critical(
+            "audit_helpers.all_fallback_buffers_failed",
+            error=e,
+        )
 
 
 def _save_to_memory_buffer(entry: dict) -> None:
@@ -246,10 +261,18 @@ def _write_to_wal(
         # 성공 시 메모리 버퍼 플러시 시도
         _try_flush_memory_buffer()
 
-        logger.debug(f"[AuditHelpers] WAL write success: seq={seq}, event={event_type}, trace_id={final_trace_id}")
+        logger.debug(
+            "audit_helpers.wal_write_success",
+            seq=seq,
+            event_type=event_type,
+            final_trace_id=final_trace_id,
+        )
         return seq
     except Exception as e:
-        logger.error(f"[AuditHelpers] WAL write failed (CRITICAL): {e}")
+        logger.error(
+            "audit_helpers.wal_write_failed_critical",
+            error=e,
+        )
         if metrics:
             metrics.record_write("wal", success=False)
             metrics.record_failure("wal", type(e).__name__)
@@ -290,7 +313,10 @@ def _try_flush_memory_buffer() -> int:
     except ImportError:
         return 0
     except Exception as e:
-        logger.debug(f"[AuditHelpers] Memory buffer flush failed: {e}")
+        logger.debug(
+            "audit_helpers.memory_buffer_flush_failed",
+            error=e,
+        )
         return 0
 
 
@@ -332,7 +358,10 @@ def get_wal_stats() -> dict[str, Any] | None:
             "recovered_entries": stats.recovered_entries,
         }
     except Exception as e:
-        logger.warning(f"[AuditHelpers] Failed to get WAL stats: {e}")
+        logger.warning(
+            "audit_helpers.failed_get_wal_stats",
+            error=e,
+        )
         return None
 
 
@@ -413,5 +442,8 @@ def _try_add_to_buffer(
         )
         return True
     except Exception as e:
-        logger.debug(f"[AuditHelpers] Buffer add failed: {e}")
+        logger.debug(
+            "audit_helpers.buffer_add_failed",
+            error=e,
+        )
         return False

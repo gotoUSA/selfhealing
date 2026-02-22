@@ -11,7 +11,7 @@ and throttle-aware backoff.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -24,7 +24,7 @@ from .models import RetryAction, RetryConfig, RetryResult, T
 if TYPE_CHECKING:
     from ..rate_limit_coordinator import RateLimitCoordinator
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _is_system_enabled() -> bool:
@@ -139,7 +139,10 @@ class RetryHandler:
 
                 self._rate_limit_coordinator = get_rate_limit_coordinator()
             except Exception as e:
-                logger.warning(f"[RetryHandler] Could not initialize rate limit coordinator: {e}")
+                logger.warning(
+                    "retry_handler.initialize_rate_limit_coordinator",
+                    error=e,
+                )
         return self._rate_limit_coordinator
 
     def _log_retry_audit(
@@ -173,7 +176,10 @@ class RetryHandler:
             )
         except Exception as e:
             # Fail-Open: Audit 실패가 재시도 로직을 중단시키지 않음
-            logger.debug(f"[RetryHandler] Audit logging failed (ignored): {e}")
+            logger.debug(
+                "retry_handler.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def _check_error_budget_gate(self) -> Any | None:
         """
@@ -190,7 +196,10 @@ class RetryHandler:
             # ErrorBudgetGate not available
             return None
         except Exception as e:
-            logger.warning(f"[RetryHandler] ErrorBudgetGate check failed: {e}")
+            logger.warning(
+                "retry_handler.errorbudgetgate_check_failed",
+                error=e,
+            )
             return None
 
     def is_rate_limit_error(self, exception: Exception) -> tuple[bool, float | None]:
@@ -274,7 +283,10 @@ class RetryHandler:
         if coordinator:
             result = coordinator.wait_if_needed(self._rate_limit_key)
             if result.waited:
-                logger.info(f"[RetryHandler] Waited {result.wait_time:.2f}s for rate limit cooldown")
+                logger.info(
+                    "retry_handler.waited_rate_limit_cooldown",
+                    result=result.wait_time,
+                )
 
     def _handle_rate_limit_error(self, exception: Exception) -> None:
         """Handle rate limit error by setting global cooldown."""
@@ -287,7 +299,10 @@ class RetryHandler:
                     key=self._rate_limit_key,
                     retry_after=retry_after,
                 )
-                logger.warning(f"[RetryHandler] Rate limit detected, set global cooldown: {cooldown:.2f}s")
+                logger.warning(
+                    "retry_handler.rate_limit_detected_set",
+                    cooldown=cooldown,
+                )
 
     def get_next_delay(self, attempt: int, is_critical_tier: bool = False) -> int:
         """
@@ -327,7 +342,10 @@ class RetryHandler:
                         self._record_critical_tier_grace_metric()
                         return self.config.critical_tier_full_stop_max_delay
 
-                logger.warning(f"[RetryHandler] Full Stop active, skipping retry for attempt {attempt}")
+                logger.warning(
+                    "retry_handler.full_stop_active_skipping",
+                    attempt=attempt,
+                )
                 return -1
 
             if multiplier > 1.0:
@@ -389,7 +407,10 @@ class RetryHandler:
 
                     return combined
             except Exception as e:
-                logger.debug(f"[RetryHandler] Rate limit state check failed: {e}")
+                logger.debug(
+                    "retry_handler.rate_limit_state_check",
+                    error=e,
+                )
 
         return throttle_delay
 
@@ -397,7 +418,10 @@ class RetryHandler:
         """Kill Switch 및 ErrorBudgetGate 사전 조건 확인. 차단 시 RetryResult 반환."""
         # Kill Switch 체크
         if not _is_system_enabled():
-            logger.warning(f"[RetryHandler] execute blocked: Kill Switch is active. " f"domain={self.config.domain}")
+            logger.warning(
+                "retry_handler.execute_blocked_kill_switch",
+                self=self.config.domain,
+            )
             return RetryResult(
                 success=False,
                 action=RetryAction.ABORT,
@@ -446,7 +470,12 @@ class RetryHandler:
             }
         )
 
-        logger.warning(f"[RetryHandler] Attempt {attempt}/{effective_max_attempts} failed: {e}")
+        logger.warning(
+            "retry_handler.attempt_failed",
+            attempt=attempt,
+            effective_max_attempts=effective_max_attempts,
+            error=e,
+        )
 
         # Self-DDoS prevention: Handle rate limit errors
         rate_limited, _ = self.is_rate_limit_error(e)
@@ -460,7 +489,7 @@ class RetryHandler:
 
             # Full Stop 신호 처리 (-1)
             if next_delay < 0:
-                logger.warning("[RetryHandler] Full Stop triggered, moving to DLQ immediately")
+                logger.warning("retry_handler.full_stop_triggered_moving")
                 self._log_retry_audit(
                     attempt=attempt,
                     success=False,
@@ -497,7 +526,12 @@ class RetryHandler:
 
         if self.should_retry(e, attempt, effective_max_attempts) and next_delay is not None and next_delay >= 0:
             delay = next_delay
-            logger.info(f"[RetryHandler] Will retry in {delay}s " f"(attempt {attempt + 1}/{effective_max_attempts})")
+            logger.info(
+                "retry_handler.retry_attempt",
+                delay=delay,
+                value=attempt + 1,
+                effective_max_attempts=effective_max_attempts,
+            )
             return True  # 계속
 
         return False  # 중단
@@ -559,7 +593,10 @@ class RetryHandler:
 
             # Adaptive Retry Budget: 재시도 예산 확인 (CRITICAL 티어는 우회)
             if attempt > 1 and not is_critical_tier and not self._retry_budget.should_allow_retry():
-                logger.warning(f"[RetryHandler] Retry budget exhausted: " f"{self._retry_budget.get_stats()}")
+                logger.warning(
+                    "retry_handler.retry_budget_exhausted",
+                    self=self._retry_budget.get_stats(),
+                )
                 break
 
             # Self-DDoS prevention: Wait if rate limited
@@ -572,7 +609,11 @@ class RetryHandler:
                 if self.rate_limit_coordinator:
                     self.rate_limit_coordinator.on_success(self._rate_limit_key)
 
-                logger.debug(f"[RetryHandler] Success on attempt {attempt}/{self.config.max_attempts}")
+                logger.debug(
+                    "retry_handler.success_attempt",
+                    attempt=attempt,
+                    self=self.config.max_attempts,
+                )
 
                 # Audit 기록: 재시도 성공
                 self._log_retry_audit(
@@ -605,7 +646,12 @@ class RetryHandler:
                     break
 
         # Max retries exceeded or non-retryable error
-        logger.error(f"[RetryHandler] Max retries exceeded ({attempt}/{effective_max_attempts}), " f"last error: {last_error}")
+        logger.error(
+            "retry_handler.max_retries_exceeded_last",
+            attempt=attempt,
+            effective_max_attempts=effective_max_attempts,
+            last_error=last_error,
+        )
 
         # Move to DLQ if enabled
         dlq_id = None
@@ -689,12 +735,21 @@ class RetryHandler:
             )
 
             if result.success:
-                logger.info(f"[RetryHandler] Created DLQ entry: id={result.dlq_id}")
+                logger.info(
+                    "retry_handler.created_dlq_entry",
+                    result=result.dlq_id,
+                )
                 return result.dlq_id
             else:
-                logger.error(f"[RetryHandler] Failed to create DLQ entry: {result.error}")
+                logger.error(
+                    "retry_handler.failed_create_dlq_entry",
+                    result=result.error,
+                )
                 return None
 
         except Exception as dlq_error:
-            logger.error(f"[RetryHandler] Failed to create DLQ entry: {dlq_error}")
+            logger.error(
+                "retry_handler.failed_create_dlq_entry",
+                dlq_error=dlq_error,
+            )
             return None

@@ -18,10 +18,10 @@ Reference:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -246,12 +246,20 @@ class AtomicStateQuery:
 
             state = json.loads(state_json)
 
-            logger.debug(f"[AtomicStateQuery] namespace={namespace}, " f"decision={decision_type}, reason={decision_reason}")
+            logger.debug(
+                "atomic_state_query.event",
+                namespace=namespace,
+                decision_type=decision_type,
+                decision_reason=decision_reason,
+            )
 
             return (state, decision_type, decision_reason)
 
         except Exception as e:
-            logger.error(f"[AtomicStateQuery] Query failed: {e}")
+            logger.error(
+                "atomic_state_query.query_failed",
+                error=e,
+            )
             # 폴백: 안전한 기본값 (NORMAL 상태)
             return (
                 {
@@ -277,7 +285,10 @@ class AtomicStateQuery:
         """
         if self._script_sha is None:
             self._script_sha = self._redis.script_load(ATOMIC_STATE_QUERY_SCRIPT)
-            logger.info(f"[AtomicStateQuery] Script loaded: {self._script_sha[:8]}...")
+            logger.info(
+                "atomic_state_query.script_loaded",
+                self=self._script_sha[:8],
+            )
         return self._script_sha
 
     def query_with_sha(
@@ -327,7 +338,10 @@ class AtomicStateQuery:
             return (json.loads(state_json), decision_type, decision_reason)
 
         except Exception as e:
-            logger.warning(f"[AtomicStateQuery] EVALSHA failed, falling back to EVAL: {e}")
+            logger.warning(
+                "atomic_state_query.evalsha_failed_falling_back",
+                error=e,
+            )
             return self.query_effective_state(namespace, precedence)
 
 

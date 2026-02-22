@@ -23,7 +23,7 @@ Panic Threshold for Circuit Breaker
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from selfhealing.services.circuit_breaker_service import CircuitBreakerService
     from selfhealing.services.emergency_mode import EmergencyModeManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -126,7 +126,7 @@ class PanicThresholdMonitor:
 
                 self._cb_service = CircuitBreakerService()
             except ImportError:
-                logger.warning("[PanicThreshold] CircuitBreakerService not available")
+                logger.warning("panic_threshold.circuitbreakerservice_available")
         return self._cb_service
 
     @property
@@ -138,7 +138,7 @@ class PanicThresholdMonitor:
 
                 self._emergency_manager = EmergencyModeManager()
             except ImportError:
-                logger.warning("[PanicThreshold] EmergencyModeManager not available")
+                logger.warning("panic_threshold.emergencymodemanager_available")
         return self._emergency_manager
 
     def check_panic_threshold(self) -> PanicThresholdResult:
@@ -238,7 +238,10 @@ class PanicThresholdMonitor:
 
             return open_circuits, total_circuits
         except Exception as e:
-            logger.warning(f"[PanicThreshold] Failed to get circuit stats: {e}")
+            logger.warning(
+                "panic_threshold.failed_get_circuit_stats",
+                error=e,
+            )
             return [], []
 
     def _trigger_panic(
@@ -327,7 +330,10 @@ class PanicThresholdMonitor:
                 halted_systems=halted_systems,
             )
         except Exception as e:
-            logger.warning(f"[PanicThreshold] Audit log failed: {e}")
+            logger.warning(
+                "panic_threshold.audit_log_failed",
+                error=e,
+            )
 
     def _escalate_to_level_3(
         self,
@@ -336,7 +342,7 @@ class PanicThresholdMonitor:
     ) -> None:
         """Emergency Level 3로 에스컬레이션."""
         if self.emergency_manager is None:
-            logger.warning("[PanicThreshold] EmergencyManager not available for escalation")
+            logger.warning("panic_threshold.emergencymanager_available_escalation")
             return
 
         try:
@@ -353,7 +359,10 @@ class PanicThresholdMonitor:
                 f"open_rate={open_rate:.1f}%, open_circuits={len(open_circuits)}"
             )
         except Exception as e:
-            logger.error(f"[PanicThreshold] Failed to escalate to Level 3: {e}")
+            logger.error(
+                "panic_threshold.failed_escalate_level",
+                error=e,
+            )
 
     def _activate_freeze_mode(self, open_rate: float) -> None:
         """Freeze Mode 활성화."""
@@ -369,7 +378,10 @@ class PanicThresholdMonitor:
                 activated_by="PanicThresholdMonitor",
             )
         except Exception as e:
-            logger.warning(f"[PanicThreshold] Failed to activate Freeze Mode: {e}")
+            logger.warning(
+                "panic_threshold.failed_activate_freeze_mode",
+                error=e,
+            )
 
     def _notify_critical(
         self,

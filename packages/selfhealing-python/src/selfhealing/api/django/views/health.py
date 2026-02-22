@@ -20,7 +20,7 @@ V3 Optimization:
 - Target: P95 < 50ms for all L3 observability endpoints
 """
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 
 from selfhealing.services.health_check import get_health_check_service
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

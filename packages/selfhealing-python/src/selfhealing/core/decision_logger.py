@@ -16,11 +16,11 @@ Logged fields:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timezone
 from enum import Enum
 
-logger = logging.getLogger("selfhealing.decision_record")
+logger = structlog.get_logger()
 
 
 class ReasonCode(str, Enum):

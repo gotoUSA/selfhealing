@@ -26,7 +26,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from enum import Enum
 from typing import TYPE_CHECKING, Any
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
         SecurityIncidentRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -311,7 +311,10 @@ def configure_service_factory(
         framework=framework,
         custom_repositories=custom_repositories,
     )
-    logger.info(f"[ServiceFactory] Configured for framework: {framework.value}")
+    logger.info(
+        "service_factory.configured_framework",
+        framework=framework.value,
+    )
     return _service_factory
 
 

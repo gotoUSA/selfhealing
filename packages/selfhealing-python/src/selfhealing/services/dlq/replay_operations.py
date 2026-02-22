@@ -7,7 +7,7 @@ Includes throttle-aware replay for safe re-processing with adaptive throttle.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from selfhealing.interfaces.repositories import FailedOperationData
     from selfhealing.services.throttle.adaptive import AdaptiveThrottle
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ReplayOperationsMixin:
@@ -38,7 +38,11 @@ class ReplayOperationsMixin:
         # Check if replay is allowed
         can_replay, reason = handler.can_replay(entry)
         if not can_replay:
-            logger.warning(f"[DLQService] Replay not allowed for entry {entry.id}: {reason}")
+            logger.warning(
+                "dlq_service.replay_allowed_entry",
+                entry=entry.id,
+                reason=reason,
+            )
             return False
 
         # Execute replay
@@ -108,7 +112,11 @@ class ReplayOperationsMixin:
                 except Exception as e:
                     result.failed += 1
                     result.errors.append(f"Entry {entry.id}: {str(e)}")
-                    logger.warning(f"[DLQService] Replay failed for entry {entry.id}: {e}")
+                    logger.warning(
+                        "dlq_service.replay_failed_entry",
+                        entry=entry.id,
+                        error=e,
+                    )
                     # Audit 로깅: Replay 예외 (버퍼 패턴 지원)
                     self._log_dlq_audit(
                         action="replay",
@@ -126,7 +134,10 @@ class ReplayOperationsMixin:
             )
 
         except Exception as e:
-            logger.error(f"[DLQService] Replay failed: {e}")
+            logger.error(
+                "dlq_service.replay_failed",
+                error=e,
+            )
             result.errors.append(str(e))
 
         return result
@@ -169,7 +180,11 @@ class ReplayOperationsMixin:
             if expires_at_aware.tzinfo is None:
                 expires_at_aware = expires_at_aware.replace(tzinfo=timezone.utc)
             if expires_at_aware < now_utc:
-                logger.info(f"[DLQService] Entry {entry_id} expired at {entry.expires_at}, " f"skipping replay")
+                logger.info(
+                    "dlq_service.entry_expired_skipping_replay",
+                    entry_id=entry_id,
+                    entry=entry.expires_at,
+                )
                 self.repository.update_status(
                     entry.id,
                     status="expired",
@@ -194,7 +209,12 @@ class ReplayOperationsMixin:
 
         # 2. can_retry 재시도 한도 검증 (retry_count < max_retries)
         if not entry.can_retry:
-            logger.warning(f"[DLQService] Entry {entry_id} exhausted retries " f"({entry.retry_count}/{entry.max_retries})")
+            logger.warning(
+                "dlq_service.entry_exhausted_retries",
+                entry_id=entry_id,
+                entry=entry.retry_count,
+                entry_2=entry.max_retries,
+            )
             self.repository.update_status(
                 entry.id,
                 status="permanently_failed",

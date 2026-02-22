@@ -5,7 +5,7 @@ Provides batched file writing with reduced fsync overhead.
 """
 
 import json
-import logging
+import structlog
 import os
 import threading
 import time
@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -95,7 +95,10 @@ class BatchFlushWriter:
                 return True
 
             except Exception as e:
-                logger.error(f"[BatchFlushWriter] Write failed: {e}")
+                logger.error(
+                    "batch_flush_writer.write_failed",
+                    error=e,
+                )
                 return False
 
     def _flush(self) -> bool:
@@ -137,7 +140,10 @@ class BatchFlushWriter:
             return True
 
         except Exception as e:
-            logger.error(f"[BatchFlushWriter] Flush failed: {e}")
+            logger.error(
+                "batch_flush_writer.flush_failed",
+                error=e,
+            )
             return False
 
     def _ensure_file_open(self) -> None:

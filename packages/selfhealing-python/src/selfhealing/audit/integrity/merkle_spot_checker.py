@@ -22,11 +22,11 @@ Merkle Spot Checker.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 블록 머클 루트 저장 키 (Redis)
 BLOCK_MERKLE_ROOT_KEY = "selfhealing:{namespace}:audit:merkle_block:{block_id}"
@@ -177,7 +177,11 @@ class MerkleSpotChecker:
             self._store_merkle_root(block_id, root)
             stored += 1
 
-        logger.info(f"[MerkleSpotChecker] Built {stored} block merkle roots " f"for {len(entries)} entries")
+        logger.info(
+            "merkle_spot_checker.built_block_merkle_roots",
+            stored=stored,
+            count=len(entries),
+        )
 
         return {"blocks_stored": stored, "total_entries": len(entries)}
 
@@ -252,4 +256,8 @@ class MerkleSpotChecker:
             # anchor.py L137 패턴과 동일 — 설정에서 TTL 참조
             self._redis.set(key, root, ex=settings.anchor_retention_days * 86400)
         except Exception as e:
-            logger.warning(f"[MerkleSpotChecker] Failed to store root for block {block_id}: {e}")
+            logger.warning(
+                "merkle_spot_checker.failed_store_root_block",
+                block_id=block_id,
+                error=e,
+            )

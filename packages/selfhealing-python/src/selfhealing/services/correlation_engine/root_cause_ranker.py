@@ -20,7 +20,7 @@ Postmortem의 root_cause_hypothesis를 키워드 매칭에서
 
 from __future__ import annotations
 
-import logging
+import structlog
 import math
 import time
 from collections import defaultdict
@@ -36,7 +36,7 @@ from selfhealing.services.correlation_engine.event_graph import (
     EventNode,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

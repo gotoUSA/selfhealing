@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import atexit
 import json
-import logging
+import structlog
 import os
 import shutil
 import signal
@@ -38,7 +38,7 @@ from selfhealing.audit.persistence.config import (
     get_disk_buffer_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -228,7 +228,12 @@ class DiskPersistentBuffer:
         self._recover_sequence()
         self._state = BufferState.ACTIVE
 
-        logger.info(f"[DiskBuffer] Initialized: path={db_path}, " f"sequence={self._sequence}, db_name={self._db_name}")
+        logger.info(
+            "disk_buffer.initialized",
+            db_path=db_path,
+            self=self._sequence,
+            self_2=self._db_name,
+        )
 
     def _quarantine_corrupt_db(self, db_path: Path) -> bool:
         """
@@ -251,14 +256,21 @@ class DiskPersistentBuffer:
             shutil.move(str(db_path), str(corrupt_path))
             self._stats["quarantine_events"] += 1
 
-            logger.critical(f"[DiskBuffer] Quarantined corrupt DB: {db_path} -> {corrupt_path}")
+            logger.critical(
+                "disk_buffer.quarantined_corrupt_db",
+                db_path=db_path,
+                corrupt_path=corrupt_path,
+            )
 
             # 알림 전송 시도
             self._send_corruption_alert(db_path, corrupt_path)
 
             return True
         except Exception as e:
-            logger.error(f"[DiskBuffer] Quarantine failed: {e}")
+            logger.error(
+                "disk_buffer.quarantine_failed",
+                error=e,
+            )
             return False
 
     def _send_corruption_alert(self, original: Path, quarantined: Path) -> None:
@@ -281,7 +293,10 @@ class DiskPersistentBuffer:
             )
             UnifiedNotificationManager().notify(payload)
         except Exception as e:
-            logger.debug(f"[DiskBuffer] Alert send failed: {e}")
+            logger.debug(
+                "disk_buffer.alert_send_failed",
+                error=e,
+            )
 
     def _recover_sequence(self) -> None:
         """마지막 시퀀스 복구."""
@@ -328,11 +343,11 @@ class DiskPersistentBuffer:
         with self._lock:
             # Disk Full Fail-Open 모드 확인
             if self._state == BufferState.DISK_FULL_FAILOPEN:
-                logger.warning("[DiskBuffer] Disk full fail-open mode, skipping write")
+                logger.warning("disk_buffer.disk_full_fail_open")
                 return None
 
             if self._state == BufferState.CLOSED:
-                logger.warning("[DiskBuffer] Buffer closed, skipping write")
+                logger.warning("disk_buffer.buffer_closed_skipping_write")
                 return None
 
             # 디스크 여유 공간 확인 및 Purge
@@ -364,13 +379,16 @@ class DiskPersistentBuffer:
                 if self._settings.priority_based_purge:
                     purged = self._purge_old_entries_for_space()
                     if purged > 0:
-                        logger.warning(f"[DiskBuffer] Purged {purged} entries for disk space")
+                        logger.warning(
+                            "disk_buffer.purged_entries_disk_space",
+                            purged=purged,
+                        )
                         return True
 
                 # Purge 실패 시 Fail-Open 모드 전환
                 self._state = BufferState.DISK_FULL_FAILOPEN
                 self._stats["disk_full_events"] += 1
-                logger.critical("[DiskBuffer] DISK FULL - Switching to fail-open mode")
+                logger.critical("disk_buffer.disk_full_switching_fail")
                 self._send_disk_full_alert()
                 return False
 
@@ -378,11 +396,14 @@ class DiskPersistentBuffer:
             if self._state == BufferState.DISK_FULL_FAILOPEN:
                 if free_ratio > self._settings.disk_recovery_threshold:
                     self._state = BufferState.ACTIVE
-                    logger.info("[DiskBuffer] Disk space recovered, resuming normal operation")
+                    logger.info("disk_buffer.disk_space_recovered_resuming")
 
             return True
         except Exception as e:
-            logger.debug(f"[DiskBuffer] Disk check failed: {e}")
+            logger.debug(
+                "disk_buffer.disk_check_failed",
+                error=e,
+            )
             return True  # 체크 실패 시 계속 진행
 
     def _purge_old_entries_for_space(self) -> int:
@@ -420,7 +441,10 @@ class DiskPersistentBuffer:
             )
             UnifiedNotificationManager().notify(payload)
         except Exception as e:
-            logger.debug(f"[DiskBuffer] Alert send failed: {e}")
+            logger.debug(
+                "disk_buffer.alert_send_failed",
+                error=e,
+            )
 
     def _buffered_put(self, entry: dict[str, Any]) -> bytes:
         """
@@ -507,7 +531,10 @@ class DiskPersistentBuffer:
             self._save_sequence(txn)
 
         self._stats["total_puts"] += 1
-        logger.debug(f"[DiskBuffer] Put: key={key.decode()}")
+        logger.debug(
+            "disk_buffer.put",
+            key=key.decode(),
+        )
         return key
 
     def flush_group_commit(self) -> None:
@@ -549,7 +576,10 @@ class DiskPersistentBuffer:
             if self._settings.enable_checksum:
                 computed_checksum = self._compute_checksum(data_bytes)
                 if stored_checksum != computed_checksum:
-                    logger.warning(f"[DiskBuffer] Checksum mismatch: key={key.decode()}")
+                    logger.warning(
+                        "disk_buffer.checksum_mismatch",
+                        key=key.decode(),
+                    )
                     self._stats["checksum_errors"] += 1
                     return None
 
@@ -566,7 +596,10 @@ class DiskPersistentBuffer:
                 checksum=stored_checksum,
             )
         except Exception as e:
-            logger.error(f"[DiskBuffer] Parse error: {e}")
+            logger.error(
+                "disk_buffer.parse_error",
+                error=e,
+            )
             return None
 
     def iter_entries(
@@ -682,7 +715,10 @@ class DiskPersistentBuffer:
             try:
                 success = handler(entries)
             except Exception as e:
-                logger.error(f"[DiskBuffer] Flush handler error: {e}")
+                logger.error(
+                    "disk_buffer.flush_handler_error",
+                    error=e,
+                )
                 # Poison Pill 격리 시도
                 self._handle_flush_failure(entries, e)
                 break
@@ -694,7 +730,10 @@ class DiskPersistentBuffer:
                 deleted = self.delete_batch(keys)
                 flushed += deleted
 
-                logger.debug(f"[DiskBuffer] Flushed {deleted} entries")
+                logger.debug(
+                    "disk_buffer.flushed_entries",
+                    deleted=deleted,
+                )
             else:
                 # 실패 시 재시도 카운터 증가 및 Poison Pill 검사
                 for entry in entries:
@@ -740,7 +779,10 @@ class DiskPersistentBuffer:
         반복 실패하는 엔트리를 격리하여 관리자가 검토할 수 있도록 합니다.
         """
         if not self._settings.enable_dead_letter_db:
-            logger.warning(f"[DiskBuffer] Poison pill detected but DLQ disabled: {entry.key}")
+            logger.warning(
+                "disk_buffer.poison_pill_detected_dlq",
+                entry=entry.key,
+            )
             self.delete(entry.key)  # 무한 루프 방지
             return
 
@@ -770,13 +812,19 @@ class DiskPersistentBuffer:
             self._retry_counters.pop(entry.key.decode(), None)
 
             self._stats["dead_letter_moves"] += 1
-            logger.warning(f"[DiskBuffer] Moved to dead letter DB: {entry.key.decode()}")
+            logger.warning(
+                "disk_buffer.moved_dead_letter_db",
+                entry=entry.key.decode(),
+            )
 
             # 알림 전송
             self._send_poison_pill_alert(entry)
 
         except Exception as e:
-            logger.error(f"[DiskBuffer] Dead letter move failed: {e}")
+            logger.error(
+                "disk_buffer.dead_letter_move_failed",
+                error=e,
+            )
 
     def _send_poison_pill_alert(self, entry: BufferEntry) -> None:
         """Poison Pill 알림 전송."""
@@ -798,7 +846,10 @@ class DiskPersistentBuffer:
             )
             UnifiedNotificationManager().notify(payload)
         except Exception as e:
-            logger.debug(f"[DiskBuffer] Alert send failed: {e}")
+            logger.debug(
+                "disk_buffer.alert_send_failed",
+                error=e,
+            )
 
     # ─────────────────────────────────────────────────────
     # Public API: Dead Letter 관리
@@ -864,10 +915,16 @@ class DiskPersistentBuffer:
             with self._env.begin(write=True, db=self._dead_letter_db) as txn:
                 txn.delete(key)
 
-            logger.info(f"[DiskBuffer] Replayed dead letter: {key.decode()}")
+            logger.info(
+                "disk_buffer.replayed_dead_letter",
+                key=key.decode(),
+            )
             return True
         except Exception as e:
-            logger.error(f"[DiskBuffer] Dead letter replay failed: {e}")
+            logger.error(
+                "disk_buffer.dead_letter_replay_failed",
+                error=e,
+            )
             return False
 
     # ─────────────────────────────────────────────────────
@@ -894,7 +951,10 @@ class DiskPersistentBuffer:
 
         if keys_to_delete:
             deleted = self.delete_batch(keys_to_delete)
-            logger.info(f"[DiskBuffer] Cleaned up {deleted} old entries")
+            logger.info(
+                "disk_buffer.cleaned_up_old_entries",
+                deleted=deleted,
+            )
             return deleted
 
         return 0
@@ -1003,12 +1063,15 @@ class DiskPersistentBuffer:
                     try:
                         self._flush_group_buffer()
                     except Exception as e:
-                        logger.error(f"[DiskBuffer] Final flush failed: {e}")
+                        logger.error(
+                            "disk_buffer.final_flush_failed",
+                            error=e,
+                        )
 
                 self._env.close()
                 self._env = None
                 self._state = BufferState.CLOSED
-                logger.info("[DiskBuffer] Closed")
+                logger.info("disk_buffer.closed")
 
     def __enter__(self) -> "DiskPersistentBuffer":
         """Context manager 진입."""
@@ -1172,7 +1235,7 @@ def register_disk_buffer_shutdown(buffer: DiskPersistentBuffer) -> None:
     # 시그널 핸들러 등록 (기존 핸들러 체인)
     _register_signal_handlers()
 
-    logger.debug("[DiskBuffer] Shutdown handlers registered")
+    logger.debug("disk_buffer.shutdown_handlers_registered")
 
 
 def _register_signal_handlers() -> None:
@@ -1186,7 +1249,7 @@ def _register_signal_handlers() -> None:
 
     def _sigterm_handler(signum: int, frame: Any) -> None:
         """SIGTERM 핸들러."""
-        logger.info("[DiskBuffer] SIGTERM received, initiating shutdown")
+        logger.info("disk_buffer.sigterm_received_initiating_shutdown")
         _shutdown_disk_buffer()
         # 원래 핸들러 호출
         if callable(original_sigterm):
@@ -1194,7 +1257,7 @@ def _register_signal_handlers() -> None:
 
     def _sigint_handler(signum: int, frame: Any) -> None:
         """SIGINT 핸들러."""
-        logger.info("[DiskBuffer] SIGINT received, initiating shutdown")
+        logger.info("disk_buffer.sigint_received_initiating_shutdown")
         _shutdown_disk_buffer()
         # 원래 핸들러 호출
         if callable(original_sigint):

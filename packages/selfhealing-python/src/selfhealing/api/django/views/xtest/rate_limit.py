@@ -21,7 +21,7 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework import status
@@ -31,7 +31,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin, collect_system_snapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -398,7 +398,10 @@ class RateLimitConfigXTestView(XTestModeMixin, APIView):
         if api_settings and hasattr(api_settings, "excluded_paths"):
             excluded_paths = getattr(api_settings, "excluded_paths", [])
 
-        logger.info(f"[X-Test-Mode] Rate limit config: source={source}")
+        logger.info(
+            "test_mode_rate_limit",
+            source=source,
+        )
 
         response_data = {
             "status": "success",
@@ -489,7 +492,11 @@ class RateLimitResetView(XTestModeMixin, APIView):
             if reset_events:
                 events_reset = reset_rate_limit_events()
 
-            logger.warning(f"[X-Test-Mode] Rate limit RESET ALL: " f"clients={reset_count}, events={events_reset}")
+            logger.warning(
+                "test_mode_rate_limit",
+                reset_count=reset_count,
+                events_reset=events_reset,
+            )
         elif client_key:
             # 특정 클라이언트만 초기화
             if local_limiter.reset_client(client_key):
@@ -499,7 +506,11 @@ class RateLimitResetView(XTestModeMixin, APIView):
             if reset_events:
                 events_reset = reset_rate_limit_events(client_key)
 
-            logger.info(f"[X-Test-Mode] Rate limit reset client: client_key={client_key}, " f"events_reset={events_reset}")
+            logger.info(
+                "test_mode_rate_limit",
+                client_key=client_key,
+                events_reset=events_reset,
+            )
         else:
             return Response(
                 {

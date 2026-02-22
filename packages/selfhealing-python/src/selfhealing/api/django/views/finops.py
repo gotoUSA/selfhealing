@@ -4,7 +4,7 @@ FinOps DNA API Views
 FinOps DNA 서비스의 REST API 엔드포인트
 """
 
-import logging
+import structlog
 from decimal import Decimal
 
 from rest_framework import status
@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsOperator, IsSelfHealingAdmin, IsViewer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def get_finops_service():

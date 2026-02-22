@@ -16,12 +16,12 @@ Reference: docs/self_healing/middleware_system/70_MULTI_CLUSTER_ARCHITECTURE.md
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RedisScope(str, Enum):
@@ -65,7 +65,11 @@ class TieredRedisProvider:
         self._local_client: Any | None = None
         self._global_client: Any | None = None
 
-        logger.debug(f"[TieredRedisProvider] Initialized with " f"local={self._local_url}, global={self._global_url}")
+        logger.debug(
+            "tiered_redis_provider.initialized",
+            self=self._local_url,
+            self_1=self._global_url,
+        )
 
     def get_redis(self, scope: RedisScope = RedisScope.LOCAL) -> Any:
         """
@@ -88,7 +92,10 @@ class TieredRedisProvider:
             import redis
 
             self._local_client = redis.from_url(self._local_url)
-            logger.info(f"[TieredRedisProvider] Local Redis connected: {self._local_url}")
+            logger.info(
+                "tiered_redis_provider.local_redis_connected",
+                self=self._local_url,
+            )
         return self._local_client
 
     def _get_global_client(self) -> Any:
@@ -97,12 +104,15 @@ class TieredRedisProvider:
             # 같은 URL이면 로컬 클라이언트 재사용
             if self._global_url == self._local_url:
                 self._global_client = self._get_local_client()
-                logger.debug("[TieredRedisProvider] Global Redis reusing local client")
+                logger.debug("tiered_redis_provider.global_redis_reusing_local")
             else:
                 import redis
 
                 self._global_client = redis.from_url(self._global_url)
-                logger.info(f"[TieredRedisProvider] Global Redis connected: {self._global_url}")
+                logger.info(
+                    "tiered_redis_provider.global_redis_connected",
+                    self=self._global_url,
+                )
         return self._global_client
 
     @property
@@ -126,14 +136,20 @@ class TieredRedisProvider:
             try:
                 self._local_client.close()
             except Exception as e:
-                logger.warning(f"[TieredRedisProvider] Error closing local client: {e}")
+                logger.warning(
+                    "tiered_redis_provider.error_closing_local_client",
+                    error=e,
+                )
             self._local_client = None
 
         if self._global_client is not None and self._global_url != self._local_url:
             try:
                 self._global_client.close()
             except Exception as e:
-                logger.warning(f"[TieredRedisProvider] Error closing global client: {e}")
+                logger.warning(
+                    "tiered_redis_provider.error_closing_global_client",
+                    error=e,
+                )
             self._global_client = None
 
     def health_check(self, scope: RedisScope | None = None) -> dict:

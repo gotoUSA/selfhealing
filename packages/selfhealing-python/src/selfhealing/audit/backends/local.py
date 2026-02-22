@@ -6,7 +6,7 @@ This is the default backend that is always active.
 """
 
 import json
-import logging
+import structlog
 import os
 import threading
 from datetime import datetime, timezone
@@ -22,7 +22,7 @@ from selfhealing.audit.integrity import (
     RedisHashChainManager,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LocalFileBackend(AuditBackend):
@@ -93,7 +93,7 @@ class LocalFileBackend(AuditBackend):
                         fallback_manager=local_fallback,
                     )
                 )
-                logger.info("[LocalFileBackend] Using distributed hash chain (Redis)")
+                logger.info("local_file_backend.using_distributed_hash_chain")
             else:
                 # Local mode: File-based hash chain
                 self._hash_chain = HashChainManager(state_file)
@@ -117,7 +117,7 @@ class LocalFileBackend(AuditBackend):
                     key_prefix=redis_key_prefix,
                 )
             )
-            logger.info("[LocalFileBackend] PendingSequenceManager enabled")
+            logger.info("local_file_backend.pendingsequencemanager_enabled")
         else:
             self._pending_manager = None
 
@@ -158,12 +158,18 @@ class LocalFileBackend(AuditBackend):
                 self._close_file()
                 self._current_file = target_file
                 self._file_handle = open(target_file, "a", encoding="utf-8")
-                logger.debug(f"[LocalFileBackend] Opened log file: {target_file}")
+                logger.debug(
+                    "local_file_backend.opened_log_file",
+                    target_file=target_file,
+                )
 
             return True
         except Exception as e:
             self._last_error = str(e)
-            logger.error(f"[LocalFileBackend] Failed to open log file: {e}")
+            logger.error(
+                "local_file_backend.failed_open_log_file",
+                error=e,
+            )
             return False
 
     def _close_file(self) -> None:
@@ -235,7 +241,10 @@ class LocalFileBackend(AuditBackend):
 
             except Exception as e:
                 self._last_error = str(e)
-                logger.error(f"[LocalFileBackend] Failed to write entry: {e}")
+                logger.error(
+                    "local_file_backend.failed_write_entry",
+                    error=e,
+                )
 
                 # Abort sequence on failure
                 if sequence and self._pending_manager:
@@ -267,7 +276,10 @@ class LocalFileBackend(AuditBackend):
 
         except Exception as e:
             # Anchor backup failure should not block writes
-            logger.warning(f"[LocalFileBackend] Anchor backup failed: {e}")
+            logger.warning(
+                "local_file_backend.anchor_backup_failed",
+                error=e,
+            )
 
     def health_check(self) -> BackendHealth:
         """Check backend health."""
@@ -298,7 +310,10 @@ class LocalFileBackend(AuditBackend):
                     os.fsync(self._file_handle.fileno())
                     return True
                 except Exception as e:
-                    logger.error(f"[LocalFileBackend] Failed to flush: {e}")
+                    logger.error(
+                        "local_file_backend.failed_flush",
+                        error=e,
+                    )
                     return False
         return True
 
@@ -400,7 +415,10 @@ class LocalFileBackend(AuditBackend):
                             results.append(entry)
 
         except Exception as e:
-            logger.error(f"[LocalFileBackend] Query failed: {e}")
+            logger.error(
+                "local_file_backend.query_failed",
+                error=e,
+            )
 
         return results
 

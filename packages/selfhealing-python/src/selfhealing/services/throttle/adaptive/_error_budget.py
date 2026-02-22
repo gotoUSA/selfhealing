@@ -6,8 +6,8 @@ ErrorBudgetHandlerMixin for AdaptiveThrottle.
 
 from selfhealing.services.throttle.config import ThrottleResult
 import selfhealing.services.throttle.adaptive as _adaptive_mod
-import logging
-logger = logging.getLogger(__name__)
+import structlog
+logger = structlog.get_logger()
 
 
 
@@ -38,11 +38,14 @@ class ErrorBudgetHandlerMixin:
             # ERROR_BUDGET_RECOVERED 구독
             bus.subscribe(EventType.ERROR_BUDGET_RECOVERED, self._handle_error_budget_recovered)
 
-            logger.info("[AdaptiveThrottle] Subscribed to error budget events")
+            logger.info("adaptive_throttle.subscribed_error_budget_events")
         except ImportError:
-            logger.debug("[AdaptiveThrottle] EventBus not available for error budget subscription")
+            logger.debug("adaptive_throttle.eventbus_available_error_budget")
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to subscribe to error budget events: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_subscribe_error_budget",
+                error=e,
+            )
 
     def set_target_slo_patterns(self, patterns: list[str]) -> None:
         """
@@ -53,7 +56,10 @@ class ErrorBudgetHandlerMixin:
                       예: ["availability:payment"] → payment 도메인만 반응
         """
         self._target_slo_patterns = patterns
-        logger.info(f"[AdaptiveThrottle] Target SLO patterns: {patterns}")
+        logger.info(
+            "adaptive_throttle.target_slo_patterns",
+            patterns=patterns,
+        )
 
     def _should_react_to_slo(self, slo_name: str) -> bool:
         """이벤트의 SLO가 이 Throttle의 반응 대상인지 확인."""
@@ -291,9 +297,12 @@ class ErrorBudgetHandlerMixin:
                 self._apply_preemptive_reduction(forecast)
 
         except ImportError:
-            logger.debug("[AdaptiveThrottle] Forecaster or ErrorBudgetService not available")
+            logger.debug("adaptive_throttle.forecaster_errorbudgetservice_available")
         except Exception as e:
-            logger.debug(f"[AdaptiveThrottle] Preemptive check skipped: {e}")
+            logger.debug(
+                "adaptive_throttle.preemptive_check_skipped",
+                error=e,
+            )
 
     def _apply_preemptive_reduction(self, forecast) -> None:
         """

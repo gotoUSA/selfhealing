@@ -11,7 +11,7 @@ Note:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -19,7 +19,7 @@ from typing import Any
 
 from django.db import connection, connections
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -79,7 +79,10 @@ class PostgresRepository:
                 cursor.fetchone()
             return True
         except Exception as e:
-            logger.error(f"[PostgresRepository] ping failed: {e}")
+            logger.error(
+                "postgres_repository.ping_failed",
+                error=e,
+            )
             return False
 
     def get_connection_stats(self) -> ConnectionStats:
@@ -393,7 +396,11 @@ class PostgresRepository:
                     else:
                         cursor.execute("SELECT pg_advisory_unlock_shared(%s)", [lock_id])
                 except Exception as e:
-                    logger.warning(f"[PostgresRepository] Failed to release lock {lock_id}: {e}")
+                    logger.warning(
+                        "postgres_repository.failed_release_lock",
+                        lock_id=lock_id,
+                        error=e,
+                    )
             if cursor:
                 try:
                     cursor.close()

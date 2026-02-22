@@ -8,7 +8,7 @@ Saga 오케스트레이터를 위한 Celery 태스크.
 - scan_orphan_sagas: 고아/중단 Saga를 주기적으로 스캔하여 재개
 """
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -30,7 +30,7 @@ except ImportError:
 
 from selfhealing.services.saga.models import SagaStatus
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # =============================================================================
 # 상수

@@ -7,7 +7,7 @@ RuntimeFeedbackLoop, DecisionEngine, SafetyBounds를 조합하여
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -24,7 +24,7 @@ from .adjustment_recorder import AdjustmentRecorder
 from .metrics_provider import MetricsProviderWrapper
 from .models import AdjustmentRecord, TuningState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class TuningMode(str, Enum):
@@ -138,7 +138,7 @@ class AutoTuningService:
             enabled=enabled,
         )
 
-        logger.info("[AutoTuningService] Initialized")
+        logger.info("auto_tuning_service.initialized")
 
     def _check_governance_before_adjustment(
         self,
@@ -175,7 +175,10 @@ class AutoTuningService:
                 adjustment_type="service_start",
             )
             if not gov_result.allowed:
-                logger.warning(f"[AutoTuningService] Start blocked by governance: " f"{gov_result.block_message}")
+                logger.warning(
+                    "auto_tuning_service.start_blocked_governance",
+                    gov_result=gov_result.block_message,
+                )
                 return False
 
             # 세션 시작
@@ -187,7 +190,7 @@ class AutoTuningService:
             # 롤백 가드 시작
             self.rollback_guard.start()
 
-            logger.info("[AutoTuningService] Started")
+            logger.info("auto_tuning_service.started")
             return True
 
     def stop(self) -> bool:
@@ -197,7 +200,7 @@ class AutoTuningService:
             self.rollback_guard.stop()
             self.adjustment_recorder.end_session(TuningState.COMPLETED)
 
-            logger.info("[AutoTuningService] Stopped")
+            logger.info("auto_tuning_service.stopped")
             return True
 
     def pause(self, reason: str = "manual") -> bool:
@@ -213,7 +216,10 @@ class AutoTuningService:
 
     def trigger_emergency_recovery(self, reason: str = "manual") -> bool:
         """긴급 복구 트리거"""
-        logger.warning(f"[AutoTuningService] Emergency recovery triggered: {reason}")
+        logger.warning(
+            "auto_tuning_service.emergency_recovery_triggered",
+            reason=reason,
+        )
         return self.rollback_guard.trigger_manual_emergency(reason)
 
     def get_status(self) -> dict[str, Any]:
@@ -302,7 +308,11 @@ class AutoTuningService:
 
             enabled_at = datetime.now(timezone.utc)
 
-            logger.info(f"[AutoTuningService] Enabled by {enabled_by}: {reason}")
+            logger.info(
+                "auto_tuning_service.enabled",
+                enabled_by=enabled_by,
+                reason=reason,
+            )
 
             return {
                 "status": "enabled",
@@ -362,7 +372,11 @@ class AutoTuningService:
                     "warning",
                 )
 
-            logger.warning(f"[AutoTuningService] Disabled by {disabled_by}: {reason}")
+            logger.warning(
+                "auto_tuning_service.disabled",
+                disabled_by=disabled_by,
+                reason=reason,
+            )
 
             return {
                 "status": "disabled",
@@ -409,7 +423,11 @@ class AutoTuningService:
                 },
             )
 
-            logger.info(f"[AutoTuningService] Module {module} enabled by {enabled_by}")
+            logger.info(
+                "auto_tuning_service.module_enabled",
+                module=module,
+                enabled_by=enabled_by,
+            )
 
             return {
                 "status": "enabled",
@@ -465,7 +483,12 @@ class AutoTuningService:
                 },
             )
 
-            logger.warning(f"[AutoTuningService] Module {module} disabled by {disabled_by}: {reason}")
+            logger.warning(
+                "auto_tuning_service.module_disabled",
+                module=module,
+                disabled_by=disabled_by,
+                reason=reason,
+            )
 
             return {
                 "status": "disabled",
@@ -703,7 +726,12 @@ class AutoTuningService:
                 },
             )
 
-            logger.info(f"[AutoTuningService] Override: {parameter}={value} by {overridden_by}")
+            logger.info(
+                "auto_tuning_service.override",
+                parameter=parameter,
+                value=value,
+                overridden_by=overridden_by,
+            )
 
             return {
                 "status": "applied",
@@ -742,7 +770,10 @@ class AutoTuningService:
                 try:
                     self.config_applier.apply(parameter, override_info["previous_value"])
                 except Exception as e:
-                    logger.warning(f"Failed to restore previous value: {e}")
+                    logger.warning(
+                        "failed_restore_previous_value",
+                        error=e,
+                    )
 
             # 자동 조정 재활성화
             self._enable_parameter_auto_tuning(parameter)
@@ -891,7 +922,10 @@ class AutoTuningService:
             )
             self.audit_adapter.log(entry)
         except Exception as e:
-            logger.warning(f"[AutoTuningService] Audit log failed: {e}")
+            logger.warning(
+                "auto_tuning_service.audit_log_failed",
+                error=e,
+            )
 
         return audit_id
 
@@ -901,9 +935,16 @@ class AutoTuningService:
             if hasattr(self.alert_manager, "_send_notification"):
                 self.alert_manager._send_notification(title, message, severity)
             else:
-                logger.info(f"[Notification] {title}: {message}")
+                logger.info(
+                    "notification.event",
+                    title=title,
+                    message=message,
+                )
         except Exception as e:
-            logger.warning(f"[AutoTuningService] Notification failed: {e}")
+            logger.warning(
+                "auto_tuning_service.notification_failed",
+                error=e,
+            )
 
     def _format_history_item(self, record: AdjustmentRecord) -> dict[str, Any]:
         """이력 아이템 포맷"""
@@ -961,10 +1002,17 @@ class AutoTuningService:
 
         class DefaultAlertManager:
             def send_auto_tuning_alert(self, **kwargs):
-                logger.info(f"[AutoTuning Alert] {kwargs}")
+                logger.info(
+                    "autotuning_alert",
+                    kwargs=kwargs,
+                )
 
             def _send_notification(self, title, message, severity):
-                logger.info(f"[Notification] {title}: {message}")
+                logger.info(
+                    "notification.event",
+                    title=title,
+                    message=message,
+                )
 
         return DefaultAlertManager()
 
@@ -974,7 +1022,11 @@ class AutoTuningService:
 
     def _handle_guard_alert(self, alert_type: str, message: str):
         """Guard 알림 처리"""
-        logger.warning(f"[AutoTuningService] Guard alert: {alert_type} - {message}")
+        logger.warning(
+            "auto_tuning_service.guard_alert",
+            alert_type=alert_type,
+            message=message,
+        )
 
 
 __all__ = [

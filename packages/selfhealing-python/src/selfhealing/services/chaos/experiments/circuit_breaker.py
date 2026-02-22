@@ -7,7 +7,7 @@ Tests fast-fail behavior, fallback strategies, and canary recovery.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
@@ -21,7 +21,7 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     CB_OPEN_HYPOTHESIS,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CircuitBreakerOpenExperiment(ChaosExperiment):
@@ -62,7 +62,11 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
 
     def inject_chaos(self) -> bool:
         """Force CB to OPEN state."""
-        logger.info(f"[CBOpenInjection] Forcing CB OPEN for {self.config.target_service} " f"(TTL: {self._effective_ttl}s)")
+        logger.info(
+            "cb_open_injection.forcing_cb_open_ttl",
+            self=self.config.target_service,
+            self_1=self._effective_ttl,
+        )
 
         try:
             from selfhealing.services.circuit_breaker import (
@@ -78,7 +82,10 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
             )
 
             if not result.success:
-                logger.error(f"[CBOpenInjection] Failed to open CB: {result.message}")
+                logger.error(
+                    "cb_open_injection.failed_open_cb",
+                    result=result.message,
+                )
                 return False
 
             # 설정 저장 (TTL 및 rollback용)
@@ -96,17 +103,26 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[CBOpenInjection] Failed to inject: {e}")
+            logger.error(
+                "cb_open_injection.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
         """Force CB back to CLOSED state."""
         with self._rollback_lock:
             if self._rollback_completed:
-                logger.info(f"[CBOpenInjection] Rollback already completed for {self.experiment_id}")
+                logger.info(
+                    "cb_open_injection.rollback_already_completed",
+                    self=self.experiment_id,
+                )
                 return
 
-            logger.info(f"[CBOpenInjection] Rolling back {self.experiment_id}")
+            logger.info(
+                "cb_open_injection.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 from selfhealing.services.circuit_breaker import (
@@ -132,7 +148,10 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[CBOpenInjection] Rollback failed: {e}")
+                logger.error(
+                    "cb_open_injection.rollback_failed",
+                    error=e,
+                )
 
     # =========================================================================
     # Canary Recovery 검증
@@ -178,7 +197,10 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
                 "stage_started_at": (state.stage_started_at.isoformat() if state.stage_started_at else None),
             }
         except Exception as e:
-            logger.warning(f"[CBOpenExperiment] Canary verification failed: {e}")
+            logger.warning(
+                "cb_open_experiment.canary_verification_failed",
+                error=e,
+            )
             return {
                 "canary_state": "unknown",
                 "traffic_percent": None,
@@ -212,7 +234,10 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
 
             time.sleep(1.0)  # 1초마다 체크
 
-        logger.warning(f"[CBOpenExperiment] Canary recovery did not start within {timeout_seconds}s")
+        logger.warning(
+            "cb_open_experiment.canary_recovery_start_within",
+            timeout_seconds=timeout_seconds,
+        )
         return False
 
     def get_canary_verification_result(self) -> dict[str, Any]:

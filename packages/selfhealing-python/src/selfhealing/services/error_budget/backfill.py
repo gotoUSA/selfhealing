@@ -28,7 +28,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import statistics
 import uuid
 from collections.abc import Callable
@@ -40,7 +40,7 @@ from selfhealing.core.timezone import now as utc_now
 from selfhealing.services.emergency_mode.enums import EmergencyLevel
 from selfhealing.services.error_budget.constants import DEFAULT_LEVEL_MULTIPLIERS
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -260,7 +260,10 @@ class EmergencyBackfillCalculator:
                     return max(spike_time, max_lookback)
 
             except Exception as e:
-                logger.warning(f"[Backfill] Metrics lookup failed: {e}")
+                logger.warning(
+                    "backfill.metrics_lookup_failed",
+                    error=e,
+                )
 
         # 폴백: 기본 소급 시간
         return declared_at - timedelta(minutes=self.DEFAULT_LOOKBACK_MINUTES)
@@ -320,7 +323,10 @@ class EmergencyBackfillCalculator:
                     getattr(r, "raw_duration_minutes", 1.0) for r in (records or [])
                 )
             except Exception as e:
-                logger.warning(f"[Backfill] Error records lookup failed: {e}")
+                logger.warning(
+                    "backfill.error_records_lookup_failed",
+                    error=e,
+                )
 
         # 조정된 소진량 계산
         adjusted_consumption = original_consumption * backfill_multiplier
@@ -387,7 +393,10 @@ class EmergencyBackfillCalculator:
                 entry = result.to_hash_chain_entry()
                 self._hash_chain_manager.add_entry(entry)
             except Exception as e:
-                logger.warning(f"[Backfill] Hash chain recording failed: {e}")
+                logger.warning(
+                    "backfill.hash_chain_recording_failed",
+                    error=e,
+                )
 
 
 # =============================================================================

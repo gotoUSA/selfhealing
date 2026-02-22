@@ -15,7 +15,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from typing import Any
 
@@ -24,7 +24,7 @@ from selfhealing.services.audit.base import (
     _write_to_wal,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def log_kill_switch_override_audit(
@@ -381,7 +381,10 @@ def log_emergency_mode_audit(
             user=user,
         )
     except Exception as e:
-        logger.debug(f"[EmergencyModeAudit] Fallback log_config_change failed: {e}")
+        logger.debug(
+            "emergency_mode_audit.fallback_failed",
+            error=e,
+        )
 
     return wal_seq
 

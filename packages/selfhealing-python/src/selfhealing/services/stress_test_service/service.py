@@ -13,7 +13,7 @@ Note:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import threading
 import time
@@ -32,7 +32,7 @@ from .models import (
 if TYPE_CHECKING:
     from selfhealing.adapters.postgres.repository import PostgresRepository
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # SQLAlchemy Pool 상태 조회를 위한 import
 try:
@@ -129,14 +129,20 @@ class StressTestService:
                 use_connection_pool=os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE",
             )
         except SATimeoutError as e:
-            logger.error(f"[StressTestService] Pool exhausted! TimeoutError: {e}")
+            logger.error(
+                "stress_test_service.pool_exhausted_timeouterror",
+                error=e,
+            )
             return PoolStatusResult(
                 status="exhausted",
                 error="Connection pool exhausted",
                 error_type="SQLAlchemy TimeoutError",
             )
         except Exception as e:
-            logger.error(f"[StressTestService] pool_status failed: {e}")
+            logger.error(
+                "stress_test_service.failed",
+                error=e,
+            )
             return PoolStatusResult(
                 status="error",
                 error=str(e),
@@ -161,7 +167,11 @@ class StressTestService:
             )
         except SATimeoutError as e:
             elapsed = time.time() - start
-            logger.error(f"[StressTestService] POOL EXHAUSTED! slow_query timeout after {elapsed:.2f}s: {e}")
+            logger.error(
+                "stress_test_service.pool_exhausted_timeout_after",
+                elapsed=elapsed,
+                error=e,
+            )
             return StressTestResult(
                 status="pool_exhausted",
                 elapsed_seconds=elapsed,
@@ -170,7 +180,11 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(f"[StressTestService] slow_query failed after {elapsed:.2f}s: {e}")
+            logger.error(
+                "stress_test_service.failed_after",
+                elapsed=elapsed,
+                error=e,
+            )
             return StressTestResult(
                 status="error",
                 elapsed_seconds=elapsed,
@@ -207,7 +221,11 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(f"[StressTestService] leak simulation failed after {elapsed:.2f}s: {e}")
+            logger.error(
+                "stress_test_service.leak_simulation_failed_after",
+                elapsed=elapsed,
+                error=e,
+            )
             return StressTestResult(
                 status="error",
                 elapsed_seconds=elapsed,
@@ -242,7 +260,11 @@ class StressTestService:
             )
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(f"[StressTestService] heavy_query failed after {elapsed:.2f}s: {e}")
+            logger.error(
+                "stress_test_service.failed_after",
+                elapsed=elapsed,
+                error=e,
+            )
             return StressTestResult(
                 status="error",
                 elapsed_seconds=elapsed,
@@ -269,7 +291,10 @@ class StressTestService:
             with self._repo.advisory_lock_context(lock_id, exclusive, wait) as lock_acquired:
                 if not lock_acquired:
                     elapsed = time.time() - start
-                    logger.info(f"[StressTestService] Lock {lock_id} not acquired (conflict)")
+                    logger.info(
+                        "stress_test_service.lock_acquired_conflict",
+                        lock_id=lock_id,
+                    )
                     return StressTestResult(
                         status="conflict",
                         elapsed_seconds=elapsed,
@@ -277,12 +302,20 @@ class StressTestService:
                         extra={"lock_id": lock_id},
                     )
 
-                logger.info(f"[StressTestService] Lock {lock_id} acquired, holding for {hold_seconds}s")
+                logger.info(
+                    "stress_test_service.lock_acquired_holding",
+                    lock_id=lock_id,
+                    hold_seconds=hold_seconds,
+                )
                 time.sleep(hold_seconds)
 
             # 컨텍스트 매니저가 자동으로 락 해제
             elapsed = time.time() - start
-            logger.info(f"[StressTestService] Lock {lock_id} released after {elapsed:.2f}s")
+            logger.info(
+                "stress_test_service.lock_released_after",
+                lock_id=lock_id,
+                elapsed=elapsed,
+            )
 
             return StressTestResult(
                 status="success",
@@ -301,7 +334,10 @@ class StressTestService:
 
             # 락 타임아웃 또는 데드락 감지
             if "lock" in error_str or "timeout" in error_str or "deadlock" in error_str:
-                logger.warning(f"[StressTestService] Lock contention detected: {e}")
+                logger.warning(
+                    "stress_test_service.lock_contention_detected",
+                    error=e,
+                )
                 return StressTestResult(
                     status="lock_timeout",
                     elapsed_seconds=elapsed,
@@ -310,7 +346,11 @@ class StressTestService:
                     extra={"lock_id": lock_id},
                 )
 
-            logger.error(f"[StressTestService] Failed after {elapsed:.2f}s: {e}")
+            logger.error(
+                "stress_test_service.failed_after",
+                elapsed=elapsed,
+                error=e,
+            )
             return StressTestResult(
                 status="error",
                 elapsed_seconds=elapsed,
@@ -372,7 +412,10 @@ class StressTestService:
 
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(f"[StressTestService] Contention test failed: {e}")
+            logger.error(
+                "stress_test_service.contention_test_failed",
+                error=e,
+            )
             return LockContentionResult(
                 status="error",
                 lock_id=lock_id,
@@ -438,7 +481,10 @@ class StressTestService:
                     self._repo.release_advisory_lock(lock_id)
 
                 except Exception as lock_e:
-                    logger.error(f"[StressTestService] Main lock failed: {lock_e}")
+                    logger.error(
+                        "stress_test_service.main_lock_failed",
+                        lock_e=lock_e,
+                    )
                     timeout_count += 1
 
             # 타임아웃 컨텍스트 매니저가 자동으로 타임아웃 복원
@@ -446,7 +492,11 @@ class StressTestService:
             elapsed = time.time() - start
             total_attempts = timeout_count + success_count + deadlock_count
 
-            logger.warning(f"[StressTestService] 🔥 BURST COMPLETED: timeouts={timeout_count}, " f"deadlocks={deadlock_count}")
+            logger.warning(
+                "stress_test_service.burst_completed",
+                timeout_count=timeout_count,
+                deadlock_count=deadlock_count,
+            )
 
             return BurstFailureResult(
                 status="burst_completed",
@@ -463,7 +513,10 @@ class StressTestService:
 
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(f"[StressTestService] Test failed: {e}")
+            logger.error(
+                "stress_test_service.test_failed",
+                error=e,
+            )
             return BurstFailureResult(
                 status="error",
                 lock_id=lock_id,
@@ -517,14 +570,26 @@ class StressTestService:
                             StressTestService._held_connections.append({"cursor": cursor, "created_at": time.time()})
 
                     held_count += 1
-                    logger.info(f"[StressTestService] Held connection {i+1}/{connections_to_hold}")
+                    logger.info(
+                        "stress_test_service.held_connection",
+                        value=i+1,
+                        connections_to_hold=connections_to_hold,
+                    )
 
                 except Exception as e:
-                    logger.warning(f"[StressTestService] Failed to acquire connection {i+1}: {e}")
+                    logger.warning(
+                        "stress_test_service.failed_acquire_connection",
+                        value=i+1,
+                        error=e,
+                    )
                     break
 
             # 커넥션 유지하면서 대기
-            logger.warning(f"[StressTestService] 🔥 Holding {held_count} connections for {hold_seconds}s")
+            logger.warning(
+                "stress_test_service.holding_connections",
+                held_count=held_count,
+                hold_seconds=hold_seconds,
+            )
             time.sleep(hold_seconds)
 
             # 커넥션 반환
@@ -538,7 +603,10 @@ class StressTestService:
                     StressTestService._held_connections.clear()
 
             elapsed = time.time() - start
-            logger.warning(f"[StressTestService] 🔥 Pool exhaustion completed after {elapsed:.2f}s")
+            logger.warning(
+                "stress_test_service.pool_exhaustion_completed_after",
+                elapsed=elapsed,
+            )
 
             return StressTestResult(
                 status="exhaustion_completed",
@@ -552,7 +620,10 @@ class StressTestService:
 
         except Exception as e:
             elapsed = time.time() - start
-            logger.error(f"[StressTestService] Failed: {e}")
+            logger.error(
+                "stress_test_service.failed",
+                error=e,
+            )
             return StressTestResult(
                 status="error",
                 elapsed_seconds=elapsed,

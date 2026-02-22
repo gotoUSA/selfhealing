@@ -14,7 +14,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
         CanarySafetyInterlock,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass

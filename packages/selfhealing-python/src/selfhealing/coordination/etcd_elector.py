@@ -15,7 +15,7 @@ Redis 대안으로, 더 강력한 일관성이 필요한 환경에서 사용.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 import time
 from datetime import datetime, timezone
@@ -31,7 +31,7 @@ from selfhealing.coordination.config import (
     get_leader_election_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # etcd 가용성 확인
 # TypeError: protobuf 버전 불일치 시 Descriptors 오류 발생 가능
@@ -42,7 +42,10 @@ try:
 except (ImportError, TypeError) as e:
     ETCD_AVAILABLE = False
     etcd3 = None  # type: ignore
-    logger.debug(f"etcd3 라이브러리를 로드할 수 없습니다: {e}")
+    logger.debug(
+        "라이브러리를_로드할_없습니다",
+        error=e,
+    )
 
 
 class EtcdLeaderElector(LeaderElector):
@@ -180,7 +183,10 @@ class EtcdLeaderElector(LeaderElector):
             )
 
         except Exception as e:
-            logger.error(f"[EtcdLeaderElector] Get leader error: {e}")
+            logger.error(
+                "etcd_leader_elector.get_leader_error",
+                error=e,
+            )
             return None
 
     def is_lease_valid(self) -> bool:
@@ -199,7 +205,10 @@ class EtcdLeaderElector(LeaderElector):
         etcd = self._get_etcd()
         self._lease = etcd.lease(ttl=self._settings.lease_ttl_seconds)
         self._lease_id = self._lease.id
-        logger.debug(f"[EtcdLeaderElector] Lease 생성: {self._lease_id}")
+        logger.debug(
+            "etcd_leader_elector.lease_생성",
+            self=self._lease_id,
+        )
         return self._lease
 
     def _try_acquire(self) -> bool:
@@ -244,7 +253,10 @@ class EtcdLeaderElector(LeaderElector):
                 return False
 
         except Exception as e:
-            logger.error(f"[EtcdLeaderElector] Acquire error: {e}")
+            logger.error(
+                "etcd_leader_elector.acquire_error",
+                error=e,
+            )
             return False
 
     def _increment_fencing_token(self) -> int:
@@ -264,7 +276,10 @@ class EtcdLeaderElector(LeaderElector):
             return new_value
 
         except Exception as e:
-            logger.error(f"[EtcdLeaderElector] Fencing token error: {e}")
+            logger.error(
+                "etcd_leader_elector.fencing_token_error",
+                error=e,
+            )
             self._fencing_token += 1
             return self._fencing_token
 
@@ -275,11 +290,17 @@ class EtcdLeaderElector(LeaderElector):
                 return False
 
             self._lease.refresh()
-            logger.debug(f"[EtcdLeaderElector] Lease 갱신: {self._lease_id}")
+            logger.debug(
+                "etcd_leader_elector.lease_갱신",
+                self=self._lease_id,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[EtcdLeaderElector] Renew error: {e}")
+            logger.error(
+                "etcd_leader_elector.renew_error",
+                error=e,
+            )
             return False
 
     def _release_leadership(self) -> None:
@@ -300,10 +321,16 @@ class EtcdLeaderElector(LeaderElector):
                 self._lease = None
                 self._lease_id = 0
 
-            logger.info(f"[EtcdLeaderElector] 리더십 반납 (resource={self._resource_name})")
+            logger.info(
+                "etcd_leader_elector.리더십_반납",
+                self=self._resource_name,
+            )
 
         except Exception as e:
-            logger.error(f"[EtcdLeaderElector] Release error: {e}")
+            logger.error(
+                "etcd_leader_elector.release_error",
+                error=e,
+            )
 
     def _become_leader(self) -> None:
         """리더 됨 (비동기 콜백)."""
@@ -312,7 +339,10 @@ class EtcdLeaderElector(LeaderElector):
                 return
             self._state = LeadershipState.LEADER
 
-        logger.info(f"[EtcdLeaderElector] 리더가 되었습니다 (resource={self._resource_name})")
+        logger.info(
+            "etcd_leader_elector.리더가_되었습니다",
+            self=self._resource_name,
+        )
 
         # 비동기 콜백 실행
         executor = self._get_callback_executor()
@@ -326,7 +356,11 @@ class EtcdLeaderElector(LeaderElector):
                 return
             self._state = LeadershipState.FOLLOWER
 
-        logger.info(f"[EtcdLeaderElector] 리더십을 잃었습니다 " f"(resource={self._resource_name}, reason={reason})")
+        logger.info(
+            "etcd_leader_elector.리더십을_잃었습니다",
+            self=self._resource_name,
+            reason=reason,
+        )
 
         # 비동기 콜백 실행
         executor = self._get_callback_executor()
@@ -338,7 +372,11 @@ class EtcdLeaderElector(LeaderElector):
         try:
             callback()
         except Exception as e:
-            logger.error(f"[EtcdLeaderElector] {callback_type} callback error: {e}")
+            logger.error(
+                "etcd_leader_elector.callback_error",
+                callback_type=callback_type,
+                error=e,
+            )
 
     def _run_loop(self) -> None:
         """선출 루프."""
@@ -360,7 +398,9 @@ class EtcdLeaderElector(LeaderElector):
 
                         # Self-Fencing
                         if self._settings.self_fencing_enabled:
-                            logger.warning(f"[EtcdLeaderElector] Lease 갱신 실패, 리더십 포기 " f"(self_fencing_enabled=True)")
+                            logger.warning(
+                                "etcd_leader_elector.lease_갱신_실패_리더십",
+                            )
                             self._lose_leader(reason="self_fencing")
                             consecutive_failures = 0
                         elif consecutive_failures >= self._settings.max_retry_attempts > 0:
@@ -391,7 +431,10 @@ class EtcdLeaderElector(LeaderElector):
                         break
 
             except Exception as e:
-                logger.error(f"[EtcdLeaderElector] Loop error: {e}")
+                logger.error(
+                    "etcd_leader_elector.loop_error",
+                    error=e,
+                )
                 self._stop_event.wait(self._settings.retry_interval_seconds)
                 if self._stop_event.is_set():
                     break
@@ -399,7 +442,10 @@ class EtcdLeaderElector(LeaderElector):
     def start(self) -> None:
         """리더 선출 시작."""
         if not self._settings.enabled:
-            logger.info(f"[EtcdLeaderElector] 비활성화됨 (resource={self._resource_name})")
+            logger.info(
+                "etcd_leader_elector.비활성화됨",
+                self=self._resource_name,
+            )
             return
 
         if self._running:
@@ -416,7 +462,10 @@ class EtcdLeaderElector(LeaderElector):
             daemon=True,
         )
         self._worker.start()
-        logger.info(f"[EtcdLeaderElector] 시작됨 (resource={self._resource_name})")
+        logger.info(
+            "etcd_leader_elector.시작됨",
+            self=self._resource_name,
+        )
 
     def stop(self) -> None:
         """리더 선출 중지."""
@@ -432,7 +481,10 @@ class EtcdLeaderElector(LeaderElector):
         if was_leader:
             self._release_leadership()
 
-            logger.info(f"[EtcdLeaderElector] 리더십을 잃었습니다 " f"(resource={self._resource_name}, reason=shutdown)")
+            logger.info(
+                "etcd_leader_elector.리더십을_잃었습니다",
+                self=self._resource_name,
+            )
 
             # 비동기 콜백
             executor = self._get_callback_executor()
@@ -459,7 +511,10 @@ class EtcdLeaderElector(LeaderElector):
         with self._lock:
             self._state = LeadershipState.STOPPED
 
-        logger.info(f"[EtcdLeaderElector] 중지됨 (resource={self._resource_name})")
+        logger.info(
+            "etcd_leader_elector.중지됨",
+            self=self._resource_name,
+        )
 
     def on_become_leader(self, callback: Callable[[], None]) -> Callable[[], None]:
         """리더가 되었을 때 콜백 등록."""

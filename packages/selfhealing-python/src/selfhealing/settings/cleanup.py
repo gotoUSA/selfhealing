@@ -25,12 +25,12 @@ Environment Variables:
     SELFHEALING_CLEANUP_PURGE_DLQ_RETRY_DELAY=600
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CleanupSettings(BaseSettings):
@@ -180,7 +180,10 @@ class CleanupSettings(BaseSettings):
         # Note: cross-field validation은 model_validator로 처리해야 하지만
         # 단순 경고만 발생시킴
         if v < 60:
-            logger.warning(f"[CleanupSettings] Low purge_older_than_days={v}, " "consider using >= 60 for data retention")
+            logger.warning(
+                "cleanup_settings.low_consider_using_data",
+                v=v,
+            )
         return v
 
 

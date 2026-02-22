@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
+import structlog
 import sys
 import tempfile
 import time
@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _configure_demo_logging() -> None:

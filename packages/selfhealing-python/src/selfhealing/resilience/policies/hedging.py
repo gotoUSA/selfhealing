@@ -21,7 +21,7 @@ Policy 내부에 유지한다. 부하 레벨의 갱신 방법만 HedgingConfigUp
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any, Awaitable, Callable, TypeVar
 
 from selfhealing.core.hedging.async_executor import AsyncHedgingExecutor
@@ -40,7 +40,7 @@ from selfhealing.interfaces.resilience_policy import (
     ResiliencePolicy,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -171,15 +171,27 @@ class HedgingPolicy(ResiliencePolicy[T]):
         if config_key == "hedging.mode" and config_value:
             try:
                 self._config.mode = HedgingMode(config_value)
-                logger.info(f"[HedgingPolicy] Mode changed to: {config_value}")
+                logger.info(
+                    "hedging_policy.mode_changed",
+                    config_value=config_value,
+                )
             except ValueError:
-                logger.warning(f"[HedgingPolicy] Invalid mode: {config_value}")
+                logger.warning(
+                    "hedging_policy.invalid_mode",
+                    config_value=config_value,
+                )
         elif config_key == "hedging.delay" and config_value is not None:
             self._config.delay = float(config_value)
-            logger.info(f"[HedgingPolicy] Delay changed to: {config_value}")
+            logger.info(
+                "hedging_policy.delay_changed",
+                config_value=config_value,
+            )
         elif config_key == "backpressure.level" and config_value:
             self._current_load_level = config_value.lower()
-            logger.info(f"[HedgingPolicy] Load level updated: {self._current_load_level}")
+            logger.info(
+                "hedging_policy.load_level_updated",
+                self=self._current_load_level,
+            )
 
     # -------------------------------------------------------------------------
     # 내부 실행 메서드
@@ -557,15 +569,27 @@ class AsyncHedgingPolicy:
         if config_key == "hedging.mode" and config_value:
             try:
                 self._config.mode = HedgingMode(config_value)
-                logger.info(f"[AsyncHedgingPolicy] Mode changed to: {config_value}")
+                logger.info(
+                    "async_hedging_policy.mode_changed",
+                    config_value=config_value,
+                )
             except ValueError:
-                logger.warning(f"[AsyncHedgingPolicy] Invalid mode: {config_value}")
+                logger.warning(
+                    "async_hedging_policy.invalid_mode",
+                    config_value=config_value,
+                )
         elif config_key == "hedging.delay" and config_value is not None:
             self._config.delay = float(config_value)
-            logger.info(f"[AsyncHedgingPolicy] Delay changed to: {config_value}")
+            logger.info(
+                "async_hedging_policy.delay_changed",
+                config_value=config_value,
+            )
         elif config_key == "backpressure.level" and config_value:
             self._current_load_level = config_value.lower()
-            logger.info(f"[AsyncHedgingPolicy] Load level updated: " f"{self._current_load_level}")
+            logger.info(
+                "async_hedging_policy.load_level_updated",
+                self=self._current_load_level,
+            )
 
     # -------------------------------------------------------------------------
     # 내부 실행 메서드
@@ -827,11 +851,14 @@ class HedgingConfigUpdateHook:
 
             bus = get_event_bus()
             bus.subscribe(EventType.CONFIG_UPDATED, self._dispatch)
-            logger.debug("[HedgingConfigUpdateHook] Subscribed to CONFIG_UPDATED")
+            logger.debug("hedging_config_update_hook.subscribed")
         except ImportError:
-            logger.debug("[HedgingConfigUpdateHook] EventBus not available")
+            logger.debug("hedging_config_update_hook.eventbus_available")
         except Exception as e:
-            logger.warning(f"[HedgingConfigUpdateHook] Failed to subscribe: {e}")
+            logger.warning(
+                "hedging_config_update_hook.failed_subscribe",
+                error=e,
+            )
 
     def _dispatch(self, event: Any) -> None:
         """이벤트를 등록된 모든 Policy에 전달 (Fail-Open)."""

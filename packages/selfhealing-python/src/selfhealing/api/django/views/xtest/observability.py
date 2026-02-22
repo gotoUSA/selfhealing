@@ -12,7 +12,7 @@ Production Post-mortem API는 views/postmortem.py를 참조하세요:
 - GET /postmortem/incidents/ - 인시던트 목록 조회
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework import status
@@ -28,7 +28,7 @@ from .base import (
     get_healing_events_count,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HealingTimelineView(XTestModeMixin, APIView):
@@ -355,7 +355,10 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
         # 격리 점수 계산
         isolation_score = _calculate_isolation_score(matrix, len(test_services))
 
-        logger.info(f"[Stage 51] Multi blast radius test: score={isolation_score:.1f}%")
+        logger.info(
+            "stage_multi_blast_radius",
+            isolation_score=isolation_score,
+        )
 
         # WAL Audit 기록
         self.log_xtest_audit(
@@ -491,7 +494,11 @@ class RecordHealingEventView(XTestModeMixin, APIView):
 
         add_healing_event(event)
 
-        logger.info(f"[Stage 51] Healing event recorded: {event_type} ({service})")
+        logger.info(
+            "stage_healing_event_recorded",
+            event_type=event_type,
+            service=service,
+        )
 
         # WAL Audit 기록
         self.log_xtest_audit(

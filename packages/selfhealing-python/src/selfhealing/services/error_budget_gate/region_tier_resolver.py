@@ -8,9 +8,9 @@ API 경로 기반 티어 결정(TierRegistry.resolve_tier)과 달리,
 
 from __future__ import annotations
 
-import logging
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # RegionalRecoveryConfig.priority → 티어 매핑 범위
 # seoul(100) → critical, tokyo(50) → standard, oregon(10) → non_essential
@@ -55,7 +55,11 @@ def resolve_tier_from_region(region: str) -> str:
         return _DEFAULT_TIER
 
     except Exception as e:
-        logger.warning(f"[RegionTierResolver] Failed to resolve tier for " f"region '{region}': {e}")
+        logger.warning(
+            "region_tier_resolver.failed_resolve_tier_region",
+            region=region,
+            error=e,
+        )
         return _DEFAULT_TIER
 
 

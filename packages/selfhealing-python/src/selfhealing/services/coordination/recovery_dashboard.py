@@ -19,7 +19,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from .regional_recovery_policy import RegionalRecoveryPolicyEngine
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -524,7 +524,10 @@ class RecoveryDashboardService:
                 return session.status
             return RecoveryStatus.NOT_STARTED
         except Exception as e:
-            logger.warning(f"[RecoveryDashboard] Failed to get status: {e}")
+            logger.warning(
+                "recovery_dashboard.failed_get_status",
+                error=e,
+            )
             return RecoveryStatus.NOT_STARTED
 
     def _get_active_session_info(self, namespace: str) -> ActiveSessionInfo | None:
@@ -556,7 +559,10 @@ class RecoveryDashboardService:
                 started_at=(session.started_at if hasattr(session, "started_at") else None),
             )
         except Exception as e:
-            logger.warning(f"[RecoveryDashboard] Failed to get session: {e}")
+            logger.warning(
+                "recovery_dashboard.failed_get_session",
+                error=e,
+            )
             return None
 
     def _get_pending_approvals_info(self) -> PendingApprovalsInfo:
@@ -572,7 +578,10 @@ class RecoveryDashboardService:
                 urgent=len(stale) > 0,
             )
         except Exception as e:
-            logger.warning(f"[RecoveryDashboard] Failed to get approvals: {e}")
+            logger.warning(
+                "recovery_dashboard.failed_get_approvals",
+                error=e,
+            )
             return PendingApprovalsInfo()
 
     def _get_recovery_stats(self) -> RecoveryStats:
@@ -589,7 +598,10 @@ class RecoveryDashboardService:
                 aborted=stats.get("aborted_count", 0),
             )
         except Exception as e:
-            logger.warning(f"[RecoveryDashboard] Failed to get stats: {e}")
+            logger.warning(
+                "recovery_dashboard.failed_get_stats",
+                error=e,
+            )
             return RecoveryStats()
 
     def _get_available_actions(

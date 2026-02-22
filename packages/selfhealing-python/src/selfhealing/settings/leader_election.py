@@ -9,7 +9,7 @@ Moved from: coordination/config.py (위치 통일)
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import socket
 from functools import lru_cache
@@ -18,7 +18,7 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LeaderElectionSettings(BaseSettings):

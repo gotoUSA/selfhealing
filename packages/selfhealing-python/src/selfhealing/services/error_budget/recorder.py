@@ -6,7 +6,7 @@ Freeze Decision Recorder (Audit Trail)
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
@@ -19,7 +19,7 @@ from selfhealing.services.error_budget.enums import (
 )
 from selfhealing.services.error_budget.models import FreezeDecisionRecord
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class FreezeDecisionRecorder:
@@ -173,7 +173,7 @@ class FreezeDecisionRecorder:
             # 설정 확인
             config = _get_error_budget_config()
             if not config.get("escalation_enabled", True):
-                logger.debug("[FreezeDecision] Escalation disabled, skipping")
+                logger.debug("freeze_decision.escalation_disabled_skipping")
                 return
 
             escalation_channel = config.get("escalation_channel", "#governance")
@@ -208,7 +208,10 @@ class FreezeDecisionRecorder:
                 )
         except Exception as e:
             # 에스컬레이션 실패는 Override 자체를 막지 않음
-            logger.error(f"[FreezeDecision] Failed to send escalation: {e}")
+            logger.error(
+                "freeze_decision.failed_send_escalation",
+                error=e,
+            )
 
     def record_freeze_lifted(
         self,
@@ -283,7 +286,10 @@ class FreezeDecisionRecorder:
             try:
                 self._persist_record(record)
             except Exception as e:
-                logger.error(f"[FreezeDecision] Failed to persist record: {e}")
+                logger.error(
+                    "freeze_decision.failed_persist_record",
+                    error=e,
+                )
 
         # 메트릭 발행
         if self._emit_metric:
@@ -297,7 +303,10 @@ class FreezeDecisionRecorder:
                     },
                 )
             except Exception as e:
-                logger.warning(f"[FreezeDecision] Failed to emit metric: {e}")
+                logger.warning(
+                    "freeze_decision.failed_emit_metric",
+                    error=e,
+                )
 
         # OpenTelemetry 이벤트 발행
         if self._emit_otel_event:
@@ -307,4 +316,7 @@ class FreezeDecisionRecorder:
                     record.to_dict(),
                 )
             except Exception as e:
-                logger.warning(f"[FreezeDecision] Failed to emit OTel event: {e}")
+                logger.warning(
+                    "freeze_decision.failed_emit_otel_event",
+                    error=e,
+                )

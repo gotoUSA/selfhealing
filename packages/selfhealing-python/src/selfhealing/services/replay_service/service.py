@@ -19,7 +19,7 @@ DLQ 재생 기능을 제공합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
@@ -43,7 +43,7 @@ if TYPE_CHECKING:
         AdaptiveReplayManager,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -148,7 +148,11 @@ class ReplayService:
         )
 
         if not governance.allowed:
-            logger.warning(f"[ReplayService] replay_single blocked: {governance.block_message}. " f"dlq_id={dlq_id}")
+            logger.warning(
+                "replay_service.blocked",
+                governance=governance.block_message,
+                dlq_id=dlq_id,
+            )
             return ReplayResult.blocked(dlq_id, governance)
 
         # Atomically try to acquire the entry for replay
@@ -201,9 +205,16 @@ class ReplayService:
         )
 
         if result.success:
-            logger.info(f"[ReplayService] DLQ entry {dlq_id} replayed successfully")
+            logger.info(
+                "replay_service.dlq_entry_replayed_successfully",
+                dlq_id=dlq_id,
+            )
         else:
-            logger.warning(f"[ReplayService] DLQ entry {dlq_id} replay failed: {result.error}")
+            logger.warning(
+                "replay_service.dlq_entry_replay_failed",
+                dlq_id=dlq_id,
+                result=result.error,
+            )
 
         # Audit 로깅: DLQ 리플레이 결과 기록
         log_dlq_replay_audit(
@@ -393,7 +404,11 @@ class ReplayService:
 
         effective_max_items = manager.get_current_max_items()
 
-        logger.debug(f"[ReplayService] Adaptive mode: " f"requested={max_items}, effective={effective_max_items}")
+        logger.debug(
+            "replay_service.adaptive_mode",
+            max_items=max_items,
+            effective_max_items=effective_max_items,
+        )
 
         return effective_max_items, manager
 
@@ -406,7 +421,10 @@ class ReplayService:
             config = manager.get_config("replay_automation")
             return config.get("adaptive_enabled", False)
         except Exception as e:
-            logger.warning(f"[ReplayService] Failed to read adaptive_enabled: {e}")
+            logger.warning(
+                "replay_service.failed_read",
+                error=e,
+            )
             return False
 
     def _is_priority_enabled(self) -> bool:
@@ -418,7 +436,10 @@ class ReplayService:
             config = manager.get_config("replay_automation")
             return config.get("priority_enabled", False)
         except Exception as e:
-            logger.warning(f"[ReplayService] Failed to read priority_enabled: {e}")
+            logger.warning(
+                "replay_service.failed_read",
+                error=e,
+            )
             return False
 
     def _get_domain_priorities(self) -> dict[str, str]:
@@ -430,7 +451,10 @@ class ReplayService:
             config = manager.get_config("replay_automation")
             return config.get("domain_priorities", {})
         except Exception as e:
-            logger.warning(f"[ReplayService] Failed to load domain_priorities: {e}")
+            logger.warning(
+                "replay_service.failed_load",
+                error=e,
+            )
             return {}
 
     def _get_domain_max_retries(self, domain: str) -> int | None:
@@ -443,7 +467,10 @@ class ReplayService:
             domain_max_retries = config.get("domain_max_retries", {})
             return domain_max_retries.get(domain)
         except Exception as e:
-            logger.warning(f"[ReplayService] Failed to load domain_max_retries: {e}")
+            logger.warning(
+                "replay_service.failed_load",
+                error=e,
+            )
             return None
 
     def _get_entries_by_priority(
@@ -555,7 +582,10 @@ class ReplayService:
                 failure_threshold=config.get("adaptive_failure_threshold", 0.2),
             )
         except Exception as e:
-            logger.warning(f"[ReplayService] Failed to load adaptive config: {e}")
+            logger.warning(
+                "replay_service.failed_load_adaptive_config",
+                error=e,
+            )
             return AdaptiveReplayConfig()
 
     def _replay_single_internal(self, dlq_id: int) -> ReplayResult:
@@ -607,9 +637,16 @@ class ReplayService:
         )
 
         if result.success:
-            logger.info(f"[ReplayService] DLQ entry {dlq_id} replayed successfully")
+            logger.info(
+                "replay_service.dlq_entry_replayed_successfully",
+                dlq_id=dlq_id,
+            )
         else:
-            logger.warning(f"[ReplayService] DLQ entry {dlq_id} replay failed: {result.error}")
+            logger.warning(
+                "replay_service.dlq_entry_replay_failed",
+                dlq_id=dlq_id,
+                result=result.error,
+            )
 
         return result
 
@@ -651,7 +688,10 @@ class ReplayService:
 
         failure_types = failure_type_map.get(service_name, [])
         if not failure_types:
-            logger.info(f"[ReplayService] No failure types mapped for service '{service_name}'")
+            logger.info(
+                "replay_service.no_failure_types_mapped",
+                service_name=service_name,
+            )
             return BatchReplayResult()
 
         # Replay entries with matching failure types using repository

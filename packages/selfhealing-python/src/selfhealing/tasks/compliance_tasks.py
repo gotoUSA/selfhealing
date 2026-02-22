@@ -12,7 +12,7 @@ Tasks:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -22,7 +22,7 @@ from selfhealing.tasks.notification_policy import (
     NotificationTiming,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -329,7 +329,7 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
 
     def run(self) -> dict[str, Any]:
         """메트릭 수집 태스크 실행."""
-        logger.info("[CollectSelfHealingMetrics] Starting metrics collection")
+        logger.info("collect_self_healing_metrics.starting_metrics_collection")
 
         try:
             metrics_collected = 0
@@ -345,7 +345,10 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
                     cb_count = len(registry.list_all())
                     metrics_collected += cb_count
             except Exception as e:
-                logger.debug(f"CB metrics not available: {e}")
+                logger.debug(
+                    "cb_metrics_available",
+                    error=e,
+                )
 
             # DLQ 메트릭
             try:
@@ -355,7 +358,10 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
                 # 서비스 상태 확인 (실제 메트릭 수집은 구현 필요)
                 metrics_collected += 1
             except Exception as e:
-                logger.debug(f"DLQ metrics not available: {e}")
+                logger.debug(
+                    "dlq_metrics_available",
+                    error=e,
+                )
 
             # Emergency Mode 메트릭
             try:
@@ -367,7 +373,10 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
                 current_level = manager.get_current_level()
                 metrics_collected += 1
             except Exception as e:
-                logger.debug(f"Emergency mode metrics not available: {e}")
+                logger.debug(
+                    "emergency_mode_metrics_available",
+                    error=e,
+                )
 
             timestamp = datetime.now(timezone.utc).isoformat()
 
@@ -441,7 +450,10 @@ def register_compliance_tasks_with_celery(app):
             },
         )
         app.register_task(wrapped())
-        logger.info(f"[ComplianceTasks] Registered: {task_class.name}")
+        logger.info(
+            "cell_registry.bulkheads_registered",
+            task_class=task_class.name,
+        )
 
 
 # =============================================================================

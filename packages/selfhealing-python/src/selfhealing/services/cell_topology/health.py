@@ -15,7 +15,7 @@ LeaderScheduler를 통해 클러스터 내 단일 리더만 집계를 수행합�
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
         EWMAForecaster,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # ---------------------------------------------------------------------------
 # Prometheus API 설정
@@ -161,7 +161,7 @@ class CellHealthAggregator:
                 ),
             }
         except ImportError:
-            logger.debug("prometheus_client not available, metrics disabled")
+            logger.debug("available_metrics_disabled")
             return None
 
     # =========================================================================
@@ -486,7 +486,10 @@ class CellHealthAggregator:
             # 건강도 갱신 완료 후 대피 정책 평가
             self._evaluate_evacuation_policy(registry)
         except Exception as e:
-            logger.error("CellHealthAggregator aggregate_all failed: %s", e)
+            logger.error(
+                "cellhealthaggregator_failed",
+                error=e,
+            )
 
     def _evaluate_evacuation_policy(self, registry: object) -> None:
         """갱신된 건강도를 기반으로 Cell 대피 정책을 평가.
@@ -516,12 +519,12 @@ class CellHealthAggregator:
     def on_become_leader(self) -> None:
         """리더 전환 시 호출 — warmup 시작 시각 기록."""
         self._leader_since = time.monotonic()
-        logger.info("[CellHealthAggregator] Became leader, " "EWMA fallback data may be cold")
+        logger.info("cell_health_aggregator.became_leader_ewma_fallback")
 
     def on_lose_leader(self) -> None:
         """리더십 상실 시 호출."""
         self._leader_since = None
-        logger.info("[CellHealthAggregator] Lost leadership")
+        logger.info("cell_health_aggregator.lost_leadership")
 
 
 # =============================================================================

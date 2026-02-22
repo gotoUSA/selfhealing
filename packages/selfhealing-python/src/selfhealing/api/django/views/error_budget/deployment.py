@@ -18,7 +18,7 @@ FAIL-SAFE DESIGN:
 - 배포를 막는 것보다 시스템 가용성이 더 중요
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework.request import Request
@@ -32,7 +32,7 @@ from selfhealing.services.error_budget_service import (
     get_failsafe_verdict_response,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DeploymentVerdictView(APIView):
@@ -119,7 +119,11 @@ class DeploymentFreezeAcknowledgeView(APIView):
             justification=justification,
         )
 
-        logger.info(f"[DeploymentPolicy] Freeze acknowledged by {decided_by}: {justification}")
+        logger.info(
+            "deployment_policy.freeze_acknowledged",
+            decided_by=decided_by,
+            justification=justification,
+        )
 
         return Response(
             {
@@ -233,7 +237,11 @@ class DeploymentFreezeLiftView(APIView):
             justification=justification,
         )
 
-        logger.info(f"[DeploymentPolicy] Freeze lifted by {decided_by}: {justification}")
+        logger.info(
+            "deployment_policy.freeze_lifted",
+            decided_by=decided_by,
+            justification=justification,
+        )
 
         return Response(
             {

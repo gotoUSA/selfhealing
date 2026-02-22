@@ -14,7 +14,7 @@ Health Checks:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,7 +24,7 @@ from selfhealing.tasks.notification_policy import (
     NotificationTiming,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -91,7 +91,10 @@ def check_traffic_health(domain: str | None = None) -> TrafficHealthStatus:
             )
             checks["circuit_breaker"] = True  # 사용 불가 시 통과
         except Exception as e:
-            logger.warning(f"[TrafficHealth] CB check failed: {e}")
+            logger.warning(
+                "traffic_health.cb_check_failed",
+                error=e,
+            )
             checks["circuit_breaker"] = True  # 예외 시 fail-open
 
     # Check 2: Error Budget Gate
@@ -107,10 +110,13 @@ def check_traffic_health(domain: str | None = None) -> TrafficHealthStatus:
                 checks=checks,
             )
     except ImportError:
-        logger.debug("[TrafficHealth] ErrorBudgetGate not available, skipping")
+        logger.debug("traffic_health.errorbudgetgate_available_skipping")
         checks["error_budget"] = True  # 사용 불가 시 통과
     except Exception as e:
-        logger.warning(f"[TrafficHealth] Error budget check failed: {e}")
+        logger.warning(
+            "traffic_health.error_budget_check_failed",
+            error=e,
+        )
         checks["error_budget"] = True  # 예외 시 fail-open
 
     # Check 3: Governance (Kill Switch, Emergency Mode)
@@ -137,10 +143,13 @@ def check_traffic_health(domain: str | None = None) -> TrafficHealthStatus:
                 checks=checks,
             )
     except ImportError:
-        logger.debug("[TrafficHealth] GovernanceChecks not available, skipping")
+        logger.debug("traffic_health.governancechecks_available_skipping")
         checks["governance"] = True
     except Exception as e:
-        logger.warning(f"[TrafficHealth] Governance check failed: {e}")
+        logger.warning(
+            "traffic_health.governance_check_failed",
+            error=e,
+        )
         checks["governance"] = True  # 예외 시 fail-open
 
     return TrafficHealthStatus.healthy(checks)
@@ -224,7 +233,10 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
         Returns:
             dict with status, counts, and check results
         """
-        logger.info(f"[TrafficAwareReplay] Starting check (domain={domain})")
+        logger.info(
+            "traffic_aware_replay.starting_check",
+            domain=domain,
+        )
 
         task_id = (
             getattr(self.request, "id", None) if hasattr(self, "request") else None
@@ -234,7 +246,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
         config = self._get_replay_automation_config()
 
         if not config.get("track3_enabled", False):
-            logger.debug("[TrafficAwareReplay] Track 3 is disabled")
+            logger.debug("traffic_aware_replay.track_disabled")
             result = {
                 "status": "disabled",
                 "reason": "Track 3 is disabled in RuntimeConfig",
@@ -333,7 +345,10 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 task_id=task_id,
             )
         except Exception as audit_error:
-            logger.debug(f"[TrafficAwareReplay] Audit logging failed: {audit_error}")
+            logger.debug(
+                "traffic_aware_replay.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
     def _get_replay_automation_config(self) -> dict[str, Any]:
         """RuntimeConfig에서 replay_automation 설정을 로드합니다."""
@@ -343,10 +358,13 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             manager = get_runtime_config_manager()
             return manager._get_config("replay_automation")
         except ImportError:
-            logger.debug("[TrafficAwareReplay] RuntimeConfigManager not available")
+            logger.debug("traffic_aware_replay.runtimeconfigmanager_available")
             return {}
         except Exception as e:
-            logger.warning(f"[TrafficAwareReplay] Failed to load config: {e}")
+            logger.warning(
+                "traffic_aware_replay.failed_load_config",
+                error=e,
+            )
             return {}
 
     def _execute_replay(self, domain: str | None, max_items: int) -> dict[str, int]:
@@ -366,7 +384,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 "failed": batch_result.failed_count,
             }
         except ImportError:
-            logger.error("[TrafficAwareReplay] ReplayService not available")
+            logger.error("traffic_aware_replay.replayservice_available")
             raise RuntimeError("ReplayService not available")
 
     def _get_severity(self, result: dict[str, Any]) -> str:
@@ -414,7 +432,10 @@ def register_traffic_aware_tasks_with_celery(app) -> None:
     """Celery 앱에 Traffic-Aware 태스크를 등록합니다."""
     for task_class in TRAFFIC_AWARE_TASKS:
         app.register_task(task_class())
-        logger.debug(f"[TrafficAware] Registered task: {task_class.name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            task_class=task_class.name,
+        )
 
 
 def get_traffic_aware_beat_schedule() -> dict[str, Any]:

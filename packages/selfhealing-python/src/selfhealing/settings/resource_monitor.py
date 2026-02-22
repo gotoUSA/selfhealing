@@ -9,12 +9,12 @@ Environment Variables:
     SELFHEALING_RESOURCE_CPU_MARGIN=0.10
 """
 
-import logging
+import structlog
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ResourceMonitorSettings(BaseSettings):
@@ -85,4 +85,4 @@ def reset_resource_monitor_settings() -> None:
     """
     global _settings
     _settings = None
-    logger.debug("[ResourceMonitorSettings] Reset")
+    logger.debug("resource_monitor_settings.reset")

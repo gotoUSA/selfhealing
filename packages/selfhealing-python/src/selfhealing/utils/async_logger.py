@@ -16,7 +16,7 @@ Zero-Latency Logging을 위한 비동기 이벤트 버퍼링
 
 from __future__ import annotations
 
-import logging
+import structlog
 import queue
 import threading
 import time
@@ -43,7 +43,7 @@ __all__ = [
     "FlushErrorAlertConfig",
 ]
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -256,7 +256,10 @@ class AsyncHealingLogger:
         with cls._lock:
             cls._wal = wal
             cls._wal_policy = policy
-        logger.info(f"[AsyncHealingLogger] WAL configured with policy={policy.value}")
+        logger.info(
+            "async_healing_logger.wal_configured",
+            policy=policy.value,
+        )
 
     @classmethod
     def configure_queue(
@@ -274,7 +277,11 @@ class AsyncHealingLogger:
         with cls._lock:
             cls._max_queue_size = max_size
             cls._overflow_policy = overflow_policy
-        logger.debug(f"[AsyncHealingLogger] Queue configured: max_size={max_size}, policy={overflow_policy.value}")
+        logger.debug(
+            "async_healing_logger.queue_configured",
+            max_size=max_size,
+            overflow_policy=overflow_policy.value,
+        )
 
     @classmethod
     def configure_retry(cls, policy: BatchRetryPolicy) -> None:
@@ -286,7 +293,10 @@ class AsyncHealingLogger:
         """
         with cls._lock:
             cls._retry_policy = policy
-        logger.debug(f"[AsyncHealingLogger] Retry policy configured: max_retries={policy.max_retries}")
+        logger.debug(
+            "async_healing_logger.retry_policy_configured",
+            policy=policy.max_retries,
+        )
 
     @classmethod
     def configure_alert(cls, config: FlushErrorAlertConfig) -> None:
@@ -298,7 +308,10 @@ class AsyncHealingLogger:
         """
         with cls._lock:
             cls._alert_config = config
-        logger.debug(f"[AsyncHealingLogger] Alert configured: threshold={config.threshold_count}")
+        logger.debug(
+            "async_healing_logger.alert_configured",
+            config=config.threshold_count,
+        )
 
     # -------------------------------------------------------------------------
     # Lifecycle
@@ -334,7 +347,7 @@ class AsyncHealingLogger:
 
             cls._worker_thread = threading.Thread(target=cls._worker, daemon=True)
             cls._worker_thread.start()
-            logger.debug("[AsyncHealingLogger] Background worker started")
+            logger.debug("async_healing_logger.background_worker_started")
 
     @classmethod
     def stop(cls, timeout: float = 5.0) -> None:
@@ -352,7 +365,7 @@ class AsyncHealingLogger:
             cls._critical_executor.shutdown(wait=True, cancel_futures=False)
             cls._critical_executor = None
 
-        logger.debug("[AsyncHealingLogger] Background worker stopped")
+        logger.debug("async_healing_logger.background_worker_stopped")
 
     # -------------------------------------------------------------------------
     # WAL Support
@@ -398,7 +411,10 @@ class AsyncHealingLogger:
                 with cls._lock:
                     cls._stats["wal_writes"] += 1
             except Exception as e:
-                logger.warning(f"[AsyncHealingLogger] WAL write failed: {e}")
+                logger.warning(
+                    "async_healing_logger.wal_write_failed",
+                    error=e,
+                )
 
         enriched_event["_wal_seq"] = wal_seq
 
@@ -440,7 +456,7 @@ class AsyncHealingLogger:
                     cls._stats["queue_overflows"] += 1
 
                     if cls._overflow_policy == QueueOverflowPolicy.DROP_NEWEST:
-                        logger.warning("[AsyncHealingLogger] Queue full, dropping newest event")
+                        logger.warning("async_healing_logger.queue_full_dropping_newest")
                         return
                     elif cls._overflow_policy == QueueOverflowPolicy.DROP_OLDEST:
                         # 성능2: atomic하게 get + put 수행
@@ -449,7 +465,7 @@ class AsyncHealingLogger:
                             # 카운터는 그대로 (get 후 put이므로)
                         except queue.Empty:
                             pass
-                        logger.warning("[AsyncHealingLogger] Queue full, dropping oldest event")
+                        logger.warning("async_healing_logger.queue_full_dropping_oldest")
                         # DROP_OLDEST에서는 아래에서 put
                     # BLOCK은 put() 사용 (Non-blocking 위반이므로 권장 안함)
 
@@ -461,7 +477,7 @@ class AsyncHealingLogger:
         except queue.Full:
             with cls._lock:
                 cls._stats["queue_overflows"] += 1
-            logger.warning("[AsyncHealingLogger] Queue full, event dropped")
+            logger.warning("async_healing_logger.queue_full_event_dropped")
 
     @classmethod
     def flush(cls) -> None:
@@ -608,7 +624,10 @@ class AsyncHealingLogger:
             with cls._lock:
                 cls._stats["events_flushed"] += len(events)
                 cls._stats["batch_flushes"] += 1
-            logger.debug(f"[AsyncHealingLogger] Flushed {len(events)} events")
+            logger.debug(
+                "async_healing_logger.flushed_events",
+                count=len(events),
+            )
 
         except Exception as e:
             with cls._lock:
@@ -637,13 +656,17 @@ class AsyncHealingLogger:
                 )
             else:
                 # 최종 실패
-                logger.error(f"[AsyncHealingLogger] Flush failed after {attempt} retries: {e}")
+                logger.error(
+                    "async_healing_logger.flush_failed_after_retries",
+                    attempt=attempt,
+                    error=e,
+                )
 
                 if cls._retry_policy.dlq_on_final_failure:
                     cls._move_to_dlq(events, str(e))
                 else:
                     # WAL에 시퀀스가 있으면 SyncWorker가 재처리
-                    logger.warning("[AsyncHealingLogger] Events lost (no DLQ, check WAL)")
+                    logger.warning("async_healing_logger.events_lost_no_dlq")
 
     @classmethod
     def _process_pending_retries(cls) -> None:
@@ -683,12 +706,18 @@ class AsyncHealingLogger:
             with cls._lock:
                 cls._stats["dlq_moved"] += len(events)
 
-            logger.info(f"[AsyncHealingLogger] Moved {len(events)} events to DLQ")
+            logger.info(
+                "async_healing_logger.moved_events_dlq",
+                count=len(events),
+            )
 
         except ImportError:
-            logger.warning("[AsyncHealingLogger] DLQ not available, events lost")
+            logger.warning("async_healing_logger.dlq_available_events_lost")
         except Exception as e:
-            logger.error(f"[AsyncHealingLogger] DLQ store failed: {e}")
+            logger.error(
+                "async_healing_logger.dlq_store_failed",
+                error=e,
+            )
 
     # -------------------------------------------------------------------------
     # Alert
@@ -740,12 +769,18 @@ class AsyncHealingLogger:
             with cls._lock:
                 cls._stats["alerts_sent"] += 1
 
-            logger.info(f"[AsyncHealingLogger] Flush error alert sent: {error_count} errors")
+            logger.info(
+                "async_healing_logger.flush_error_alert_sent",
+                error_count=error_count,
+            )
 
         except ImportError:
-            logger.warning("[AsyncHealingLogger] UnifiedNotificationManager not available")
+            logger.warning("async_healing_logger.unifiednotificationmanager_available")
         except Exception as e:
-            logger.error(f"[AsyncHealingLogger] Failed to send alert: {e}")
+            logger.error(
+                "async_healing_logger.failed_send_alert",
+                error=e,
+            )
 
     # -------------------------------------------------------------------------
     # Immediate Flush
@@ -762,12 +797,18 @@ class AsyncHealingLogger:
             with cls._lock:
                 cls._stats["events_flushed"] += len(events)
                 cls._stats["immediate_flushes"] += 1
-            logger.debug(f"[AsyncHealingLogger] Flushed {len(events)} events (immediate)")
+            logger.debug(
+                "async_healing_logger.flushed_events_immediate",
+                count=len(events),
+            )
         except Exception as e:
             with cls._lock:
                 cls._stats["flush_errors"] += 1
                 cls._error_timestamps.append(time.time())
-            logger.warning(f"[AsyncHealingLogger] Immediate flush failed: {e}")
+            logger.warning(
+                "async_healing_logger.immediate_flush_failed",
+                error=e,
+            )
             cls._check_and_send_alert()
 
     # -------------------------------------------------------------------------

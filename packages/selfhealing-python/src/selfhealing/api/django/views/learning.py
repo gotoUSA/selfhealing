@@ -4,7 +4,7 @@ Self-Learning DNA API Views
 Self-Learning DNA 서비스의 REST API 엔드포인트
 """
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.permissions import BasePermission
@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsOperator, IsViewer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def get_learning_service():

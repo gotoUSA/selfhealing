@@ -7,7 +7,7 @@ L2 저장소 동기화 시 Bulkhead 패턴을 사용하여 리소스 격리를 �
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -25,7 +25,7 @@ from selfhealing.interfaces.repositories import (
 if TYPE_CHECKING:
     from selfhealing.resilience.bulkhead.base import Bulkhead
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LayeredRepositoryBase:
@@ -136,7 +136,10 @@ class LayeredRepositoryBase:
                 f"adapter={self._adapter_type}, bulkhead={self._bulkhead.name}"
             )
         except Exception as e:
-            logger.warning(f"[LayeredRepositoryBase] Bulkhead init failed, " f"continuing without bulkhead: {e}")
+            logger.warning(
+                "layered_repository_base.bulkhead_init_failed_continuing",
+                error=e,
+            )
             self._bulkhead = None
             self._use_bulkhead = False
 
@@ -165,10 +168,18 @@ class LayeredRepositoryBase:
                 return func(*args, **kwargs)
         except BulkheadFullError:
             self._metrics["bulkhead_rejected_count"] += 1
-            logger.warning(f"[LayeredRepositoryBase] Bulkhead rejected {operation_name}, " f"bulkhead={self._bulkhead.name}")
+            logger.warning(
+                "layered_repository_base.bulkhead_rejected",
+                operation_name=operation_name,
+                _bulkhead=self._bulkhead.name,
+            )
             return None
         except Exception as e:
-            logger.warning(f"[LayeredRepositoryBase] Bulkhead error in {operation_name}: {e}")
+            logger.warning(
+                "layered_repository_base.bulkhead_error",
+                operation_name=operation_name,
+                error=e,
+            )
             return func(*args, **kwargs)
 
     def _get_timeout_seconds(self) -> float:

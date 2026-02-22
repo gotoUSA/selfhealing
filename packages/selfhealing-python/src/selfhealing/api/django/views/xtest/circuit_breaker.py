@@ -9,7 +9,7 @@ Circuit Breaker 관련 테스트 API:
 - TriggerCBRecoveryView: CB 복구 트리거
 """
 
-import logging
+import structlog
 import time
 
 from django.utils import timezone
@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin, collect_system_snapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class InjectCBFailureView(XTestModeMixin, APIView):
@@ -361,7 +361,10 @@ class TriggerCBRecoveryView(XTestModeMixin, APIView):
                 success_count=0,
                 opened_at=None,
             )
-            logger.info(f"[X-Test-Mode] CB force-closed for '{service_name}'")
+            logger.info(
+                "test_mode_cb_force",
+                service_name=service_name,
+            )
         else:
             # 정상 복구 흐름: record_success 호출
             for i in range(success_count):

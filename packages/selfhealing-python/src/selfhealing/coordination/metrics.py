@@ -6,10 +6,10 @@ Leader Election Prometheus Metrics.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Prometheus 클라이언트 가용성 확인

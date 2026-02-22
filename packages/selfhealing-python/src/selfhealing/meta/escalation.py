@@ -13,7 +13,7 @@ Escalation Manager - 인간 개입 요청.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 import time
 import urllib.error
@@ -25,7 +25,7 @@ from typing import Any
 
 from selfhealing.meta.config import MetaWatchdogSettings, get_meta_watchdog_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class EscalationLevel(str, Enum):
@@ -172,7 +172,7 @@ class EscalationManager:
         """
         # 비활성화 확인
         if not self._settings.escalation_enabled:
-            logger.debug("[EscalationManager] Escalation disabled")
+            logger.debug("escalation.escalation_disabled")
             return EscalationResult(
                 success=False,
                 channels_sent=[],
@@ -182,7 +182,11 @@ class EscalationManager:
 
         # Dry-run 모드 확인
         if self._settings.dry_run_mode:
-            logger.info(f"[EscalationManager] Dry-run mode - would escalate: " f"{event.component} - {event.title}")
+            logger.info(
+                "escalation.dry_run_escalation",
+                event=event.component,
+                event_1=event.title,
+            )
             return EscalationResult(
                 success=True,
                 channels_sent=["dry_run"],
@@ -191,7 +195,10 @@ class EscalationManager:
 
         # 유지보수 컴포넌트 확인
         if self._is_maintenance_component(event.component):
-            logger.debug(f"[EscalationManager] Component {event.component} in maintenance")
+            logger.debug(
+                "escalation.maintenance_skipped",
+                event=event.component,
+            )
             return EscalationResult(
                 success=False,
                 channels_sent=[],
@@ -201,7 +208,10 @@ class EscalationManager:
 
         # 쿨다운 확인
         if not self._can_escalate(event.component):
-            logger.debug(f"[EscalationManager] Cooldown active for {event.component}")
+            logger.debug(
+                "escalation.cooldown_active",
+                event=event.component,
+            )
             return EscalationResult(
                 success=False,
                 channels_sent=[],
@@ -235,7 +245,12 @@ class EscalationManager:
 
         if success:
             self._record_escalation(event.component)
-            logger.warning(f"[EscalationManager] Escalated: {event.component} - {event.title} " f"(channels: {channels_sent})")
+            logger.warning(
+                "escalation.escalated",
+                event=event.component,
+                event_1=event.title,
+                channels_sent=channels_sent,
+            )
 
         return EscalationResult(
             success=success,
@@ -254,7 +269,7 @@ class EscalationManager:
             전송 성공 여부
         """
         if not self._settings.pagerduty_routing_key:
-            logger.debug("[EscalationManager] PagerDuty not configured")
+            logger.debug("escalation.pagerduty_configured")
             return False
 
         try:
@@ -286,15 +301,24 @@ class EscalationManager:
 
             with urllib.request.urlopen(req, timeout=10.0) as resp:
                 if resp.status == 202:
-                    logger.info(f"[EscalationManager] PagerDuty sent: {event.title}")
+                    logger.info(
+                        "escalation.pagerduty_sent",
+                        event=event.title,
+                    )
                     return True
 
             return False
         except urllib.error.URLError as e:
-            logger.error(f"[EscalationManager] PagerDuty network error: {e}")
+            logger.error(
+                "escalation.pagerduty_network_error",
+                error=e,
+            )
             return False
         except Exception as e:
-            logger.error(f"[EscalationManager] PagerDuty error: {e}")
+            logger.error(
+                "escalation.pagerduty_error",
+                error=e,
+            )
             return False
 
     def _send_slack(self, event: EscalationEvent) -> bool:
@@ -308,7 +332,7 @@ class EscalationManager:
             전송 성공 여부
         """
         if not self._settings.slack_webhook_url:
-            logger.debug("[EscalationManager] Slack not configured")
+            logger.debug("escalation.slack_configured")
             return False
 
         try:
@@ -367,15 +391,24 @@ class EscalationManager:
 
             with urllib.request.urlopen(req, timeout=10.0) as resp:
                 if resp.status == 200:
-                    logger.info(f"[EscalationManager] Slack sent: {event.title}")
+                    logger.info(
+                        "escalation.slack_sent",
+                        event=event.title,
+                    )
                     return True
 
             return False
         except urllib.error.URLError as e:
-            logger.error(f"[EscalationManager] Slack network error: {e}")
+            logger.error(
+                "escalation.slack_network_error",
+                error=e,
+            )
             return False
         except Exception as e:
-            logger.error(f"[EscalationManager] Slack error: {e}")
+            logger.error(
+                "escalation.slack_error",
+                error=e,
+            )
             return False
 
     def get_last_escalation_time(self, component: str) -> float | None:

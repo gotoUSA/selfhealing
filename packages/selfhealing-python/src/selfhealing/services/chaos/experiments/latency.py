@@ -7,7 +7,7 @@ Simulates network delays, slow database queries, or congested services.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.services.chaos.base import (
@@ -20,7 +20,7 @@ from selfhealing.services.chaos.experiments.hypothesis import (
     LATENCY_INJECTION_HYPOTHESIS,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LatencyInjectionExperiment(ChaosExperiment):
@@ -94,7 +94,10 @@ class LatencyInjectionExperiment(ChaosExperiment):
             return True
 
         except Exception as e:
-            logger.error(f"[LatencyInjection] Failed to inject: {e}")
+            logger.error(
+                "latency_injection.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -106,7 +109,10 @@ class LatencyInjectionExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[LatencyInjection] Rolling back {self.experiment_id}")
+            logger.info(
+                "latency_injection.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -120,7 +126,10 @@ class LatencyInjectionExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[LatencyInjection] Rollback failed: {e}")
+                logger.error(
+                    "latency_injection.rollback_failed",
+                    error=e,
+                )
 
 
 __all__ = ["LatencyInjectionExperiment"]

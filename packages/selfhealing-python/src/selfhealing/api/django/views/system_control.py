@@ -25,7 +25,7 @@ Configuration:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from rest_framework import status
@@ -45,7 +45,7 @@ from selfhealing.services.system_control import (
     should_execute_action,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Re-export for backward compatibility

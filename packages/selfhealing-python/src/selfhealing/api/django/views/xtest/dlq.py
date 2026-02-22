@@ -15,7 +15,7 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import logging
+import structlog
 import uuid
 from typing import Any
 
@@ -27,7 +27,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin, collect_system_snapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # X-Test-Mode 메타데이터 식별자
 XTEST_SOURCE = "x-test-mode"
@@ -240,7 +240,10 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
                 if isinstance(metadata, dict) and metadata.get("source") == XTEST_SOURCE:
                     xtest_entries_count += 1
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] DLQ status list failed: {e}")
+            logger.warning(
+                "test_mode_dlq_status",
+                error=e,
+            )
 
         logger.info(
             f"[X-Test-Mode] DLQ status query: domain={domain_filter}, "
@@ -368,7 +371,10 @@ class ForceStatusView(XTestModeMixin, APIView):
                 if not success:
                     raise ValueError(f"Failed to update status for entry {dlq_id}")
         except Exception as e:
-            logger.error(f"[X-Test-Mode] Force status change failed: {e}")
+            logger.error(
+                "test_mode_force_status",
+                error=e,
+            )
             return Response(
                 {
                     "status": "error",
@@ -451,7 +457,11 @@ def _delete_dlq_entries(dlq_service, entry_ids: list[int]) -> int:
             dlq_service.repository.delete_by_id(entry_id)
             deleted_count += 1
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to delete DLQ entry {entry_id}: {e}")
+            logger.warning(
+                "test_mode_failed_delete",
+                entry_id=entry_id,
+                error=e,
+            )
     return deleted_count
 
 
@@ -496,7 +506,10 @@ class ResetDLQXTestView(XTestModeMixin, APIView):
             deleted_count = _delete_dlq_entries(dlq_service, ids_to_delete)
 
         except Exception as e:
-            logger.error(f"[X-Test-Mode] DLQ reset failed: {e}")
+            logger.error(
+                "test_mode_dlq_reset",
+                error=e,
+            )
             return Response(
                 {
                     "status": "error",

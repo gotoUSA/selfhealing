@@ -7,7 +7,7 @@ context managers for instrumentation, and alerting rule definitions.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
         FailedOperationRepository,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -48,7 +48,10 @@ def update_shadow_log_metrics() -> None:
         stats = shadow_logger.get_stats()
         shadow_log_unsynced_count.labels().set(stats.get("unsynced_count", 0))
     except Exception as e:
-        logger.warning(f"[Metrics] Failed to update shadow log metrics: {e}")
+        logger.warning(
+            "metrics.failed_update_shadow_log",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -83,11 +86,17 @@ def update_dlq_pending_gauges(
             count = pending_by_domain.get(domain, 0)
             dlq_pending_gauge.labels(domain=domain).set(count)
 
-        logger.debug(f"[Metrics] Updated DLQ pending gauges: {pending_by_domain}")
+        logger.debug(
+            "metrics.updated_dlq_pending_gauges",
+            pending_by_domain=pending_by_domain,
+        )
         return pending_by_domain
 
     except Exception as e:
-        logger.error(f"[Metrics] Failed to update DLQ pending gauges: {e}")
+        logger.error(
+            "metrics.failed_update_dlq_pending",
+            error=e,
+        )
         return {}
 
 
@@ -121,11 +130,17 @@ def update_dlq_status_gauges(
             safe_count = clamp_non_negative(count, f"dlq_status_count[{status}]")
             dlq_by_status_gauge.labels(status=status).set(safe_count)
 
-        logger.debug(f"[Metrics] Updated DLQ status gauges: {by_status}")
+        logger.debug(
+            "metrics.updated_dlq_status_gauges",
+            by_status=by_status,
+        )
         return by_status
 
     except Exception as e:
-        logger.error(f"[Metrics] Failed to update DLQ status gauges: {e}")
+        logger.error(
+            "metrics.failed_update_dlq_status",
+            error=e,
+        )
         return {}
 
 
@@ -157,11 +172,17 @@ def update_circuit_breaker_gauges(
             circuit_breaker_state.labels(service=base_service, cell_id=cell_id).set(state_value)
             states[cb.service_name] = cb.state
 
-        logger.debug(f"[Metrics] Updated circuit breaker gauges: {states}")
+        logger.debug(
+            "metrics.updated_circuit_breaker_gauges",
+            states=states,
+        )
         return states
 
     except Exception as e:
-        logger.error(f"[Metrics] Failed to update circuit breaker gauges: {e}")
+        logger.error(
+            "metrics.failed_update_circuit_breaker",
+            error=e,
+        )
         return {}
 
 
@@ -198,11 +219,17 @@ def update_retry_success_rates(
             retry_success_rate.labels(domain=domain).set(safe_rate)
             rates[domain] = safe_rate
 
-        logger.debug(f"[Metrics] Updated retry success rates: {rates}")
+        logger.debug(
+            "metrics.updated_retry_success_rates",
+            rates=rates,
+        )
         return rates
 
     except Exception as e:
-        logger.error(f"[Metrics] Failed to update retry success rates: {e}")
+        logger.error(
+            "metrics.failed_update_retry_success",
+            error=e,
+        )
         return {}
 
 

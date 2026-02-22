@@ -20,7 +20,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from typing import TYPE_CHECKING
 
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from selfhealing.services.event_bus import SelfHealingEvent
     from selfhealing.settings.bulkhead import BulkheadSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class BulkheadRegistry:
@@ -93,7 +93,10 @@ class BulkheadRegistry:
 
         for name, bulkhead in defaults.items():
             self._bulkheads[name] = bulkhead
-            logger.debug(f"[BulkheadRegistry] Registered default: {name}")
+            logger.debug(
+                "cell_registry.bulkheads_registered",
+                name=name,
+            )
 
     def _subscribe_config_updates(self) -> None:
         """CONFIG_UPDATED 이벤트 구독."""
@@ -108,9 +111,12 @@ class BulkheadRegistry:
                 EventType.CONFIG_UPDATED,
                 self._on_config_updated,
             )
-            logger.info("[BulkheadRegistry] Subscribed to CONFIG_UPDATED events")
+            logger.info("bulkhead_registry.subscribed_events")
         except Exception as e:
-            logger.warning(f"[BulkheadRegistry] Failed to subscribe to EventBus: {e}")
+            logger.warning(
+                "bulkhead_registry.failed_subscribe_eventbus",
+                error=e,
+            )
 
     def _on_config_updated(self, event: SelfHealingEvent) -> None:
         """
@@ -124,7 +130,10 @@ class BulkheadRegistry:
         if "bulkhead" not in config_type.lower():
             return
 
-        logger.info(f"[BulkheadRegistry] Config updated: {config_type}, " f"reloading bulkheads...")
+        logger.info(
+            "bulkhead_registry.config_updated_reloading_bulkheads",
+            config_type=config_type,
+        )
 
         # 설정 리로드
         from selfhealing.settings.bulkhead import (
@@ -165,7 +174,11 @@ class BulkheadRegistry:
             # 교체
             for name, bulkhead in new_bulkheads.items():
                 self._bulkheads[name] = bulkhead
-                logger.info(f"[BulkheadRegistry] Reloaded {name}: " f"max_concurrent={bulkhead.get_state().max_concurrent}")
+                logger.info(
+                    "bulkhead_registry.reloaded",
+                    name=name,
+                    bulkhead=bulkhead.get_state().max_concurrent,
+                )
 
             # 비동기 격벽도 초기화
             self._async_bulkheads.clear()
@@ -220,7 +233,11 @@ class BulkheadRegistry:
                         name=name,
                         max_concurrent=concurrent,
                     )
-                logger.info(f"[BulkheadRegistry] Created: {name} ({bulkhead_type})")
+                logger.info(
+                    "bulkhead_registry.created",
+                    name=name,
+                    bulkhead_type=bulkhead_type,
+                )
 
             return self._bulkheads[name]
 
@@ -294,7 +311,10 @@ class BulkheadRegistry:
         """
         with self._lock:
             self._bulkheads[bulkhead.name] = bulkhead
-            logger.info(f"[BulkheadRegistry] Registered: {bulkhead.name}")
+            logger.info(
+                "cell_registry.bulkheads_registered",
+                bulkhead=bulkhead.name,
+            )
 
     def unregister(self, name: str) -> bool:
         """

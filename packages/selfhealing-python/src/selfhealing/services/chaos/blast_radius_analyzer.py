@@ -16,12 +16,12 @@ Design Principle:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -492,7 +492,10 @@ class BlastRadiusAnalyzer:
                 blocking_reasons.extend(result.violations)
 
         except Exception as e:
-            logger.warning(f"[BlastRadiusAnalyzer] Manager check failed: {e}")
+            logger.warning(
+                "blast_radius_analyzer.manager_check_failed",
+                error=e,
+            )
 
         return len(blocking_reasons) == 0, blocking_reasons
 

@@ -7,10 +7,10 @@ Uses Repository pattern for domain-free architecture.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ListOperationsMixin:
@@ -102,7 +102,10 @@ class ListOperationsMixin:
             }
 
         except Exception as e:
-            logger.error(f"[DLQService] List failed: {e}")
+            logger.error(
+                "dlq_service.list_failed",
+                error=e,
+            )
             return {
                 "results": [],
                 "page": page,

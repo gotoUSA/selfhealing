@@ -7,7 +7,7 @@ Use these for production. For testing, use factory functions directly.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from .service import (
     create_circuit_breaker_service,
@@ -16,7 +16,7 @@ from .service import (
     create_security_violation_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Service singletons - use these for production
@@ -96,4 +96,4 @@ def reset_service_singletons():
     _circuit_breaker_service_instance = None
     _security_violation_service_instance = None
 
-    logger.debug("[Factory] Reset all service singletons")
+    logger.debug("factory.reset_all_service_singletons")

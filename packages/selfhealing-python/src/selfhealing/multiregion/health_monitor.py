@@ -19,7 +19,7 @@ Region Health Monitor - 리전 건강 상태 모니터링.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 import time
 import urllib.error
@@ -35,7 +35,7 @@ from selfhealing.multiregion.config import (
     get_multiregion_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RegionHealthStatus(str, Enum):
@@ -322,7 +322,10 @@ class RegionHealthMonitor:
                 return 0.0
 
         except Exception as e:
-            logger.debug(f"[RegionHealth] Kafka lag check skipped: {e}")
+            logger.debug(
+                "region_health.kafka_lag_check_skipped",
+                error=e,
+            )
             return 0.0
 
     def _check_redis_lag(self, endpoint: RegionEndpoint) -> float:
@@ -350,7 +353,10 @@ class RegionHealthMonitor:
                 return 0.0
 
         except Exception as e:
-            logger.debug(f"[RegionHealth] Redis lag check skipped: {e}")
+            logger.debug(
+                "region_health.redis_lag_check_skipped",
+                error=e,
+            )
             return 0.0
 
     def check_all_regions(self) -> dict[str, RegionHealth]:
@@ -367,7 +373,11 @@ class RegionHealthMonitor:
                 health = self.check_region(endpoint)
                 results[endpoint.region] = health
             except Exception as e:
-                logger.error(f"[RegionHealth] {endpoint.region} check error: {e}")
+                logger.error(
+                    "region_health.check_error",
+                    endpoint=endpoint.region,
+                    error=e,
+                )
                 results[endpoint.region] = RegionHealth(
                     region=endpoint.region,
                     status=RegionHealthStatus.UNHEALTHY,
@@ -456,7 +466,10 @@ class RegionHealthMonitor:
             try:
                 self.check_all_regions()
             except Exception as e:
-                logger.error(f"[RegionHealth] Loop error: {e}")
+                logger.error(
+                    "region_health.loop_error",
+                    error=e,
+                )
 
             self._stop_event.wait(self._settings.health_check_interval_seconds)
             if self._stop_event.is_set():
@@ -482,7 +495,10 @@ class RegionHealthMonitor:
                     consecutive_failures=self._settings.unhealthy_threshold,
                     details={"reason": "heartbeat_expired"},
                 )
-                logger.warning(f"[RegionHealth] Marked {region} as UNREACHABLE " f"(heartbeat expired)")
+                logger.warning(
+                    "region_health.marked_unreachable_heartbeat_expired",
+                    region=region,
+                )
 
     def _subscribe_heartbeat_expiry(self) -> None:
         """
@@ -503,7 +519,7 @@ class RegionHealthMonitor:
             # 관리형 Redis 대응: CONFIG SET 시도 후 실패 시 로그만 남기고 구독 시도
             try:
                 client.config_set("notify-keyspace-events", "Ex")
-                logger.info("[RegionHealth] Keyspace notifications enabled " "(notify-keyspace-events=Ex)")
+                logger.info("region_health.keyspace_notifications_enabled_notify")
             except redis_lib.exceptions.ResponseError as e:
                 error_msg = str(e).lower()
                 if "unknown command" in error_msg or "permission" in error_msg:
@@ -527,13 +543,19 @@ class RegionHealthMonitor:
                     key = message["data"]
                     if key.startswith("selfhealing:state:multiregion:heartbeat:"):
                         region = key.split(":")[-1]
-                        logger.warning(f"[RegionHealth] Heartbeat expired: {region}")
+                        logger.warning(
+                            "region_health.heartbeat_expired",
+                            region=region,
+                        )
                         self._mark_unhealthy(region)
 
         except ImportError:
-            logger.warning("[RegionHealth] redis package not installed, " "keyspace notification unavailable")
+            logger.warning("region_health.redis_package_installed_keyspace")
         except Exception as e:
-            logger.warning(f"[RegionHealth] Keyspace notification unavailable: {e}")
+            logger.warning(
+                "region_health.keyspace_notification_unavailable",
+                error=e,
+            )
 
     def start(self) -> None:
         """
@@ -562,7 +584,7 @@ class RegionHealthMonitor:
         )
         self._heartbeat_worker.start()
 
-        logger.info("[RegionHealth] Started")
+        logger.info("region_health.started")
 
     def stop(self) -> None:
         """
@@ -574,7 +596,7 @@ class RegionHealthMonitor:
         self._stop_event.set()
         if self._worker:
             self._worker.join(timeout=2.0)
-        logger.info("[RegionHealth] Stopped")
+        logger.info("region_health.stopped")
 
     def is_running(self) -> bool:
         """모니터링 실행 중인지 확인."""

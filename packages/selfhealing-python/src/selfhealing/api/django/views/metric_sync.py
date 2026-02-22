@@ -11,7 +11,7 @@ Endpoints:
 
 from __future__ import annotations
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.request import Request
@@ -32,7 +32,7 @@ from selfhealing.services.metric_sync_service import (
     reset_metric_sync_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

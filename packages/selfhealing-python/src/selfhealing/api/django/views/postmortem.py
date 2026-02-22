@@ -15,7 +15,7 @@ Security:
 - X-Test 헤더 불필요
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework import status
@@ -36,7 +36,7 @@ from selfhealing.services.postmortem_store import (
     generate_postmortem_data as _generate_postmortem_data,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -96,7 +96,10 @@ class PostmortemGeneratorView(APIView):
 
         add_healing_incident(postmortem)
 
-        logger.info(f"[Postmortem] Postmortem generated: {incident_id}")
+        logger.info(
+            "postmortem.postmortem_generated",
+            incident_id=incident_id,
+        )
 
         # Audit 기록: 수동 Post-mortem 생성
         self._log_postmortem_audit(
@@ -139,7 +142,10 @@ class PostmortemGeneratorView(APIView):
                 target_id=incident_id,
             )
         except Exception as e:
-            logger.warning(f"[Postmortem] Failed to log audit: {e}")
+            logger.warning(
+                "postmortem.failed_log_audit",
+                error=e,
+            )
 
     @staticmethod
     def _get_postmortem_history_limit() -> int:

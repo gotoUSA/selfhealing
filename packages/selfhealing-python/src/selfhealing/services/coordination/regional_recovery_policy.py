@@ -20,7 +20,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from typing import Any
@@ -31,7 +31,7 @@ from selfhealing.settings.regional_recovery_policy import (
 
 from .recovery_state import RecoveryStep, RecoveryStepType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_settings():
@@ -412,7 +412,10 @@ class RegionalRecoveryPolicyEngine:
         with self._lock:
             if namespace in self._configs:
                 del self._configs[namespace]
-                logger.info(f"[RegionalRecoveryPolicy] Removed config: {namespace}")
+                logger.info(
+                    "regional_recovery_policy.removed_config",
+                    namespace=namespace,
+                )
                 return True
             return False
 

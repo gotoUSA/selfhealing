@@ -11,12 +11,12 @@ Environment Variables:
     SELFHEALING_RESOURCE_GUARD_RETRY_AFTER_SECONDS=30     # 429 응답 시 권장 대기 시간
 """
 
-import logging
+import structlog
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ResourceGuardSettings(BaseSettings):
@@ -109,4 +109,4 @@ def reset_resource_guard_settings() -> None:
     """
     global _settings
     _settings = None
-    logger.debug("[ResourceGuardSettings] Reset")
+    logger.debug("resource_guard_settings.reset")

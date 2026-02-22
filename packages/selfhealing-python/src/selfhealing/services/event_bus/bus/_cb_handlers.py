@@ -6,12 +6,12 @@ Circuit Breaker 알림 및 Postmortem 핸들러.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from . import SelfHealingEvent, EventType
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
@@ -32,9 +32,12 @@ def _on_circuit_breaker_opened_notify(event: SelfHealingEvent) -> None:
             timestamp=event.data.get("timestamp", ""),
         )
     except ImportError:
-        logger.debug("[EventHandler] Celery tasks not available, skipping CB notification")
+        logger.debug("event_handler.celery_tasks_available_skipping")
     except Exception as e:
-        logger.warning(f"[Notification] Failed to enqueue CB notification: {e}")
+        logger.warning(
+            "notification.failed_enqueue_cb_notification",
+            error=e,
+        )
 
 
 def _collect_web_server_metrics() -> dict | None:
@@ -70,9 +73,12 @@ def _on_circuit_breaker_opened_snapshot(event: SelfHealingEvent) -> None:
             web_server_metrics=web_metrics,
         )
     except ImportError:
-        logger.debug("[EventHandler] Celery tasks not available, skipping CB snapshot")
+        logger.debug("event_handler.celery_tasks_available_skipping")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to enqueue CB snapshot: {e}")
+        logger.warning(
+            "event_handler.failed_enqueue_cb_snapshot",
+            error=e,
+        )
 
 
 def _send_postmortem_notification(
@@ -96,7 +102,10 @@ def _send_postmortem_notification(
     try:
         # 알림 활성화 여부 확인
         if not settings.notification_enabled:
-            logger.debug(f"[Notification] Postmortem notification disabled for {incident_id}")
+            logger.debug(
+                "notification.postmortem_notification_disabled",
+                incident_id=incident_id,
+            )
             return
 
         # 최소 duration 확인
@@ -157,7 +166,10 @@ def _send_postmortem_notification(
         result = manager.notify(payload)
 
         if result.success and not result.suppressed:
-            logger.info(f"[Notification] Postmortem notification sent for {incident_id}")
+            logger.info(
+                "notification.postmortem_notification_sent",
+                incident_id=incident_id,
+            )
         elif result.suppressed:
             logger.debug(
                 f"[Notification] Postmortem notification suppressed for {incident_id}: " f"{result.suppression_reason}"
@@ -165,7 +177,10 @@ def _send_postmortem_notification(
 
     except Exception as e:
         # 알림 실패가 시스템에 영향을 주지 않도록 함
-        logger.warning(f"[Notification] Failed to send postmortem notification: {e}")
+        logger.warning(
+            "notification.failed_send_postmortem_notification",
+            error=e,
+        )
 
 
 def _on_circuit_breaker_closed(event: SelfHealingEvent):
@@ -203,14 +218,20 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
         manager = get_runtime_config_manager()
         config = manager._get_config("replay_automation")
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to get replay_automation config: {e}")
+        logger.warning(
+            "event_handler.failed_get_config",
+            error=e,
+        )
         config = {}
 
     # Track 1 활성화 여부 확인 (기본값: True)
     track1_enabled = config.get("track1_enabled", True)
 
     if not track1_enabled:
-        logger.info(f"[EventHandler] Circuit breaker closed for {service_name}, " f"Track 1 disabled - skipping auto replay")
+        logger.info(
+            "event_handler.circuit_breaker_closed_track",
+            service_name=service_name,
+        )
         return
 
     max_items = config.get("track1_max_items", 50)
@@ -230,9 +251,16 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
             f"triggered Track 1 auto replay (max_items={max_items})"
         )
     except ImportError:
-        logger.debug(f"[EventHandler] Celery tasks not available, " f"skipping Track 1 replay for {service_name}")
+        logger.debug(
+            "event_handler.celery_tasks_available_skipping",
+            service_name=service_name,
+        )
     except Exception as e:
-        logger.error(f"[EventHandler] Failed to trigger Track 1 replay for {service_name}: {e}")
+        logger.error(
+            "event_handler.failed_trigger_track_replay",
+            service_name=service_name,
+            error=e,
+        )
 
 
 def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
@@ -252,7 +280,10 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         settings = get_postmortem_settings()
 
         if not settings.auto_enabled:
-            logger.debug(f"[EventHandler] Auto postmortem disabled, skipping for {service_name}")
+            logger.debug(
+                "event_handler.auto_postmortem_disabled_skipping",
+                service_name=service_name,
+            )
             return
 
         min_duration = settings.auto_min_duration
@@ -261,7 +292,10 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
         # 인시던트 그룹핑 활성화 여부 확인
         incident_group_enabled = getattr(settings, "incident_group_enabled", True)
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to get postmortem settings: {e}")
+        logger.warning(
+            "event_handler.failed_get_postmortem_settings",
+            error=e,
+        )
         return
 
     # 인시던트 그룹핑 처리
@@ -272,7 +306,10 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
             _handle_incident_group(event, service_name, settings)
             return  # 그룹핑 시 즉시 Postmortem 생성 안함 (close_incident_group task에서 처리)
         except Exception as e:
-            logger.warning(f"[EventHandler] Incident grouping failed, fallback to individual: {e}")
+            logger.warning(
+                "event_handler.incident_grouping_failed_fallback",
+                error=e,
+            )
             # Fallback: Celery task로 개별 Postmortem 위임
 
     # 개별 Post-mortem 생성을 Celery task로 위임
@@ -300,4 +337,7 @@ def _on_circuit_breaker_closed_postmortem(event: SelfHealingEvent):
 
         _create_individual_postmortem(event, service_name, settings, min_duration, history_limit)
     except Exception as e:
-        logger.warning(f"[EventHandler] Failed to enqueue postmortem: {e}")
+        logger.warning(
+            "event_handler.failed_enqueue_postmortem",
+            error=e,
+        )

@@ -42,7 +42,7 @@ Reference:
 
 import hashlib
 import json
-import logging
+import structlog
 import time
 from typing import Any
 
@@ -56,7 +56,7 @@ from .keys import (
 )
 from .models import ConfigVersion
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ConfigHistoryService:
@@ -107,7 +107,7 @@ class ConfigHistoryService:
 
             cache = caches.get("default")
             if cache is None:
-                logger.warning("[ConfigHistory] Default cache not configured")
+                logger.warning("config_history.default_cache_configured")
                 return None
 
             # django-redis 사용 시
@@ -118,11 +118,14 @@ class ConfigHistoryService:
                 return client
 
             # 다른 캐시 백엔드 사용 시
-            logger.warning("[ConfigHistory] Cache backend does not support Redis client")
+            logger.warning("config_history.cache_backend_support_redis")
             return None
 
         except Exception as e:
-            logger.warning(f"[ConfigHistory] Redis unavailable: {e}")
+            logger.warning(
+                "config_history.redis_unavailable",
+                error=e,
+            )
             return None
 
     def is_valid_config_type(self, config_type: str) -> bool:
@@ -149,11 +152,14 @@ class ConfigHistoryService:
             저장된 ConfigVersion 또는 None (Redis 장애 시)
         """
         if not self.is_valid_config_type(config_type):
-            logger.error(f"[ConfigHistory] Invalid config_type: {config_type}")
+            logger.error(
+                "config_history.invalid",
+                config_type=config_type,
+            )
             return None
 
         if not self.redis_client:
-            logger.warning("[ConfigHistory] Redis unavailable - skip save")
+            logger.warning("config_history.redis_unavailable_skip_save")
             return None
 
         try:
@@ -222,11 +228,14 @@ class ConfigHistoryService:
             ConfigVersion 목록 (최신순)
         """
         if not self.is_valid_config_type(config_type):
-            logger.error(f"[ConfigHistory] Invalid config_type: {config_type}")
+            logger.error(
+                "config_history.invalid",
+                config_type=config_type,
+            )
             return []
 
         if not self.redis_client:
-            logger.warning("[ConfigHistory] Redis unavailable - returning empty history")
+            logger.warning("config_history.redis_unavailable_returning_empty")
             return []
 
         try:
@@ -243,7 +252,10 @@ class ConfigHistoryService:
                     data = json.loads(entry)
                     versions.append(ConfigVersion.from_dict(data))
                 except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning(f"[ConfigHistory] Failed to parse entry: {e}")
+                    logger.warning(
+                        "config_history.failed_parse_entry",
+                        error=e,
+                    )
                     continue
 
             return versions
@@ -303,7 +315,11 @@ class ConfigHistoryService:
         target = self.get_version(config_type, target_version)
 
         if not target:
-            logger.error(f"[ConfigHistory] Rollback failed: " f"version {target_version} not found for {config_type}")
+            logger.error(
+                "config_history.rollback_failed_version_found",
+                target_version=target_version,
+                config_type=config_type,
+            )
             return None
 
         # 롤백도 새 버전으로 저장
@@ -399,11 +415,17 @@ class ConfigHistoryService:
             pipe.delete(current_key)
             pipe.execute()
 
-            logger.warning(f"[ConfigHistory] Cleared history for {config_type}")
+            logger.warning(
+                "config_history.cleared_history",
+                config_type=config_type,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[ConfigHistory] Clear failed: {e}")
+            logger.error(
+                "config_history.clear_failed",
+                error=e,
+            )
             return False
 
     def _compute_hash(self, values: dict[str, Any]) -> str:

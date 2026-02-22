@@ -8,7 +8,7 @@ Includes:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
@@ -18,7 +18,7 @@ from selfhealing.services.chaos.base import (
     _apply_chaos_config,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class PartialFailureExperiment(ChaosExperiment):
@@ -74,7 +74,10 @@ class PartialFailureExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[PartialFailure] Failed to inject: {e}")
+            logger.error(
+                "partial_failure.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -86,7 +89,10 @@ class PartialFailureExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[PartialFailure] Rolling back {self.experiment_id}")
+            logger.info(
+                "partial_failure.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 _apply_chaos_config(
@@ -100,7 +106,10 @@ class PartialFailureExperiment(ChaosExperiment):
                 )
                 self._rollback_completed = True
             except Exception as e:
-                logger.error(f"[PartialFailure] Rollback failed: {e}")
+                logger.error(
+                    "partial_failure.rollback_failed",
+                    error=e,
+                )
 
     # =========================================================================
     # Load Shedding 연동
@@ -150,10 +159,13 @@ class PartialFailureExperiment(ChaosExperiment):
                 "shedding_triggered": after_status.active and not before_status.active,
             }
         except ImportError:
-            logger.debug("[PartialFailure] LoadSheddingManager not available")
+            logger.debug("partial_failure.loadsheddingmanager_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[PartialFailure] Load shedding trigger failed: {e}")
+            logger.warning(
+                "partial_failure.load_shedding_trigger_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def _verify_shedding_behavior(self) -> dict[str, Any]:
@@ -181,10 +193,13 @@ class PartialFailureExperiment(ChaosExperiment):
                 "timestamp": status.timestamp,
             }
         except ImportError:
-            logger.debug("[PartialFailure] LoadSheddingManager not available")
+            logger.debug("partial_failure.loadsheddingmanager_available")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
-            logger.warning(f"[PartialFailure] Shedding verification failed: {e}")
+            logger.warning(
+                "partial_failure.shedding_verification_failed",
+                error=e,
+            )
             return {"available": False, "error": str(e)}
 
     def _deactivate_load_shedding(self) -> None:
@@ -207,7 +222,10 @@ class PartialFailureExperiment(ChaosExperiment):
         except ImportError:
             pass
         except Exception as e:
-            logger.warning(f"[PartialFailure] Load shedding deactivation failed: {e}")
+            logger.warning(
+                "partial_failure.load_shedding_deactivation_failed",
+                error=e,
+            )
 
 
 class CascadingFailureExperiment(ChaosExperiment):
@@ -254,7 +272,7 @@ class CascadingFailureExperiment(ChaosExperiment):
         )
 
         if not self.affected_services:
-            logger.error("[CascadingFailure] No affected_services specified")
+            logger.error("cascading_failure.no_specified")
             return False
 
         try:
@@ -281,7 +299,10 @@ class CascadingFailureExperiment(ChaosExperiment):
 
                 if result.success:
                     opened_services.append(service)
-                    logger.info(f"[CascadingFailure] Opened CB for {service}")
+                    logger.info(
+                        "cascading_failure.opened_cb",
+                        service=service,
+                    )
                 else:
                     logger.warning(
                         f"[CascadingFailure] Failed to open CB for {service}: {result.message}"
@@ -311,7 +332,10 @@ class CascadingFailureExperiment(ChaosExperiment):
             )
             return True
         except Exception as e:
-            logger.error(f"[CascadingFailure] Failed to inject: {e}")
+            logger.error(
+                "cascading_failure.failed_inject",
+                error=e,
+            )
             return False
 
     def rollback(self) -> None:
@@ -323,7 +347,10 @@ class CascadingFailureExperiment(ChaosExperiment):
                 )
                 return
 
-            logger.info(f"[CascadingFailure] Rolling back {self.experiment_id}")
+            logger.info(
+                "cascading_failure.rolling_back",
+                self=self.experiment_id,
+            )
 
             try:
                 from selfhealing.services.circuit_breaker import (
@@ -354,7 +381,10 @@ class CascadingFailureExperiment(ChaosExperiment):
                     f"[CascadingFailure] Rollback complete for {len(self.affected_services)} services"
                 )
             except Exception as e:
-                logger.error(f"[CascadingFailure] Rollback failed: {e}")
+                logger.error(
+                    "cascading_failure.rollback_failed",
+                    error=e,
+                )
 
 
 __all__ = ["PartialFailureExperiment", "CascadingFailureExperiment"]

@@ -7,7 +7,7 @@ Handles tier definitions, mappings, and overrides with fallback chain.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections import OrderedDict
@@ -25,7 +25,7 @@ from .enums import OverrideIdentifierType, TierFallbackReason
 from .models import TierDefinition, TierMapping, TierOverride, TierResult
 from .validator import TierConfigValidator, TierValidationResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class TierRegistry:
@@ -104,7 +104,10 @@ class TierRegistry:
         if len(self._previous_configs) > 10:
             self._previous_configs = self._previous_configs[-10:]
 
-        logger.debug(f"[TierRegistry] Saved pre-mutation snapshot: action={action}")
+        logger.debug(
+            "tier_registry.saved_pre_mutation_snapshot",
+            action=action,
+        )
 
     def get_previous_configs(self) -> list[dict[str, Any]]:
         """
@@ -128,13 +131,16 @@ class TierRegistry:
         """
         with self._data_lock:
             if not self._previous_configs:
-                logger.warning("[TierRegistry] No previous config to rollback")
+                logger.warning("tier_registry.no_previous_config_rollback")
                 return None
 
             # 역순 인덱스 (0=가장 최근)
             actual_index = len(self._previous_configs) - 1 - index
             if actual_index < 0:
-                logger.warning(f"[TierRegistry] Invalid rollback index: {index}")
+                logger.warning(
+                    "tier_registry.invalid_rollback_index",
+                    index=index,
+                )
                 return None
 
             snapshot = self._previous_configs[actual_index]
@@ -533,7 +539,10 @@ class TierRegistry:
                 user="system",
             )
         except Exception as audit_error:
-            logger.error(f"[TierRegistry] Shadow audit failed: {audit_error}")
+            logger.error(
+                "tier_registry.shadow_audit_failed",
+                audit_error=audit_error,
+            )
 
     def resolve_tier_safe(
         self,
@@ -569,7 +578,11 @@ class TierRegistry:
             )
 
         except Exception as e:
-            logger.warning(f"[TierRegistry] Fail-safe activated: {e}. " f"Returning default tier for path={path}")
+            logger.warning(
+                "tier_registry.fail_safe_activated_returning",
+                error=e,
+                path=path,
+            )
             return TierDefinition(
                 id="_failsafe",
                 name="Fail-Safe",
@@ -684,7 +697,10 @@ class TierRegistry:
                 user="TierRegistry",
             )
         except Exception as e:
-            logger.warning(f"[TierRegistry] Failed to log change: {e}")
+            logger.warning(
+                "tier_registry.failed_log_change",
+                error=e,
+            )
 
     def export_config(self) -> dict[str, Any]:
         """Export current configuration."""

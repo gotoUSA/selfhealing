@@ -11,7 +11,7 @@ AIMD (Additive Increase, Multiplicative Decrease) 패턴 적용.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass
@@ -27,7 +27,7 @@ from selfhealing.scaling.config import (
 if TYPE_CHECKING:
     from selfhealing.scaling.metrics import BackpressureMetrics
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Priority별 토큰 비율 임계치 (Watermark).
@@ -386,7 +386,10 @@ class RateController:
             gate = RecoveryGate()
             allowed, reason = gate.check_recovery_allowed()
             if not allowed:
-                logger.info("[RateController] Starvation relief blocked: %s", reason)
+                logger.info(
+                    "rate_controller.starvation_relief_blocked",
+                    reason=reason,
+                )
             return allowed
         except Exception:
             # RecoveryGate 사용 불가 시 안전하게 Relief 차단
@@ -465,14 +468,17 @@ class RateController:
             try:
                 self._adjust_rate()
             except Exception as e:
-                logger.error(f"[RateController] Adjust error: {e}")
+                logger.error(
+                    "rate_controller.adjust_error",
+                    error=e,
+                )
 
             time.sleep(self._settings.rate_adjust_interval_seconds)
 
     def start(self) -> None:
         """Rate 조절 시작."""
         if not self._settings.backpressure_enabled:
-            logger.info("[RateController] Disabled")
+            logger.info("rate_controller.disabled")
             return
 
         if self._running:
@@ -485,14 +491,14 @@ class RateController:
             daemon=True,
         )
         self._worker.start()
-        logger.info("[RateController] Started")
+        logger.info("rate_controller.started")
 
     def stop(self) -> None:
         """Rate 조절 중지."""
         self._running = False
         if self._worker:
             self._worker.join(timeout=5.0)
-        logger.info("[RateController] Stopped")
+        logger.info("rate_controller.stopped")
 
 
 # =============================================================================

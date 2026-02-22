@@ -28,7 +28,7 @@ Usage in settings.py:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.utils.network import extract_client_ip
@@ -36,7 +36,7 @@ from selfhealing.utils.network import extract_client_ip
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class IPBanMiddleware:
@@ -76,7 +76,10 @@ class IPBanMiddleware:
 
             self._config = SecurityConfig.from_settings()
         except Exception as e:
-            logger.warning(f"[IPBanMiddleware] Config init failed: {e}")
+            logger.warning(
+                "ip_ban_middleware.config_init_failed",
+                error=e,
+            )
             self._config = None
 
         try:
@@ -84,7 +87,10 @@ class IPBanMiddleware:
 
             self._cache = ProviderRegistry.get_cache()
         except Exception as e:
-            logger.debug(f"[IPBanMiddleware] Cache init failed (will retry): {e}")
+            logger.debug(
+                "ip_ban_middleware.cache_init_failed_retry",
+                error=e,
+            )
             self._cache = None
 
         self._initialized = True
@@ -131,7 +137,11 @@ class IPBanMiddleware:
 
         if ban_info is not None:
             ban_type = ban_info.get("type", "unknown")
-            logger.warning(f"[IPBanMiddleware] Blocked banned IP: " f"type={ban_type}, path={request.path}")
+            logger.warning(
+                "ip_ban_middleware.blocked_banned_ip",
+                ban_type=ban_type,
+                request=request.path,
+            )
 
             # 보안: ban_type을 응답에 포함하지 않음 (공격자 정보 노출 방지)
             # ban_type은 로그에만 기록
@@ -171,5 +181,8 @@ class IPBanMiddleware:
 
         except Exception as e:
             # FAIL-OPEN: Redis 장애 시 요청 허용
-            logger.debug(f"[IPBanMiddleware] Cache check failed (fail-open): {e}")
+            logger.debug(
+                "ip_ban_middleware.cache_check_failed_fail",
+                error=e,
+            )
             return None

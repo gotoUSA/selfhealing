@@ -47,7 +47,7 @@ Version: 1.0.0
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -61,7 +61,7 @@ if TYPE_CHECKING:
         RequestAuditBuffer,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # 즉시 전송해야 하는 CRITICAL 이벤트 타입
@@ -145,9 +145,12 @@ class AuditMiddleware:
                     )
 
                     checkpoint_strategy = get_default_checkpoint_strategy()
-                    logger.info("[AuditMiddleware] Checkpoint strategy loaded")
+                    logger.info("audit_middleware.checkpoint_strategy_loaded")
                 except Exception as e:
-                    logger.warning(f"[AuditMiddleware] Checkpoint strategy failed: {e}")
+                    logger.warning(
+                        "audit_middleware.checkpoint_strategy_failed",
+                        error=e,
+                    )
 
             # WAL + Checkpoint 설정
             wal_enabled = self._is_wal_enabled()
@@ -160,9 +163,12 @@ class AuditMiddleware:
                 checkpoint_strategy=checkpoint_strategy,
                 checkpoint_namespace=self._get_checkpoint_namespace(),
             )
-            logger.info("[AuditMiddleware] Initialized with ContinuousAuditRecorder")
+            logger.info("audit_middleware.initialized_continuousauditrecorder")
         except Exception as e:
-            logger.warning(f"[AuditMiddleware] Recorder init failed: {e}")
+            logger.warning(
+                "audit_middleware.recorder_init_failed",
+                error=e,
+            )
             self._recorder = None
 
         # ADR-002: 설정 기반 조회 기록 경로 로드
@@ -196,9 +202,15 @@ class AuditMiddleware:
             audit_config = getattr(settings, "SELFHEALING_AUDIT", {})
             self._read_audit_paths = audit_config.get("read_paths", self.DEFAULT_READ_AUDIT_PATHS)
 
-            logger.debug(f"[AuditMiddleware] Read audit paths: {self._read_audit_paths}")
+            logger.debug(
+                "audit_middleware.read_audit_paths",
+                self=self._read_audit_paths,
+            )
         except Exception as e:
-            logger.debug(f"[AuditMiddleware] Failed to load audit config: {e}")
+            logger.debug(
+                "audit_middleware.failed_load_audit_config",
+                error=e,
+            )
             self._read_audit_paths = self.DEFAULT_READ_AUDIT_PATHS
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
@@ -460,7 +472,10 @@ class AuditMiddleware:
         except Exception as e:
             # Fail-open: 로깅 실패가 응답에 영향 주지 않음
             self._failed_recordings += 1
-            logger.warning(f"[AuditMiddleware] Async logging failed (fail-open): {e}")
+            logger.warning(
+                "audit_middleware.async_logging_failed_fail",
+                error=e,
+            )
             # Fallback으로 stderr 출력
             self._fallback_log_events(buffer)
 
@@ -587,7 +602,10 @@ class AuditMiddleware:
             self._recorder.audit_adapter.log(entry)
 
         except Exception as e:
-            logger.debug(f"[AuditMiddleware] Event record failed: {e}")
+            logger.debug(
+                "audit_middleware.event_record_failed",
+                error=e,
+            )
 
     def _fallback_log_events(self, buffer: RequestAuditBuffer) -> None:
         """Fallback: stderr로 이벤트 출력."""

@@ -6,14 +6,14 @@ Manages metrics-based recovery checks and gradual recovery steps.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 
 from .enums import EmergencyLevel
 from .models import RecoveryGateConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RecoveryGate:
@@ -80,7 +80,10 @@ class RecoveryGate:
             return (True, "All metrics within thresholds")
 
         except Exception as e:
-            logger.warning(f"[RecoveryGate] Metrics check failed: {e}")
+            logger.warning(
+                "recovery_gate.metrics_check_failed",
+                error=e,
+            )
             # 메트릭 확인 실패 시 보수적으로 허용하지 않음
             return (False, f"Metrics check failed: {e}")
 

@@ -10,13 +10,13 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from typing import Any
 
 from selfhealing.settings.audit_integrity import get_audit_integrity_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_pending_ttl_seconds() -> int:
@@ -128,14 +128,24 @@ class PendingSequenceManager:
             )
 
             if result:
-                logger.debug(f"[PendingSeq] Reserved sequence {sequence}")
+                logger.debug(
+                    "pending_seq.reserved_sequence",
+                    sequence=sequence,
+                )
                 return True
             else:
-                logger.warning(f"[PendingSeq] Sequence {sequence} already reserved")
+                logger.warning(
+                    "pending_seq.sequence_already_reserved",
+                    sequence=sequence,
+                )
                 return False
 
         except Exception as e:
-            logger.error(f"[PendingSeq] Failed to reserve sequence {sequence}: {e}")
+            logger.error(
+                "pending_seq.failed_reserve_sequence",
+                sequence=sequence,
+                error=e,
+            )
             return False
 
     def commit_sequence(self, sequence: int) -> bool:
@@ -155,7 +165,10 @@ class PendingSequenceManager:
             deleted = self._redis.delete(pending_key)
 
             if deleted:
-                logger.debug(f"[PendingSeq] Committed sequence {sequence}")
+                logger.debug(
+                    "pending_seq.committed_sequence",
+                    sequence=sequence,
+                )
                 return True
             else:
                 # Key may have expired (TTL) - still considered success
@@ -165,7 +178,11 @@ class PendingSequenceManager:
                 return True
 
         except Exception as e:
-            logger.error(f"[PendingSeq] Failed to commit sequence {sequence}: {e}")
+            logger.error(
+                "pending_seq.failed_commit_sequence",
+                sequence=sequence,
+                error=e,
+            )
             return False
 
     def abort_sequence(self, sequence: int) -> bool:
@@ -200,11 +217,18 @@ class PendingSequenceManager:
             )
             pipe.execute()
 
-            logger.warning(f"[PendingSeq] Aborted sequence {sequence} -> ORPHANED")
+            logger.warning(
+                "pending_seq.aborted_sequence_orphaned",
+                sequence=sequence,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[PendingSeq] Failed to abort sequence {sequence}: {e}")
+            logger.error(
+                "pending_seq.failed_abort_sequence",
+                sequence=sequence,
+                error=e,
+            )
             return False
 
     def get_pending_sequences(self) -> list[int]:
@@ -233,7 +257,10 @@ class PendingSequenceManager:
             return sorted(sequences)
 
         except Exception as e:
-            logger.error(f"[PendingSeq] Failed to get pending sequences: {e}")
+            logger.error(
+                "pending_seq.failed_get_pending_sequences",
+                error=e,
+            )
             return []
 
     def get_orphaned_sequences(self) -> list[int]:
@@ -261,7 +288,10 @@ class PendingSequenceManager:
             return sorted(sequences)
 
         except Exception as e:
-            logger.error(f"[PendingSeq] Failed to get orphaned sequences: {e}")
+            logger.error(
+                "pending_seq.failed_get_orphaned_sequences",
+                error=e,
+            )
             return []
 
     def get_expected_hash(self, sequence: int) -> str | None:
@@ -318,7 +348,10 @@ class PendingSequenceManager:
             cleaned += 1
 
         if cleaned:
-            logger.info(f"[PendingSeq] Cleaned up {cleaned} stale pending sequences")
+            logger.info(
+                "pending_seq.cleaned_up_stale_pending",
+                cleaned=cleaned,
+            )
 
         return cleaned
 
@@ -335,11 +368,18 @@ class PendingSequenceManager:
         try:
             orphaned_key = self._get_orphaned_key(sequence)
             self._redis.delete(orphaned_key)
-            logger.debug(f"[PendingSeq] Cleared orphaned sequence {sequence}")
+            logger.debug(
+                "pending_seq.cleared_orphaned_sequence",
+                sequence=sequence,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[PendingSeq] Failed to clear orphaned {sequence}: {e}")
+            logger.error(
+                "pending_seq.failed_clear_orphaned",
+                sequence=sequence,
+                error=e,
+            )
             return False
 
 

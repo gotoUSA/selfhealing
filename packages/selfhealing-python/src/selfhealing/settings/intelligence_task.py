@@ -16,12 +16,12 @@ Environment Variables:
     SELFHEALING_INTELLIGENCE_TASK_RECONCILIATION_CUTOFF_MINUTES=30
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class IntelligenceTaskSettings(BaseSettings):

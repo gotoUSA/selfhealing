@@ -9,7 +9,7 @@ Provides graceful degradation strategies when connections fail:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -18,7 +18,7 @@ from typing import Any, Generic, TypeVar
 
 from .connection_health import PartitionState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -76,7 +76,10 @@ class SimpleFallback(FallbackStrategy):
             result = primary_fn()
             return FallbackResult(value=result, used_fallback=False)
         except Exception as e:
-            logger.warning(f"Primary function failed: {e}")
+            logger.warning(
+                "primary_function_failed",
+                error=e,
+            )
 
             # Try explicit fallback
             if fallback_fn:
@@ -89,7 +92,10 @@ class SimpleFallback(FallbackStrategy):
                         original_error=str(e),
                     )
                 except Exception as fallback_e:
-                    logger.warning(f"Fallback function also failed: {fallback_e}")
+                    logger.warning(
+                        "fallback_function_also_failed",
+                        fallback_e=fallback_e,
+                    )
 
             # Use default value
             if default_value is not None:
@@ -143,7 +149,10 @@ class PartitionAwareFallback(FallbackStrategy):
             result = primary_fn()
             return FallbackResult(value=result, used_fallback=False)
         except Exception as e:
-            logger.warning(f"Primary operation failed: {e}")
+            logger.warning(
+                "primary_operation_failed",
+                error=e,
+            )
             return self._handle_failure(e, fallback_fn, default_value)
 
     def _handle_failure(
@@ -163,14 +172,17 @@ class PartitionAwareFallback(FallbackStrategy):
                     original_error=str(error),
                 )
             except Exception as e:
-                logger.warning(f"Explicit fallback failed: {e}")
+                logger.warning(
+                    "explicit_fallback_failed",
+                    error=e,
+                )
 
         # 2. 캐시 사용 불가 + DB 가용 → DB fallback
         if not self._partition_state.cache_available and self._partition_state.db_available:
             if self._db_fallback:
                 try:
                     result = self._db_fallback()
-                    logger.info("Using DB fallback due to cache unavailability")
+                    logger.info("using_db_fallback_due")
                     return FallbackResult(
                         value=result,
                         used_fallback=True,
@@ -178,14 +190,17 @@ class PartitionAwareFallback(FallbackStrategy):
                         original_error=str(error),
                     )
                 except Exception as e:
-                    logger.warning(f"DB fallback failed: {e}")
+                    logger.warning(
+                        "db_fallback_failed",
+                        error=e,
+                    )
 
         # 3. DB 사용 불가 + 캐시 가용 → 캐시 fallback
         if not self._partition_state.db_available and self._partition_state.cache_available:
             if self._cache_fallback:
                 try:
                     result = self._cache_fallback()
-                    logger.info("Using cache fallback due to DB unavailability")
+                    logger.info("using_cache_fallback_due")
                     return FallbackResult(
                         value=result,
                         used_fallback=True,
@@ -193,11 +208,14 @@ class PartitionAwareFallback(FallbackStrategy):
                         original_error=str(error),
                     )
                 except Exception as e:
-                    logger.warning(f"Cache fallback failed: {e}")
+                    logger.warning(
+                        "cache_fallback_failed",
+                        error=e,
+                    )
 
         # 4. 기본값 반환
         if default_value is not None:
-            logger.info("Using default value as all fallbacks exhausted")
+            logger.info("using_default_value_all")
             return FallbackResult(
                 value=default_value,
                 used_fallback=True,
@@ -206,7 +224,10 @@ class PartitionAwareFallback(FallbackStrategy):
             )
 
         # 5. 모든 fallback 실패
-        logger.error(f"All fallback strategies failed. Original error: {error}")
+        logger.error(
+            "all_fallback_strategies_failed",
+            error=error,
+        )
         return FallbackResult(
             value=None,
             used_fallback=True,
@@ -255,7 +276,10 @@ class CacheFirstFallback(FallbackStrategy):
             if result is not None:
                 return FallbackResult(value=result, used_fallback=False)
         except Exception as e:
-            logger.debug(f"Cache lookup failed: {e}")
+            logger.debug(
+                "cache_lookup_failed",
+                error=e,
+            )
 
         # Cache miss or error, try DB
         try:
@@ -264,7 +288,10 @@ class CacheFirstFallback(FallbackStrategy):
                 try:
                     self._update_cache_fn(result)
                 except Exception as e:
-                    logger.warning(f"Failed to update cache: {e}")
+                    logger.warning(
+                        "failed_update_cache",
+                        error=e,
+                    )
 
             return FallbackResult(
                 value=result,
@@ -272,7 +299,10 @@ class CacheFirstFallback(FallbackStrategy):
                 fallback_mode=FallbackMode.DEGRADE_GRACEFULLY,
             )
         except Exception as e:
-            logger.warning(f"DB lookup failed: {e}")
+            logger.warning(
+                "db_lookup_failed",
+                error=e,
+            )
 
         # Both failed
         if default_value is not None:

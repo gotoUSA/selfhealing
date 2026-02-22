@@ -31,14 +31,14 @@ Usage in settings.py:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ActorContextMiddleware:
@@ -54,7 +54,10 @@ class ActorContextMiddleware:
         self._enabled = self._check_enabled()
 
         status = "enabled" if self._enabled else "DISABLED"
-        logger.info(f"[ActorContextMiddleware] Initialized - {status}")
+        logger.info(
+            "actor_context_middleware.initialized",
+            status=status,
+        )
 
     def _check_enabled(self) -> bool:
         """미들웨어 활성화 여부 확인."""
@@ -79,7 +82,10 @@ class ActorContextMiddleware:
             with ActorContext.set_actor_from_django_request(request):
                 response = self.get_response(request)
         except Exception as e:
-            logger.warning(f"[ActorContextMiddleware] Actor context setup failed: {e}. " "Proceeding without actor context.")
+            logger.warning(
+                "actor_context_middleware.actor_context_setup_failed",
+                error=e,
+            )
             response = self.get_response(request)
 
         return response

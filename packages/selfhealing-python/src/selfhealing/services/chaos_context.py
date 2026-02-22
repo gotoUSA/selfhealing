@@ -10,7 +10,7 @@ in the DLQ to prevent confusion with real incidents.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ from typing import Any, Protocol
 
 from selfhealing.core.timezone import now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -315,7 +315,11 @@ def attach_chaos_context(
 
     operation.save(update_fields=["metadata", "next_action_hint", "updated_at"])
 
-    logger.info(f"[ChaosContext] Attached experiment {context.experiment_id} " f"to operation {operation.id}")
+    logger.info(
+        "chaos_context.attached_experiment_operation",
+        context=context.experiment_id,
+        operation=operation.id,
+    )
 
 
 def resolve_chaos_experiment(
@@ -357,7 +361,11 @@ def resolve_chaos_experiment(
         ]
     )
 
-    logger.info(f"[ChaosContext] Resolved chaos experiment {context.experiment_id} " f"for operation {operation.id}")
+    logger.info(
+        "chaos_context.resolved_chaos_experiment_operation",
+        context=context.experiment_id,
+        operation=operation.id,
+    )
 
     return True
 

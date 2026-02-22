@@ -11,11 +11,11 @@ traceparent + baggage 헤더가 함께 outgoing HTTP 요청에 전파된다.
 from __future__ import annotations
 
 import importlib
-import logging
+import structlog
 from functools import lru_cache
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Baggage 키 접두사 — selfhealing 네임스페이스
 BAGGAGE_PREFIX = "selfhealing"
@@ -60,11 +60,14 @@ def setup_baggage_propagation() -> None:
                 ]
             )
         )
-        logger.info("OTel Baggage propagation enabled (W3C TraceContext + Baggage)")
+        logger.info("otel_baggage_propagation_enabled")
     except ImportError:
-        logger.debug("OpenTelemetry propagation packages not installed — baggage disabled")
+        logger.debug("opentelemetry_propagation_packages_installed")
     except Exception as e:
-        logger.warning("Failed to setup baggage propagation: %s", e)
+        logger.warning(
+            "failed_setup_baggage_propagation",
+            error=e,
+        )
 
 
 @lru_cache(maxsize=None)

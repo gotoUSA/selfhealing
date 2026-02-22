@@ -32,7 +32,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
-import logging
+import structlog
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -41,7 +41,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, TextIO
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ExportFormat(str, Enum):
@@ -125,7 +125,7 @@ class AuditExporter:
         self._stats.total_files = len(input_files)
 
         if not input_files:
-            logger.warning("No input files found")
+            logger.warning("no_input_files_found")
             self._stats.end_time = datetime.now(timezone.utc)
             return self._stats
 
@@ -169,7 +169,11 @@ class AuditExporter:
                         try:
                             entry = json.loads(line)
                         except json.JSONDecodeError as e:
-                            logger.warning(f"Invalid JSON in {file_path}: {e}")
+                            logger.warning(
+                                "invalid_json",
+                                file_path=file_path,
+                                error=e,
+                            )
                             continue
 
                         if self._matches_filters(entry):
@@ -177,7 +181,11 @@ class AuditExporter:
                             yield entry
 
             except Exception as e:
-                logger.error(f"Failed to read {file_path}: {e}")
+                logger.error(
+                    "failed_read",
+                    file_path=file_path,
+                    error=e,
+                )
 
     def _matches_filters(self, entry: dict[str, Any]) -> bool:
         """필터 조건 확인."""
@@ -341,7 +349,11 @@ class AuditExporter:
         key = f"{self._options.s3_prefix}audit_export_{timestamp}.jsonl"
 
         s3.upload_file(file_path, self._options.s3_bucket, key)
-        logger.info(f"Uploaded to s3://{self._options.s3_bucket}/{key}")
+        logger.info(
+            "uploaded",
+            self=self._options.s3_bucket,
+            key=key,
+        )
 
     def _export_to_http(self, entries: Iterator[dict[str, Any]]) -> None:
         """HTTP로 내보내기."""
@@ -370,7 +382,10 @@ class AuditExporter:
 
         try:
             with urllib.request.urlopen(req, timeout=30) as response:
-                logger.info(f"HTTP export completed: {response.status}")
+                logger.info(
+                    "http_export_completed",
+                    response=response.status,
+                )
         except urllib.error.URLError as e:
             raise RuntimeError(f"HTTP export failed: {e}") from e
 
@@ -409,7 +424,7 @@ class AuditExporter:
                         entries.append(json.loads(line))
 
         if not entries:
-            logger.warning("No entries to export")
+            logger.warning("no_entries_export")
             return
 
         # PyArrow Table 생성
@@ -417,7 +432,11 @@ class AuditExporter:
 
         # Parquet 쓰기
         pq.write_table(table, output_path, compression="snappy")
-        logger.info(f"Exported {len(entries)} entries to {output_path}")
+        logger.info(
+            "exported_entries",
+            count=len(entries),
+            output_path=output_path,
+        )
 
 
 def parse_datetime(value: str) -> datetime:
@@ -583,7 +602,10 @@ Examples:
         return 0
 
     except Exception as e:
-        logger.error(f"Export failed: {e}")
+        logger.error(
+            "export_failed",
+            error=e,
+        )
         if parsed.verbose:
             import traceback
 

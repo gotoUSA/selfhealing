@@ -36,7 +36,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import logging
+import structlog
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -44,7 +44,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -248,17 +248,27 @@ class RFC3161Client:
 
             with urllib.request.urlopen(req, timeout=self._timeout) as response:
                 if response.status != 200:
-                    logger.error(f"TSA returned status {response.status}")
+                    logger.error(
+                        "tsa_returned_status",
+                        response=response.status,
+                    )
                     return None
 
                 response_data = response.read()
                 return self._parse_timestamp_response(response_data, data_hash)
 
         except urllib.error.URLError as e:
-            logger.error(f"Failed to get timestamp from {self._tsa_url}: {e}")
+            logger.error(
+                "failed_get_timestamp",
+                self=self._tsa_url,
+                error=e,
+            )
             return None
         except Exception as e:
-            logger.error(f"Timestamp request failed: {e}")
+            logger.error(
+                "timestamp_request_failed",
+                error=e,
+            )
             return None
 
     def _create_timestamp_request(self, data_hash: bytes) -> bytes:
@@ -407,7 +417,11 @@ class SignedManifest:
 
         self._entries.append(manifest_entry)
 
-        logger.info(f"Added {file_path}: {entry_count} entries")
+        logger.info(
+            "added_entries",
+            file_path=file_path,
+            entry_count=entry_count,
+        )
         return manifest_entry
 
     def add_log_directory(
@@ -459,7 +473,7 @@ class SignedManifest:
             RFC3161Timestamp or None
         """
         if not self._tsa_client:
-            logger.warning("RFC 3161 timestamp is disabled")
+            logger.warning("rfc_timestamp_disabled")
             return None
 
         if data is None:
@@ -539,7 +553,10 @@ class SignedManifest:
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
 
-        logger.info(f"Saved manifest to {output_path}")
+        logger.info(
+            "saved_manifest",
+            output_path=output_path,
+        )
 
     @classmethod
     def load(cls, manifest_path: str | Path) -> SignedManifest:
@@ -577,7 +594,10 @@ class SignedManifest:
             file_path = Path(entry.file_path)
 
             if not file_path.exists():
-                logger.error(f"File not found: {file_path}")
+                logger.error(
+                    "file_found",
+                    file_path=file_path,
+                )
                 return False
 
             with open(file_path, encoding="utf-8") as f:
@@ -595,7 +615,7 @@ class SignedManifest:
             )
             return False
 
-        logger.info("Manifest verification passed!")
+        logger.info("manifest_verification_passed")
         return True
 
 

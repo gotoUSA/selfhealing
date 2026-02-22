@@ -24,10 +24,10 @@ Usage (호스트 앱의 AppConfig.ready()):
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 콜백 타입: (user_id: int) -> str (결과 설명)
 # ──────────────────────────────────────────────────────────────────

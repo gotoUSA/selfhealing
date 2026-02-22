@@ -10,13 +10,13 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class GateFaultState(str, Enum):
@@ -57,7 +57,11 @@ class GateFaultDetector:
         with self._lock:
             self._failure_threshold = failure_threshold
             self._recovery_timeout = recovery_timeout
-            logger.info(f"[CircuitBreaker] Updated: threshold={failure_threshold}, timeout={recovery_timeout}s")
+            logger.info(
+                "circuit_breaker.updated",
+                failure_threshold=failure_threshold,
+                recovery_timeout=recovery_timeout,
+            )
 
     def can_execute(self) -> bool:
         """요청 실행 가능 여부."""
@@ -71,7 +75,7 @@ class GateFaultDetector:
                     elapsed = (datetime.now(timezone.utc) - self._last_failure_time).total_seconds()
                     if elapsed >= self._recovery_timeout:
                         self._state = GateFaultState.RECOVERING
-                        logger.info("[GateFaultDetector] State: DEGRADED -> RECOVERING (attempting recovery)")
+                        logger.info("gate_fault_detector.state_degraded_recovering_attempting")
                         return True
                 return False
 
@@ -82,7 +86,7 @@ class GateFaultDetector:
         """성공 기록."""
         with self._lock:
             if self._state == GateFaultState.RECOVERING:
-                logger.info("[GateFaultDetector] State: RECOVERING -> HEALTHY (recovered)")
+                logger.info("gate_fault_detector.state_recovering_healthy_recovered")
             self._state = GateFaultState.HEALTHY
             self._failure_count = 0
 
@@ -95,7 +99,7 @@ class GateFaultDetector:
             if self._state == GateFaultState.RECOVERING:
                 # 복구 실패 - 다시 DEGRADED
                 self._state = GateFaultState.DEGRADED
-                logger.warning("[GateFaultDetector] State: RECOVERING -> DEGRADED (recovery failed)")
+                logger.warning("gate_fault_detector.state_recovering_degraded_recovery")
             elif self._failure_count >= self._failure_threshold:
                 self._state = GateFaultState.DEGRADED
                 logger.warning(
@@ -120,7 +124,7 @@ class GateFaultDetector:
             self._state = GateFaultState.HEALTHY
             self._failure_count = 0
             self._last_failure_time = None
-            logger.info("[GateFaultDetector] Reset to HEALTHY state")
+            logger.info("gate_fault_detector.reset_healthy_state")
 
 
 __all__ = [

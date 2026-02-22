@@ -15,7 +15,7 @@ Design Principle:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -25,7 +25,7 @@ from typing import Any
 
 from selfhealing.core.timezone import now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -464,7 +464,10 @@ class SyntheticLoadGenerator:
                 try:
                     success = self._request_handler(request)
                 except Exception as e:
-                    logger.debug(f"[SyntheticLoad] Request failed: {e}")
+                    logger.debug(
+                        "synthetic_load.request_failed",
+                        error=e,
+                    )
                     success = False
 
             latency_ms = (time.time() - start_latency) * 1000

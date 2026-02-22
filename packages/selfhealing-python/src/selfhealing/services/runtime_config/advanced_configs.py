@@ -12,12 +12,12 @@ Provides get/update methods for advanced configuration types:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.settings import DriftThresholdSettings as DriftThresholdConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AdvancedConfigMixin:
@@ -290,13 +290,19 @@ class AdvancedConfigMixin:
                 ),
             }
             config["slos"].append(new_slo)
-            logger.info(f"[RuntimeConfig] Added SLO: {slo_name}")
+            logger.info(
+                "runtime_config.added_slo",
+                slo_name=slo_name,
+            )
         else:
             # Update existing SLO (only provided fields)
             for key, value in slo_def.items():
                 if value is not None:
                     config["slos"][existing_idx][key] = value
-            logger.info(f"[RuntimeConfig] Updated SLO: {slo_name}")
+            logger.info(
+                "runtime_config.updated_slo",
+                slo_name=slo_name,
+            )
 
     def delete_slo(self, slo_name: str) -> dict[str, Any]:
         """
@@ -326,7 +332,10 @@ class AdvancedConfigMixin:
             current["slos"] = [s for s in current["slos"] if s.get("name") != slo_name]
             self._save_config("slo", current)
 
-            logger.info(f"[RuntimeConfig] Deleted SLO: {slo_name}")
+            logger.info(
+                "runtime_config.deleted_slo",
+                slo_name=slo_name,
+            )
             return {
                 "status": "deleted",
                 "deleted_slo": deleted_slo,
@@ -534,5 +543,8 @@ class AdvancedConfigMixin:
             reason="Reset to default values",
         )
 
-        logger.info(f"[RuntimeConfig] Drift threshold config reset by {changed_by}")
+        logger.info(
+            "runtime_config.drift_threshold_config_reset",
+            changed_by=changed_by,
+        )
         return default_config

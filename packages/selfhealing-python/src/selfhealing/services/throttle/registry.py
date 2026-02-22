@@ -17,7 +17,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
@@ -30,7 +30,7 @@ from selfhealing.services.throttle.config import ThrottleConfig
 if TYPE_CHECKING:
     from selfhealing.services.circuit_breaker.service import CircuitBreakerService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -145,7 +145,10 @@ class ThrottleRegistry:
             cb_state=CircuitState.CLOSED,
         )
 
-        logger.debug(f"[ThrottleRegistry] Created throttle for '{service_name}'")
+        logger.debug(
+            "throttle_registry.created_throttle",
+            service_name=service_name,
+        )
 
     def on_circuit_breaker_state_changed(
         self,
@@ -175,7 +178,10 @@ class ThrottleRegistry:
             try:
                 new_cb_state = CircuitState(new_state)
             except ValueError:
-                logger.warning(f"[ThrottleRegistry] Invalid CB state: {new_state}")
+                logger.warning(
+                    "throttle_registry.invalid_cb_state",
+                    new_state=new_state,
+                )
                 return
 
             previous_limit = throttle.current_limit
@@ -236,7 +242,7 @@ class ThrottleRegistry:
             cb_service: CircuitBreakerService 인스턴스
         """
         if self._cb_callbacks_registered:
-            logger.debug("[ThrottleRegistry] CB callbacks already registered")
+            logger.debug("throttle_registry.cb_callbacks_already_registered")
             return
 
         # 각 상태별 콜백 등록
@@ -247,7 +253,7 @@ class ThrottleRegistry:
             )
 
         self._cb_callbacks_registered = True
-        logger.info("[ThrottleRegistry] Registered CB state change callbacks")
+        logger.info("cell_registry.bulkheads_registered")
 
     def _on_cb_state_changed_callback(
         self,
@@ -311,7 +317,7 @@ class ThrottleRegistry:
             self._configs.clear()
             self._cb_callbacks_registered = False
 
-        logger.info("[ThrottleRegistry] Registry reset")
+        logger.info("throttle_registry.registry_reset")
 
 
 # =============================================================================

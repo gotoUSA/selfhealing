@@ -30,12 +30,12 @@ Usage:
 from __future__ import annotations
 
 import collections
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -270,7 +270,10 @@ class HoltLinearForecaster:
             )
             return True
         except Exception as e:
-            logger.warning(f"[HoltLinearForecaster] Failed to save state: {e}")
+            logger.warning(
+                "holt_linear_forecaster.failed_save_state",
+                error=e,
+            )
             return False
 
     def load_state(self, metric_name: str) -> bool:
@@ -295,7 +298,10 @@ class HoltLinearForecaster:
 
             state = backend.get(key)
             if state is None:
-                logger.debug(f"[HoltLinearForecaster] No saved state for '{metric_name}'")
+                logger.debug(
+                    "holt_linear_forecaster.no_saved_state",
+                    metric_name=metric_name,
+                )
                 return False
 
             self._alpha = state["alpha"]
@@ -321,7 +327,10 @@ class HoltLinearForecaster:
             )
             return True
         except Exception as e:
-            logger.warning(f"[HoltLinearForecaster] Failed to load state: {e}")
+            logger.warning(
+                "holt_linear_forecaster.failed_load_state",
+                error=e,
+            )
             return False
 
 

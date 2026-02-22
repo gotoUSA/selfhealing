@@ -16,10 +16,10 @@ Schedule:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -131,7 +131,7 @@ try:
     CELERY_TASKS_AVAILABLE = True
 
 except ImportError:
-    logger.debug("[XTestCleanupTasks] Celery not available, skipping task registration")
+    logger.debug("x_test_cleanup_tasks.celery_available_skipping_task")
     CELERY_TASKS_AVAILABLE = False
 
 
@@ -165,7 +165,7 @@ def get_xtest_cleanup_beat_schedule() -> dict[str, Any]:
         }
 
     except ImportError:
-        logger.debug("[XTestCleanupTasks] Celery not available for beat schedule")
+        logger.debug("x_test_cleanup_tasks.celery_available_beat_schedule")
         return {}
 
 

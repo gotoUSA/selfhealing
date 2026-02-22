@@ -10,12 +10,12 @@ Tracks:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditMetrics:
@@ -149,10 +149,10 @@ class AuditMetrics:
 
             if degraded and not was_degraded:
                 self._degraded_since = datetime.now(timezone.utc)
-                logger.warning("[AuditMetrics] Entered DEGRADED MODE")
+                logger.warning("audit_metrics.entered_degraded_mode")
             elif not degraded and was_degraded:
                 self._degraded_since = None
-                logger.info("[AuditMetrics] Exited DEGRADED MODE")
+                logger.info("audit_metrics.exited_degraded_mode")
 
     def is_degraded(self) -> bool:
         """Check if in degraded mode."""

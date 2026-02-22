@@ -4,7 +4,7 @@ Self-Learning DNA Service - 자가 학습 서비스
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -22,7 +22,7 @@ from .models import (
     SuggestionPriority,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -69,7 +69,10 @@ class ParameterBlacklist:
 
             self._backend = get_state_backend()
         except Exception as e:
-            logger.warning(f"[ParameterBlacklist] StateBackend init failed: {e}")
+            logger.warning(
+                "parameter_blacklist.statebackend_init_failed",
+                error=e,
+            )
             self._backend = None
 
     def register(
@@ -120,7 +123,12 @@ class ParameterBlacklist:
         # StateBackend에 영속화
         self._save_to_storage()
 
-        logger.warning(f"[ParameterBlacklist] Registered: {key} " f"blocked_values={blocked_values} reason={reason.value}")
+        logger.warning(
+            "cell_registry.bulkheads_registered",
+            key=key,
+            blocked_values=blocked_values,
+            reason=reason.value,
+        )
 
         return entry
 
@@ -179,7 +187,10 @@ class ParameterBlacklist:
             if key in self._blacklist:
                 del self._blacklist[key]
                 self._save_to_storage()
-                logger.info(f"[ParameterBlacklist] Unregistered: {key}")
+                logger.info(
+                    "parameter_blacklist.unregistered",
+                    key=key,
+                )
                 return True
         return False
 
@@ -204,9 +215,15 @@ class ParameterBlacklist:
                 with self._lock:
                     for key, entry_dict in stored.items():
                         self._blacklist[key] = BlacklistedParameter.from_dict(entry_dict)
-                logger.info(f"[ParameterBlacklist] Loaded {len(self._blacklist)} entries from storage")
+                logger.info(
+                    "parameter_blacklist.loaded_entries_storage",
+                    count=len(self._blacklist),
+                )
         except Exception as e:
-            logger.warning(f"[ParameterBlacklist] Failed to load from storage: {e}")
+            logger.warning(
+                "parameter_blacklist.failed_load_storage",
+                error=e,
+            )
 
     def _save_to_storage(self) -> None:
         """
@@ -222,9 +239,15 @@ class ParameterBlacklist:
                 serialized = {key: entry.to_dict() for key, entry in self._blacklist.items()}
 
             self._backend.set(self.STORAGE_KEY, serialized)
-            logger.debug(f"[ParameterBlacklist] Saved {len(serialized)} entries to storage")
+            logger.debug(
+                "parameter_blacklist.saved_entries_storage",
+                count=len(serialized),
+            )
         except Exception as e:
-            logger.error(f"[ParameterBlacklist] Failed to save to storage: {e}")
+            logger.error(
+                "parameter_blacklist.failed_save_storage",
+                error=e,
+            )
 
 
 class LearningService:
@@ -261,7 +284,7 @@ class LearningService:
 
         self._initialized = True
 
-        logger.info("LearningService initialized")
+        logger.info("learningservice_initialized")
 
     def start_session(self, stage_name: str) -> LearningSession:
         """
@@ -279,7 +302,11 @@ class LearningService:
             stage_name=stage_name,
         )
         self._sessions[session_id] = session
-        logger.info(f"Learning session started: {session_id} for {stage_name}")
+        logger.info(
+            "learning_session_started",
+            session_id=session_id,
+            stage_name=stage_name,
+        )
         return session
 
     def end_session(self, session_id: str) -> LearningSession | None:
@@ -359,7 +386,11 @@ class LearningService:
         if session_id and session_id in self._sessions:
             self._sessions[session_id].patterns_learned += 1
 
-        logger.debug(f"Pattern learned: {name} ({pattern_type.value})")
+        logger.debug(
+            "pattern_learned",
+            name=name,
+            pattern_type=pattern_type.value,
+        )
 
         # 제안 생성 체크
         self._check_and_generate_suggestions(pattern)
@@ -509,7 +540,10 @@ class LearningService:
             if suggestion.suggestion_id == suggestion_id:
                 suggestion.applied = True
                 suggestion.applied_at = datetime.now(timezone.utc)
-                logger.info(f"Suggestion applied: {suggestion_id}")
+                logger.info(
+                    "suggestion_applied",
+                    suggestion_id=suggestion_id,
+                )
                 return True
         return False
 
@@ -702,7 +736,10 @@ class LearningService:
                 features={"module": module, "manual_only": True},
                 confidence=1.0,
             )
-            logger.warning(f"[LearningService] Module '{module}' is now MANUAL ONLY")
+            logger.warning(
+                "learning_service.module_now_manual_only",
+                module=module,
+            )
         else:
             # 해당 패턴 제거
             pattern_to_remove = None
@@ -712,7 +749,10 @@ class LearningService:
                     break
             if pattern_to_remove:
                 del self._patterns[pattern_to_remove]
-            logger.info(f"[LearningService] Module '{module}' autonomous mode restored")
+            logger.info(
+                "learning_service.module_autonomous_mode_restored",
+                module=module,
+            )
 
     def is_manual_only_mode(self, module: str) -> bool:
         """

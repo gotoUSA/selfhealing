@@ -9,13 +9,13 @@ Contains:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from pathlib import Path
 from typing import Any
 
 from selfhealing.audit.integrity.models import compute_hash
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HashChainVerifier:

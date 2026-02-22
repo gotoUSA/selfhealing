@@ -21,14 +21,14 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any, Literal
 
 from selfhealing.interfaces.rate_limit_storage import (
     RateLimitStorageInterface,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Cached storage instance
 _storage_instance: RateLimitStorageInterface | None = None
@@ -113,19 +113,25 @@ def _auto_detect_storage(
     try:
         storage = _create_redis_storage(redis_client, required=False)
         if storage and storage.is_available():
-            logger.info("[RateLimitStorage] Auto-detected: Redis")
+            logger.info("rate_limit_storage.auto_detected_redis")
             return storage
     except Exception as e:
-        logger.debug(f"[RateLimitStorage] Redis not available: {e}")
+        logger.debug(
+            "rate_limit_storage.redis_available",
+            error=e,
+        )
 
     # 2. Try Database (100% fallback)
     try:
         storage = _create_database_storage()
         if storage.is_available():
-            logger.info("[RateLimitStorage] Auto-detected: Database")
+            logger.info("rate_limit_storage.auto_detected_database")
             return storage
     except Exception as e:
-        logger.debug(f"[RateLimitStorage] Database not available: {e}")
+        logger.debug(
+            "rate_limit_storage.database_available",
+            error=e,
+        )
 
     # 3. Fall back to In-Memory (single process)
     logger.warning(

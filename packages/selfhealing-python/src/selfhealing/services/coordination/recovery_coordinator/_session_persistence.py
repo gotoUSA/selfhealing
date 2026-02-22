@@ -7,7 +7,7 @@ SessionPersistenceMixin for RecoveryCoordinator.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 from selfhealing.settings.recovery_coordinator import get_recovery_coordinator_settings
@@ -15,7 +15,7 @@ from ..enums import CompensationStatus, RecoveryStatus
 from ..recovery_state import CompensationResult, RecoverySession, RecoveryStep
 from . import SESSION_CAS_SCRIPT, SessionVersionConflictError, StepTimeoutError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SessionPersistenceMixin:
@@ -100,7 +100,11 @@ class SessionPersistenceMixin:
         # EMERGENCY_RECOVERY_COMPLETED 이벤트 발행 (Postmortem 자동 생성 트리거)
         self._publish_emergency_recovery_completed_event(session)
 
-        logger.info(f"[Recovery] Completed: id={session.id}, " f"namespace={session.namespace}")
+        logger.info(
+            "recovery.completed",
+            session=session.id,
+            session_1=session.namespace,
+        )
 
     def _fail_session(
         self,
@@ -154,7 +158,11 @@ class SessionPersistenceMixin:
         # 로그 선행 — SIGKILL 방어 (Lock 해제 전)
         # Lock 해제 후 DLQ 저장 전에 프로세스가 죽어도
         # 최소한 로그 시스템에 흔적이 남음
-        logger.error(f"[Recovery] Failed: id={session.id}, error={error}")
+        logger.error(
+            "recovery.failed",
+            session=session.id,
+            error=error,
+        )
 
         # 락 해제 — DLQ 저장보다 먼저 (Lock 보유 시간 최소화)
         # 세션이 이미 FAILED 상태로 영속화되었으므로,
@@ -308,7 +316,11 @@ class SessionPersistenceMixin:
 
         except Exception as e:
             # Fail-Open: DLQ 저장 실패가 복구 실패 처리를 중단시키지 않음
-            logger.warning(f"[Recovery] DLQ store failed (ignored): session={session.id}, " f"error={e}")
+            logger.warning(
+                "recovery.dlq_store_failed_ignored",
+                session=session.id,
+                error=e,
+            )
 
     def _attempt_compensation(
         self,
@@ -351,13 +363,19 @@ class SessionPersistenceMixin:
 
             compensate_handler = self._compensate_handlers.get(step.step_type)
             if compensate_handler is None:
-                logger.debug(f"[Recovery] No compensate handler for " f"{step.step_type.value}, skipping")
+                logger.debug(
+                    "recovery.no_compensate_handler_skipping",
+                    step_type=step.step_type.value,
+                )
                 result.skipped_steps.append(step)
                 continue
 
             # 이미 보상 완료된 Step은 건너뜀 (재시작 안전성)
             if step.compensation_status == CompensationStatus.COMPENSATED:
-                logger.debug(f"[Recovery] Already compensated: " f"{step.step_type.value}, skipping")
+                logger.debug(
+                    "recovery.already_compensated_skipping",
+                    step_type=step.step_type.value,
+                )
                 result.compensated_steps.append(step)
                 continue
 
@@ -377,26 +395,42 @@ class SessionPersistenceMixin:
                     self._save_session(session)
 
                     result.compensated_steps.append(step)
-                    logger.info(f"[Recovery] Compensated: {step.step_type.value}, " f"session={session.id}")
+                    logger.info(
+                        "recovery.compensated",
+                        step_type=step.step_type.value,
+                        session=session.id,
+                    )
                 else:
                     error_msg = handler_result.get("error", "Unknown error")
                     step.compensation_status = CompensationStatus.COMPENSATE_FAILED
                     self._save_session(session)
 
                     result.failed_steps.append((step, error_msg))
-                    logger.warning(f"[Recovery] Compensation failed: " f"{step.step_type.value}, error={error_msg}")
+                    logger.warning(
+                        "recovery.compensation_failed",
+                        step_type=step.step_type.value,
+                        error_msg=error_msg,
+                    )
             except StepTimeoutError as e:
                 # 보상 타임아웃도 COMPENSATE_FAILED 처리
                 step.compensation_status = CompensationStatus.COMPENSATE_FAILED
                 self._save_session(session)
                 result.failed_steps.append((step, str(e)))
-                logger.warning(f"[Recovery] Compensation timeout: {step.step_type.value}, " f"timeout={comp_timeout}s")
+                logger.warning(
+                    "recovery.compensation_timeout",
+                    step_type=step.step_type.value,
+                    comp_timeout=comp_timeout,
+                )
             except Exception as e:
                 step.compensation_status = CompensationStatus.COMPENSATE_FAILED
                 self._save_session(session)
 
                 result.failed_steps.append((step, str(e)))
-                logger.warning(f"[Recovery] Compensation exception: " f"{step.step_type.value}, error={e}")
+                logger.warning(
+                    "recovery.compensation_exception",
+                    step_type=step.step_type.value,
+                    error=e,
+                )
                 # Fail-Open: 보상 실패가 세션 실패 처리를 중단시키지 않음
 
         return result

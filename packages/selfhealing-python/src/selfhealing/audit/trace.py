@@ -6,14 +6,14 @@ Integrates with OpenTelemetry and common tracing headers.
 """
 
 import contextvars
-import logging
+import structlog
 import threading
 import uuid
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Context variable for async-safe trace ID storage
 _trace_id_var: contextvars.ContextVar[str | None] = contextvars.ContextVar("trace_id", default=None)

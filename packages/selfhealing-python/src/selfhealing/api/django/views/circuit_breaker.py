@@ -17,7 +17,7 @@ Note:
 - View는 Request/Response 처리만 담당
 """
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -38,7 +38,7 @@ from selfhealing.services.control_api_service import (
     get_control_api_service,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Re-export for backward compatibility
@@ -217,7 +217,10 @@ class ControlAuditView(APIView):
                 }
             )
         except Exception as e:
-            logger.warning(f"[AuditLogsView] Error retrieving audit logs: {e}")
+            logger.warning(
+                "audit_logs_view.error_retrieving_audit_logs",
+                error=e,
+            )
             return Response(
                 {
                     "logs": [],

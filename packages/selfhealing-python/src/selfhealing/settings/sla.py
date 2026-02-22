@@ -14,13 +14,13 @@ Environment Variables:
 SLA 일괄 설정 및 도메인별 임계값 관리.
 """
 
-import logging
+import structlog
 from datetime import timedelta
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SLASettings(BaseSettings):

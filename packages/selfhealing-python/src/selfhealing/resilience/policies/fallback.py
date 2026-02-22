@@ -23,7 +23,7 @@ RetryPolicy가 기존 RetryHandler를 재사용하지 않은 선례와 동일하
 
 from __future__ import annotations
 
-import logging
+import structlog
 import warnings
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, TypeVar
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
         FallbackStrategy,
     )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -207,7 +207,11 @@ class FallbackPolicy(ResiliencePolicy[T]):
                     },
                 )
             except Exception as e:
-                logger.warning(f"Fallback chain[{i}] failed: {e}")
+                logger.warning(
+                    "fallback_chain_failed",
+                    i=i,
+                    error=e,
+                )
                 continue
 
         # Step 3: fallback_fn 시도
@@ -225,7 +229,10 @@ class FallbackPolicy(ResiliencePolicy[T]):
                     },
                 )
             except Exception as e:
-                logger.warning(f"Fallback function failed: {e}")
+                logger.warning(
+                    "fallback_function_failed",
+                    error=e,
+                )
 
         # Step 4: default_value 반환
         if self._default_value is not None:
@@ -277,7 +284,10 @@ class FallbackPolicy(ResiliencePolicy[T]):
             )
             return self._convert_fallback_result(fallback_result, original_error)
         except Exception as e:
-            logger.debug(f"Strategy shim failed, falling back to native path: {e}")
+            logger.debug(
+                "strategy_shim_failed_falling",
+                error=e,
+            )
             return None
 
     @staticmethod
@@ -435,7 +445,11 @@ class AsyncFallbackPolicy:
                     },
                 )
             except Exception as e:
-                logger.warning(f"Async fallback chain[{i}] failed: {e}")
+                logger.warning(
+                    "async_fallback_chain_failed",
+                    i=i,
+                    error=e,
+                )
                 continue
 
         # Step 2: fallback_fn 시도
@@ -453,7 +467,10 @@ class AsyncFallbackPolicy:
                     },
                 )
             except Exception as e:
-                logger.warning(f"Async fallback function failed: {e}")
+                logger.warning(
+                    "async_fallback_function_failed",
+                    error=e,
+                )
 
         # Step 3: default_value 반환
         if self._default_value is not None:

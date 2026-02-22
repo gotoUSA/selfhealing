@@ -4,11 +4,11 @@ Lua Script Atomic Hash Chain (5 RTT → 1 RTT).
 Provides atomic hash chain operations using Redis Lua scripts.
 """
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LuaAtomicHashChain:
@@ -148,9 +148,12 @@ class LuaAtomicHashChain:
             self._commit_sha = self._redis.script_load(self.LUA_ATOMIC_COMMIT)
             self._batch_get_sha = self._redis.script_load(self.LUA_BATCH_GET_STATE)
             self._scripts_loaded = True
-            logger.debug("[LuaAtomicHashChain] Scripts loaded successfully")
+            logger.debug("lua_atomic_hash_chain.scripts_loaded_successfully")
         except Exception as e:
-            logger.warning(f"[LuaAtomicHashChain] Script load failed: {e}")
+            logger.warning(
+                "lua_atomic_hash_chain.script_load_failed",
+                error=e,
+            )
             # Fallback to eval on each call
 
     def _get_keys(self) -> dict[str, str]:
@@ -227,7 +230,10 @@ class LuaAtomicHashChain:
             return True, int(result) if result else 0, ""
 
         except Exception as e:
-            logger.error(f"[LuaAtomicHashChain] Reserve failed: {e}")
+            logger.error(
+                "lua_atomic_hash_chain.reserve_failed",
+                error=e,
+            )
             return False, 0, str(e)
 
     def commit_sequence_atomic(
@@ -284,5 +290,8 @@ class LuaAtomicHashChain:
             return True, ""
 
         except Exception as e:
-            logger.error(f"[LuaAtomicHashChain] Commit failed: {e}")
+            logger.error(
+                "lua_atomic_hash_chain.commit_failed",
+                error=e,
+            )
             return False, str(e)

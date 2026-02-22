@@ -13,13 +13,13 @@ Environment Variables:
     SELFHEALING_SCALE_FLUSH_INTERVAL_SECONDS=1.0
 """
 
-import logging
+import structlog
 from enum import Enum
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ScaleProfile(str, Enum):

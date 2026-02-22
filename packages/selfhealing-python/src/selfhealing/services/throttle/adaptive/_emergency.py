@@ -5,9 +5,9 @@ EmergencyModeMixin for AdaptiveThrottle.
 """
 
 import selfhealing.services.throttle.adaptive as _adaptive_mod
-import logging
+import structlog
 import time
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 
@@ -49,7 +49,9 @@ class EmergencyModeMixin:
 
             # Recovery Dampening으로 점진적 복구
             self.start_recovery_dampening()
-            logger.info(f"[AdaptiveThrottle] Emergency deactivated, " f"starting recovery dampening")
+            logger.info(
+                "adaptive_throttle.emergency_deactivated_starting_recovery",
+            )
         else:
             # Emergency 활성화
             if not self._emergency_mode_active:
@@ -150,9 +152,16 @@ class EmergencyModeMixin:
             level_enum = EmergencyLevel(level)
             rules = EMERGENCY_LEVEL_RULES.get(level_enum, EMERGENCY_LEVEL_RULES[EmergencyLevel.NORMAL])
             self._emergency_tier_multipliers = rules.copy()
-            logger.debug(f"[AdaptiveThrottle] Cached tier multipliers for level {level}: {rules}")
+            logger.debug(
+                "adaptive_throttle.cached_tier_multipliers_level",
+                level=level,
+                rules=rules,
+            )
         except (ImportError, ValueError) as e:
-            logger.debug(f"[AdaptiveThrottle] Could not cache tier multipliers: {e}")
+            logger.debug(
+                "adaptive_throttle.cache_tier_multipliers",
+                error=e,
+            )
             self._emergency_tier_multipliers = {}
 
     def _apply_emergency_cap(self, gradient_limit: int, tier_id: str = "standard") -> int:
@@ -231,13 +240,19 @@ class EmergencyModeMixin:
             level = manager.get_current_level()
 
             if level.value > 0:
-                logger.info(f"[AdaptiveThrottle] Syncing emergency state on init: " f"level={level.name}")
+                logger.info(
+                    "adaptive_throttle.syncing_emergency_state_init",
+                    level=level.name,
+                )
                 self.adjust_for_emergency(level.value)
 
             self._last_emergency_check_time = time.time()
 
         except ImportError:
-            logger.debug("[AdaptiveThrottle] EmergencyMode not available for sync")
+            logger.debug("adaptive_throttle.emergencymode_available_sync")
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to sync emergency state: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_sync_emergency_state",
+                error=e,
+            )
 

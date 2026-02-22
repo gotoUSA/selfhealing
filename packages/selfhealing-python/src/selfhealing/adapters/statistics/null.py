@@ -13,7 +13,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.interfaces.statistics import (
@@ -29,7 +29,7 @@ from selfhealing.interfaces.statistics import (
     StatusCounts,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class NullStatisticsRepository(StatisticsRepositoryInterface):
@@ -128,7 +128,7 @@ class NullStatisticsRepository(StatisticsRepositoryInterface):
         statuses: list[str] | None = None,
     ) -> dict[str, int]:
         """Return empty SLA breaches (no-op)."""
-        logger.debug("[NullStatisticsRepository] get_sla_breaches called (no-op)")
+        logger.debug("null_statistics_repository.called_no_op")
         return {}
 
     # =========================================================================
@@ -141,7 +141,7 @@ class NullStatisticsRepository(StatisticsRepositoryInterface):
 
     def archive_old_entries(self, older_than_days: int = 30) -> int:
         """Return zero archived entries (no-op)."""
-        logger.debug("[NullStatisticsRepository] archive_old_entries called (no-op)")
+        logger.debug("null_statistics_repository.called_no_op")
         return 0
 
     def purge_archived(
@@ -150,7 +150,7 @@ class NullStatisticsRepository(StatisticsRepositoryInterface):
         older_than_days: int | None = None,
     ) -> int:
         """Return zero purged entries (no-op)."""
-        logger.debug("[NullStatisticsRepository] purge_archived called (no-op)")
+        logger.debug("null_statistics_repository.called_no_op")
         return 0
 
     # =========================================================================
@@ -171,12 +171,12 @@ class NullStatisticsRepository(StatisticsRepositoryInterface):
 
     def persist_entry(self, entry_data: dict[str, Any]) -> str | None:
         """No-op persist (returns None)."""
-        logger.debug("[NullStatisticsRepository] persist_entry called (no-op)")
+        logger.debug("null_statistics_repository.called_no_op")
         return None
 
     def sync_from_runtime(self, entries: list[dict[str, Any]]) -> int:
         """No-op sync (returns 0)."""
-        logger.debug("[NullStatisticsRepository] sync_from_runtime called (no-op)")
+        logger.debug("null_statistics_repository.called_no_op")
         return 0
 
     # =========================================================================
@@ -207,5 +207,5 @@ class NullStatisticsRepository(StatisticsRepositoryInterface):
         audit_record_hash: str | None = None,
     ) -> bool:
         """No-op link (returns False)."""
-        logger.debug("[NullStatisticsRepository] link_audit_entry called (no-op)")
+        logger.debug("null_statistics_repository.called_no_op")
         return False

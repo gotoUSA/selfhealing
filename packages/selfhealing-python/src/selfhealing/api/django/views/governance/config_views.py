@@ -9,7 +9,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from rest_framework import status
@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class GovernanceConfigView(APIView):
@@ -101,7 +101,11 @@ class GovernanceConfigView(APIView):
         # 업데이트 수행 - ValueError는 exception handler로 전파
         new_config = manager.update_governance_config(**update_fields)
 
-        logger.info(f"[Governance] Config updated by {actor}: {list(update_fields.keys())}")
+        logger.info(
+            "governance.config_updated",
+            actor=actor,
+            value=list(update_fields.keys()),
+        )
 
         return Response(
             {
@@ -172,7 +176,11 @@ class L2StorageConfigManagedView(APIView):
 
         new_config = manager.update_l2_storage_config(**update_fields)
 
-        logger.info(f"[Governance] L2 storage config updated by {actor}: {list(update_fields.keys())}")
+        logger.info(
+            "governance.storage_config_updated",
+            actor=actor,
+            value=list(update_fields.keys()),
+        )
 
         return Response(
             {

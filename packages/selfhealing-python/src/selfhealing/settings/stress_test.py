@@ -13,12 +13,12 @@ Environment Variables:
     SELFHEALING_STRESS_TEST_MAX_CONCURRENT_LOCKS=100
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class StressTestSettings(BaseSettings):

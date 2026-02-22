@@ -14,7 +14,7 @@ Reference:
     92_CONFIG_IMPLEMENTATION_GUIDE.md Week 4 [21] CeleryTaskSettings 참조.
 """
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import Any
 
@@ -48,7 +48,7 @@ from selfhealing.settings.celery_task import get_celery_task_settings
 from selfhealing.settings.cleanup import get_cleanup_settings
 from selfhealing.settings.recovery_tasks import get_recovery_tasks_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_task_settings():
@@ -133,7 +133,12 @@ def check_recovery_trigger_task(
         - session_id: 시작된 세션 ID (있으면)
         - reason: 트리거 이유 또는 불발 이유
     """
-    logger.info(f"[check_recovery_trigger] namespace={namespace}, " f"error_rate={error_rate}, success_rate={success_rate}")
+    logger.info(
+        "check_recovery_trigger.event",
+        namespace=namespace,
+        error_rate=error_rate,
+        success_rate=success_rate,
+    )
 
     try:
         coordinator = get_recovery_coordinator()
@@ -247,7 +252,10 @@ def check_recovery_trigger_task(
         }
 
     except Exception as e:
-        logger.exception(f"[check_recovery_trigger] Error: {e}")
+        logger.exception(
+            "check_recovery_trigger.error",
+            error=e,
+        )
         raise self.retry(exc=e)
 
 
@@ -284,7 +292,11 @@ def execute_recovery_step_task(
         - status: 현재 상태
         - completed: 전체 복구 완료 여부
     """
-    logger.info(f"[execute_recovery_step] session_id={session_id}, namespace={namespace}")
+    logger.info(
+        "execute_recovery_step.event",
+        session_id=session_id,
+        namespace=namespace,
+    )
 
     try:
         coordinator = get_recovery_coordinator()
@@ -339,7 +351,11 @@ def execute_recovery_step_task(
         if not success:
             # 단계 실패 - 재시도 또는 중단
             error_msg = result.get("error", "Unknown error")
-            logger.warning(f"[execute_recovery_step] Step failed: {step_name}, error={error_msg}")
+            logger.warning(
+                "execute_recovery_step.step_failed",
+                step_name=step_name,
+                error_msg=error_msg,
+            )
 
             # 재시도 가능 여부 확인
             retry_count = result.get("retry_count", 0)
@@ -398,7 +414,10 @@ def execute_recovery_step_task(
         }
 
     except Exception as e:
-        logger.exception(f"[execute_recovery_step] Error: {e}")
+        logger.exception(
+            "execute_recovery_step.error",
+            error=e,
+        )
         raise self.retry(exc=e)
 
 
@@ -437,7 +456,10 @@ def monitor_recovery_health_task(
         - tripped: 회로 차단 여부
         - should_re_escalate: 재에스컬레이션 필요 여부
     """
-    logger.debug(f"[monitor_recovery_health] namespace={namespace}")
+    logger.debug(
+        "monitor_recovery_health.event",
+        namespace=namespace,
+    )
 
     try:
         coordinator = get_recovery_coordinator()
@@ -490,7 +512,10 @@ def monitor_recovery_health_task(
                     )
 
                 # Emergency 재진입 (별도 태스크 또는 이벤트로 처리)
-                logger.critical(f"[monitor_recovery_health] RE-ESCALATION required: " f"namespace={namespace}")
+                logger.critical(
+                    "monitor_recovery_health.re_escalation_required",
+                    namespace=namespace,
+                )
 
         return {
             "healthy": not result["tripped"],
@@ -502,7 +527,10 @@ def monitor_recovery_health_task(
         }
 
     except Exception as e:
-        logger.exception(f"[monitor_recovery_health] Error: {e}")
+        logger.exception(
+            "monitor_recovery_health.error",
+            error=e,
+        )
         raise self.retry(exc=e)
 
 
@@ -536,7 +564,10 @@ def check_stale_pending_recoveries_task(
         - reminded_count: 알림 발송된 수
         - expired_count: 만료 처리된 수
     """
-    logger.info(f"[check_stale_pending_recoveries] " f"threshold={stale_threshold_minutes} minutes")
+    logger.info(
+        "check_stale_pending_recoveries.minutes",
+        stale_threshold_minutes=stale_threshold_minutes,
+    )
 
     try:
         manager = get_pending_recovery_approval_manager()
@@ -546,7 +577,10 @@ def check_stale_pending_recoveries_task(
         expired_count = len(expired)
 
         if expired_count > 0:
-            logger.warning(f"[check_stale_pending_recoveries] " f"Expired {expired_count} requests")
+            logger.warning(
+                "check_stale_pending_recoveries.expired_requests",
+                expired_count=expired_count,
+            )
 
         # 방치된 요청 확인 및 리마인더 발송
         reminded = manager.check_and_send_reminders()
@@ -557,7 +591,10 @@ def check_stale_pending_recoveries_task(
         stale_count = len(stale)
 
         if stale_count > 0:
-            logger.warning(f"[check_stale_pending_recoveries] " f"{stale_count} stale requests found")
+            logger.warning(
+                "check_stale_pending_recoveries.stale_requests_found",
+                stale_count=stale_count,
+            )
 
         return {
             "stale_count": stale_count,
@@ -574,7 +611,10 @@ def check_stale_pending_recoveries_task(
         }
 
     except Exception as e:
-        logger.exception(f"[check_stale_pending_recoveries] Error: {e}")
+        logger.exception(
+            "check_stale_pending_recoveries.error",
+            error=e,
+        )
         return {
             "error": str(e),
             "stale_count": 0,
@@ -612,7 +652,10 @@ def cleanup_old_recovery_sessions_task(
         _cleanup_settings = get_cleanup_settings()
         max_age_hours = _cleanup_settings.recovery_max_age_hours
 
-    logger.info(f"[cleanup_old_recovery_sessions] max_age={max_age_hours}h")
+    logger.info(
+        "cleanup_old_recovery_sessions.event",
+        max_age_hours=max_age_hours,
+    )
 
     try:
         approval_manager = get_pending_recovery_approval_manager()
@@ -620,14 +663,20 @@ def cleanup_old_recovery_sessions_task(
         # 오래된 승인 요청 정리
         cleaned = approval_manager.cleanup_old_requests(max_age_hours=max_age_hours)
 
-        logger.info(f"[cleanup_old_recovery_sessions] Cleaned {cleaned} old requests")
+        logger.info(
+            "cleanup_old_recovery_sessions.cleaned_old_requests",
+            cleaned=cleaned,
+        )
 
         return {
             "cleaned_count": cleaned,
         }
 
     except Exception as e:
-        logger.exception(f"[cleanup_old_recovery_sessions] Error: {e}")
+        logger.exception(
+            "cleanup_old_recovery_sessions.error",
+            error=e,
+        )
         return {
             "error": str(e),
             "cleaned_count": 0,

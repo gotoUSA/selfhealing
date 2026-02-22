@@ -11,7 +11,7 @@ HALF_OPEN 상태에서 Canary 비율(10%→30%→60%)의 요청만 백엔드로 
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -24,7 +24,7 @@ from selfhealing.services.circuit_breaker.canary_recovery import (
 )
 from selfhealing.services.circuit_breaker.config import CircuitState
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -678,7 +678,10 @@ class CanaryWithStaleCacheService:
             try:
                 self.update_cache(cache_key, response_data, service_id=service_id)
             except Exception as e:
-                logger.warning("Auto cache update failed (suppressed): %s", e)
+                logger.warning(
+                    "auto_cache_update_failed",
+                    error=e,
+                )
 
     def record_failure(self, service_id: str) -> None:
         """

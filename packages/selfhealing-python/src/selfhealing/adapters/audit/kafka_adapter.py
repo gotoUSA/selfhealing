@@ -24,7 +24,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import threading
 import time
@@ -37,7 +37,7 @@ from selfhealing.interfaces.audit_adapter import AuditEntry, AuditLogAdapter
 if TYPE_CHECKING:
     from confluent_kafka import Producer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -151,7 +151,10 @@ class KafkaAuditAdapter(AuditLogAdapter):
 
             if err:
                 self._error_count += 1
-                logger.warning(f"[KafkaAuditAdapter] Delivery failed: {err}")
+                logger.warning(
+                    "kafka_audit_adapter.delivery_failed",
+                    error=err,
+                )
             else:
                 self._sent_count += 1
 
@@ -165,7 +168,7 @@ class KafkaAuditAdapter(AuditLogAdapter):
             entry: 감사 로그 엔트리
         """
         if self._closed:
-            logger.warning("[KafkaAuditAdapter] Adapter closed, ignoring log")
+            logger.warning("kafka_audit_adapter.adapter_closed_ignoring_log")
             return
 
         _, KafkaError, KafkaException = _get_confluent_kafka()
@@ -197,14 +200,20 @@ class KafkaAuditAdapter(AuditLogAdapter):
 
         except (TypeError, ValueError) as e:
             # 직렬화 실패 → Dead Letter Topic으로 전송
-            logger.error(f"[KafkaAuditAdapter] Serialization failed: {e}")
+            logger.error(
+                "kafka_audit_adapter.serialization_failed",
+                error=e,
+            )
             self._send_to_dlt(entry, error=str(e))
             with self._lock:
                 self._error_count += 1
                 self._pending_count -= 1
 
         except Exception as e:
-            logger.error(f"[KafkaAuditAdapter] Produce failed: {e}")
+            logger.error(
+                "kafka_audit_adapter.produce_failed",
+                error=e,
+            )
             with self._lock:
                 self._error_count += 1
                 self._pending_count -= 1
@@ -223,7 +232,10 @@ class KafkaAuditAdapter(AuditLogAdapter):
                 value=json.dumps(dlt_value).encode("utf-8"),
             )
         except Exception as e:
-            logger.error(f"[KafkaAuditAdapter] DLT send failed: {e}")
+            logger.error(
+                "kafka_audit_adapter.dlt_send_failed",
+                error=e,
+            )
 
     def log_batch(self, entries: list[AuditEntry]) -> None:
         """
@@ -266,11 +278,21 @@ class KafkaAuditAdapter(AuditLogAdapter):
             try:
                 remaining = self._producer.flush(timeout=10.0)
                 if remaining > 0:
-                    logger.warning(f"[KafkaAuditAdapter] {remaining} messages not delivered")
+                    logger.warning(
+                        "kafka_audit_adapter.messages_delivered",
+                        remaining=remaining,
+                    )
             except Exception as e:
-                logger.warning(f"[KafkaAuditAdapter] Close error: {e}")
+                logger.warning(
+                    "kafka_audit_adapter.close_error",
+                    error=e,
+                )
 
-        logger.info(f"[KafkaAuditAdapter] Closed. " f"Sent: {self._sent_count}, Errors: {self._error_count}")
+        logger.info(
+            "kafka_audit_adapter.closed_sent_errors",
+            self=self._sent_count,
+            self_1=self._error_count,
+        )
 
     def get_stats(self) -> dict[str, Any]:
         """

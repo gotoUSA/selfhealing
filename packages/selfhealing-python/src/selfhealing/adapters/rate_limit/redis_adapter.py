@@ -16,7 +16,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
@@ -44,7 +44,7 @@ except ImportError:
     set_ratelimit_fallback_mode = lambda *args: None
     record_ratelimit_reconciliation = lambda *args: None
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_redis_ttl() -> int:
@@ -123,7 +123,10 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             # v6.3.0: Redis 불가용 메트릭 기록
             if not self._fallback_mode:
                 record_ratelimit_redis_unavailable()
-                logger.warning(f"[RedisRateLimitStorage] Redis unavailable: {e}")
+                logger.warning(
+                    "redis_rate_limit_storage.redis_unavailable",
+                    error=e,
+                )
             self._fallback_mode = True
             set_ratelimit_fallback_mode(True)
             self._available = False
@@ -144,13 +147,20 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
                         or local_state.consecutive_429s != redis_state.consecutive_429s
                     ):
                         record_ratelimit_drift(key)
-                        logger.info(f"[RedisRateLimitStorage] Drift detected for {key}, " f"syncing local → Redis")
+                        logger.info(
+                            "redis_rate_limit_storage.drift_detected_syncing_local",
+                            key=key,
+                        )
                         # 더 보수적인 값 선택 (안전 우선)
                         merged = self._merge_conservative(local_state, redis_state)
                         self._save_to_redis(key, merged)
                         record_ratelimit_reconciliation(success=True)
             except Exception as e:
-                logger.warning(f"[RedisRateLimitStorage] Reconciliation failed for {key}: {e}")
+                logger.warning(
+                    "redis_rate_limit_storage.reconciliation_failed",
+                    key=key,
+                    error=e,
+                )
                 record_ratelimit_reconciliation(success=False)
 
         self._local_state.clear()
@@ -231,7 +241,10 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
 
         except Exception as e:
-            logger.error(f"[RedisRateLimitStorage] Failed to get state: {e}")
+            logger.error(
+                "redis_rate_limit_storage.failed_get_state",
+                error=e,
+            )
             return RateLimitState(key=key)
 
     def set_cooldown(
@@ -258,10 +271,18 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             )
             pipeline.execute()
 
-            logger.debug(f"[RedisRateLimitStorage] Set cooldown for '{key}': " f"until={cooldown_until}, ttl={ttl}")
+            logger.debug(
+                "redis_rate_limit_storage.set_cooldown",
+                key=key,
+                cooldown_until=cooldown_until,
+                ttl=ttl,
+            )
 
         except Exception as e:
-            logger.error(f"[RedisRateLimitStorage] Failed to set cooldown: {e}")
+            logger.error(
+                "redis_rate_limit_storage.failed_set_cooldown",
+                error=e,
+            )
             raise RateLimitStorageUnavailableError(str(e)) from e
 
     def increment_consecutive_429s(self, key: str) -> int:
@@ -276,21 +297,34 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             results = pipeline.execute()
 
             new_value = results[0]
-            logger.debug(f"[RedisRateLimitStorage] Incremented 429 counter for '{key}': {new_value}")
+            logger.debug(
+                "redis_rate_limit_storage.incremented_counter",
+                key=key,
+                new_value=new_value,
+            )
             return new_value
 
         except Exception as e:
-            logger.error(f"[RedisRateLimitStorage] Failed to increment: {e}")
+            logger.error(
+                "redis_rate_limit_storage.failed_increment",
+                error=e,
+            )
             raise RateLimitStorageUnavailableError(str(e)) from e
 
     def reset_consecutive_429s(self, key: str) -> None:
         """Reset 429 counter in Redis."""
         try:
             self._redis.delete(self._make_key(key, "consecutive_429s"))
-            logger.debug(f"[RedisRateLimitStorage] Reset 429 counter for '{key}'")
+            logger.debug(
+                "redis_rate_limit_storage.reset_counter",
+                key=key,
+            )
 
         except Exception as e:
-            logger.error(f"[RedisRateLimitStorage] Failed to reset: {e}")
+            logger.error(
+                "redis_rate_limit_storage.failed_reset",
+                error=e,
+            )
 
     def clear(self, key: str) -> None:
         """Clear all rate limit state for a key."""
@@ -301,7 +335,13 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             pipeline.delete(self._make_key(key, "last_updated"))
             pipeline.execute()
 
-            logger.debug(f"[RedisRateLimitStorage] Cleared state for '{key}'")
+            logger.debug(
+                "redis_rate_limit_storage.cleared_state",
+                key=key,
+            )
 
         except Exception as e:
-            logger.error(f"[RedisRateLimitStorage] Failed to clear: {e}")
+            logger.error(
+                "redis_rate_limit_storage.failed_clear",
+                error=e,
+            )

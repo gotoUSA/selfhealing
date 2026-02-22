@@ -6,10 +6,10 @@ Provides methods for audit logging and notifications with Fail-Open principle.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditHelpersMixin:
@@ -37,7 +37,10 @@ class AuditHelpersMixin:
             )
         except Exception as e:
             # Fail-Open: Audit 실패가 시스템을 중단시키지 않음
-            logger.debug(f"[LayeredRepo] Audit logging failed (ignored): {e}")
+            logger.debug(
+                "layered_repo.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def _log_l2_recovery_audit(self) -> None:
         """L2 복구 시 Audit 로그 기록. Fail-Open 원칙 적용."""
@@ -50,7 +53,10 @@ class AuditHelpersMixin:
                 total_failures=self._metrics.get("l2_sync_failure_count", 0),
             )
         except Exception as e:
-            logger.debug(f"[LayeredRepo] Audit logging failed (ignored): {e}")
+            logger.debug(
+                "layered_repo.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def _log_drift_reconciliation_audit(
         self,
@@ -75,7 +81,10 @@ class AuditHelpersMixin:
                 error_count=len(errors),
             )
         except Exception as e:
-            logger.debug(f"[LayeredRepo] Audit logging failed (ignored): {e}")
+            logger.debug(
+                "layered_repo.audit_logging_failed_ignored",
+                error=e,
+            )
 
     def _send_l2_failure_notification(
         self,
@@ -106,7 +115,10 @@ class AuditHelpersMixin:
                 },
             )
         except Exception as e:
-            logger.debug(f"[LayeredRepo] Notification failed (ignored): {e}")
+            logger.debug(
+                "layered_repo.notification_failed_ignored",
+                error=e,
+            )
 
     def _send_l2_recovery_notification(self) -> None:
         """L2 복구 완료 시 알림 발송. Fail-Open 원칙 적용."""
@@ -131,4 +143,7 @@ class AuditHelpersMixin:
                 },
             )
         except Exception as e:
-            logger.debug(f"[LayeredRepo] Notification failed (ignored): {e}")
+            logger.debug(
+                "layered_repo.notification_failed_ignored",
+                error=e,
+            )

@@ -36,7 +36,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -50,7 +50,7 @@ from selfhealing.interfaces.audit_adapter import (
     AuditLogAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 

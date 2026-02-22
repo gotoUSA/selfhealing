@@ -7,7 +7,7 @@ RQ is a simple, lightweight, Python library for queueing jobs and processing the
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any, TypeVar
@@ -19,7 +19,7 @@ from selfhealing.interfaces.task_queue import (
     TaskStatus,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 F = TypeVar("F", bound=Callable)
 
 
@@ -284,7 +284,11 @@ class RQTaskAdapter(TaskQueueInterface):
                 **job_options,
             )
 
-        logger.info(f"[RQ] Enqueued task {task_name}: {job.id}")
+        logger.info(
+            "rq.enqueued_task",
+            task_name=task_name,
+            job=job.id,
+        )
         return job.id
 
     def _get_retry_intervals(self, options: TaskOptions) -> list[int]:
@@ -371,7 +375,11 @@ class RQTaskAdapter(TaskQueueInterface):
             )
 
         except Exception as e:
-            logger.error(f"[RQ] Failed to get result for {task_id}: {e}")
+            logger.error(
+                "rq.failed_get_result",
+                task_id=task_id,
+                error=e,
+            )
             return TaskResult(
                 task_id=task_id,
                 status=TaskStatus.FAILURE,
@@ -405,11 +413,18 @@ class RQTaskAdapter(TaskQueueInterface):
             else:
                 job.cancel()
 
-            logger.info(f"[RQ] Revoked task: {task_id}")
+            logger.info(
+                "rq.revoked_task",
+                task_id=task_id,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[RQ] Failed to revoke task {task_id}: {e}")
+            logger.error(
+                "rq.failed_revoke_task",
+                task_id=task_id,
+                error=e,
+            )
             return False
 
     def retry(
@@ -435,11 +450,18 @@ class RQTaskAdapter(TaskQueueInterface):
             job = Job.fetch(task_id, connection=self.connection)
             job.requeue()
 
-            logger.info(f"[RQ] Requeued task: {task_id}")
+            logger.info(
+                "rq.requeued_task",
+                task_id=task_id,
+            )
             return task_id
 
         except Exception as e:
-            logger.error(f"[RQ] Failed to retry task {task_id}: {e}")
+            logger.error(
+                "rq.failed_retry_task",
+                task_id=task_id,
+                error=e,
+            )
             raise
 
     # =========================================================================
@@ -487,7 +509,11 @@ class RQTaskAdapter(TaskQueueInterface):
                 repeat=None,  # Repeat forever
             )
 
-            logger.info(f"[RQ] Scheduled periodic task {task_name}: {job.id}")
+            logger.info(
+                "rq.scheduled_periodic_task",
+                task_name=task_name,
+                job=job.id,
+            )
             return job.id
 
         except ImportError:
@@ -512,11 +538,18 @@ class RQTaskAdapter(TaskQueueInterface):
             scheduler = Scheduler(connection=self.connection)
             scheduler.cancel(schedule_id)
 
-            logger.info(f"[RQ] Unscheduled: {schedule_id}")
+            logger.info(
+                "rq.unscheduled",
+                schedule_id=schedule_id,
+            )
             return True
 
         except Exception as e:
-            logger.error(f"[RQ] Failed to unschedule {schedule_id}: {e}")
+            logger.error(
+                "rq.failed_unschedule",
+                schedule_id=schedule_id,
+                error=e,
+            )
             return False
 
     # =========================================================================
@@ -535,11 +568,19 @@ class RQTaskAdapter(TaskQueueInterface):
             count = queue.count
             queue.empty()
 
-            logger.info(f"[RQ] Purged {count} tasks from queue: {queue_name}")
+            logger.info(
+                "rq.purged_tasks_queue",
+                count=count,
+                queue_name=queue_name,
+            )
             return count
 
         except Exception as e:
-            logger.error(f"[RQ] Failed to purge queue {queue_name}: {e}")
+            logger.error(
+                "rq.failed_purge_queue",
+                queue_name=queue_name,
+                error=e,
+            )
             return 0
 
     def queue_length(self, queue_name: str = "default") -> int:
@@ -548,7 +589,11 @@ class RQTaskAdapter(TaskQueueInterface):
             queue = self._get_queue(queue_name)
             return queue.count
         except Exception as e:
-            logger.error(f"[RQ] Failed to get queue length for {queue_name}: {e}")
+            logger.error(
+                "rq.failed_get_queue_length",
+                queue_name=queue_name,
+                error=e,
+            )
             return 0
 
     # =========================================================================
@@ -561,7 +606,10 @@ class RQTaskAdapter(TaskQueueInterface):
             self.connection.ping()
             return True
         except Exception as e:
-            logger.error(f"[RQ] Health check failed: {e}")
+            logger.error(
+                "rq.health_check_failed",
+                error=e,
+            )
             return False
 
 

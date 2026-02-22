@@ -7,7 +7,7 @@ Ideal for containerized environments where logs are collected from stdout.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import sys
 from datetime import datetime
 
@@ -17,7 +17,7 @@ from selfhealing.interfaces.audit_adapter import (
     AuditLogAdapter,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class StdoutAuditLogAdapter(AuditLogAdapter):

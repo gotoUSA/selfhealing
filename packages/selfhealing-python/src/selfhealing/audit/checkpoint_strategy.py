@@ -31,7 +31,7 @@ Version: 1.0.0
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import tempfile
 import threading
@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     import redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -300,7 +300,11 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
                 # 원자적 rename
                 tmp_path.replace(file_path)
 
-                logger.debug(f"[FileCheckpoint] Saved: namespace={namespace}, seq={data.wal_sequence}")
+                logger.debug(
+                    "file_checkpoint.saved",
+                    namespace=namespace,
+                    data=data.wal_sequence,
+                )
 
             except Exception as e:
                 try:
@@ -327,7 +331,10 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
                 return UnifiedCheckpointData.from_dict(raw_data)
 
             except Exception as e:
-                logger.warning(f"[FileCheckpoint] Load failed: {e}")
+                logger.warning(
+                    "file_checkpoint.load_failed",
+                    error=e,
+                )
                 return None
 
     def commit(self, namespace: str) -> None:
@@ -413,7 +420,10 @@ class RedisCheckpointStorage(CheckpointStorageStrategy):
             else:
                 self._write_to_redis(namespace, data)
         except Exception as e:
-            logger.error(f"[RedisCheckpoint] Save failed: {e}")
+            logger.error(
+                "redis_checkpoint.save_failed",
+                error=e,
+            )
             self._notify_failure(namespace, str(e))
             raise
 
@@ -442,7 +452,7 @@ class RedisCheckpointStorage(CheckpointStorageStrategy):
 
         except ImportError:
             # DistributedRecoveryLock 없으면 일반 저장
-            logger.warning("[RedisCheckpoint] DistributedRecoveryLock not available")
+            logger.warning("redis_checkpoint.distributedrecoverylock_available")
             self._write_to_redis(namespace, data)
 
     def _write_to_redis(self, namespace: str, data: UnifiedCheckpointData) -> None:
@@ -455,7 +465,11 @@ class RedisCheckpointStorage(CheckpointStorageStrategy):
         else:
             self._redis.set(key, value)
 
-        logger.debug(f"[RedisCheckpoint] Saved: namespace={namespace}, seq={data.wal_sequence}")
+        logger.debug(
+            "redis_checkpoint.saved",
+            namespace=namespace,
+            data=data.wal_sequence,
+        )
 
     def _notify_failure(self, namespace: str, error: str) -> None:
         """체크포인트 저장 실패 알림."""
@@ -485,12 +499,18 @@ class RedisCheckpointStorage(CheckpointStorageStrategy):
                     },
                 )
             )
-            logger.info(f"[RedisCheckpoint] Failure notification sent: namespace={namespace}")
+            logger.info(
+                "redis_checkpoint.failure_notification_sent",
+                namespace=namespace,
+            )
 
         except ImportError:
-            logger.warning("[RedisCheckpoint] UnifiedNotificationManager not available")
+            logger.warning("redis_checkpoint.unifiednotificationmanager_available")
         except Exception as e:
-            logger.warning(f"[RedisCheckpoint] Failed to send notification: {e}")
+            logger.warning(
+                "redis_checkpoint.failed_send_notification",
+                error=e,
+            )
 
     def load(self, namespace: str) -> UnifiedCheckpointData | None:
         """체크포인트 로드 (Checksum 검증 포함)."""
@@ -512,7 +532,10 @@ class RedisCheckpointStorage(CheckpointStorageStrategy):
         except CheckpointCorruptedError:
             raise
         except Exception as e:
-            logger.warning(f"[RedisCheckpoint] Load failed: {e}")
+            logger.warning(
+                "redis_checkpoint.load_failed",
+                error=e,
+            )
             return None
 
     def _verify_data_checksum(self, data: UnifiedCheckpointData) -> None:
@@ -537,7 +560,7 @@ class RedisCheckpointStorage(CheckpointStorageStrategy):
                 )
 
         except ImportError:
-            logger.debug("[RedisCheckpoint] checksum module not available, skipping verification")
+            logger.debug("redis_checkpoint.checksum_module_available_skipping")
 
     def commit(self, namespace: str) -> None:
         """pending 체크포인트 커밋."""
@@ -605,7 +628,10 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
         if enable_file_backup:
             backup_path = file_backup_path or self._get_default_backup_path()
             self._file_backup = FileCheckpointStorage(base_path=backup_path)
-            logger.info(f"[KafkaRedisCheckpoint] File backup enabled: {backup_path}")
+            logger.info(
+                "kafka_redis_checkpoint.file_backup_enabled",
+                backup_path=backup_path,
+            )
 
     def _get_default_backup_path(self) -> Path:
         """기본 백업 경로."""
@@ -650,16 +676,25 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
                 f"seq={data.wal_sequence}, offset={data.kafka_offset}"
             )
         except Exception as e:
-            logger.error(f"[KafkaRedisCheckpoint] Redis save failed: {e}")
+            logger.error(
+                "kafka_redis_checkpoint.redis_save_failed",
+                error=e,
+            )
 
         # 2. File 백업 (Secondary) - Redis와 무관하게 항상 시도
         if self._file_backup:
             try:
                 self._file_backup.save(namespace, data)
                 file_success = True
-                logger.debug(f"[KafkaRedisCheckpoint] File backup saved: namespace={namespace}")
+                logger.debug(
+                    "kafka_redis_checkpoint.file_backup_saved",
+                    namespace=namespace,
+                )
             except Exception as e:
-                logger.warning(f"[KafkaRedisCheckpoint] File backup failed: {e}")
+                logger.warning(
+                    "kafka_redis_checkpoint.file_backup_failed",
+                    error=e,
+                )
 
         # 둘 다 실패한 경우 알림 + 예외
         if not redis_success and not file_success:
@@ -695,7 +730,10 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
                 )
             )
         except Exception as e:
-            logger.warning(f"[KafkaRedisCheckpoint] Failed to send failure notification: {e}")
+            logger.warning(
+                "kafka_redis_checkpoint.failed_send_failure_notification",
+                error=e,
+            )
 
     def _notify_degraded(self, namespace: str) -> None:
         """Redis 장애로 인한 Degraded 상태 알림 (HIGH)."""
@@ -722,7 +760,10 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
                 )
             )
         except Exception as e:
-            logger.warning(f"[KafkaRedisCheckpoint] Failed to send degraded notification: {e}")
+            logger.warning(
+                "kafka_redis_checkpoint.failed_send_degraded_notification",
+                error=e,
+            )
 
     def save_with_kafka_offset(
         self,
@@ -763,14 +804,20 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
         except CheckpointCorruptedError:
             raise
         except Exception as e:
-            logger.warning(f"[KafkaRedisCheckpoint] Redis load failed: {e}")
+            logger.warning(
+                "kafka_redis_checkpoint.redis_load_failed",
+                error=e,
+            )
 
         # 2. File 백업에서 시도 (Fallback)
         if self._file_backup:
             try:
                 data = self._file_backup.load(namespace)
                 if data:
-                    logger.info(f"[KafkaRedisCheckpoint] Loaded from file backup: namespace={namespace}")
+                    logger.info(
+                        "kafka_redis_checkpoint.loaded_file_backup",
+                        namespace=namespace,
+                    )
 
                     # Checksum 검증
                     if data.checksum:
@@ -780,7 +827,10 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
             except CheckpointCorruptedError:
                 raise
             except Exception as e:
-                logger.warning(f"[KafkaRedisCheckpoint] File backup load failed: {e}")
+                logger.warning(
+                    "kafka_redis_checkpoint.file_backup_load_failed",
+                    error=e,
+                )
 
         return None
 
@@ -807,7 +857,7 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
                 )
 
         except ImportError:
-            logger.debug("[KafkaRedisCheckpoint] checksum module not available")
+            logger.debug("kafka_redis_checkpoint.checksum_module_available")
 
     def commit(self, namespace: str) -> None:
         """Redis에 이미 저장됨."""
@@ -919,7 +969,10 @@ class CompositeCheckpointStorage(CheckpointStorageStrategy):
             self._stats["primary_writes"] += 1
             return
         except Exception as e:
-            logger.warning(f"[CompositeCheckpoint] Primary failed: {e}")
+            logger.warning(
+                "composite_checkpoint.primary_failed",
+                error=e,
+            )
             self._stats["fallback_events"] += 1
 
         # Tier 2: Secondary (degraded 마킹)
@@ -938,10 +991,16 @@ class CompositeCheckpointStorage(CheckpointStorageStrategy):
                 self._secondary.save(namespace, data_copy)
                 self._current_tier = "secondary"
                 self._stats["secondary_writes"] += 1
-                logger.warning(f"[CompositeCheckpoint] Degraded to secondary: namespace={namespace}")
+                logger.warning(
+                    "composite_checkpoint.degraded_secondary",
+                    namespace=namespace,
+                )
                 return
             except Exception as e:
-                logger.warning(f"[CompositeCheckpoint] Secondary failed: {e}")
+                logger.warning(
+                    "composite_checkpoint.secondary_failed",
+                    error=e,
+                )
                 self._stats["fallback_events"] += 1
 
         # Tier 3: Memory Buffer (최후 수단)
@@ -949,7 +1008,10 @@ class CompositeCheckpointStorage(CheckpointStorageStrategy):
             self._memory_buffer[namespace] = data
             self._current_tier = "memory"
             self._stats["memory_writes"] += 1
-            logger.error(f"[CompositeCheckpoint] Degraded to MEMORY (volatile): namespace={namespace}")
+            logger.error(
+                "composite_checkpoint.degraded_memory_volatile",
+                namespace=namespace,
+            )
             return
 
         raise CheckpointError("All storage tiers failed")
@@ -1055,7 +1117,10 @@ class CheckpointStrategyRegistry:
         """
         with cls._lock:
             cls._strategies[name] = strategy_class
-            logger.info(f"[CheckpointStrategyRegistry] Registered: {name}")
+            logger.info(
+                "cell_registry.bulkheads_registered",
+                name=name,
+            )
 
     @classmethod
     def get(
@@ -1265,7 +1330,9 @@ def get_default_checkpoint_strategy() -> CheckpointStorageStrategy:
                         redis_client=redis_client,
                     )
                 except ImportError:
-                    logger.warning(f"[CheckpointStrategy] redis package not installed, " f"falling back to file storage")
+                    logger.warning(
+                        "checkpoint_strategy.redis_package_installed_falling",
+                    )
                     _default_strategy = FileCheckpointStorage()
             else:
                 _default_strategy = FileCheckpointStorage()

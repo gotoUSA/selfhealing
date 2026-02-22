@@ -32,7 +32,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -42,7 +42,7 @@ from selfhealing.services.error_budget.constants import (
 )
 from selfhealing.settings import get_error_budget_propagation_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -462,7 +462,10 @@ class DomainPropagationMultiplier:
 
             self._cycle_detected_counter.labels(domain=domain).inc()
 
-            logger.warning(f"[DomainPropagation] Cycle detected at domain: {domain}")
+            logger.warning(
+                "domain_propagation.cycle_detected_domain",
+                domain=domain,
+            )
         except Exception:
             pass
 

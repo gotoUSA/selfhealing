@@ -22,12 +22,12 @@ Reference:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -99,7 +99,11 @@ def archive_cascade_events(
             _archive_single_event_to_db(event)
             archived_count += 1
         except Exception as e:
-            logger.error(f"[CascadeCleanup] Archive failed: cascade={event.id}, error={e}")
+            logger.error(
+                "cascade_cleanup.archive_failed",
+                event=event.id,
+                error=e,
+            )
             failed_count += 1
 
     logger.info(
@@ -237,7 +241,11 @@ def purge_old_cascade_events(
             _delete_cascade_event(event.id, namespace)
             purged_count += 1
         except Exception as e:
-            logger.error(f"[CascadeCleanup] Purge failed: cascade={event.id}, error={e}")
+            logger.error(
+                "cascade_cleanup.purge_failed",
+                event=event.id,
+                error=e,
+            )
             failed_count += 1
 
     logger.warning(
@@ -327,7 +335,10 @@ def create_cascade_daily_checkpoint(
         merkle_result = checker.build_merkle_roots([e.to_dict() if hasattr(e, "to_dict") else e for e in events])
         checkpoint["merkle_blocks"] = merkle_result["blocks_stored"]
     except Exception as e:
-        logger.warning(f"[CascadeCleanup] Merkle root build failed: {e}")
+        logger.warning(
+            "cascade_cleanup.merkle_root_build_failed",
+            error=e,
+        )
 
     return checkpoint
 
@@ -364,9 +375,17 @@ def verify_cascade_chain_integrity(
         result = auditor.verify_chain_integrity(namespace)
 
     if result["valid"]:
-        logger.info(f"[CascadeCleanup] Chain integrity verified: " f"namespace={namespace}, checked={result['checked']}")
+        logger.info(
+            "cascade_cleanup.chain_integrity_verified",
+            namespace=namespace,
+            result=result['checked'],
+        )
     else:
-        logger.error(f"[CascadeCleanup] Chain integrity FAILED: " f"namespace={namespace}, errors={len(result['errors'])}")
+        logger.error(
+            "cascade_cleanup.chain_integrity_failed",
+            namespace=namespace,
+            count=len(result['errors']),
+        )
 
     return result
 
@@ -434,7 +453,11 @@ def recover_cascade_from_wal(
                 continue
 
     if dry_run:
-        logger.info(f"[CascadeCleanup] WAL recovery dry run: " f"found {len(entries)} entries, namespace={namespace}")
+        logger.info(
+            "cascade_cleanup.wal_recovery_dry_run",
+            count=len(entries),
+            namespace=namespace,
+        )
         return {
             "status": "dry_run",
             "namespace": namespace,
@@ -453,14 +476,22 @@ def recover_cascade_from_wal(
             auditor._add_to_index(namespace, event.id)
             recovered += 1
         except Exception as e:
-            logger.error(f"[CascadeCleanup] Recovery failed: error={e}")
+            logger.error(
+                "watchdog.recovery_failed",
+                error=e,
+            )
             failed += 1
 
     # 복구 완료 후 WAL 파일에서 해당 네임스페이스 엔트리 제거
     if recovered > 0 and failed == 0:
         _remove_namespace_from_wal(namespace)
 
-    logger.info(f"[CascadeCleanup] WAL recovery completed: " f"recovered={recovered}, failed={failed}, namespace={namespace}")
+    logger.info(
+        "cascade_cleanup.wal_recovery_completed",
+        recovered=recovered,
+        failed=failed,
+        namespace=namespace,
+    )
 
     return {
         "status": "completed",

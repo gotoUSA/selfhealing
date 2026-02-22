@@ -29,7 +29,7 @@ FallbackPolicy 중복 실행 방지:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any, Awaitable, Callable, Generic, TypeVar
 
@@ -45,7 +45,7 @@ from selfhealing.interfaces.resilience_policy import (
     ResiliencePolicy,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -302,7 +302,10 @@ class PolicyComposer(Generic[T]):
             try:
                 hook.on_success("composer", result)
             except Exception as e:
-                logger.warning("Hook on_success failed (fail-open): %s", e)
+                logger.warning(
+                    "hook_failed_fail_open",
+                    error=e,
+                )
 
     def _notify_hooks_failure(self, result: PolicyResult) -> None:
         """실패 시 모든 Hook의 on_failure 호출 (Fail-Open)."""
@@ -314,7 +317,10 @@ class PolicyComposer(Generic[T]):
                     result.total_attempts,
                 )
             except Exception as e:
-                logger.warning("Hook on_failure failed (fail-open): %s", e)
+                logger.warning(
+                    "hook_failed_fail_open",
+                    error=e,
+                )
 
     def _notify_hooks_reject(self, guard_name: str, reason: str) -> None:
         """거부 시 모든 Hook의 on_reject 호출 (Fail-Open)."""
@@ -322,7 +328,10 @@ class PolicyComposer(Generic[T]):
             try:
                 hook.on_reject(guard_name, reason)
             except Exception as e:
-                logger.warning("Hook on_reject failed (fail-open): %s", e)
+                logger.warning(
+                    "hook_failed_fail_open",
+                    error=e,
+                )
 
     # === Sink Processing ===
 
@@ -347,7 +356,10 @@ class PolicyComposer(Generic[T]):
                 if sink_id is not None:
                     result.metadata["sink_id"] = sink_id
             except Exception as e:
-                logger.warning("Sink handle_failure failed: %s", e)
+                logger.warning(
+                    "sink_failed",
+                    error=e,
+                )
 
 
 # =============================================================================
@@ -572,7 +584,10 @@ class AsyncPolicyComposer(Generic[T]):
             try:
                 hook.on_success("composer", result)
             except Exception as e:
-                logger.warning("Hook on_success failed (fail-open): %s", e)
+                logger.warning(
+                    "hook_failed_fail_open",
+                    error=e,
+                )
 
     def _notify_hooks_failure(self, result: PolicyResult) -> None:
         """실패 시 모든 Hook의 on_failure 호출 (Fail-Open)."""
@@ -584,7 +599,10 @@ class AsyncPolicyComposer(Generic[T]):
                     result.total_attempts,
                 )
             except Exception as e:
-                logger.warning("Hook on_failure failed (fail-open): %s", e)
+                logger.warning(
+                    "hook_failed_fail_open",
+                    error=e,
+                )
 
     def _notify_hooks_reject(self, guard_name: str, reason: str) -> None:
         """거부 시 모든 Hook의 on_reject 호출 (Fail-Open)."""
@@ -592,7 +610,10 @@ class AsyncPolicyComposer(Generic[T]):
             try:
                 hook.on_reject(guard_name, reason)
             except Exception as e:
-                logger.warning("Hook on_reject failed (fail-open): %s", e)
+                logger.warning(
+                    "hook_failed_fail_open",
+                    error=e,
+                )
 
     # === Sink Processing (동기) ===
 
@@ -617,7 +638,10 @@ class AsyncPolicyComposer(Generic[T]):
                 if sink_id is not None:
                     result.metadata["sink_id"] = sink_id
             except Exception as e:
-                logger.warning("Sink handle_failure failed: %s", e)
+                logger.warning(
+                    "sink_failed",
+                    error=e,
+                )
 
 
 # =============================================================================

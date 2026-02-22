@@ -31,7 +31,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import queue
 import threading
 import time
@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterator
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -130,11 +130,14 @@ class EventStreamProxy:
                 bus.subscribe(event_type, self._on_event)
 
             self._registered = True
-            logger.debug("[EventStreamProxy] Registered EventBus handlers")
+            logger.debug("cell_registry.bulkheads_registered")
         except ImportError:
-            logger.warning("[EventStreamProxy] EventBus not available")
+            logger.warning("event_stream_proxy.eventbus_available")
         except Exception as e:
-            logger.warning(f"[EventStreamProxy] EventBus registration failed: {e}")
+            logger.warning(
+                "event_stream_proxy.eventbus_registration_failed",
+                error=e,
+            )
 
     def _on_event(self, event: Any) -> None:
         """
@@ -199,7 +202,11 @@ class EventStreamProxy:
             self._stats.total_subscriptions += 1
             self._stats.active_subscriptions = len(self._subscriptions)
 
-        logger.info(f"[EventStreamProxy] New subscription: {stream_id}, " f"events: {event_types or 'all'}")
+        logger.info(
+            "event_stream_proxy.new_subscription_events",
+            stream_id=stream_id,
+            value=event_types or 'all',
+        )
         return event_queue
 
     def unsubscribe(self, stream_id: str) -> bool:
@@ -216,7 +223,10 @@ class EventStreamProxy:
             if stream_id in self._subscriptions:
                 del self._subscriptions[stream_id]
                 self._stats.active_subscriptions = len(self._subscriptions)
-                logger.info(f"[EventStreamProxy] Unsubscribed: {stream_id}")
+                logger.info(
+                    "event_stream_proxy.unsubscribed",
+                    stream_id=stream_id,
+                )
                 return True
             return False
 
@@ -341,7 +351,10 @@ class EventStreamProxy:
             self._stats.active_subscriptions = len(self._subscriptions)
 
         if to_remove:
-            logger.info(f"[EventStreamProxy] Cleaned up {len(to_remove)} idle subscriptions")
+            logger.info(
+                "event_stream_proxy.cleaned_up_idle_subscriptions",
+                count=len(to_remove),
+            )
 
         return len(to_remove)
 

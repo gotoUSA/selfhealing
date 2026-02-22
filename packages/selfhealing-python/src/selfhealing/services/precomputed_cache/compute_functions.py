@@ -4,14 +4,14 @@ Pre-computed Cache Service - Compute Functions for L3 Endpoints.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from .constants import CACHE_KEY_ERROR_BUDGET, CACHE_KEY_HEALTH, CACHE_KEY_POOL_STATUS
 from .multi_tier import get_cached_response
 from .worker import _worker
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -28,7 +28,10 @@ def compute_health_status() -> dict[str, Any]:
         health = service.get_overall_health()
         return health.to_dict()
     except Exception as e:
-        logger.error(f"[PrecomputedCache] Health compute failed: {e}")
+        logger.error(
+            "precomputed_cache.health_compute_failed",
+            error=e,
+        )
         return {"status": "error", "error": str(e)}
 
 
@@ -50,7 +53,10 @@ def compute_error_budget_status() -> dict[str, Any]:
             "timestamp": timezone.now().isoformat(),
         }
     except Exception as e:
-        logger.error(f"[PrecomputedCache] Error budget compute failed: {e}")
+        logger.error(
+            "precomputed_cache.error_budget_compute_failed",
+            error=e,
+        )
         return {"status": "error", "error": str(e)}
 
 
@@ -95,7 +101,10 @@ def compute_pool_status() -> dict[str, Any]:
             "use_connection_pool": os.getenv("USE_CONNECTION_POOL", "FALSE") == "TRUE",
         }
     except Exception as e:
-        logger.error(f"[PrecomputedCache] Pool status compute failed: {e}")
+        logger.error(
+            "precomputed_cache.pool_status_compute_failed",
+            error=e,
+        )
         return {"status": "error", "error": str(e)}
 
 
@@ -104,7 +113,7 @@ def register_default_compute_functions() -> None:
     _worker.register(CACHE_KEY_HEALTH, compute_health_status)
     _worker.register(CACHE_KEY_ERROR_BUDGET, compute_error_budget_status)
     _worker.register(CACHE_KEY_POOL_STATUS, compute_pool_status)
-    logger.info("[PrecomputedCache] Registered default compute functions")
+    logger.info("cell_registry.bulkheads_registered")
 
 
 # =============================================================================

@@ -10,12 +10,12 @@ EventBus가 없는 환경에서는 아무 동작도 하지 않는다 (Fail-Open)
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.interfaces.resilience_policy import PolicyResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class EventBusHook:
@@ -46,10 +46,13 @@ class EventBusHook:
             self._bus = get_event_bus()
             return True
         except ImportError:
-            logger.debug("EventBus not available")
+            logger.debug("eventbus_available")
             return False
         except Exception as e:
-            logger.warning("EventBus initialization failed: %s", e)
+            logger.warning(
+                "eventbus_initialization_failed",
+                error=e,
+            )
             return False
 
     def on_execute(self, policy_name: str, attempt: int) -> None:
@@ -70,7 +73,10 @@ class EventBusHook:
                 },
             )
         except Exception as e:
-            logger.debug("EventBus publish failed (fail-open): %s", e)
+            logger.debug(
+                "eventbus_publish_failed_fail",
+                error=e,
+            )
 
     def on_failure(self, policy_name: str, error: Exception, attempt: int) -> None:
         """파이프라인 실패 시 EventBus에 이벤트 발행."""
@@ -87,7 +93,10 @@ class EventBusHook:
                 },
             )
         except Exception as e:
-            logger.debug("EventBus publish failed (fail-open): %s", e)
+            logger.debug(
+                "eventbus_publish_failed_fail",
+                error=e,
+            )
 
     def on_retry(self, policy_name: str, attempt: int, delay: float) -> None:
         """재시도 — Composer 레벨에서는 미사용."""
@@ -106,4 +115,7 @@ class EventBusHook:
                 },
             )
         except Exception as e:
-            logger.debug("EventBus publish failed (fail-open): %s", e)
+            logger.debug(
+                "eventbus_publish_failed_fail",
+                error=e,
+            )

@@ -20,7 +20,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass, field
@@ -32,7 +32,7 @@ from selfhealing.coordination.shutdown_integration import (
     register_for_graceful_shutdown,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 기본 스케줄러 리소스 이름
 DEFAULT_SCHEDULER_RESOURCE = "scheduler"
@@ -217,7 +217,11 @@ class LeaderScheduler:
             enabled=enabled,
         )
         self._jobs[name] = job
-        logger.info(f"[Scheduler] 작업 등록: {name} (주기={interval_seconds}초)")
+        logger.info(
+            "scheduler.작업_등록",
+            name=name,
+            interval_seconds=interval_seconds,
+        )
         return job
 
     def remove_job(self, name: str) -> bool:
@@ -232,7 +236,10 @@ class LeaderScheduler:
         """
         if name in self._jobs:
             del self._jobs[name]
-            logger.info(f"[Scheduler] 작업 제거: {name}")
+            logger.info(
+                "scheduler.작업_제거",
+                name=name,
+            )
             return True
         return False
 
@@ -255,7 +262,10 @@ class LeaderScheduler:
         if self._running:
             return
 
-        logger.info(f"[Scheduler] 시작 (resource={self._resource_name})")
+        logger.info(
+            "scheduler.시작",
+            self=self._resource_name,
+        )
         self._stop_event.clear()
         self._running = True
 
@@ -264,7 +274,10 @@ class LeaderScheduler:
 
     def stop(self) -> None:
         """스케줄러 중지."""
-        logger.info(f"[Scheduler] 중지 중 (resource={self._resource_name})")
+        logger.info(
+            "scheduler.중지",
+            self=self._resource_name,
+        )
         self._running = False
         self._stop_event.set()
 
@@ -274,16 +287,23 @@ class LeaderScheduler:
 
         # Leader Election 중지
         self._elector.stop()
-        logger.info(f"[Scheduler] 중지됨 (resource={self._resource_name})")
+        logger.info(
+            "scheduler.중지됨",
+            self=self._resource_name,
+        )
 
     def _on_become_leader(self) -> None:
         """리더가 되었을 때 스케줄러 루프 시작."""
-        logger.info(f"[Scheduler] 리더가 됨 - 스케줄러 루프 시작")
+        logger.info(
+            "scheduler.리더가_스케줄러_루프_시작",
+        )
         self._start_scheduler_loop()
 
     def _on_lose_leader(self) -> None:
         """리더십을 잃었을 때 스케줄러 루프 중단."""
-        logger.info(f"[Scheduler] 리더십 상실 - 스케줄러 루프 중단")
+        logger.info(
+            "scheduler.리더십_상실_스케줄러_루프",
+        )
 
     def _start_scheduler_loop(self) -> None:
         """스케줄러 루프 시작 (별도 스레드)."""
@@ -299,13 +319,13 @@ class LeaderScheduler:
 
     def _scheduler_loop(self) -> None:
         """스케줄러 메인 루프."""
-        logger.info("[Scheduler] 스케줄러 루프 시작")
+        logger.info("scheduler.스케줄러_루프_시작")
 
         while self._running and not self._stop_event.is_set():
             try:
                 # 리더십 확인
                 if not self._elector.is_leader():
-                    logger.debug("[Scheduler] 리더 아님, 대기")
+                    logger.debug("scheduler.리더_아님_대기")
                     self._stop_event.wait(timeout=self._tick_interval)
                     continue
 
@@ -324,7 +344,7 @@ class LeaderScheduler:
                 logger.error(f"[Scheduler] 루프 오류: {e}", exc_info=True)
                 self._stop_event.wait(timeout=self._tick_interval)
 
-        logger.info("[Scheduler] 스케줄러 루프 종료")
+        logger.info("scheduler.스케줄러_루프_종료")
 
     def _execute_job(self, job: ScheduledJob) -> None:
         """
@@ -334,10 +354,17 @@ class LeaderScheduler:
             job: 실행할 작업
         """
         try:
-            logger.debug(f"[Scheduler] 작업 실행: {job.name}")
+            logger.debug(
+                "scheduler.작업_실행",
+                job=job.name,
+            )
             job.func()
             job.mark_run(success=True)
-            logger.info(f"[Scheduler] 작업 완료: {job.name} " f"(run_count={job.run_count})")
+            logger.info(
+                "scheduler.작업_완료",
+                job=job.name,
+                job_1=job.run_count,
+            )
 
         except Exception as e:
             job.mark_run(success=False)

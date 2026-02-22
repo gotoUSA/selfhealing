@@ -34,7 +34,7 @@ Example:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 try:
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -1014,7 +1014,10 @@ def _auto_register_concrete_admin():
                 ]
 
     except Exception as e:
-        logger.debug(f"[SelfHealing] Admin auto-registration skipped: {e}")
+        logger.debug(
+            "self_healing.admin_auto_registration_skipped",
+            error=e,
+        )
 
 
 _auto_register_concrete_admin()

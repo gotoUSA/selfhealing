@@ -24,11 +24,11 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -134,7 +134,10 @@ class EscalationTriggeredInvalidation:
             )
             return False
         except Exception as e:
-            logger.warning(f"[EscalationInvalidation] Registration failed: {e}")
+            logger.warning(
+                "escalation_invalidation.registration_failed",
+                error=e,
+            )
             return False
 
     def _on_level_changed(self, event: Any) -> None:
@@ -222,7 +225,10 @@ class EscalationTriggeredInvalidation:
                 invalidate_fn()
                 success_count += 1
             except Exception as e:
-                logger.error(f"[EscalationInvalidation] Invalidation failed: {e}")
+                logger.error(
+                    "escalation_invalidation.invalidation_failed",
+                    error=e,
+                )
 
         self._invalidation_count += 1
 
@@ -344,5 +350,8 @@ def setup_crisis_multiplier_invalidation() -> bool:
         )
         return False
     except Exception as e:
-        logger.error(f"[EscalationInvalidation] Setup failed: {e}")
+        logger.error(
+            "escalation_invalidation.setup_failed",
+            error=e,
+        )
         return False

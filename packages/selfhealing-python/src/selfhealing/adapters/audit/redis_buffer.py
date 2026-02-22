@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import atexit
 import json
-import logging
+import structlog
 import os
 import signal
 import socket
@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     import redis
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # 환경 변수 기본값
@@ -178,7 +178,10 @@ class RedisAuditBuffer:
             return True
 
         except Exception as e:
-            logger.warning(f"[RedisAuditBuffer] Redis write failed: {e}")
+            logger.warning(
+                "redis_audit_buffer.redis_write_failed",
+                error=e,
+            )
 
             with self._lock:
                 self._consecutive_failures += 1
@@ -197,9 +200,12 @@ class RedisAuditBuffer:
                         self._fallback.log_raw(entry)
                     else:
                         self._fallback.log(entry)
-                    logger.info("[RedisAuditBuffer] Used file fallback")
+                    logger.info("redis_audit_buffer.used_file_fallback")
                 except Exception as fallback_error:
-                    logger.error(f"[RedisAuditBuffer] Fallback also failed: {fallback_error}")
+                    logger.error(
+                        "redis_audit_buffer.fallback_also_failed",
+                        fallback_error=fallback_error,
+                    )
 
             return False
 
@@ -290,7 +296,10 @@ class RedisAuditBuffer:
                 self._total_batch_writes += 1
                 self._total_writes += len(entries)
 
-            logger.debug(f"[RedisAuditBuffer] Batch chunk logged: {len(entries)} entries")
+            logger.debug(
+                "redis_audit_buffer.batch_chunk_logged_entries",
+                count=len(entries),
+            )
             return True
 
         except Exception as e:
@@ -331,7 +340,10 @@ class RedisAuditBuffer:
             if len(self._fallback_buffer) > self._max_fallback:
                 overflow = len(self._fallback_buffer) - self._max_fallback
                 self._fallback_buffer = self._fallback_buffer[overflow:]
-                logger.warning(f"[RedisAuditBuffer] Fallback buffer overflow, " f"dropped {overflow} oldest entries")
+                logger.warning(
+                    "redis_audit_buffer.fallback_buffer_overflow_dropped",
+                    overflow=overflow,
+                )
 
     def retry_fallback_buffer(self) -> int:
         """
@@ -430,7 +442,10 @@ class RedisAuditBuffer:
                         flushed += 1
                         count += 1
                     except Exception as e:
-                        logger.error(f"[RedisAuditBuffer] Flush error: {e}")
+                        logger.error(
+                            "redis_audit_buffer.flush_error",
+                            error=e,
+                        )
                         # 실패 시 다시 넣기 (뒤에)
                         self._redis.rpush(key, item)
                         break
@@ -439,7 +454,10 @@ class RedisAuditBuffer:
                 self._total_flushes += flushed
 
         except Exception as e:
-            logger.error(f"[RedisAuditBuffer] Flush scan error: {e}")
+            logger.error(
+                "redis_audit_buffer.flush_scan_error",
+                error=e,
+            )
 
         return flushed
 
@@ -466,7 +484,10 @@ class RedisAuditBuffer:
                 # 임계치 체크 및 알림 발송
                 self._check_buffer_threshold(domain, size)
         except Exception as e:
-            logger.debug(f"[RedisAuditBuffer] Stats query failed: {e}")
+            logger.debug(
+                "redis_audit_buffer.stats_query_failed",
+                error=e,
+            )
             stats["error"] = str(e)
 
         return stats
@@ -559,7 +580,10 @@ class RedisAuditBuffer:
             return result_domains
 
         except Exception as e:
-            logger.debug(f"[RedisAuditBuffer] ActiveKeySet query failed: {e}")
+            logger.debug(
+                "redis_audit_buffer.activekeyset_query_failed",
+                error=e,
+            )
             return self._get_active_domains_fallback()
 
     def _get_active_domains_fallback(self) -> list[str]:
@@ -583,7 +607,10 @@ class RedisAuditBuffer:
                 pipe.expire(self.ACTIVE_DOMAINS_SET, 86400)  # 24시간 TTL
                 pipe.execute()
             except Exception as e:
-                logger.debug(f"[RedisAuditBuffer] Failed to update active domains: {e}")
+                logger.debug(
+                    "redis_audit_buffer.failed_update_active_domains",
+                    error=e,
+                )
 
     def apply_safety_ltrim(self) -> dict[str, int]:
         """
@@ -628,7 +655,10 @@ class RedisAuditBuffer:
                         pass
 
         except Exception as e:
-            logger.error(f"[RedisAuditBuffer] Safety LTRIM failed: {e}")
+            logger.error(
+                "redis_audit_buffer.safety_ltrim_failed",
+                error=e,
+            )
 
         return trimmed
 
@@ -695,17 +725,31 @@ class RedisAuditBuffer:
                 lua_scripts.atomic_batch_complete(current_domain, moved)
                 total_flushed += moved
 
-                logger.debug(f"[RedisAuditBuffer] Flushed {moved} entries from {current_domain}")
+                logger.debug(
+                    "redis_audit_buffer.flushed_entries",
+                    moved=moved,
+                    current_domain=current_domain,
+                )
 
             except Exception as e:
-                logger.error(f"[RedisAuditBuffer] Flush failed for {current_domain}: {e}")
+                logger.error(
+                    "redis_audit_buffer.flush_failed",
+                    current_domain=current_domain,
+                    error=e,
+                )
 
                 # 5. 실패 시 순서 보존하여 복원
                 try:
                     restored = lua_scripts.atomic_batch_restore(current_domain)
-                    logger.info(f"[RedisAuditBuffer] Restored {restored} items to buffer")
+                    logger.info(
+                        "redis_audit_buffer.restored_items_buffer",
+                        restored=restored,
+                    )
                 except Exception as restore_error:
-                    logger.error(f"[RedisAuditBuffer] Restore failed: {restore_error}")
+                    logger.error(
+                        "redis_audit_buffer.restore_failed",
+                        restore_error=restore_error,
+                    )
 
         with self._lock:
             self._total_flushes += total_flushed
@@ -745,9 +789,17 @@ class RedisAuditBuffer:
                 domain = processing_key.split(":")[-1]
                 restored = lua_scripts.atomic_batch_restore(domain)
                 recovered_total += restored
-                logger.info(f"[RedisAuditBuffer] Recovered {restored} items from {domain}")
+                logger.info(
+                    "redis_audit_buffer.recovered_items",
+                    restored=restored,
+                    domain=domain,
+                )
             except Exception as e:
-                logger.error(f"[RedisAuditBuffer] Recovery failed for {processing_key}: {e}")
+                logger.error(
+                    "watchdog.recovery_failed",
+                    processing_key=processing_key,
+                    error=e,
+                )
 
         return recovered_total
 
@@ -766,13 +818,19 @@ class RedisAuditBuffer:
                 signal.signal(signal.SIGINT, self._signal_handler)
 
             self._shutdown_registered = True
-            logger.debug("[RedisAuditBuffer] Shutdown hooks registered")
+            logger.debug("redis_audit_buffer.shutdown_hooks_registered")
         except Exception as e:
-            logger.debug(f"[RedisAuditBuffer] Could not register shutdown hooks: {e}")
+            logger.debug(
+                "redis_audit_buffer.register_shutdown_hooks",
+                error=e,
+            )
 
     def _signal_handler(self, signum: int, frame: Any) -> None:
         """시그널 핸들러."""
-        logger.info(f"[RedisAuditBuffer] Received signal {signum}")
+        logger.info(
+            "redis_audit_buffer.received_signal",
+            signum=signum,
+        )
         self._graceful_shutdown()
 
     def _graceful_shutdown(self) -> None:
@@ -862,7 +920,7 @@ def create_redis_audit_buffer(
                 fallback_path = Path(fallback_log_dir) / "audit_fallback.jsonl"
                 fallback = FileAuditLogAdapter(file_path=fallback_path)
             except ImportError:
-                logger.debug("[RedisAuditBuffer] FileAuditLogAdapter not available")
+                logger.debug("redis_audit_buffer.fileauditlogadapter_available")
 
         return RedisAuditBuffer(
             redis_client=redis_client,
@@ -872,8 +930,11 @@ def create_redis_audit_buffer(
         )
 
     except ImportError:
-        logger.info("[RedisAuditBuffer] redis package not installed")
+        logger.info("redis_audit_buffer.redis_package_installed")
         return None
     except Exception as e:
-        logger.info(f"[RedisAuditBuffer] Redis unavailable: {e}")
+        logger.info(
+            "redis_audit_buffer.redis_unavailable",
+            error=e,
+        )
         return None

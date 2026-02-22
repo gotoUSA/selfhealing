@@ -19,14 +19,14 @@ Redis 키 구조:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Django 기본값: SESSION_COOKIE_AGE = 1209600 (2주)
 _DEFAULT_SESSION_TTL_SECONDS = 1209600
@@ -81,7 +81,10 @@ class UserSessionRegistry:
                 f"{session_key[:8]}... (total: {len(existing)})"
             )
         except Exception as e:
-            logger.warning(f"[UserSessionRegistry] Failed to register session: {e}")
+            logger.warning(
+                "user_session_registry.failed_register_session",
+                error=e,
+            )
 
     def unregister(self, user_id: int, session_key: str) -> None:
         """
@@ -99,9 +102,16 @@ class UserSessionRegistry:
                 self.cache.set(key, existing, ttl=timedelta(seconds=ttl))
             else:
                 self.cache.delete(key)
-            logger.debug(f"[UserSessionRegistry] Unregistered session for user {user_id}: " f"{session_key[:8]}...")
+            logger.debug(
+                "user_session_registry.unregistered_session_user",
+                user_id=user_id,
+                session_key=session_key[:8],
+            )
         except Exception as e:
-            logger.warning(f"[UserSessionRegistry] Failed to unregister session: {e}")
+            logger.warning(
+                "user_session_registry.failed_unregister_session",
+                error=e,
+            )
 
     def get_session_keys(self, user_id: int) -> list[str]:
         """user_id에 연결된 모든 session_key 조회."""
@@ -134,7 +144,11 @@ class UserSessionRegistry:
                 pass
         # 레지스트리 키 삭제
         self.cache.delete(self._key(user_id))
-        logger.info(f"[UserSessionRegistry] Invalidated {deleted} sessions " f"for user {user_id}")
+        logger.info(
+            "user_session_registry.invalidated_sessions_user",
+            deleted=deleted,
+            user_id=user_id,
+        )
         return deleted
 
     @staticmethod

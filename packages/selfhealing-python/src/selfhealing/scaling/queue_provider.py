@@ -6,7 +6,7 @@ Redis 큐 조회 시 네트워크 지연이 RateController 병목이 되는 것�
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from typing import Callable
@@ -16,7 +16,7 @@ from selfhealing.scaling.config import (
     get_backpressure_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CachedQueueSizeProvider:
@@ -74,7 +74,10 @@ class CachedQueueSizeProvider:
                     self._cached_value = self._provider()
                     self._last_fetch_time = now
                 except Exception as e:
-                    logger.warning(f"[CachedQueueSizeProvider] Fetch failed, using cached: {e}")
+                    logger.warning(
+                        "cached_queue_size_provider.fetch_failed_using_cached",
+                        error=e,
+                    )
                     # 실패 시 기존 캐시 값 유지
 
             return self._cached_value

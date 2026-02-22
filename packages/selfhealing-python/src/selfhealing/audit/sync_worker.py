@@ -24,7 +24,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from selfhealing.settings.audit_sync import AuditSyncSettings
     from selfhealing.audit.checkpoint_strategy import CheckpointStorageStrategy
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -250,7 +250,10 @@ class AuditSyncWorker:
 
             return _get_wal()
         except Exception as e:
-            logger.warning(f"[AuditSyncWorker] Failed to get WAL: {e}")
+            logger.warning(
+                "audit_sync_worker.failed_get_wal",
+                error=e,
+            )
             return None
 
     def _get_adapter(self) -> Any:
@@ -264,7 +267,10 @@ class AuditSyncWorker:
 
             return ProviderRegistry.get_audit_adapter()
         except Exception as e:
-            logger.debug(f"[AuditSyncWorker] Adapter not available: {e}")
+            logger.debug(
+                "audit_sync_worker.adapter_available",
+                error=e,
+            )
             return None
 
     def start(self) -> bool:
@@ -287,7 +293,7 @@ class AuditSyncWorker:
                 daemon=True,
             )
             self._thread.start()
-            logger.info("[AuditSyncWorker] Started")
+            logger.info("audit_sync_worker.started")
             return True
 
     def stop(self, timeout: float = 1.0) -> None:
@@ -307,9 +313,9 @@ class AuditSyncWorker:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=timeout)
             if self._thread.is_alive():
-                logger.warning("[AuditSyncWorker] Thread did not stop gracefully")
+                logger.warning("audit_sync_worker.thread_stop_gracefully")
 
-        logger.info("[AuditSyncWorker] Stopped")
+        logger.info("audit_sync_worker.stopped")
 
     def _run_loop(self) -> None:
         """메인 동기화 루프."""
@@ -321,7 +327,11 @@ class AuditSyncWorker:
                 synced, failed = self._sync_batch()
 
                 if synced > 0 or failed > 0:
-                    logger.debug(f"[AuditSyncWorker] Synced: {synced}, Failed: {failed}")
+                    logger.debug(
+                        "audit_sync_worker.synced_failed",
+                        synced=synced,
+                        failed=failed,
+                    )
 
                 # 메트릭 리포팅
                 now = time.time()
@@ -330,7 +340,10 @@ class AuditSyncWorker:
                     last_metrics_time = now
 
             except Exception as e:
-                logger.error(f"[AuditSyncWorker] Sync loop error: {e}")
+                logger.error(
+                    "audit_sync_worker.sync_loop_error",
+                    error=e,
+                )
                 if self._on_sync_error:
                     try:
                         self._on_sync_error(e)
@@ -350,7 +363,11 @@ class AuditSyncWorker:
                 self._last_processed_seq = max(self._last_processed_seq, entry.sequence)
             except Exception as e:
                 failed_count += 1
-                logger.warning(f"[AuditSyncWorker] Failed to sync entry seq={entry.sequence}: {e}")
+                logger.warning(
+                    "audit_sync_worker.failed_sync_entry",
+                    entry=entry.sequence,
+                    error=e,
+                )
         return synced_count, failed_count
 
     def _post_sync_cleanup(self, synced_count: int, wal: Any) -> None:
@@ -361,7 +378,10 @@ class AuditSyncWorker:
         try:
             wal.cleanup_processed(self._last_processed_seq)
         except Exception as e:
-            logger.warning(f"[AuditSyncWorker] Failed to cleanup WAL: {e}")
+            logger.warning(
+                "audit_sync_worker.failed_cleanup_wal",
+                error=e,
+            )
 
         self._batches_since_checkpoint += 1
         should_save = (
@@ -451,14 +471,20 @@ class AuditSyncWorker:
             # 이미 처리된 경우 스킵
             result = idempotency.check(key, lambda: None)
             if result is not None:
-                logger.debug(f"[AuditSyncWorker] Skipping duplicate entry seq={entry.sequence}")
+                logger.debug(
+                    "audit_sync_worker.skipping_duplicate_entry",
+                    entry=entry.sequence,
+                )
                 return
 
         except ImportError:
             # IdempotencyService 미사용 환경
             pass
         except Exception as e:
-            logger.debug(f"[AuditSyncWorker] Idempotency check failed: {e}")
+            logger.debug(
+                "audit_sync_worker.idempotency_check_failed",
+                error=e,
+            )
 
         delay = self._config.retry_delay_seconds
         last_error: Exception | None = None
@@ -472,7 +498,10 @@ class AuditSyncWorker:
                     adapter.log(entry.data)
                 else:
                     # 범용 로그
-                    logger.info(f"[AuditSync] {entry.data}")
+                    logger.info(
+                        "audit_sync.event",
+                        entry=entry.data,
+                    )
 
                 # 성공 시 처리 완료 마킹
                 try:
@@ -524,10 +553,16 @@ class AuditSyncWorker:
             # 커스텀 메트릭 기록
             metrics.record_write("sync_worker", success=True, duration_ms=stats["avg_sync_duration_ms"])
 
-            logger.debug(f"[AuditSyncWorker] Metrics: {stats}")
+            logger.debug(
+                "audit_sync_worker.metrics",
+                stats=stats,
+            )
 
         except Exception as e:
-            logger.debug(f"[AuditSyncWorker] Failed to report metrics: {e}")
+            logger.debug(
+                "audit_sync_worker.failed_report_metrics",
+                error=e,
+            )
 
     def _get_checkpoint_strategy(self) -> CheckpointStorageStrategy | None:
         """CheckpointStorageStrategy 인스턴스 가져오기."""
@@ -540,7 +575,10 @@ class AuditSyncWorker:
             self._checkpoint_strategy = CheckpointStrategyRegistry.get_default()
             return self._checkpoint_strategy
         except Exception as e:
-            logger.debug(f"[AuditSyncWorker] CheckpointStrategy not available: {e}")
+            logger.debug(
+                "audit_sync_worker.checkpointstrategy_available",
+                error=e,
+            )
             return None
 
     def set_checkpoint_strategy(self, strategy: CheckpointStorageStrategy) -> None:
@@ -557,9 +595,15 @@ class AuditSyncWorker:
 
                 checkpoint = get_checkpoint_manager()
                 checkpoint.save(last_sequence=self._last_processed_seq)
-                logger.debug(f"[AuditSyncWorker] Checkpoint saved via legacy manager: seq={self._last_processed_seq}")
+                logger.debug(
+                    "audit_sync_worker.checkpoint_saved_via_legacy",
+                    self=self._last_processed_seq,
+                )
             except Exception as e:
-                logger.warning(f"[AuditSyncWorker] Legacy checkpoint save failed: {e}")
+                logger.warning(
+                    "audit_sync_worker.legacy_checkpoint_save_failed",
+                    error=e,
+                )
             return
 
         try:
@@ -571,9 +615,15 @@ class AuditSyncWorker:
             )
             strategy.save("sync_worker", checkpoint_data)
             strategy.commit()  # 영속적 저장 보장
-            logger.debug(f"[AuditSyncWorker] Checkpoint saved via strategy: seq={self._last_processed_seq}")
+            logger.debug(
+                "audit_sync_worker.checkpoint_saved_via_strategy",
+                self=self._last_processed_seq,
+            )
         except Exception as e:
-            logger.warning(f"[AuditSyncWorker] Checkpoint save failed: {e}")
+            logger.warning(
+                "audit_sync_worker.checkpoint_save_failed",
+                error=e,
+            )
 
     def sync_now(self) -> tuple[int, int]:
         """

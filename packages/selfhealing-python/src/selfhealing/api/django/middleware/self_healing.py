@@ -29,7 +29,7 @@ Usage in settings.py:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import re
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -38,7 +38,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SelfHealingMiddleware:
@@ -93,14 +93,20 @@ class SelfHealingMiddleware:
 
             self._cb_service = get_circuit_breaker_service()
         except Exception as e:
-            logger.warning(f"[SelfHealingMiddleware] CB service init failed: {e}")
+            logger.warning(
+                "self_healing_middleware.cb_service_init_failed",
+                error=e,
+            )
 
         try:
             from selfhealing.audit import get_audit_logger
 
             self._audit_logger = get_audit_logger()
         except Exception as e:
-            logger.warning(f"[SelfHealingMiddleware] Audit logger init failed: {e}")
+            logger.warning(
+                "self_healing_middleware.audit_logger_init_failed",
+                error=e,
+            )
 
         self._initialized = True
 
@@ -316,7 +322,10 @@ class SelfHealingMiddleware:
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as e:
-            logger.warning(f"[SelfHealingMiddleware] Request capture failed: {e}")
+            logger.warning(
+                "self_healing_middleware.request_capture_failed",
+                error=e,
+            )
             return {"path": getattr(request, "path", "unknown"), "error": str(e)}
 
     def _is_dlq_eligible(self, request: HttpRequest) -> bool:
@@ -355,7 +364,10 @@ class SelfHealingMiddleware:
 
                 pool_state = pool_circuit_breaker.state
                 if pool_state in ("OPEN", "HALF_OPEN"):
-                    logger.debug(f"[SelfHealingMiddleware] PoolCB is {pool_state}")
+                    logger.debug(
+                        "self_healing_middleware.poolcb",
+                        pool_state=pool_state,
+                    )
                     return True
             except Exception:
                 pass
@@ -363,7 +375,10 @@ class SelfHealingMiddleware:
             return False
 
         except Exception as e:
-            logger.warning(f"[SelfHealingMiddleware] CB state check failed: {e}")
+            logger.warning(
+                "self_healing_middleware.cb_state_check_failed",
+                error=e,
+            )
             return False
 
     def _record_cb_failure(
@@ -390,7 +405,10 @@ class SelfHealingMiddleware:
                     request=request,
                 )
         except Exception as e:
-            logger.error(f"[SelfHealingMiddleware] CB failure recording failed: {e}")
+            logger.error(
+                "self_healing_middleware.cb_failure_recording_failed",
+                error=e,
+            )
 
         try:
             from selfhealing.api.django.pool_circuit_breaker import pool_circuit_breaker
@@ -401,7 +419,10 @@ class SelfHealingMiddleware:
                 f"state={pool_circuit_breaker.state}, failures={pool_circuit_breaker._failure_count}"
             )
         except Exception as e:
-            logger.warning(f"[SelfHealingMiddleware] PoolCB record_failure failed: {e}")
+            logger.warning(
+                "self_healing_middleware.poolcb_failed",
+                error=e,
+            )
 
     def _record_cb_success(self) -> None:
         """Record success to CircuitBreaker."""
@@ -469,7 +490,10 @@ class SelfHealingMiddleware:
                 return None
 
         except Exception as e:
-            logger.error(f"[SelfHealingMiddleware] DLQ storage error: {e}")
+            logger.error(
+                "self_healing_middleware.dlq_storage_error",
+                error=e,
+            )
             return None
 
     def _infer_domain(self, path: str) -> str:
@@ -526,4 +550,7 @@ class SelfHealingMiddleware:
                     }
                 )
         except Exception as e:
-            logger.warning(f"[SelfHealingMiddleware] Audit log failed: {e}")
+            logger.warning(
+                "self_healing_middleware.audit_log_failed",
+                error=e,
+            )

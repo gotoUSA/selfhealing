@@ -9,14 +9,14 @@ Moved from: meta/config.py (위치 통일)
 
 from __future__ import annotations
 
-import logging
+import structlog
 from functools import lru_cache
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class MetaWatchdogSettings(BaseSettings):

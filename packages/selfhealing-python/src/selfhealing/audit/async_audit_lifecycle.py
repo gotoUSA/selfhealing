@@ -27,7 +27,7 @@ Version: 1.0.0
 from __future__ import annotations
 
 import atexit
-import logging
+import structlog
 import os
 import signal
 import sys
@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.audit.sync_worker import AuditSyncWorker
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 싱글톤 플래그
 _shutdown_registered = False
@@ -69,7 +69,7 @@ def create_audit_flush_callback():
 
             adapter = get_audit_adapter()
             if adapter is None:
-                logger.debug("[AsyncAuditLifecycle] AuditAdapter not available")
+                logger.debug("async_audit_lifecycle.auditadapter_available")
                 return
 
             entries = []
@@ -96,7 +96,10 @@ def create_audit_flush_callback():
                     )
                     entries.append(entry)
                 except Exception as e:
-                    logger.debug(f"[AsyncAuditLifecycle] Event conversion failed: {e}")
+                    logger.debug(
+                        "async_audit_lifecycle.event_conversion_failed",
+                        error=e,
+                    )
 
             # 배치 삽입 (지원되는 경우)
             if hasattr(adapter, "log_batch"):
@@ -105,10 +108,16 @@ def create_audit_flush_callback():
                 for entry in entries:
                     adapter.log(entry)
 
-            logger.debug(f"[AsyncAuditLifecycle] Flushed {len(entries)} audit entries")
+            logger.debug(
+                "async_audit_lifecycle.flushed_audit_entries",
+                count=len(entries),
+            )
 
         except Exception as e:
-            logger.warning(f"[AsyncAuditLifecycle] Flush to adapter failed: {e}")
+            logger.warning(
+                "async_audit_lifecycle.flush_adapter_failed",
+                error=e,
+            )
 
     return flush_to_audit_adapter
 
@@ -136,20 +145,26 @@ def startup_async_audit_system() -> bool:
 
     with _lifecycle_lock:
         if _startup_completed:
-            logger.debug("[AsyncAuditLifecycle] Already started")
+            logger.debug("async_audit_lifecycle.already_started")
             return False
 
-        logger.info("[AsyncAuditLifecycle] Starting async audit system...")
+        logger.info("async_audit_lifecycle.starting_async_audit_system")
 
         try:
             # 1. 체크포인트 로드
             last_seq = _load_checkpoint()
-            logger.info(f"[AsyncAuditLifecycle] Last processed sequence: {last_seq}")
+            logger.info(
+                "async_audit_lifecycle.last_processed_sequence",
+                last_seq=last_seq,
+            )
 
             # 2. WAL에서 미처리 엔트리 확인
             unprocessed_count = _check_unprocessed_wal_entries(last_seq)
             if unprocessed_count > 0:
-                logger.info(f"[AsyncAuditLifecycle] Found {unprocessed_count} unprocessed WAL entries")
+                logger.info(
+                    "async_audit_lifecycle.found_unprocessed_wal_entries",
+                    unprocessed_count=unprocessed_count,
+                )
 
             # 3. AsyncHealingLogger 초기화 및 시작
             _initialize_async_logger()
@@ -158,11 +173,14 @@ def startup_async_audit_system() -> bool:
             _start_sync_worker()
 
             _startup_completed = True
-            logger.info("[AsyncAuditLifecycle] Async audit system started successfully")
+            logger.info("async_audit_lifecycle.async_audit_system_started")
             return True
 
         except Exception as e:
-            logger.error(f"[AsyncAuditLifecycle] Startup failed: {e}")
+            logger.error(
+                "async_audit_lifecycle.startup_failed",
+                error=e,
+            )
             return False
 
 
@@ -174,7 +192,10 @@ def _load_checkpoint() -> int:
         checkpoint = get_checkpoint_manager()
         return checkpoint.load()
     except Exception as e:
-        logger.debug(f"[AsyncAuditLifecycle] Checkpoint load failed: {e}")
+        logger.debug(
+            "async_audit_lifecycle.checkpoint_load_failed",
+            error=e,
+        )
         return 0
 
 
@@ -201,7 +222,10 @@ def _check_unprocessed_wal_entries(last_seq: int) -> int:
 
         return 0
     except Exception as e:
-        logger.debug(f"[AsyncAuditLifecycle] WAL check failed: {e}")
+        logger.debug(
+            "async_audit_lifecycle.wal_check_failed",
+            error=e,
+        )
         return 0
 
 
@@ -217,9 +241,12 @@ def _initialize_async_logger() -> None:
         # 백그라운드 워커 시작
         AsyncHealingLogger.start()
 
-        logger.info("[AsyncAuditLifecycle] AsyncHealingLogger initialized")
+        logger.info("async_audit_lifecycle.asynchealinglogger_initialized")
     except Exception as e:
-        logger.warning(f"[AsyncAuditLifecycle] AsyncHealingLogger init failed: {e}")
+        logger.warning(
+            "async_audit_lifecycle.asynchealinglogger_init_failed",
+            error=e,
+        )
 
 
 def _start_sync_worker() -> None:
@@ -230,9 +257,12 @@ def _start_sync_worker() -> None:
         sync_worker = AuditSyncWorker.get_instance()
         sync_worker.start()
 
-        logger.info("[AsyncAuditLifecycle] AuditSyncWorker started")
+        logger.info("async_audit_lifecycle.auditsyncworker_started")
     except Exception as e:
-        logger.debug(f"[AsyncAuditLifecycle] SyncWorker start failed: {e}")
+        logger.debug(
+            "async_audit_lifecycle.syncworker_start_failed",
+            error=e,
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -258,7 +288,7 @@ def graceful_shutdown_audit_system() -> None:
     if os.getenv("SELFHEALING_TEST_MODE", "").lower() == "true":
         return
 
-    logger.info("[GracefulShutdown] Starting audit system shutdown...")
+    logger.info("graceful_shutdown.starting_audit_system_shutdown")
 
     # 1. AsyncHealingLogger 플러시 및 종료
     _shutdown_async_logger()
@@ -272,7 +302,7 @@ def graceful_shutdown_audit_system() -> None:
     # 4. 체크포인트 저장
     _save_final_checkpoint()
 
-    logger.info("[GracefulShutdown] Audit system shutdown complete")
+    logger.info("graceful_shutdown.audit_system_shutdown_complete")
 
 
 def _shutdown_async_logger() -> None:
@@ -286,9 +316,12 @@ def _shutdown_async_logger() -> None:
         # 워커 종료 (타임아웃 5초)
         AsyncHealingLogger.stop(timeout=5.0)
 
-        logger.info("[GracefulShutdown] AsyncHealingLogger stopped")
+        logger.info("graceful_shutdown.asynchealinglogger_stopped")
     except Exception as e:
-        logger.warning(f"[GracefulShutdown] AsyncHealingLogger error: {e}")
+        logger.warning(
+            "graceful_shutdown.asynchealinglogger_error",
+            error=e,
+        )
 
 
 def _shutdown_sync_worker() -> None:
@@ -301,9 +334,12 @@ def _shutdown_sync_worker() -> None:
         # 동기화 완료 대기 (타임아웃 30초)
         sync_worker.stop(timeout=30.0)
 
-        logger.info("[GracefulShutdown] AuditSyncWorker stopped")
+        logger.info("graceful_shutdown.auditsyncworker_stopped")
     except Exception as e:
-        logger.warning(f"[GracefulShutdown] SyncWorker error: {e}")
+        logger.warning(
+            "graceful_shutdown.syncworker_error",
+            error=e,
+        )
 
 
 def _shutdown_wal() -> None:
@@ -321,9 +357,12 @@ def _shutdown_wal() -> None:
         if hasattr(wal, "close"):
             wal.close()
 
-        logger.info("[GracefulShutdown] WAL closed")
+        logger.info("graceful_shutdown.wal_closed")
     except Exception as e:
-        logger.warning(f"[GracefulShutdown] WAL error: {e}")
+        logger.warning(
+            "graceful_shutdown.wal_error",
+            error=e,
+        )
 
 
 def _save_final_checkpoint() -> None:
@@ -337,9 +376,15 @@ def _save_final_checkpoint() -> None:
         if last_seq > 0:
             checkpoint = get_checkpoint_manager()
             checkpoint.save(last_sequence=last_seq)
-            logger.info(f"[GracefulShutdown] Checkpoint saved: seq={last_seq}")
+            logger.info(
+                "graceful_shutdown.checkpoint_saved",
+                last_seq=last_seq,
+            )
     except Exception as e:
-        logger.warning(f"[GracefulShutdown] Checkpoint error: {e}")
+        logger.warning(
+            "graceful_shutdown.checkpoint_error",
+            error=e,
+        )
 
 
 def _get_last_processed_sequence() -> int:
@@ -391,13 +436,13 @@ def register_shutdown_handlers() -> bool:
 
     with _lifecycle_lock:
         if _shutdown_registered:
-            logger.debug("[AsyncAuditLifecycle] Shutdown handlers already registered")
+            logger.debug("async_audit_lifecycle.shutdown_handlers_already_registered")
             return False
 
         # 테스트 환경에서는 실제 리소스 접근을 방지하기 위해 등록하지 않음
         if _is_test_mode():
             _shutdown_registered = True
-            logger.debug("[AsyncAuditLifecycle] Skipping shutdown handlers in test mode")
+            logger.debug("async_audit_lifecycle.skipping_shutdown_handlers_test")
             return False
 
         # atexit: 정상 종료 시 호출
@@ -410,7 +455,7 @@ def register_shutdown_handlers() -> bool:
         _register_signal_handler(signal.SIGINT, _handle_sigint)
 
         _shutdown_registered = True
-        logger.info("[AsyncAuditLifecycle] Shutdown handlers registered")
+        logger.info("async_audit_lifecycle.shutdown_handlers_registered")
         return True
 
 
@@ -421,19 +466,28 @@ def _register_signal_handler(sig: signal.Signals, handler) -> None:
         if threading.current_thread() is threading.main_thread():
             signal.signal(sig, handler)
     except (ValueError, OSError) as e:
-        logger.debug(f"[AsyncAuditLifecycle] Signal handler registration failed: {e}")
+        logger.debug(
+            "async_audit_lifecycle.signal_handler_registration_failed",
+            error=e,
+        )
 
 
 def _handle_sigterm(signum: int, frame) -> None:
     """SIGTERM 핸들러."""
-    logger.info(f"[GracefulShutdown] Received SIGTERM (signal {signum})")
+    logger.info(
+        "graceful_shutdown.received_sigterm_signal",
+        signum=signum,
+    )
     graceful_shutdown_audit_system()
     sys.exit(0)
 
 
 def _handle_sigint(signum: int, frame) -> None:
     """SIGINT 핸들러."""
-    logger.info(f"[GracefulShutdown] Received SIGINT (signal {signum})")
+    logger.info(
+        "graceful_shutdown.received_sigint_signal",
+        signum=signum,
+    )
     graceful_shutdown_audit_system()
     sys.exit(0)
 
@@ -507,7 +561,10 @@ def get_async_audit_metrics() -> dict[str, Any]:
         }
 
     except Exception as e:
-        logger.warning(f"[AsyncAuditLifecycle] Failed to get metrics: {e}")
+        logger.warning(
+            "async_audit_lifecycle.failed_get_metrics",
+            error=e,
+        )
         return {
             "error": str(e),
             "lifecycle_startup_completed": _startup_completed,

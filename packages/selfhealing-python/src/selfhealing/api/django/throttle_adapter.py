@@ -13,7 +13,7 @@ Usage in DRF views:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from typing import Any
 
@@ -23,7 +23,7 @@ from selfhealing.services.throttle.adaptive import (
 )
 from selfhealing.services.throttle.config import ThrottleConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AdaptiveDRFThrottle:

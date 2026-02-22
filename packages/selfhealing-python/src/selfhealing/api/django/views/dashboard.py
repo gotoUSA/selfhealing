@@ -10,7 +10,7 @@ Note: Business logic has been extracted to DashboardService.
 See: services/dashboard_service.py
 """
 
-import logging
+import structlog
 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -19,7 +19,7 @@ from rest_framework.views import APIView
 from selfhealing.api.django.permissions import IsViewer
 from selfhealing.services.dashboard_service import get_dashboard_service
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DashboardSummaryView(APIView):

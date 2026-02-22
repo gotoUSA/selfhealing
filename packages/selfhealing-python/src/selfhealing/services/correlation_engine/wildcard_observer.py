@@ -13,7 +13,7 @@ Correlation Engine 모듈(DAG Builder, Co-occurrence Tracker)에 공급하는 �
 
 from __future__ import annotations
 
-import logging
+import structlog
 import queue
 import threading
 import time
@@ -33,7 +33,7 @@ from selfhealing.services.predictive_forecaster.anomaly_detector import (
 )
 from selfhealing.settings.correlation import CorrelationSettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -176,7 +176,11 @@ class WildcardObserver:
                 )
                 subscribed_count += 1
             except Exception as e:
-                logger.warning(f"[WildcardObserver] Failed to subscribe to " f"{event_type.value}: {e}")
+                logger.warning(
+                    "wildcard_observer.failed_subscribe",
+                    event_type=event_type.value,
+                    error=e,
+                )
 
         # 2) Consumer 스레드 시작
         self._stop_event.clear()
@@ -188,7 +192,10 @@ class WildcardObserver:
         self._consumer_thread.start()
 
         self._subscribed = True
-        logger.info(f"[WildcardObserver] Subscribed to {subscribed_count} event types, " f"consumer thread started")
+        logger.info(
+            "wildcard_observer.subscribed_event_types_consumer",
+            subscribed_count=subscribed_count,
+        )
 
     def unregister(self, event_bus: SelfHealingEventBus) -> None:
         """구독 해제 + Consumer 스레드 종료.
@@ -216,7 +223,7 @@ class WildcardObserver:
         # 3) 래퍼 참조 해제 → 클로저가 self를 캡처하므로 순환 참조 끊기
         self._handler_ref = None
 
-        logger.info("[WildcardObserver] Unregistered and consumer stopped")
+        logger.info("wildcard_observer.unregistered_consumer_stopped")
 
     # -------------------------------------------------------------------------
     # 이벤트 수신: Producer (Hot Path)
@@ -267,9 +274,12 @@ class WildcardObserver:
                 )
             except Exception as e:
                 # Consumer 오류가 루프를 중단시키지 않음
-                logger.debug(f"[WildcardObserver] Consumer error: {e}")
+                logger.debug(
+                    "wildcard_observer.consumer_error",
+                    error=e,
+                )
 
-        logger.info("[WildcardObserver] Consumer loop exited")
+        logger.info("wildcard_observer.consumer_loop_exited")
 
     # -------------------------------------------------------------------------
     # 이벤트 발생률 이상 탐지 (Orchestrator Tick 전용)

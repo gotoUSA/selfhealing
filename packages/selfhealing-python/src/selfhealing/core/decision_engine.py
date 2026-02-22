@@ -13,7 +13,7 @@ Netflix Hystrix, Google Autopilot 스타일의 자율 조정 엔진
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -22,7 +22,7 @@ from typing import Any, Protocol
 
 from selfhealing.settings.decision_engine import get_decision_engine_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AdjustmentPriority(str, Enum):
@@ -146,7 +146,10 @@ class DecisionEngine:
         # 분석 이력
         self._history: list[dict[str, Any]] = []
 
-        logger.info(f"[DecisionEngine] Initialized with {len(self.rules)} rules")
+        logger.info(
+            "decision_engine.initialized_rules",
+            count=len(self.rules),
+        )
 
     def analyze(self, metrics: dict[str, float]) -> list[AdjustmentDecision]:
         """
@@ -186,19 +189,29 @@ class DecisionEngine:
         try:
             current_value = self.config_provider.get(rule.parameter)
             if current_value is None:
-                logger.debug(f"[DecisionEngine] No current value for {rule.parameter}")
+                logger.debug(
+                    "decision_engine.no_current_value",
+                    rule=rule.parameter,
+                )
                 return None
 
             current_value = float(current_value)
         except (TypeError, ValueError) as e:
-            logger.warning(f"[DecisionEngine] Invalid current value for {rule.parameter}: {e}")
+            logger.warning(
+                "decision_engine.invalid_current_value",
+                rule=rule.parameter,
+                error=e,
+            )
             return None
 
         # 조건 평가
         try:
             should_adjust = rule.condition(current_value, metric_value)
         except Exception as e:
-            logger.warning(f"[DecisionEngine] Condition evaluation failed: {e}")
+            logger.warning(
+                "decision_engine.condition_evaluation_failed",
+                error=e,
+            )
             return None
 
         if not should_adjust:
@@ -208,7 +221,10 @@ class DecisionEngine:
         try:
             suggested_value = rule.adjustment(current_value, metric_value)
         except Exception as e:
-            logger.warning(f"[DecisionEngine] Adjustment calculation failed: {e}")
+            logger.warning(
+                "decision_engine.adjustment_calculation_failed",
+                error=e,
+            )
             return None
 
         # 변경이 의미있는지 확인
@@ -221,7 +237,11 @@ class DecisionEngine:
         confidence = self._calculate_confidence(metrics, rule)
 
         if confidence < rule.min_confidence:
-            logger.debug(f"[DecisionEngine] Low confidence ({confidence:.2f}) for {rule.parameter}")
+            logger.debug(
+                "decision_engine.low_confidence",
+                confidence=confidence,
+                rule=rule.parameter,
+            )
             return None
 
         return AdjustmentDecision(
@@ -326,7 +346,10 @@ class DecisionEngine:
     def add_rule(self, rule: AdjustmentRule) -> None:
         """규칙 추가"""
         self.rules.append(rule)
-        logger.info(f"[DecisionEngine] Added rule for {rule.parameter}")
+        logger.info(
+            "decision_engine.added_rule",
+            rule=rule.parameter,
+        )
 
     def remove_rule(self, parameter: str) -> bool:
         """규칙 제거"""
@@ -334,7 +357,10 @@ class DecisionEngine:
         self.rules = [r for r in self.rules if r.parameter != parameter]
         removed = len(self.rules) < original_count
         if removed:
-            logger.info(f"[DecisionEngine] Removed rule for {parameter}")
+            logger.info(
+                "decision_engine.removed_rule",
+                parameter=parameter,
+            )
         return removed
 
     def get_rules(self) -> list[dict[str, Any]]:

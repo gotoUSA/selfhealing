@@ -11,7 +11,7 @@ Tasks:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.tasks.base import BaseNotifyingTask
@@ -20,7 +20,7 @@ from selfhealing.tasks.notification_policy import (
     NotificationTiming,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -87,7 +87,7 @@ class CheckSLADriftTask(BaseNotifyingTask):
 
     def run(self) -> dict[str, Any]:
         """SLA 드리프트 감지 태스크 실행."""
-        logger.info("[CheckSLADrift] Starting SLA drift detection")
+        logger.info("check_sla_drift.starting_sla_drift_detection")
 
         try:
 
@@ -108,7 +108,10 @@ class CheckSLADriftTask(BaseNotifyingTask):
 
             warnings = result.get("warnings", [])
 
-            logger.info(f"[CheckSLADrift] Completed with {len(warnings)} warning(s)")
+            logger.info(
+                "check_sla_drift.completed_warning",
+                count=len(warnings),
+            )
 
             return {
                 "success": result.get("success", True),
@@ -349,7 +352,7 @@ class AnalyzeCrossStageInsightsTask(BaseNotifyingTask):
 
     def run(self) -> dict[str, Any]:
         """Cross-Stage 인사이트 분석 태스크 실행."""
-        logger.info("[AnalyzeCrossStageInsights] Starting cross-stage analysis")
+        logger.info("analyze_cross_stage_insights.starting_cross_stage_analysis")
 
         try:
             from selfhealing.services.learning import get_learning_service
@@ -484,7 +487,7 @@ class CheckRecoveryTransitionsTask(BaseNotifyingTask):
 
     def run(self) -> dict[str, Any]:
         """복구 상태 체크 태스크 실행."""
-        logger.info("[CheckRecoveryTransitions] Checking circuit breaker states")
+        logger.info("check_recovery_transitions.checking_circuit_breaker_states")
 
         try:
             # Django 어댑터 사용 시도
@@ -585,7 +588,7 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
 
     def run(self) -> dict[str, Any]:
         """검증 대기 중인 Shadow Budget들 처리."""
-        logger.info("[VerifyReconciliationAccuracy] Starting accuracy verification")
+        logger.info("verify_reconciliation_accuracy.starting_accuracy_verification")
 
         try:
             from datetime import timedelta
@@ -754,7 +757,10 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
                 recorder.record(event)
 
         except Exception as e:
-            logger.debug(f"[VerifyReconciliationAccuracy] Audit recording failed: {e}")
+            logger.debug(
+                "verify_reconciliation_accuracy.audit_recording_failed",
+                error=e,
+            )
 
     def _get_severity(self, result: dict[str, Any]) -> str:
         """고분산 항목 수에 따른 심각도."""
@@ -820,7 +826,10 @@ def register_intelligence_tasks_with_celery(app):
             },
         )
         app.register_task(wrapped())
-        logger.info(f"[IntelligenceTasks] Registered: {task_class.name}")
+        logger.info(
+            "cell_registry.bulkheads_registered",
+            task_class=task_class.name,
+        )
 
 
 # =============================================================================

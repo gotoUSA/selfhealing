@@ -7,12 +7,12 @@ SLA 위반 시 즉시 실험을 중단하고 롤백을 트리거합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -238,7 +238,11 @@ class StopConditionsChecker:
             for key, value in kwargs.items():
                 if hasattr(self._config, key):
                     setattr(self._config, key, value)
-                    logger.info(f"[StopConditions] Updated {key} = {value}")
+                    logger.info(
+                        "stop_conditions.updated",
+                        key=key,
+                        value=value,
+                    )
             return self._config
 
     def check(
@@ -321,7 +325,10 @@ class StopConditionsChecker:
                 )
 
         except Exception as e:
-            logger.warning(f"[StopConditions] Metrics collection failed: {e}")
+            logger.warning(
+                "stop_conditions.metrics_collection_failed",
+                error=e,
+            )
             # 메트릭 수집 실패 시 fail-open (계속 진행)
             return StopConditionCheckResult(
                 should_stop=False,

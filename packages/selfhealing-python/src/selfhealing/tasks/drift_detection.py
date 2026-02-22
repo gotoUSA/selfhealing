@@ -14,14 +14,14 @@ is done in the framework-specific adapter layer.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any, Protocol
 
 from selfhealing.core.timezone import now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -100,7 +100,7 @@ class SLADriftDetector:
         Returns:
             Dictionary with drift detection results
         """
-        logger.info("[SLA Drift] Starting SLA drift detection check")
+        logger.info("sla_drift_starting_sla")
 
         try:
             sla_config = self.get_sla_thresholds()
@@ -142,7 +142,7 @@ class SLADriftDetector:
                     f"[SLA Drift] Completed with {len(results['warnings'])} warning(s)"
                 )
             else:
-                logger.info("[SLA Drift] Completed - No drift detected")
+                logger.info("sla_drift_completed_no")
 
             return results
 
@@ -349,7 +349,10 @@ class SLADriftDetector:
                     },
                 )
             except Exception as e:
-                logger.error(f"[SLADriftWarning] Failed to send notification: {e}")
+                logger.error(
+                    "sla_drift_warning.failed_send_notification",
+                    error=e,
+                )
 
 
 # =============================================================================
@@ -379,7 +382,7 @@ class ChaosExperimentCleaner:
         Returns:
             Dictionary with cleanup results
         """
-        logger.info("[ChaosCleanup] Starting expired chaos experiment cleanup")
+        logger.info("chaos_cleanup.starting_expired_chaos_experiment")
 
         try:
             resolved_count = self.resolve_expired_experiments()

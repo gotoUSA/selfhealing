@@ -18,12 +18,12 @@ Reference:
 - docs/self_healing/middleware_system/40_PYDANTIC_CONFIG_MIGRATION.md
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CircuitBreakerSettings(BaseSettings):
@@ -136,7 +136,10 @@ class CircuitBreakerSettings(BaseSettings):
     def validate_failure_threshold(cls, v: int) -> int:
         """Safe default fallback warning for extreme values."""
         if v > 50:
-            logger.warning(f"[SafeDefault] High failure_threshold={v}, " "consider using <= 50 for safety")
+            logger.warning(
+                "safe_default.high_consider_using_safety",
+                v=v,
+            )
         return v
 
 

@@ -8,7 +8,7 @@ Contains:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,7 +16,7 @@ from typing import Any
 
 from selfhealing.audit.integrity.models import compute_hash
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class HashChainManager:
@@ -53,9 +53,15 @@ class HashChainManager:
                 data = json.loads(self._state_file.read_text())
                 self._sequence = data.get("sequence", 0)
                 self._previous_hash = data.get("previous_hash", self.GENESIS_HASH)
-                logger.debug(f"[HashChain] Loaded state: seq={self._sequence}")
+                logger.debug(
+                    "hash_chain.loaded_state",
+                    self=self._sequence,
+                )
             except Exception as e:
-                logger.warning(f"[HashChain] Failed to load state: {e}")
+                logger.warning(
+                    "hash_chain.failed_load_state",
+                    error=e,
+                )
 
     def _save_state(self) -> None:
         """Save chain state to file."""
@@ -69,7 +75,10 @@ class HashChainManager:
                 }
                 self._state_file.write_text(json.dumps(data, indent=2))
             except Exception as e:
-                logger.warning(f"[HashChain] Failed to save state: {e}")
+                logger.warning(
+                    "hash_chain.failed_save_state",
+                    error=e,
+                )
 
     def add_integrity(self, entry: dict[str, Any]) -> dict[str, Any]:
         """
@@ -123,7 +132,7 @@ class HashChainManager:
             self._previous_hash = self.GENESIS_HASH
             if self._state_file and self._state_file.exists():
                 self._state_file.unlink()
-            logger.warning("[HashChain] Chain state reset")
+            logger.warning("hash_chain.chain_state_reset")
 
 
 __all__ = ["HashChainManager"]

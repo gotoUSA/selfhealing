@@ -16,7 +16,7 @@ Reference:
     docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#10.2.4
 """
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from rest_framework import status
@@ -41,7 +41,7 @@ from selfhealing.services.coordination.regional_recovery_policy import (
     get_regional_recovery_policy_engine,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -281,7 +281,11 @@ class RecoveryAbortView(APIView):
 
             raise Http404(f"Session not found or already completed: {session_id}")
 
-        logger.info(f"[RecoveryAbortView] Recovery aborted: " f"session_id={session_id}, user={request.user}")
+        logger.info(
+            "recovery_abort_view.recovery_aborted",
+            session_id=session_id,
+            request=request.user,
+        )
 
         return Response(
             {
@@ -371,7 +375,11 @@ class RecoveryApproveView(APIView):
 
             raise Http404(f"Request not found: {request_id}")
 
-        logger.info(f"[RecoveryApproveView] Approved: " f"request_id={request_id}, user={request.user}")
+        logger.info(
+            "recovery_approve_view.approved",
+            request_id=request_id,
+            request=request.user,
+        )
 
         response_data = {
             "request_id": request_id,
@@ -442,7 +450,12 @@ class RecoveryRejectView(APIView):
 
             raise Http404(f"Request not found: {request_id}")
 
-        logger.info(f"[RecoveryRejectView] Rejected: " f"request_id={request_id}, reason={reason}, user={request.user}")
+        logger.info(
+            "recovery_reject_view.rejected",
+            request_id=request_id,
+            reason=reason,
+            request=request.user,
+        )
 
         return Response(
             {

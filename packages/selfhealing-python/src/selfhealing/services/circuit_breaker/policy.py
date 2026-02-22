@@ -15,7 +15,7 @@ ResiliencePolicy.execute() 기반의 함수 래핑 방식으로 전환한다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from functools import wraps
 from typing import Any, TypeVar
@@ -32,7 +32,7 @@ from .exceptions import CircuitBreakerOpenError
 from .hooks import build_default_hooks
 from .service import CircuitBreakerService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -91,7 +91,7 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
             repository = ProviderRegistry.get_circuit_breaker_repo(name="layered")
         except (ValueError, ImportError):
             # "layered" 미등록 시 ProviderRegistry 기본값 사용
-            logger.debug("[CircuitBreakerPolicy] 'layered' repo not available, " "falling back to ProviderRegistry default")
+            logger.debug("circuit_breaker_policy.layered_repo_available_falling")
         return CircuitBreakerService(config=config, repository=repository)
 
     @property
@@ -126,7 +126,12 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
             try:
                 getattr(hook, method)(*args)
             except Exception as e:
-                logger.debug(f"[CircuitBreakerPolicy] Hook {type(hook).__name__}.{method} failed: {e}")
+                logger.debug(
+                    "circuit_breaker_policy.hook_failed",
+                    value=type(hook).__name__,
+                    method=method,
+                    error=e,
+                )
 
     def execute(
         self,

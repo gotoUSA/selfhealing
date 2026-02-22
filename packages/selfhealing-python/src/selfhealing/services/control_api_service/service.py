@@ -6,7 +6,7 @@ ControlAPIService 클래스, 싱글톤 인스턴스, get_control_api_service() �
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import timedelta
 
 from selfhealing.core.constants import (
@@ -18,7 +18,7 @@ from selfhealing.core.timezone import now
 from .models import ControlRequest, ControlResponse
 from .risk import assess_risk_level, classify_reason
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -109,7 +109,10 @@ class ControlAPIService:
                     error_message=f"Unknown action: {request.action}",
                 )
         except Exception as e:
-            logger.exception(f"[ControlAPI] Error executing action: {e}")
+            logger.exception(
+                "control_api.error_executing_action",
+                error=e,
+            )
             response = ControlResponse(
                 status="error",
                 action_applied=request.action,
@@ -428,7 +431,10 @@ class ControlAPIService:
                 "last_failure_at": (state.last_failure_at.isoformat() if state.last_failure_at else None),
             }
         except Exception as e:
-            logger.warning(f"[ControlAPI] Failed to gather evidence: {e}")
+            logger.warning(
+                "control_api.failed_gather_evidence",
+                error=e,
+            )
             return {}
 
     def _record_audit(self, request: ControlRequest, response: ControlResponse):
@@ -449,7 +455,10 @@ class ControlAPIService:
                 f"reason='{request.reason}'"
             )
         except Exception as e:
-            logger.warning(f"[ControlAPI] Failed to record audit: {e}")
+            logger.warning(
+                "control_api.failed_record_audit",
+                error=e,
+            )
 
     # =========================================================================
     # Query Methods

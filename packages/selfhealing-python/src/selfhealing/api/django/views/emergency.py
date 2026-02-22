@@ -16,7 +16,7 @@ Endpoints:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 
 from rest_framework import status
@@ -32,7 +32,7 @@ from selfhealing.services.emergency_mode.enums import (
 )
 from selfhealing.services.emergency_mode.models import RecoveryGateConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class EmergencyStatusView(APIView):
@@ -174,7 +174,12 @@ class EmergencyTriggerView(APIView):
             duration_minutes=int(duration_minutes) if duration_minutes else None,
         )
 
-        logger.warning(f"[EmergencyAPI] Emergency mode activated: level={level.name}, " f"by={actor}, reason={reason}")
+        logger.warning(
+            "emergency_api.emergency_mode_activated",
+            level=level.name,
+            actor=actor,
+            reason=reason,
+        )
 
         return Response(
             {
@@ -250,7 +255,11 @@ class EmergencyReleaseView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        logger.info(f"[EmergencyAPI] Emergency mode deactivated: " f"previous_level={previous_level}, by={actor}")
+        logger.info(
+            "emergency_api.emergency_mode_deactivated",
+            previous_level=previous_level,
+            actor=actor,
+        )
 
         return Response(
             {

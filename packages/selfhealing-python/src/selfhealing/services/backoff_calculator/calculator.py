@@ -6,7 +6,7 @@ Core backoff calculation logic with throttle-awareness.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 import time
 from collections.abc import Callable
@@ -24,7 +24,7 @@ from .models import (
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class BackoffCalculator:
@@ -162,9 +162,12 @@ class ThrottleAwareBackoffCalculator(BackoffCalculator):
             bus.subscribe(EventType.THROTTLE_SLA_WARNING, self._on_sla_warning)
             bus.subscribe(EventType.THROTTLE_SLA_CRITICAL, self._on_sla_critical)
 
-            logger.debug("[ThrottleAwareBackoff] EventBus subscription enabled")
+            logger.debug("throttle_aware_backoff.eventbus_subscription_enabled")
         except Exception as e:
-            logger.warning(f"[ThrottleAwareBackoff] EventBus subscription failed: {e}")
+            logger.warning(
+                "throttle_aware_backoff.eventbus_subscription_failed",
+                error=e,
+            )
             self._enable_push_cache = False  # 폴백: 직접 조회 모드
 
     def _on_throttle_changed(self, event: Any) -> None:
@@ -217,7 +220,10 @@ class ThrottleAwareBackoffCalculator(BackoffCalculator):
 
                 return get_throttle_registry().get_throttle(self._service_name)
             except Exception as e:
-                logger.debug(f"[ThrottleAwareBackoff] Registry lookup failed: {e}")
+                logger.debug(
+                    "throttle_aware_backoff.registry_lookup_failed",
+                    error=e,
+                )
 
         # 폴백: 전역 싱글톤
         try:
@@ -251,7 +257,10 @@ class ThrottleAwareBackoffCalculator(BackoffCalculator):
                 error_budget_reduction_active=getattr(throttle, "_error_budget_limit_reduction_active", False),
             )
         except Exception as e:
-            logger.debug(f"[ThrottleAwareBackoff] get_throttle_state failed: {e}")
+            logger.debug(
+                "throttle_aware_backoff.failed",
+                error=e,
+            )
             return None
 
     def _get_throttle_state_cached(self) -> tuple[float, str]:
@@ -289,7 +298,10 @@ class ThrottleAwareBackoffCalculator(BackoffCalculator):
         except ImportError:
             return False
         except Exception as e:
-            logger.debug(f"[ThrottleAwareBackoff] ErrorBudgetGate check failed: {e}")
+            logger.debug(
+                "throttle_aware_backoff.errorbudgetgate_check_failed",
+                error=e,
+            )
             return False
 
     def _calculate_multiplier(self, state: ThrottleState) -> float:
@@ -392,7 +404,10 @@ class ThrottleAwareBackoffCalculator(BackoffCalculator):
         except ImportError:
             pass  # Fail-Open
         except Exception as e:
-            logger.debug(f"[ThrottleAwareBackoff] Metrics recording failed: {e}")
+            logger.debug(
+                "throttle_aware_backoff.metrics_recording_failed",
+                error=e,
+            )
 
     def calculate_with_throttle_context(
         self,

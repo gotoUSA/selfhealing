@@ -13,12 +13,12 @@ Environment Variables:
     SELFHEALING_PRECOMPUTED_CACHE_L1_MAXSIZE=100
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class PrecomputedCacheSettings(BaseSettings):

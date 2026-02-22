@@ -31,7 +31,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.adapters.kafka.producer import KafkaAuditProducer
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -193,16 +193,26 @@ class NonBlockingRetryHandler:
 
             if success:
                 self._stats["retries_sent"] += 1
-                logger.info(f"[RetryHandler] Retry 토픽으로 전송: " f"topic={retry_topic}, count={retry_count + 1}")
+                logger.info(
+                    "retry_handler.retry_토픽으로_전송",
+                    retry_topic=retry_topic,
+                    value=retry_count + 1,
+                )
             else:
                 self._stats["errors"] += 1
-                logger.error(f"[RetryHandler] Retry 토픽 전송 실패: topic={retry_topic}")
+                logger.error(
+                    "retry_handler.retry_토픽_전송_실패",
+                    retry_topic=retry_topic,
+                )
 
             return success
 
         except Exception as e:
             self._stats["errors"] += 1
-            logger.error(f"[RetryHandler] Retry 전송 오류: {e}")
+            logger.error(
+                "retry_handler.retry_전송_오류",
+                error=e,
+            )
             return False
 
     def _send_to_dlq(
@@ -246,13 +256,19 @@ class NonBlockingRetryHandler:
                 )
             else:
                 self._stats["errors"] += 1
-                logger.error(f"[RetryHandler] DLQ 전송 실패: " f"topic={self._config.final_dlq_topic}")
+                logger.error(
+                    "retry_handler.dlq_전송_실패",
+                    self=self._config.final_dlq_topic,
+                )
 
             return success
 
         except Exception as e:
             self._stats["errors"] += 1
-            logger.error(f"[RetryHandler] DLQ 전송 오류: {e}")
+            logger.error(
+                "retry_handler.dlq_전송_오류",
+                error=e,
+            )
             return False
 
     def get_stats(self) -> dict[str, int]:

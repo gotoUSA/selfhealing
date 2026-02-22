@@ -6,14 +6,14 @@ Provides methods for syncing data to/from L2 storage.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from typing import Any
 
 from selfhealing.interfaces.repositories import CircuitBreakerStateData
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class L2SyncMixin:
@@ -76,7 +76,10 @@ class L2SyncMixin:
             executor = self._get_executor()
             executor.submit(_sync)
         except Exception as e:
-            logger.warning(f"[LayeredRepo] Failed to submit L2 sync task: {e}")
+            logger.warning(
+                "layered_repo.failed_submit_sync_task",
+                error=e,
+            )
 
     def force_sync_from_l2(self) -> bool:
         """L2에서 강제 동기화 (관리 목적)."""
@@ -87,7 +90,10 @@ class L2SyncMixin:
             self._load_from_l2_with_timeout()
             return True
         except Exception as e:
-            logger.error(f"[LayeredRepo] Force sync from L2 failed: {e}")
+            logger.error(
+                "layered_repo.force_sync_failed",
+                error=e,
+            )
             return False
 
     def force_sync_to_l2(self) -> dict[str, Any]:

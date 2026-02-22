@@ -45,7 +45,7 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import uuid
 from collections.abc import Callable
@@ -59,7 +59,7 @@ from selfhealing.settings.namespace import get_key_prefix
 from selfhealing.settings.slack_channel import get_slack_channel_settings
 from selfhealing.utils.time import utc_now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_default_slack_channel() -> str:
@@ -319,7 +319,12 @@ class LoggingNotificationBackend(NotificationBackend):
         metadata: dict[str, Any] | None = None,
     ) -> bool:
         """로그로 알림 기록."""
-        logger.info(f"[CrossClusterNotification] channel={channel}, " f"message={message[:100]}..., metadata={metadata}")
+        logger.info(
+            "cross_cluster_notification.event",
+            channel=channel,
+            message=message[:100],
+            metadata=metadata,
+        )
         return True
 
 
@@ -347,7 +352,7 @@ class SlackNotificationBackend(NotificationBackend):
     ) -> bool:
         """Slack으로 알림 전송."""
         if not self.webhook_url:
-            logger.warning("[SlackNotification] SLACK_WEBHOOK_URL not configured")
+            logger.warning("slack_notification.configured")
             return False
 
         try:
@@ -371,11 +376,17 @@ class SlackNotificationBackend(NotificationBackend):
             )
             response.raise_for_status()
 
-            logger.debug(f"[SlackNotification] Sent to {channel}")
+            logger.debug(
+                "slack_notification.sent",
+                channel=channel,
+            )
             return True
 
         except Exception as e:
-            logger.warning(f"[SlackNotification] Failed: {e}")
+            logger.warning(
+                "slack_notification.failed",
+                error=e,
+            )
             return False
 
 
@@ -488,9 +499,16 @@ class CrossClusterNotifier:
             results[cluster] = success
 
             if success:
-                logger.info(f"[CrossClusterNotifier] Notified {cluster} about " f"config change: {change.config_type}")
+                logger.info(
+                    "cross_cluster_notifier.notified_about_config_change",
+                    cluster=cluster,
+                    change=change.config_type,
+                )
             else:
-                logger.warning(f"[CrossClusterNotifier] Failed to notify {cluster}")
+                logger.warning(
+                    "cross_cluster_notifier.failed_notify",
+                    cluster=cluster,
+                )
 
         return results
 
@@ -658,7 +676,12 @@ class CrossClusterPropagationRequest:
                 },
             )
 
-            logger.info(f"[CrossClusterPropagation] Request created: {request.request_id} " f"({source_cluster} → {cluster})")
+            logger.info(
+                "cross_cluster_propagation.request_created",
+                request=request.request_id,
+                source_cluster=source_cluster,
+                cluster=cluster,
+            )
 
         return request_id
 
@@ -705,7 +728,10 @@ class CrossClusterPropagationRequest:
                     request.status = PropagationRequestStatus.APPLIED
                     self._save_request(request)
             except Exception as e:
-                logger.exception(f"[CrossClusterPropagation] Apply failed: {e}")
+                logger.exception(
+                    "cross_cluster_propagation.apply_failed",
+                    error=e,
+                )
 
         # 알림 전송
         self.notification_backend.send(
@@ -718,7 +744,11 @@ class CrossClusterPropagationRequest:
             ),
         )
 
-        logger.info(f"[CrossClusterPropagation] Approved: {request_id} by {approved_by}")
+        logger.info(
+            "cross_cluster_propagation.approved",
+            request_id=request_id,
+            approved_by=approved_by,
+        )
 
         return True, None
 
@@ -762,7 +792,11 @@ class CrossClusterPropagationRequest:
             ),
         )
 
-        logger.info(f"[CrossClusterPropagation] Rejected: {request_id} by {rejected_by}")
+        logger.info(
+            "cross_cluster_propagation.rejected",
+            request_id=request_id,
+            rejected_by=rejected_by,
+        )
 
         return True, None
 
@@ -783,7 +817,10 @@ class CrossClusterPropagationRequest:
                 if data:
                     return PropagationRequest.from_dict(json.loads(data))
             except Exception as e:
-                logger.warning(f"[CrossClusterPropagation] Redis get failed: {e}")
+                logger.warning(
+                    "cross_cluster_propagation.redis_get_failed",
+                    error=e,
+                )
 
         return None
 
@@ -816,7 +853,10 @@ class CrossClusterPropagationRequest:
                     json.dumps(request.to_dict()),
                 )
             except Exception as e:
-                logger.warning(f"[CrossClusterPropagation] Redis save failed: {e}")
+                logger.warning(
+                    "cross_cluster_propagation.redis_save_failed",
+                    error=e,
+                )
 
     def _add_to_pending(self, cluster: str, request_id: str) -> None:
         """대기 목록에 추가."""
@@ -956,7 +996,11 @@ class GovernancePolicySync:
             success = self._notify_policy_update(cluster, policy)
             results[cluster] = success
 
-        logger.info(f"[GovernancePolicySync] Synced policy: {policy.policy_id} " f"to {len(self.clusters)} clusters")
+        logger.info(
+            "governance_policy_sync.synced_policy_clusters",
+            policy=policy.policy_id,
+            count=len(self.clusters),
+        )
 
         return results
 
@@ -977,7 +1021,10 @@ class GovernancePolicySync:
                 if data:
                     return GovernancePolicy.from_dict(json.loads(data))
             except Exception as e:
-                logger.warning(f"[GovernancePolicySync] Redis get failed: {e}")
+                logger.warning(
+                    "governance_policy_sync.redis_get_failed",
+                    error=e,
+                )
 
         return None
 
@@ -1014,7 +1061,10 @@ class GovernancePolicySync:
             try:
                 self.redis_client.set(key, json.dumps(policy.to_dict()))
             except Exception as e:
-                logger.warning(f"[GovernancePolicySync] Redis save failed: {e}")
+                logger.warning(
+                    "governance_policy_sync.redis_save_failed",
+                    error=e,
+                )
 
     def _notify_policy_update(
         self,

@@ -7,7 +7,7 @@ Uses Repository pattern for domain-free architecture.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.core.timezone import now
@@ -15,7 +15,7 @@ from selfhealing.core.timezone import now
 if TYPE_CHECKING:
     pass
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class EntryOperationsMixin:
@@ -118,7 +118,11 @@ class EntryOperationsMixin:
 
         resolved_at = now()
 
-        logger.info(f"[DLQService] Entry {pk} manually resolved: {notes}")
+        logger.info(
+            "dlq_service.entry_manually_resolved",
+            pk=pk,
+            notes=notes,
+        )
 
         # Metrics update (Fail-Open)
         try:

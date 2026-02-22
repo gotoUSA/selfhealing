@@ -7,12 +7,12 @@ should_dlq 플래그 기반 Dumb Sink: 저장 여부 판단은 RetryPolicy가 �
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.interfaces.resilience_policy import PolicyContext, PolicyResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DLQSink:
@@ -102,12 +102,21 @@ class DLQSink:
             )
 
             if result.success:
-                logger.info("[DLQSink] Created DLQ entry: id=%s", result.dlq_id)
+                logger.info(
+                    "dlq_sink.created_dlq_entry",
+                    result=result.dlq_id,
+                )
                 return str(result.dlq_id) if result.dlq_id is not None else None
             else:
-                logger.error("[DLQSink] Failed to create DLQ entry: %s", result.error)
+                logger.error(
+                    "dlq_sink.failed_create_dlq_entry",
+                    result=result.error,
+                )
                 return None
 
         except Exception as dlq_error:
-            logger.error("[DLQSink] Failed to create DLQ entry: %s", dlq_error)
+            logger.error(
+                "dlq_sink.failed_create_dlq_entry",
+                dlq_error=dlq_error,
+            )
             return None

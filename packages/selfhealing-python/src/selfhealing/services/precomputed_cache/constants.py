@@ -7,7 +7,7 @@ Cache keys, config loader functions, feature flags, and fast JSON serialization.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 from typing import Any
 
 try:
@@ -43,7 +43,7 @@ except ImportError:
     update_cache_hit_rate = lambda *args, **kwargs: None
     record_cache_refresh = lambda *args, **kwargs: None
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

@@ -7,7 +7,7 @@ Backpressure 레벨에 따라 자동으로 기능을 활성화/비활성화합�
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Callable
@@ -18,7 +18,7 @@ from selfhealing.scaling.config import (
     get_backpressure_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class FeaturePriority(IntEnum):
@@ -115,7 +115,10 @@ class GracefulDegradation:
             feature: 등록할 기능
         """
         self._features[feature.name] = feature
-        logger.debug(f"[GracefulDegradation] Registered: {feature.name}")
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            feature=feature.name,
+        )
 
     def unregister_feature(self, name: str) -> None:
         """
@@ -176,8 +179,14 @@ class GracefulDegradation:
                     try:
                         feature.on_enable()
                     except Exception as e:
-                        logger.error(f"[GracefulDegradation] on_enable error: {e}")
-                logger.info(f"[GracefulDegradation] Enabled: {feature.name}")
+                        logger.error(
+                            "graceful_degradation.error",
+                            error=e,
+                        )
+                logger.info(
+                    "graceful_degradation.enabled",
+                    feature=feature.name,
+                )
 
             elif not should_enable and feature.enabled:
                 feature.enabled = False
@@ -185,10 +194,20 @@ class GracefulDegradation:
                     try:
                         feature.on_disable()
                     except Exception as e:
-                        logger.error(f"[GracefulDegradation] on_disable error: {e}")
-                logger.info(f"[GracefulDegradation] Disabled: {feature.name}")
+                        logger.error(
+                            "graceful_degradation.error",
+                            error=e,
+                        )
+                logger.info(
+                    "graceful_degradation.disabled",
+                    feature=feature.name,
+                )
 
-        logger.info(f"[GracefulDegradation] Level changed: {old_level.value} → {level.value}")
+        logger.info(
+            "graceful_degradation.level_changed",
+            old_level=old_level.value,
+            level=level.value,
+        )
 
     def get_enabled_features(self) -> list[str]:
         """

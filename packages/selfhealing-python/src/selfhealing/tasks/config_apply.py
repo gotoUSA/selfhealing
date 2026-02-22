@@ -13,13 +13,13 @@ Tasks:
 - apply_graceful_config_change: Wait for in-progress ops, then apply
 """
 
-import logging
+import structlog
 
 from celery import shared_task
 
 from selfhealing.settings.apply_strategy import get_apply_strategy_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 모듈 로드 시점에 설정값 캐싱
 _apply_settings = get_apply_strategy_settings()
@@ -58,7 +58,10 @@ def apply_pending_config_changes(self):
 
         status = result.get("status", "unknown")
         if status == "blocked":
-            logger.warning(f"[ConfigTask] Blocked: {result.get('reason')}")
+            logger.warning(
+                "config_task.blocked",
+                result=result.get('reason'),
+            )
 
         # === Audit 기록 ===
         try:
@@ -74,7 +77,10 @@ def apply_pending_config_changes(self):
                 },
             )
         except Exception as audit_error:
-            logger.debug(f"[ConfigTask] Audit logging failed: {audit_error}")
+            logger.debug(
+                "config_task.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
         return result
 
@@ -132,7 +138,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
         if status == "blocked":
             # 비상 모드에서는 재시도하여 비상 모드 해제 후 적용
             if self.request.retries < self.max_retries:
-                logger.info("[ConfigTask] Will retry after emergency mode ends")
+                logger.info("config_task.retry_after_emergency_mode")
                 raise self.retry(countdown=30)
 
             # === Audit 기록 (차단) ===
@@ -171,7 +177,10 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
                 task_id=task_id,
             )
         except Exception as audit_error:
-            logger.debug(f"[ConfigTask] Audit logging failed: {audit_error}")
+            logger.debug(
+                "config_task.audit_logging_failed",
+                audit_error=audit_error,
+            )
 
         return result
 

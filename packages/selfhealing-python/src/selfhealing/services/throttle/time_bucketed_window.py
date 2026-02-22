@@ -23,13 +23,13 @@ Usage:
 from __future__ import annotations
 
 import array
-import logging
+import structlog
 import threading
 import time
 from dataclasses import dataclass
 from typing import NamedTuple
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class BucketData(NamedTuple):
@@ -120,7 +120,10 @@ class TimeBucketedRTTWindow:
             rtt_ms: RTT 값 (밀리초)
         """
         if rtt_ms < 0:
-            logger.warning(f"[TimeBucketedWindow] Negative RTT ignored: {rtt_ms}")
+            logger.warning(
+                "time_bucketed_window.negative_rtt_ignored",
+                rtt_ms=rtt_ms,
+            )
             return
 
         current_second = int(time.time())

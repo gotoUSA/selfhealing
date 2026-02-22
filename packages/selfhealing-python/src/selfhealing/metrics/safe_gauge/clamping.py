@@ -6,10 +6,10 @@ Prevents invalid metric values (negative counts, out-of-range percentages).
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def clamp_non_negative(value: float, metric_name: str = "unknown") -> float:
@@ -100,7 +100,11 @@ def safe_set_gauge(
         else:
             gauge.set(value)
     except Exception as e:
-        logger.warning(f"[SafeGauge] Failed to set gauge '{metric_name}': {e}")
+        logger.warning(
+            "safe_gauge.failed_set_gauge",
+            metric_name=metric_name,
+            error=e,
+        )
 
 
 __all__ = [

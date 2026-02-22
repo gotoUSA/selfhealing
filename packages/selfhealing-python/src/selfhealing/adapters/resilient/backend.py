@@ -12,7 +12,7 @@ Key Principles:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import random
 import threading
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Windows 한국어 로케일에서 OS 에러 메시지가 cp949로 나와 로그가 깨지는 문제 방지.
 # errno 기반 영어 메시지로 통일.
@@ -169,11 +169,14 @@ class ResilientStorageBackend:
             # Test connection
             self._redis._redis.ping()
             self._redis_initialized = True
-            logger.info("[ResilientStorage] Redis connected successfully")
+            logger.info("resilient_storage.redis_connected")
 
         except Exception as e:
             err_msg = _safe_error_message(e)
-            logger.warning("[ResilientStorage] Redis init failed: %s", err_msg)
+            logger.warning(
+                "resilient_storage.redis_init_failed",
+                err_msg=err_msg,
+            )
             self._mode = ResilientStorageMode.DEGRADED
 
             if self._shadow:
@@ -185,7 +188,7 @@ class ResilientStorageBackend:
                 )
 
             if not self.config.allow_memory_only:
-                logger.critical("[ResilientStorage] Redis unavailable. " "Operating in DEGRADED mode with Memory + WAL.")
+                logger.critical("resilient_storage.degraded_mode_entered")
 
     def _init_wal(self) -> None:
         """Initialize Write-Ahead Log."""
@@ -203,10 +206,13 @@ class ResilientStorageBackend:
 
             self._wal = WriteAheadLog(config=wal_config)
             self._wal_initialized = True
-            logger.debug("[ResilientStorage] WAL initialized")
+            logger.debug("resilient_storage.wal_initialized")
 
         except Exception as e:
-            logger.error("[ResilientStorage] WAL init failed: %s", _safe_error_message(e))
+            logger.error(
+                "resilient_storage.wal_init_failed",
+                _safe_error_message=_safe_error_message(e),
+            )
             # WAL failure is serious but we continue with memory-only
             self._wal_initialized = False
 
@@ -244,11 +250,14 @@ class ResilientStorageBackend:
             if stats.total_entries == 0:
                 return  # Nothing to recover
 
-            logger.info(f"[ResilientStorage] Found {stats.last_sequence} WAL entries to check")
+            logger.info(
+                "resilient_storage.found_wal_entries_check",
+                stats=stats.last_sequence,
+            )
 
             # If Redis is unavailable, defer recovery
             if self._mode == ResilientStorageMode.DEGRADED:
-                logger.warning("[ResilientStorage] Redis unavailable, WAL recovery deferred")
+                logger.warning("resilient_storage.redis_unavailable_wal_recovery")
                 return
 
             # Replay WAL entries to Redis
@@ -261,17 +270,27 @@ class ResilientStorageBackend:
                     self._last_processed_wal_seq = entry.sequence
                     recovered_count += 1
                 except Exception as e:
-                    logger.error("[ResilientStorage] WAL replay failed for seq %s: %s", entry.sequence, _safe_error_message(e))
+                    logger.error(
+                        "resilient_storage.wal_replay_failed_seq",
+                        entry=entry.sequence,
+                        _safe_error_message=_safe_error_message(e),
+                    )
                     # Continue with next entry
 
             if recovered_count > 0:
-                logger.info(f"[ResilientStorage] Recovered {recovered_count} entries from WAL")
+                logger.info(
+                    "resilient_storage.recovered_entries_wal",
+                    recovered_count=recovered_count,
+                )
 
                 # Cleanup processed WAL entries
                 self._wal.cleanup_processed(self._last_processed_wal_seq)
 
         except Exception as e:
-            logger.error("[ResilientStorage] WAL recovery error: %s", _safe_error_message(e))
+            logger.error(
+                "resilient_storage.wal_recovery_failed",
+                _safe_error_message=_safe_error_message(e),
+            )
             # Recovery failure doesn't prevent server from starting
 
     def _replay_wal_entry(self, entry: Any) -> None:
@@ -296,7 +315,10 @@ class ResilientStorageBackend:
             if field:
                 self._redis._redis.hdel(key, field)
         else:
-            logger.warning(f"[ResilientStorage] Unknown WAL operation: {operation}")
+            logger.warning(
+                "resilient_storage.unknown_wal_operation",
+                operation=operation,
+            )
 
     # =========================================================================
     # Properties
@@ -689,7 +711,7 @@ class ResilientStorageBackend:
         with self._lock:
             if self._mode != ResilientStorageMode.DEGRADED:
                 self._mode = ResilientStorageMode.DEGRADED
-                logger.critical("[ResilientStorage] Switched to DEGRADED mode. " "Using Memory + WAL fallback.")
+                logger.critical("resilient_storage.switched_degraded_mode_using")
 
     def check_and_recover(self) -> bool:
         """
@@ -748,7 +770,10 @@ class ResilientStorageBackend:
                         self._replay_wal_entry(entry)
                         self._last_processed_wal_seq = entry.sequence
                     except Exception as e:
-                        logger.error("[ResilientStorage] WAL replay error: %s", _safe_error_message(e))
+                        logger.error(
+                            "resilient_storage.wal_replay_error",
+                            _safe_error_message=_safe_error_message(e),
+                        )
 
             # 2. Sync remaining memory to Redis (with conflict resolution)
             self._sync_memory_to_redis()
@@ -761,11 +786,14 @@ class ResilientStorageBackend:
             with self._lock:
                 self._mode = ResilientStorageMode.REDIS
 
-            logger.info("[ResilientStorage] Recovered to REDIS mode")
+            logger.info("resilient_storage.redis_mode_recovered")
             return True
 
         except Exception as e:
-            logger.error("[ResilientStorage] Recovery failed: %s", _safe_error_message(e))
+            logger.error(
+                "watchdog.recovery_failed",
+                _safe_error_message=_safe_error_message(e),
+            )
             with self._lock:
                 self._mode = ResilientStorageMode.DEGRADED
             return False
@@ -811,7 +839,11 @@ class ResilientStorageBackend:
                     self._redis.set(full_key, value)
 
             except Exception as e:
-                logger.error("[ResilientStorage] Sync error for key %s: %s", key, _safe_error_message(e))
+                logger.error(
+                    "resilient_storage.sync_error_key",
+                    key=key,
+                    _safe_error_message=_safe_error_message(e),
+                )
 
     # =========================================================================
     # Utility Methods

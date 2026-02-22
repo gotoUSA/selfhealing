@@ -15,7 +15,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from typing import TYPE_CHECKING, Callable
@@ -29,7 +29,7 @@ from selfhealing.coordination.shutdown_integration import (
 if TYPE_CHECKING:
     from selfhealing.coordination.base import LeaderElector
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # DLQ Consumer 리소스 이름 (Leader Election 키)
 DLQ_CONSUMER_RESOURCE = "dlq-consumer"
@@ -89,13 +89,19 @@ class DLQConsumerCoordinator:
 
     def start(self) -> None:
         """DLQ Consumer 시작 (Leader Election 시작)."""
-        logger.info(f"[DLQConsumer] 시작 (resource={self._resource_name})")
+        logger.info(
+            "dlq_consumer.시작",
+            self=self._resource_name,
+        )
         self._stop_event.clear()
         self._elector.start()
 
     def stop(self) -> None:
         """DLQ Consumer 중지 (Leader Election 중지)."""
-        logger.info(f"[DLQConsumer] 중지 중 (resource={self._resource_name})")
+        logger.info(
+            "dlq_consumer.중지",
+            self=self._resource_name,
+        )
         self._stop_event.set()
         self._consuming = False
 
@@ -104,17 +110,24 @@ class DLQConsumerCoordinator:
             self._consume_thread.join(timeout=5.0)
 
         self._elector.stop()
-        logger.info(f"[DLQConsumer] 중지됨 (resource={self._resource_name})")
+        logger.info(
+            "dlq_consumer.중지됨",
+            self=self._resource_name,
+        )
 
     def _on_become_leader(self) -> None:
         """리더가 되었을 때 DLQ 처리 시작."""
-        logger.info(f"[DLQConsumer] 리더가 됨 - DLQ 처리 시작")
+        logger.info(
+            "dlq_consumer.리더가_dlq_처리_시작",
+        )
         self._consuming = True
         self._start_consume_loop()
 
     def _on_lose_leader(self) -> None:
         """리더십을 잃었을 때 DLQ 처리 중단."""
-        logger.info(f"[DLQConsumer] 리더십 상실 - DLQ 처리 중단")
+        logger.info(
+            "dlq_consumer.리더십_상실_dlq_처리",
+        )
         self._consuming = False
 
     def _start_consume_loop(self) -> None:
@@ -131,20 +144,23 @@ class DLQConsumerCoordinator:
 
     def _consume_loop(self) -> None:
         """DLQ 소비 루프."""
-        logger.info("[DLQConsumer] 소비 루프 시작")
+        logger.info("dlq_consumer.소비_루프_시작")
 
         while self._consuming and not self._stop_event.is_set():
             try:
                 # Lease 유효성 확인 (Self-Fencing)
                 if not self._elector.is_leader():
-                    logger.warning("[DLQConsumer] 리더십 확인 실패, 소비 중단")
+                    logger.warning("dlq_consumer.리더십_확인_실패_소비")
                     break
 
                 # DLQ 처리
                 processed = self._process_dlq_batch()
 
                 if processed > 0:
-                    logger.info(f"[DLQConsumer] {processed}개 DLQ 항목 처리됨")
+                    logger.info(
+                        "dlq_consumer.dlq_항목_처리됨",
+                        processed=processed,
+                    )
 
                 # 다음 처리까지 대기
                 self._stop_event.wait(timeout=self._process_interval)
@@ -153,7 +169,7 @@ class DLQConsumerCoordinator:
                 logger.error(f"[DLQConsumer] 소비 루프 오류: {e}", exc_info=True)
                 self._stop_event.wait(timeout=self._process_interval)
 
-        logger.info("[DLQConsumer] 소비 루프 종료")
+        logger.info("dlq_consumer.소비_루프_종료")
 
     def _process_dlq_batch(self) -> int:
         """
@@ -182,7 +198,7 @@ class DLQConsumerCoordinator:
             for entry in pending_entries:
                 # 매 항목 처리 전 리더십 확인
                 if not self._consuming or not self._elector.is_leader():
-                    logger.warning("[DLQConsumer] 리더십 상실, 배치 처리 중단")
+                    logger.warning("dlq_consumer.리더십_상실_배치_처리")
                     break
 
                 try:
@@ -195,16 +211,24 @@ class DLQConsumerCoordinator:
                     if result.success:
                         processed += 1
                     else:
-                        logger.warning(f"[DLQConsumer] DLQ {entry.id} 재처리 실패: {result.error}")
+                        logger.warning(
+                            "dlq_consumer.dlq_재처리_실패",
+                            entry=entry.id,
+                            result=result.error,
+                        )
 
                 except Exception as e:
-                    logger.error(f"[DLQConsumer] DLQ {entry.id} 처리 오류: {e}")
+                    logger.error(
+                        "dlq_consumer.dlq_처리_오류",
+                        entry=entry.id,
+                        error=e,
+                    )
 
             return processed
 
         except ImportError:
             # 서비스가 없는 경우 (테스트 환경)
-            logger.debug("[DLQConsumer] DLQ 서비스 없음 (테스트 환경)")
+            logger.debug("dlq_consumer.dlq_서비스_없음_테스트")
             return 0
         except Exception as e:
             logger.error(f"[DLQConsumer] 배치 처리 오류: {e}", exc_info=True)

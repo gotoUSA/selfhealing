@@ -8,7 +8,7 @@ Canonical location: ``selfhealing.services.idempotency.service``
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -21,7 +21,7 @@ from .models import IdempotencyKey, IdempotencyResult
 if TYPE_CHECKING:
     from selfhealing.core.time_provider import TimeProvider
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class IdempotencyService:
@@ -174,14 +174,20 @@ class IdempotencyService:
         try:
             cached_value = cache.get(key.cache_key)
             if cached_value:
-                logger.debug(f"[Idempotency] Cache hit: {key.key}")
+                logger.debug(
+                    "idempotency.cache_hit",
+                    key=key.key,
+                )
                 return IdempotencyResult(
                     is_duplicate=True,
                     existing_record=cached_value,
                     message="Found in cache",
                 )
         except Exception as e:
-            logger.warning(f"[Idempotency] Cache unavailable, falling back to DB: {e}")
+            logger.warning(
+                "idempotency.cache_unavailable_falling_back",
+                error=e,
+            )
 
         # Check database if lookup provided
         if lookup_fn:
@@ -194,14 +200,20 @@ class IdempotencyService:
                         cache.set(key.cache_key, record_id, timeout=ttl)
                     except Exception:
                         pass
-                    logger.debug(f"[Idempotency] DB hit: {key.key}")
+                    logger.debug(
+                        "idempotency.db_hit",
+                        key=key.key,
+                    )
                     return IdempotencyResult(
                         is_duplicate=True,
                         existing_record=existing,
                         message="Found in database",
                     )
             except Exception as e:
-                logger.warning(f"[Idempotency] Lookup failed: {e}")
+                logger.warning(
+                    "idempotency.lookup_failed",
+                    error=e,
+                )
 
         return IdempotencyResult(
             is_duplicate=False,
@@ -225,13 +237,19 @@ class IdempotencyService:
         # Check cache with graceful degradation
         try:
             if cache.get(key.cache_key):
-                logger.info(f"[Idempotency] Duplicate event detected (cache): {event_id}")
+                logger.info(
+                    "idempotency.duplicate_event_detected_cache",
+                    event_id=event_id,
+                )
                 return IdempotencyResult(
                     is_duplicate=True,
                     message="Event already processed (cached)",
                 )
         except Exception as e:
-            logger.warning(f"[Idempotency] Cache unavailable for event check: {e}")
+            logger.warning(
+                "idempotency.cache_unavailable_event_check",
+                error=e,
+            )
 
         # Check database if lookup provided
         if exists_fn:
@@ -242,13 +260,19 @@ class IdempotencyService:
                         cache.set(key.cache_key, True, timeout=self.cache_ttl)
                     except Exception:
                         pass
-                    logger.info(f"[Idempotency] Duplicate event detected (DB): {event_id}")
+                    logger.info(
+                        "idempotency.duplicate_event_detected_db",
+                        event_id=event_id,
+                    )
                     return IdempotencyResult(
                         is_duplicate=True,
                         message="Event already processed (database)",
                     )
             except Exception as e:
-                logger.warning(f"[Idempotency] Event lookup failed: {e}")
+                logger.warning(
+                    "idempotency.event_lookup_failed",
+                    error=e,
+                )
 
         return IdempotencyResult(
             is_duplicate=False,
@@ -280,11 +304,17 @@ class IdempotencyService:
         value = record_id if record_id else True
         try:
             cache.set(key.cache_key, value, timeout=ttl or self.cache_ttl)
-            logger.debug(f"[Idempotency] Marked as processed: {key.cache_key}")
+            logger.debug(
+                "idempotency.marked_processed",
+                key=key.cache_key,
+            )
             return True
         except Exception as e:
             # Redis unavailable - log but don't fail the operation
-            logger.warning(f"[Idempotency] Failed to mark as processed (cache unavailable): {e}")
+            logger.warning(
+                "idempotency.failed_mark_processed_cache",
+                error=e,
+            )
             return False
 
     def clear(self, key: IdempotencyKey) -> bool:
@@ -302,10 +332,16 @@ class IdempotencyService:
         cache = self._get_cache()
         try:
             cache.delete(key.cache_key)
-            logger.debug(f"[Idempotency] Cleared: {key.cache_key}")
+            logger.debug(
+                "idempotency.cleared",
+                key=key.cache_key,
+            )
             return True
         except Exception as e:
-            logger.warning(f"[Idempotency] Failed to clear key (cache unavailable): {e}")
+            logger.warning(
+                "idempotency.failed_clear_key_cache",
+                error=e,
+            )
             return False
 
 

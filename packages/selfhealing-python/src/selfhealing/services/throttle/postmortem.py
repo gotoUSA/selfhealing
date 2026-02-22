@@ -11,13 +11,13 @@ Postmortem 생성 시 Throttle 상태 정보를 수집하여 포함시킵니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -146,7 +146,10 @@ class ThrottleLimitHistoryCollector:
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[ThrottlePostmortem] Failed to get throttle stats: {e}")
+            logger.debug(
+                "throttle_postmortem.failed_get_throttle_stats",
+                error=e,
+            )
 
         # limit 변경 이력을 딕셔너리로 변환
         history_dicts = []
@@ -210,5 +213,8 @@ def collect_throttle_postmortem_data(
         data = collector.get_postmortem_data(start_time, end_time)
         return data.to_dict()
     except Exception as e:
-        logger.warning(f"[ThrottlePostmortem] Failed to collect data: {e}")
+        logger.warning(
+            "throttle_postmortem.failed_collect_data",
+            error=e,
+        )
         return {}

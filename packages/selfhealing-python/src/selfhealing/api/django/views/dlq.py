@@ -16,7 +16,7 @@ Endpoints:
 - POST /api/self-healing/dlq/test/create/ - Create test entry (DEBUG only)
 """
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.response import Response
@@ -31,7 +31,7 @@ from selfhealing.api.django.permissions import (
 from selfhealing.api.django.serializers import DLQReplayRequestSerializer
 from selfhealing.services.dlq import get_dlq_service
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DLQReplayView(APIView):
@@ -174,7 +174,11 @@ class DLQPurgeView(APIView):
         service = get_dlq_service()
         count = service.purge_archived(ids=ids, older_than_days=older_than_days)
 
-        logger.warning(f"[DLQ] PURGED {count} archived entries via API by user {request.user}")
+        logger.warning(
+            "dlq.purged_archived_entries_via",
+            count=count,
+            request=request.user,
+        )
 
         return Response(
             {
@@ -278,7 +282,11 @@ class DLQRetryView(APIView):
         service = get_dlq_service()
         result = service.retry_entry(pk)
 
-        logger.info(f"[DLQ] Retry triggered for entry {pk} by user {request.user}")
+        logger.info(
+            "dlq.retry_triggered_entry_user",
+            pk=pk,
+            request=request.user,
+        )
 
         return Response(
             {
@@ -314,7 +322,12 @@ class DLQResolveView(APIView):
         service = get_dlq_service()
         result = service.resolve_entry(pk, notes=notes)
 
-        logger.info(f"[DLQ] Entry {pk} manually resolved by user {request.user}: {notes}")
+        logger.info(
+            "dlq.entry_manually_resolved_user",
+            pk=pk,
+            request=request.user,
+            notes=notes,
+        )
 
         return Response(
             {

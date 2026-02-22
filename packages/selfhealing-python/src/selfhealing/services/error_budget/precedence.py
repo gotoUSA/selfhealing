@@ -26,13 +26,13 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from enum import Enum
 
 from selfhealing.services.error_budget.constants import MAX_COMBINED_MULTIPLIER
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -220,7 +220,10 @@ class MultiplierPrecedenceResolver:
             strategy: 새 결합 전략
         """
         self.config.combine_strategy = strategy
-        logger.info(f"[PrecedenceResolver] Strategy changed to: {strategy.value}")
+        logger.info(
+            "precedence_resolver.strategy_changed",
+            strategy=strategy.value,
+        )
 
     def get_strategy(self) -> MultiplierCombineStrategy:
         """현재 결합 전략 반환."""

@@ -14,13 +14,13 @@ Environment Variables:
 
 """
 
-import logging
+import structlog
 from typing import Any
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # ==========================================================================
 # 도메인별 가중치 기본값 (SSOT)

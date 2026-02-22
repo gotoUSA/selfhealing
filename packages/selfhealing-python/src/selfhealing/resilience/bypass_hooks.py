@@ -19,14 +19,14 @@ Hook Priority Levels:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -214,7 +214,7 @@ def unregister_resilience_hooks() -> None:
     BypassRegistry.unregister("integration_test")
 
     _hooks_registered = False
-    logger.info("[Resilience] All bypass hooks unregistered")
+    logger.info("resilience.all_bypass_hooks_unregistered")
 
 
 # =============================================================================

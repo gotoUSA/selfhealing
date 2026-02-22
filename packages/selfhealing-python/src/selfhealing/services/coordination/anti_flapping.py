@@ -18,13 +18,13 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 from selfhealing.settings import get_anti_flapping_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # SSOT: Emergency Level 쿨다운 상수 (3가지 보완사항 ③)
@@ -266,7 +266,7 @@ class AntiFlappingGuard:
     def clear_lockout(self) -> None:
         """플래핑 잠금 해제 (수동 복구용)."""
         self._flapping_lockout_until = None
-        logger.info("[AntiFlappingGuard] Flapping lockout cleared manually")
+        logger.info("anti_flapping_guard.flapping_lockout_cleared_manually")
 
     def get_status(self) -> dict:
         """현재 상태 조회."""

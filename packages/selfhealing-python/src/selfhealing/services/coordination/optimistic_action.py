@@ -19,7 +19,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import uuid
 from collections.abc import Callable
@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -250,7 +250,10 @@ class OptimisticLocalActionExecutor:
         with self._sync_lock:
             self._sync_queue[result.action_id] = result
 
-        logger.debug(f"[OptimisticAction] Sync scheduled: id={result.action_id}")
+        logger.debug(
+            "optimistic_action.sync_scheduled",
+            result=result.action_id,
+        )
 
     def sync_pending(self) -> dict[str, bool]:
         """
@@ -275,7 +278,10 @@ class OptimisticLocalActionExecutor:
                 results[action_id] = True
                 self._stats["sync_successes"] += 1
 
-                logger.debug(f"[OptimisticAction] Sync completed: id={action_id}")
+                logger.debug(
+                    "optimistic_action.sync_completed",
+                    action_id=action_id,
+                )
             except Exception as e:
                 results[action_id] = False
                 self._stats["sync_failures"] += 1

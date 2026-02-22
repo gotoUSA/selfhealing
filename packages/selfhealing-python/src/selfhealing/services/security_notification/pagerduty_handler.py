@@ -6,7 +6,7 @@ Handles PagerDuty-specific incident triggering.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 import requests
@@ -17,7 +17,7 @@ from .models import (
     _get_notification_limits,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class PagerDutyHandlerMixin:
@@ -72,7 +72,10 @@ class PagerDutyHandlerMixin:
             )
 
         if self.config.dry_run:
-            logger.info(f"[DRY RUN] PagerDuty: {incident_type}")
+            logger.info(
+                "dry_run_pagerduty",
+                incident_type=incident_type,
+            )
             return ChannelDeliveryResult(
                 channel="pagerduty",
                 success=True,
@@ -118,7 +121,10 @@ class PagerDutyHandlerMixin:
                 )
 
         except Exception as e:
-            logger.error(f"[Security Notification] PagerDuty error: {e}")
+            logger.error(
+                "security_notification_pagerduty_error",
+                error=e,
+            )
             return ChannelDeliveryResult(
                 channel="pagerduty",
                 success=False,
@@ -135,7 +141,10 @@ class PagerDutyHandlerMixin:
             )
 
         if self.config.dry_run:
-            logger.info(f"[DRY RUN] PagerDuty alert: {message['title']}")
+            logger.info(
+                "dry_run_pagerduty_alert",
+                message=message['title'],
+            )
             return ChannelDeliveryResult(
                 channel="pagerduty",
                 success=True,
@@ -184,5 +193,8 @@ class PagerDutyHandlerMixin:
                 )
 
         except Exception as e:
-            logger.error(f"[Security Notification] PagerDuty alert error: {e}")
+            logger.error(
+                "security_notification_pagerduty_alert",
+                error=e,
+            )
             return ChannelDeliveryResult(channel="pagerduty", success=False, error=str(e))

@@ -14,7 +14,7 @@ Evidence 우선순위:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from datetime import datetime, timezone
 
@@ -44,7 +44,7 @@ from selfhealing.services.correlation_engine.event_graph import (
 )
 from selfhealing.services.event_bus.bus import SelfHealingEvent
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class EventGraphBuilder:

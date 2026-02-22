@@ -14,12 +14,12 @@ Environment Variables:
     ...
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class BackoffSettings(BaseSettings):
@@ -159,7 +159,10 @@ class BackoffSettings(BaseSettings):
     def validate_exponential_max_delay(cls, v: float) -> float:
         """max_delay가 너무 크면 경고."""
         if v > 600:
-            logger.warning(f"[BackoffSettings] High exponential_max_delay={v}s, " "consider using <= 600s for responsiveness")
+            logger.warning(
+                "backoff_settings.high_consider_using_responsiveness",
+                v=v,
+            )
         return v
 
 

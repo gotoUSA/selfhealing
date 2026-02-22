@@ -14,7 +14,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.services.canary.interlock import CanarySafetyInterlock
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -113,7 +113,7 @@ class EmergencyStateRefresher:
             False: 이미 실행 중이거나 비활성화됨
         """
         if not self._config.enabled:
-            logger.info("[EmergencyStateRefresher] Disabled, not starting")
+            logger.info("emergency_state_refresher.disabled_starting")
             return False
 
         with self._lock:
@@ -125,7 +125,7 @@ class EmergencyStateRefresher:
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
 
-            logger.info("[EmergencyStateRefresher] Started")
+            logger.info("emergency_state_refresher.started")
             return True
 
     def stop(self) -> None:
@@ -142,7 +142,7 @@ class EmergencyStateRefresher:
 
             self._thread = None
 
-            logger.info("[EmergencyStateRefresher] Stopped")
+            logger.info("emergency_state_refresher.stopped")
 
     def force_refresh(self) -> dict[str, Any] | None:
         """
@@ -184,7 +184,10 @@ class EmergencyStateRefresher:
             return None
 
         except Exception as e:
-            logger.error(f"[EmergencyStateRefresher] Refresh failed: {e}")
+            logger.error(
+                "emergency_state_refresher.refresh_failed",
+                error=e,
+            )
             return None
 
     def _run(self) -> None:

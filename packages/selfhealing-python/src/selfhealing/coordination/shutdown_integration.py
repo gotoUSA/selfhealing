@@ -8,7 +8,7 @@ SIGTERM/SIGINT 수신 시 자동으로 리더십을 안전하게 반납.
 from __future__ import annotations
 
 import atexit
-import logging
+import structlog
 import signal
 import sys
 from typing import TYPE_CHECKING
@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from selfhealing.coordination.base import LeaderElector
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 _registered_electors: list[LeaderElector] = []
 _handlers_installed = False
@@ -40,7 +40,10 @@ def register_for_graceful_shutdown(elector: "LeaderElector") -> None:
 
     if elector not in _registered_electors:
         _registered_electors.append(elector)
-        logger.debug(f"[LeaderElector] Graceful Shutdown에 등록됨: {elector.resource_name}")
+        logger.debug(
+            "leader_elector.graceful_shutdown에_등록됨",
+            elector=elector.resource_name,
+        )
 
     # 최초 등록 시 시그널 핸들러 설정
     if not _handlers_installed:
@@ -60,7 +63,10 @@ def unregister_from_graceful_shutdown(elector: "LeaderElector") -> None:
 
     if elector in _registered_electors:
         _registered_electors.remove(elector)
-        logger.debug(f"[LeaderElector] Graceful Shutdown에서 해제됨: {elector.resource_name}")
+        logger.debug(
+            "leader_elector.graceful_shutdown에서_해제됨",
+            elector=elector.resource_name,
+        )
 
 
 def _setup_signal_handlers() -> None:
@@ -72,13 +78,16 @@ def _setup_signal_handlers() -> None:
         signal.signal(signal.SIGTERM, _signal_handler)
         signal.signal(signal.SIGINT, _signal_handler)
 
-    logger.info("[LeaderElector] Graceful Shutdown 핸들러가 등록되었습니다")
+    logger.info("leader_elector.graceful_shutdown_핸들러가_등록되었습니다")
 
 
 def _signal_handler(signum: int, frame) -> None:
     """시그널 핸들러."""
     signal_name = signal.Signals(signum).name
-    logger.info(f"[LeaderElector] 시그널 수신 ({signal_name}), Shutdown 시작")
+    logger.info(
+        "leader_elector.시그널_수신_shutdown_시작",
+        signal_name=signal_name,
+    )
     _shutdown_all_electors()
 
 
@@ -88,11 +97,21 @@ def _shutdown_all_electors() -> None:
 
     for elector in list(_registered_electors):
         try:
-            logger.info(f"[LeaderElector] 종료 중: {elector.resource_name}")
+            logger.info(
+                "leader_elector.종료",
+                elector=elector.resource_name,
+            )
             elector.stop()
-            logger.info(f"[LeaderElector] 종료 완료: {elector.resource_name}")
+            logger.info(
+                "leader_elector.종료_완료",
+                elector=elector.resource_name,
+            )
         except Exception as e:
-            logger.error(f"[LeaderElector] 종료 실패 ({elector.resource_name}): {e}")
+            logger.error(
+                "leader_elector.종료_실패",
+                elector=elector.resource_name,
+                error=e,
+            )
 
     _registered_electors.clear()
 
@@ -113,7 +132,7 @@ def integrate_with_shutdown_coordinator() -> None:
 
             def on_shutdown_start(self) -> None:
                 """Shutdown 시작 시 리더십 반납."""
-                logger.info("[LeaderElector] Shutdown 시작 - 리더십 반납 중")
+                logger.info("leader_elector.shutdown_시작_리더십_반납")
                 _shutdown_all_electors()
 
             def on_drain_complete(self) -> None:
@@ -124,9 +143,9 @@ def integrate_with_shutdown_coordinator() -> None:
                 """강제 종료 시 리더십 반납."""
                 _shutdown_all_electors()
 
-        logger.info("[LeaderElector] GracefulShutdownCoordinator 통합 준비 완료")
+        logger.info("leader_elector.gracefulshutdowncoordinator_통합_준비_완료")
         return LeaderElectorShutdownHandler()
 
     except ImportError:
-        logger.debug("[LeaderElector] GracefulShutdownCoordinator를 찾을 수 없습니다")
+        logger.debug("leader_elector.gracefulshutdowncoordinator를_찾을_없습니다")
         return None

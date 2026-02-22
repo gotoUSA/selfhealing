@@ -12,13 +12,13 @@ Service-based Write Locality Router.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import re
 from dataclasses import dataclass
 
 from selfhealing.multiregion.config import get_multiregion_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -69,7 +69,7 @@ class ServiceLocalityRouter:
             cb_service.update_state("payment_kakao", "OPEN")
         else:
             # 현재 리전이 미국이면 쓰기 스킵 (복제로 받음)
-            logger.debug("Skipping write: not the preferred region")
+            logger.debug("skipping_write_preferred_region")
     """
 
     # 기본 Locality 규칙

@@ -13,7 +13,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 from selfhealing.audit.cascade_config import (
@@ -28,7 +28,7 @@ from selfhealing.audit.cascade_exceptions import (
 if TYPE_CHECKING:
     from selfhealing.audit.cascade_event import CascadeEffect
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================

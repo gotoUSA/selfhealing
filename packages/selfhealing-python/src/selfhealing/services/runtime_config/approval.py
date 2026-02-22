@@ -6,14 +6,14 @@ Provides approval request management for critical configuration changes.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .constants import STORAGE_KEYS
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ApprovalMixin:

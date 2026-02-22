@@ -13,7 +13,7 @@ Features:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -21,7 +21,7 @@ from urllib.parse import quote, urlencode
 
 import requests
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -172,21 +172,30 @@ class PrometheusMetricsCollector:
                 )
 
         except requests.exceptions.Timeout:
-            logger.warning(f"[PrometheusCollector] Query timeout: {query}")
+            logger.warning(
+                "prometheus_collector.query_timeout",
+                query=query,
+            )
             return PrometheusQueryResult(
                 success=False,
                 data=[],
                 error_message="Query timeout",
             )
         except requests.exceptions.ConnectionError as e:
-            logger.warning(f"[PrometheusCollector] Connection error: {e}")
+            logger.warning(
+                "prometheus_collector.connection_error",
+                error=e,
+            )
             return PrometheusQueryResult(
                 success=False,
                 data=[],
                 error_message=f"Connection error: {e}",
             )
         except Exception as e:
-            logger.error(f"[PrometheusCollector] Query failed: {e}")
+            logger.error(
+                "prometheus_collector.query_failed",
+                error=e,
+            )
             return PrometheusQueryResult(
                 success=False,
                 data=[],
@@ -243,21 +252,30 @@ class PrometheusMetricsCollector:
                 )
 
         except requests.exceptions.Timeout:
-            logger.warning(f"[PrometheusCollector] Range query timeout: {query}")
+            logger.warning(
+                "prometheus_collector.range_query_timeout",
+                query=query,
+            )
             return PrometheusQueryResult(
                 success=False,
                 data=[],
                 error_message="Query timeout",
             )
         except requests.exceptions.ConnectionError as e:
-            logger.warning(f"[PrometheusCollector] Connection error: {e}")
+            logger.warning(
+                "prometheus_collector.connection_error",
+                error=e,
+            )
             return PrometheusQueryResult(
                 success=False,
                 data=[],
                 error_message=f"Connection error: {e}",
             )
         except Exception as e:
-            logger.error(f"[PrometheusCollector] Range query failed: {e}")
+            logger.error(
+                "prometheus_collector.range_query_failed",
+                error=e,
+            )
             return PrometheusQueryResult(
                 success=False,
                 data=[],

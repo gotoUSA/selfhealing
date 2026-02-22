@@ -19,7 +19,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import struct
 import threading
@@ -42,7 +42,7 @@ from selfhealing.audit.wal._reader import WALReaderMixin
 from selfhealing.audit.wal._serialization import compute_checksum, verify_checksum
 from selfhealing.audit.wal._writer import WALWriterMixin
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Drift Detection 메트릭
 try:

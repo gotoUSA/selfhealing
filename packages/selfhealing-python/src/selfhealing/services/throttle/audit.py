@@ -20,7 +20,7 @@ CascadeEvent 기록 정책:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import random
 import uuid
 from contextvars import ContextVar
@@ -30,7 +30,7 @@ from queue import Full, Queue
 from threading import Lock, Thread
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -175,7 +175,7 @@ def _start_audit_worker() -> None:
 
     thread = Thread(target=_worker_loop, daemon=True, name="ThrottleAuditWorker")
     thread.start()
-    logger.info("[ThrottleAudit] Background worker started")
+    logger.info("throttle_audit.background_worker_started")
 
 
 def _process_audit_event(audit_data: dict[str, Any]) -> None:
@@ -289,9 +289,12 @@ def _inject_cluster_identity(audit_data: dict[str, Any]) -> dict[str, Any]:
             audit_data["cluster"]["tenant"] = identity.tenant
 
     except ImportError:
-        logger.debug("[ThrottleAudit] ClusterIdentity not available")
+        logger.debug("throttle_audit.clusteridentity_available")
     except Exception as e:
-        logger.debug(f"[ThrottleAudit] ClusterIdentity injection failed: {e}")
+        logger.debug(
+            "throttle_audit.clusteridentity_injection_failed",
+            error=e,
+        )
 
     return audit_data
 
@@ -438,7 +441,10 @@ def _write_to_wal_safe(action: str, audit_data: dict[str, Any]) -> None:
             domain="throttle",
         )
     except Exception as e:
-        logger.debug(f"[ThrottleAudit] WAL write failed: {e}")
+        logger.debug(
+            "throttle_audit.wal_write_failed",
+            error=e,
+        )
 
 
 def _record_cascade_event_safe(action: str, audit_data: dict[str, Any]) -> None:
@@ -457,9 +463,15 @@ def _record_cascade_event_safe(action: str, audit_data: dict[str, Any]) -> None:
             namespace="default",
             triggered_by="throttle",
         )
-        logger.debug(f"[ThrottleAudit] CascadeEvent recorded for {action}")
+        logger.debug(
+            "throttle_audit.cascadeevent_recorded",
+            action=action,
+        )
     except Exception as e:
-        logger.debug(f"[ThrottleAudit] CascadeEvent failed: {e}")
+        logger.debug(
+            "throttle_audit.cascadeevent_failed",
+            error=e,
+        )
 
 
 def _sync_to_central_immediately(audit_data: dict[str, Any]) -> None:
@@ -477,7 +489,10 @@ def _sync_to_central_immediately(audit_data: dict[str, Any]) -> None:
             worker.sync_single(audit_data)
 
     except Exception as e:
-        logger.warning(f"[ThrottleAudit] Immediate sync failed (will retry): {e}")
+        logger.warning(
+            "throttle_audit.immediate_sync_failed_retry",
+            error=e,
+        )
 
 
 # =============================================================================
@@ -557,7 +572,10 @@ def record_throttle_audit(
     try:
         # 샘플링 확인
         if not should_sample(action):
-            logger.debug(f"[ThrottleAudit] Sampled out: {action}")
+            logger.debug(
+                "throttle_audit.sampled_out",
+                action=action,
+            )
             return
 
         # 워커 시작 확인
@@ -601,18 +619,25 @@ def record_throttle_audit(
             _audit_queue.put_nowait(audit_data)
         except Full:
             # 큐 가득 참 - Fail-Open
-            logger.warning("[ThrottleAudit] Queue full, dropping event")
+            logger.warning("throttle_audit.queue_full_dropping_event")
 
             # 중요 이벤트는 동기 처리로 fallback
             if is_critical:
                 _process_audit_event(audit_data)
 
-        logger.debug(f"[ThrottleAudit] Queued {action}: event_id={audit_data.get('event_id')}")
+        logger.debug(
+            "throttle_audit.queued",
+            action=action,
+            audit_data=audit_data.get('event_id'),
+        )
 
     except ImportError:
-        logger.debug("[ThrottleAudit] Audit module not available")
+        logger.debug("throttle_audit.audit_module_available")
     except Exception as e:
-        logger.warning(f"[ThrottleAudit] Failed to record audit: {e}")
+        logger.warning(
+            "throttle_audit.failed_record_audit",
+            error=e,
+        )
 
 
 # =============================================================================

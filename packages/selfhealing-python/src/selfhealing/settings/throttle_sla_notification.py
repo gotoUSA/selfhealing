@@ -10,12 +10,12 @@ Environment Variables:
     SELFHEALING_THROTTLE_SLA_NOTIFICATION_CRITICAL_COOLDOWN_SECONDS=900
 """
 
-import logging
+import structlog
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ThrottleSLANotificationSettings(BaseSettings):

@@ -40,7 +40,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from typing import Any
 
@@ -56,7 +56,7 @@ from selfhealing.audit.cascade_auditor._wal_recovery import (
 )
 from selfhealing.settings.cascade_retention import get_cascade_retention_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _get_max_cascade_index_size() -> int:

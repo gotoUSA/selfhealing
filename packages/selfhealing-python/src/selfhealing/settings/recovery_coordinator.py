@@ -21,12 +21,12 @@ Environment Variables:
     SELFHEALING_RECOVERY_COORD_STABILITY_CHECK_ERROR_RATE_THRESHOLD=0.1
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class RecoveryCoordinatorSettings(BaseSettings):
@@ -264,9 +264,9 @@ class RecoveryCoordinatorSettings(BaseSettings):
         """레벨별 설정 일관성 검증 (LEVEL_3 > LEVEL_2 > LEVEL_1)."""
         # LEVEL_3가 가장 엄격해야 함
         if self.level3_health_check_success_threshold < self.level2_health_check_success_threshold:
-            logger.warning("[RecoveryCoordinatorSettings] LEVEL_3 success_threshold should be >= LEVEL_2")
+            logger.warning("recovery_coordinator_settings.event")
         if self.level3_health_check_error_rate_threshold > self.level2_health_check_error_rate_threshold:
-            logger.warning("[RecoveryCoordinatorSettings] LEVEL_3 error_rate_threshold should be <= LEVEL_2")
+            logger.warning("recovery_coordinator_settings.event")
         return self
 
 

@@ -6,7 +6,7 @@ X-Test Integration Scenario 기본 클래스 및 공통 모델.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -17,7 +17,7 @@ from typing import Any
 
 from django.utils import timezone
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -266,7 +266,11 @@ class IntegrationScenario(ABC):
             all_success = all(s.success for s in self.result.steps)
             self.result.status = ScenarioStatus.COMPLETED if all_success else ScenarioStatus.FAILED
         except Exception as e:
-            logger.error(f"[X-Test Integration] Scenario {self.scenario_name} failed: {e}")
+            logger.error(
+                "test_integration_scenario_failed",
+                self=self.scenario_name,
+                error=e,
+            )
             self.result.status = ScenarioStatus.FAILED
             self.result.errors.append(str(e))
         finally:
@@ -285,5 +289,8 @@ class IntegrationScenario(ABC):
 
             self.result.snapshot = collect_system_snapshot()
         except Exception as e:
-            logger.warning(f"[X-Test Integration] Snapshot collection failed: {e}")
+            logger.warning(
+                "test_integration_snapshot_collection",
+                error=e,
+            )
             self.result.snapshot = {"error": str(e)}

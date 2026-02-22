@@ -4,7 +4,7 @@ Compliance DNA Service - 규정 준수 관리 서비스
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -18,7 +18,7 @@ from .models import (
     ViolationSeverity,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # 기본 규정 검사 항목
@@ -178,7 +178,7 @@ class ComplianceService:
         # DORA-003 자동 검사 함수 등록 (Resilience Testing 요구사항)
         self._register_resilience_testing_check()
 
-        logger.info("ComplianceService initialized")
+        logger.info("complianceservice_initialized")
 
     def _log_compliance_audit(
         self,
@@ -206,7 +206,10 @@ class ComplianceService:
                 compliance_score=compliance_score,
             )
         except Exception as e:
-            logger.debug(f"[ComplianceService] Audit logging failed: {e}")
+            logger.debug(
+                "compliance_service.audit_logging_failed",
+                error=e,
+            )
 
     def _load_default_checks(self) -> None:
         """기본 검사 항목 로드"""
@@ -246,7 +249,7 @@ class ComplianceService:
             recent_experiments = scheduler.get_execution_history(limit=500)
 
             if not recent_experiments:
-                logger.warning("[Compliance] DORA-003: No chaos experiments in history")
+                logger.warning("compliance.dora_no_chaos_experiments")
                 return False
 
             # 최근 30일 필터링
@@ -281,7 +284,11 @@ class ComplianceService:
             min_required = 4
 
             if total_count < min_required:
-                logger.warning(f"[Compliance] DORA-003: Insufficient experiments " f"({total_count}/{min_required})")
+                logger.warning(
+                    "compliance.dora_insufficient_experiments",
+                    total_count=total_count,
+                    min_required=min_required,
+                )
                 return False
 
             # 통과: 실패한 실험도 "복원력 한계 발견"으로 인정
@@ -292,10 +299,16 @@ class ComplianceService:
             return True
 
         except ImportError as e:
-            logger.warning(f"[Compliance] DORA-003 check failed (import): {e}")
+            logger.warning(
+                "compliance.dora_check_failed_import",
+                error=e,
+            )
             return False
         except Exception as e:
-            logger.warning(f"[Compliance] DORA-003 check failed: {e}")
+            logger.warning(
+                "compliance.dora_check_failed",
+                error=e,
+            )
             return False
 
     def register_check(
@@ -349,7 +362,11 @@ class ComplianceService:
             standards: 적용할 규정 목록
         """
         self._stage_standards[stage_name] = standards
-        logger.info(f"Standards set for {stage_name}: {[s.value for s in standards]}")
+        logger.info(
+            "standards_set",
+            stage_name=stage_name,
+            value=[s.value for s in standards],
+        )
 
     def run_check(
         self,
@@ -398,7 +415,11 @@ class ComplianceService:
                 remediation=f"{check.description}을 확인하세요",
             )
             self._violations.append(violation)
-            logger.warning(f"Compliance violation: {check_id} in {stage_name}")
+            logger.warning(
+                "compliance_violation",
+                check_id=check_id,
+                stage_name=stage_name,
+            )
 
             # Audit 로깅
             self._log_compliance_audit(
@@ -475,7 +496,12 @@ class ComplianceService:
         )
 
         self._reports.append(report)
-        logger.info(f"Compliance report generated: {stage_name}, " f"score={score:.1f}%, violations={len(violations)}")
+        logger.info(
+            "compliance_report_generated",
+            stage_name=stage_name,
+            score=score,
+            count=len(violations),
+        )
 
         return report
 
@@ -521,7 +547,10 @@ class ComplianceService:
             if violation.violation_id == violation_id:
                 violation.resolved = True
                 violation.resolved_at = datetime.now(timezone.utc)
-                logger.info(f"Violation resolved: {violation_id}")
+                logger.info(
+                    "violation_resolved",
+                    violation_id=violation_id,
+                )
                 return True
         return False
 

@@ -15,13 +15,13 @@ Code reference:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # DLQ Fallback 경로 (selfhealing 소유, 상대 시스템 비침투)
@@ -77,7 +77,7 @@ class StoreOperationsMixin:
         from selfhealing.services.dlq.models import DLQEntryResult
 
         if not self.is_enabled:
-            logger.debug("[DLQService] DLQ is disabled, skipping storage")
+            logger.debug("dlq_service.dlq_disabled_skipping_storage")
             return DLQEntryResult.failed("DLQ is disabled")
 
         try:
@@ -97,7 +97,12 @@ class StoreOperationsMixin:
                 recommended_action=recommended_action,
             )
 
-            logger.info(f"[DLQService] Created DLQ entry: id={failed_op.id}, " f"domain={domain}, failure_type={failure_type}")
+            logger.info(
+                "dlq_service.created_dlq_entry",
+                failed_op=failed_op.id,
+                domain=domain,
+                failure_type=failure_type,
+            )
 
             # Push 이벤트 - Gauge 증가 (SafeGauge 사용)
             try:
@@ -121,7 +126,10 @@ class StoreOperationsMixin:
             return DLQEntryResult.created(failed_op.id)
 
         except Exception as e:
-            logger.error(f"[DLQService] Failed to store in DLQ: {e}")
+            logger.error(
+                "dlq_service.failed_store_dlq",
+                error=e,
+            )
 
             # Local Fallback: 무손실 보장
             entry_data = {
@@ -142,7 +150,10 @@ class StoreOperationsMixin:
 
             fallback_path = self._write_to_local_fallback(entry_data, str(e))
             if fallback_path:
-                logger.warning(f"[DLQService] Fallback to local file: {fallback_path}")
+                logger.warning(
+                    "dlq_service.fallback_local_file",
+                    fallback_path=fallback_path,
+                )
                 return DLQEntryResult.fallback(str(e), fallback_path)
 
             return DLQEntryResult.failed(str(e))
@@ -186,7 +197,10 @@ class StoreOperationsMixin:
                     "pending_reconciliation": True,
                 }
             )
-            logger.info(f"[DLQService] Fallback saved to DiskPersistentBuffer: " f"domain={entry_data.get('domain')}")
+            logger.info(
+                "dlq_service.fallback_saved_diskpersistentbuffer",
+                entry_data=entry_data.get('domain'),
+            )
             # Fallback 채널 메트릭 기록 (Fail-Open)
             try:
                 from selfhealing.services.metrics.definitions import throttle_dlq_fallback_total
@@ -196,9 +210,12 @@ class StoreOperationsMixin:
                 pass
             return "disk_persistent_buffer://dlq_fallback"
         except ImportError:
-            logger.debug("[DLQService] DiskPersistentBuffer not available")
+            logger.debug("dlq_service.diskpersistentbuffer_available")
         except Exception as e:
-            logger.warning(f"[DLQService] DiskPersistentBuffer failed: {e}")
+            logger.warning(
+                "dlq_service.diskpersistentbuffer_failed",
+                error=e,
+            )
 
         # 2차: JSONL 파일 (기존 방식)
         try:
@@ -215,7 +232,10 @@ class StoreOperationsMixin:
                 with open(DLQ_FALLBACK_PATH, "a", encoding="utf-8") as f:
                     f.write(json.dumps(fallback_entry, default=str) + "\n")
 
-                logger.info(f"[DLQService] Fallback entry saved to JSONL: " f"domain={entry_data.get('domain')}")
+                logger.info(
+                    "dlq_service.fallback_entry_saved_jsonl",
+                    entry_data=entry_data.get('domain'),
+                )
                 # Fallback 채널 메트릭 기록 (Fail-Open)
                 try:
                     from selfhealing.services.metrics.definitions import throttle_dlq_fallback_total

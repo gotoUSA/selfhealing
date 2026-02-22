@@ -17,7 +17,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
@@ -31,7 +31,7 @@ from selfhealing.interfaces.audit_adapter import (
 if TYPE_CHECKING:
     from django.db import models
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DjangoAuditLogAdapter(AuditLogAdapter):
@@ -64,7 +64,10 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
         self._model_class = model_class
         self._generate_event_id = generate_event_id
 
-        logger.info(f"[DjangoAuditAdapter] Initialized with model: " f"{model_class._meta.db_table}")
+        logger.info(
+            "django_audit_adapter.initialized_model",
+            model_class=model_class._meta.db_table,
+        )
 
     def log(self, entry: AuditEntry) -> None:
         """
@@ -89,11 +92,20 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
             )
 
             if created:
-                logger.debug(f"[DjangoAuditAdapter] Logged: {audit_event_id}")
+                logger.debug(
+                    "django_audit_adapter.logged",
+                    audit_event_id=audit_event_id,
+                )
             else:
-                logger.debug(f"[DjangoAuditAdapter] Duplicate skipped: {audit_event_id}")
+                logger.debug(
+                    "django_audit_adapter.duplicate_skipped",
+                    audit_event_id=audit_event_id,
+                )
         except Exception as e:
-            logger.error(f"[DjangoAuditAdapter] Failed to log: {e}")
+            logger.error(
+                "django_audit_adapter.failed_log",
+                error=e,
+            )
             raise
 
     def log_batch(
@@ -126,10 +138,17 @@ class DjangoAuditLogAdapter(AuditLogAdapter):
         try:
             inserted, skipped = self._model_class.bulk_insert_ignore_conflict(records)
 
-            logger.info(f"[DjangoAuditAdapter] Batch: inserted={inserted}, " f"skipped={skipped}")
+            logger.info(
+                "django_audit_adapter.batch",
+                inserted=inserted,
+                skipped=skipped,
+            )
             return inserted, skipped
         except Exception as e:
-            logger.error(f"[DjangoAuditAdapter] Batch failed: {e}")
+            logger.error(
+                "django_audit_adapter.batch_failed",
+                error=e,
+            )
             raise
 
     def query(

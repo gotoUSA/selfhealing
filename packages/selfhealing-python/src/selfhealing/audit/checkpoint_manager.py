@@ -27,7 +27,7 @@ Version: 1.1.0
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 import sys
 import tempfile
@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -153,7 +153,11 @@ class CheckpointManager:
         # 권한 체크 및 폴백
         if not self._verify_write_permission():
             fallback_path = Path(tempfile.gettempdir()) / "selfhealing" / "checkpoint.json"
-            logger.warning(f"[CheckpointManager] No write permission for {self._path}, " f"falling back to {fallback_path}")
+            logger.warning(
+                "checkpoint_manager.no_write_permission_falling",
+                self=self._path,
+                fallback_path=fallback_path,
+            )
             self._path = fallback_path
 
         # 디렉토리 생성
@@ -231,11 +235,17 @@ class CheckpointManager:
                         except Exception:
                             pass
 
-                logger.debug(f"Checkpoint saved: sequence={last_sequence}")
+                logger.debug(
+                    "checkpoint_saved",
+                    last_sequence=last_sequence,
+                )
 
             except (BlockingIOError, OSError) as e:
                 # 다른 프로세스가 락 보유 중 - 스킵
-                logger.warning(f"[CheckpointManager] Lock contention, skipping save: {e}")
+                logger.warning(
+                    "checkpoint_manager.lock_contention_skipping_save",
+                    error=e,
+                )
 
             except Exception as e:
                 # 임시 파일 정리
@@ -257,7 +267,7 @@ class CheckpointManager:
         """
         with self._lock:
             if not self._path.exists():
-                logger.debug("Checkpoint file not found, returning 0")
+                logger.debug("checkpoint_file_found_returning")
                 return 0
 
             try:
@@ -265,11 +275,17 @@ class CheckpointManager:
                     data = json.load(f)
 
                 checkpoint_data = CheckpointData.from_dict(data)
-                logger.debug(f"Checkpoint loaded: sequence={checkpoint_data.last_sequence}")
+                logger.debug(
+                    "checkpoint_loaded",
+                    checkpoint_data=checkpoint_data.last_sequence,
+                )
                 return checkpoint_data.last_sequence
 
             except Exception as e:
-                logger.warning(f"Failed to load checkpoint: {e}, returning 0")
+                logger.warning(
+                    "failed_load_checkpoint_returning",
+                    error=e,
+                )
                 return 0
 
     def load_full(self) -> CheckpointData | None:

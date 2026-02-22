@@ -4,7 +4,7 @@ Chaos Engineering Configuration Views.
 API views for SafetyGuard, BlastRadius, Scheduler, and Report configuration.
 """
 
-import logging
+import structlog
 
 from rest_framework import status
 from rest_framework.permissions import BasePermission
@@ -20,7 +20,7 @@ from selfhealing.api.django.serializers.chaos import (
     SchedulerConfigSerializer,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SafetyGuardConfigView(APIView):
@@ -64,7 +64,10 @@ class SafetyGuardConfigView(APIView):
         guard = get_safety_guard()
         updated_config = guard.update_config(**serializer.validated_data)
 
-        logger.info(f"[ChaosAPI] SafetyGuard config updated by {request.user}")
+        logger.info(
+            "chaos_api.safetyguard_config_updated",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -118,7 +121,10 @@ class ChaosBlastRadiusPolicyView(APIView):
         manager = get_blast_radius_manager()
         updated_policy = manager.update_policy(**serializer.validated_data)
 
-        logger.info(f"[ChaosAPI] BlastRadius policy updated by {request.user}")
+        logger.info(
+            "chaos_api.blastradius_policy_updated",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -169,7 +175,10 @@ class SchedulerConfigView(APIView):
         scheduler = get_chaos_scheduler()
         updated_config = scheduler.update_config(**serializer.validated_data)
 
-        logger.info(f"[ChaosAPI] Scheduler config updated by {request.user}")
+        logger.info(
+            "chaos_api.scheduler_config_updated",
+            request=request.user,
+        )
 
         return Response(
             {
@@ -220,7 +229,10 @@ class ReportConfigView(APIView):
         generator = get_report_generator()
         updated_config = generator.update_config(**serializer.validated_data)
 
-        logger.info(f"[ChaosAPI] Report config updated by {request.user}")
+        logger.info(
+            "chaos_api.report_config_updated",
+            request=request.user,
+        )
 
         return Response(
             {

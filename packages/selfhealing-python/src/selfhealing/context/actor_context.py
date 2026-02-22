@@ -36,14 +36,14 @@ Usage:
 from __future__ import annotations
 
 import contextvars
-import logging
+import structlog
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Context variable for thread-safe actor tracking
 _current_actor: contextvars.ContextVar[Actor | None] = contextvars.ContextVar("current_actor", default=None)
@@ -162,11 +162,20 @@ class ActorContext:
         )
         token = _current_actor.set(actor)
         try:
-            logger.debug(f"[ActorContext] Set actor: {actor_id} ({actor_type}) from {source} roles={actor.roles}")
+            logger.debug(
+                "actor_context.set_actor",
+                actor_id=actor_id,
+                actor_type=actor_type,
+                source=source,
+                actor=actor.roles,
+            )
             yield actor
         finally:
             _current_actor.reset(token)
-            logger.debug(f"[ActorContext] Cleared actor: {actor_id}")
+            logger.debug(
+                "actor_context.cleared_actor",
+                actor_id=actor_id,
+            )
 
     @classmethod
     def set_actor_from_django_request(cls, request: Any) -> Generator[Actor, None, None]:
@@ -234,7 +243,10 @@ class ActorContext:
             if hasattr(user, "groups"):
                 return list(user.groups.filter(name__startswith="selfhealing_").values_list("name", flat=True))
         except Exception:
-            logger.debug(f"[ActorContext] Failed to extract RBAC roles for user {user}")
+            logger.debug(
+                "actor_context.failed_extract_rbac_roles",
+                user=user,
+            )
         return []
 
     @classmethod
@@ -270,7 +282,10 @@ class ActorContext:
 
             return extract_client_ip(request)
         except Exception as e:
-            logger.warning(f"[ActorContext] Failed to extract client IP: {e}")
+            logger.warning(
+                "actor_context.failed_extract_client_ip",
+                error=e,
+            )
             return None
 
     @classmethod
@@ -462,7 +477,7 @@ def restore_actor_from_celery(actor_info: dict[str, Any]) -> Generator[Actor, No
     """
     if not actor_info:
         # No actor info passed, log warning
-        logger.warning("[ActorContext] Celery task started without actor_info. " "Operations will be attributed to 'system'.")
+        logger.warning("actor_context.celery_task_started_without")
         yield SYSTEM_ACTOR
         return
 
@@ -507,5 +522,9 @@ def set_management_command_actor(
         actor_type="management_command",
         source=f"manage.py:{command_name}",
     ) as actor:
-        logger.info(f"[ActorContext] Management command '{command_name}' started by {actor_id}")
+        logger.info(
+            "actor_context.management_command_started",
+            command_name=command_name,
+            actor_id=actor_id,
+        )
         yield actor

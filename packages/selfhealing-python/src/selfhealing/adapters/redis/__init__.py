@@ -10,7 +10,7 @@ Uses ResilientStorageBackend for zero data loss guarantees.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.adapters.redis.circuit_breaker import (
@@ -18,7 +18,7 @@ from selfhealing.adapters.redis.circuit_breaker import (
 )
 from selfhealing.adapters.redis.dlq import RedisDLQRepository
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def get_redis_client() -> Any | None:
@@ -76,7 +76,7 @@ def get_redis_client() -> Any | None:
     except (ImportError, Exception):
         pass
 
-    logger.debug("[Redis] No Redis client available")
+    logger.debug("redis.no_redis_client_available")
     return None
 
 

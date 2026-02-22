@@ -20,13 +20,13 @@ Environment Variables:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -359,7 +359,7 @@ class PostmortemNotifier:
             bool: 발송 성공 여부
         """
         if not self._config.enabled:
-            logger.debug("[PostmortemNotifier] Notification disabled")
+            logger.debug("postmortem_notifier.notification_disabled")
             return True
 
         payload = PostmortemNotificationPayload(
@@ -386,14 +386,17 @@ class PostmortemNotifier:
         try:
             self._send_via_unified_manager(payload)
         except Exception as e:
-            logger.warning(f"[PostmortemNotifier] Unified manager failed: {e}")
+            logger.warning(
+                "postmortem_notifier.unified_manager_failed",
+                error=e,
+            )
 
         return success
 
     def _send_slack_notification(self, payload: PostmortemNotificationPayload) -> bool:
         """Slack Webhook으로 알림 발송."""
         if not self._config.slack_webhook_url:
-            logger.debug("[PostmortemNotifier] Slack webhook not configured")
+            logger.debug("postmortem_notifier.slack_webhook_configured")
             return True  # 설정 안 됨 = 성공으로 간주
 
         try:
@@ -412,17 +415,29 @@ class PostmortemNotifier:
 
             with urllib.request.urlopen(request, timeout=10) as response:
                 if response.status == 200:
-                    logger.info(f"[PostmortemNotifier] Slack notification sent: " f"{payload.incident_id}")
+                    logger.info(
+                        "postmortem_notifier.slack_notification_sent",
+                        payload=payload.incident_id,
+                    )
                     return True
                 else:
-                    logger.warning(f"[PostmortemNotifier] Slack response: {response.status}")
+                    logger.warning(
+                        "postmortem_notifier.slack_response",
+                        response=response.status,
+                    )
                     return False
 
         except urllib.error.URLError as e:
-            logger.warning(f"[PostmortemNotifier] Slack webhook failed: {e}")
+            logger.warning(
+                "postmortem_notifier.slack_webhook_failed",
+                error=e,
+            )
             return False
         except Exception as e:
-            logger.warning(f"[PostmortemNotifier] Slack notification error: {e}")
+            logger.warning(
+                "postmortem_notifier.slack_notification_error",
+                error=e,
+            )
             return False
 
     def _send_via_unified_manager(self, payload: PostmortemNotificationPayload) -> None:
@@ -463,7 +478,7 @@ class PostmortemNotifier:
             )
 
         except ImportError:
-            logger.debug("[PostmortemNotifier] UnifiedNotificationManager not available")
+            logger.debug("postmortem_notifier.unifiednotificationmanager_available")
 
     def send_webhook(
         self,
@@ -497,7 +512,10 @@ class PostmortemNotifier:
                 return response.status == 200
 
         except Exception as e:
-            logger.warning(f"[PostmortemNotifier] Webhook failed: {e}")
+            logger.warning(
+                "postmortem_notifier.webhook_failed",
+                error=e,
+            )
             return False
 
     def is_enabled(self) -> bool:

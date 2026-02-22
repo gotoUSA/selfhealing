@@ -14,7 +14,7 @@ Audit, DLQ)을 제거하고 순수한 재시도 로직만 담당한다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from selfhealing.services.backoff_calculator import AdaptiveRetryBudget
     from selfhealing.services.rate_limit_coordinator import RateLimitCoordinator
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 

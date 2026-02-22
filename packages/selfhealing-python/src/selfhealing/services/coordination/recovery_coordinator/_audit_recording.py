@@ -6,12 +6,12 @@ AuditRecordingMixin for RecoveryCoordinator.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 from ..recovery_audit import RecoveryAuditEventType
 from ..recovery_state import RecoverySession, RecoveryStep
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditRecordingMixin:
@@ -254,8 +254,14 @@ class AuditRecordingMixin:
                 source="recovery_coordinator",
             )
 
-            logger.info(f"[Recovery] Published EMERGENCY_RECOVERY_COMPLETED: {session.id}")
+            logger.info(
+                "adaptive_throttle.event_published",
+                session=session.id,
+            )
 
         except Exception as e:
             # 이벤트 발행 실패가 복구 완료에 영향을 주지 않도록 함
-            logger.warning(f"[Recovery] Failed to publish EMERGENCY_RECOVERY_COMPLETED: {e}")
+            logger.warning(
+                "recovery.failed_publish",
+                error=e,
+            )

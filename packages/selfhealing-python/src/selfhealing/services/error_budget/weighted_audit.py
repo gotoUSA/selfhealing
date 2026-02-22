@@ -32,7 +32,7 @@ Reference:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -40,7 +40,7 @@ from typing import Any
 
 from selfhealing.core.timezone import now as utc_now
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -236,7 +236,7 @@ class WeightedAuditRecorder:
 
                 self._hash_chain_manager = get_hash_chain_manager()
             except ImportError:
-                logger.debug("[WeightedAudit] Hash Chain Manager not available")
+                logger.debug("weighted_audit.hash_chain_manager_available")
         return self._hash_chain_manager
 
     def record(self, entry: WeightedBudgetAuditEntry) -> None:
@@ -273,7 +273,10 @@ class WeightedAuditRecorder:
                     f"audit_id={entry.audit_id}"
                 )
             except Exception as e:
-                logger.warning(f"[WeightedAudit] Failed to add to hash chain: {e}")
+                logger.warning(
+                    "weighted_audit.failed_add_hash_chain",
+                    error=e,
+                )
 
     def get_entries(
         self,

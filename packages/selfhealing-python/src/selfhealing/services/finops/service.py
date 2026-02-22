@@ -4,14 +4,14 @@ FinOps DNA Service - 비용 관리 서비스
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from threading import Lock
 
 from .models import CostAlert, CostBudget, CostRecord, CostReport, CostTier
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # 기본 작업별 비용 (USD)
@@ -56,7 +56,7 @@ class FinOpsService:
         self._enabled = True
         self._initialized = True
 
-        logger.info("FinOpsService initialized")
+        logger.info("finopsservice_initialized")
 
     def set_budget(
         self,
@@ -87,7 +87,11 @@ class FinOpsService:
             reset_period=reset_period,
         )
         self._budgets[stage_name] = budget
-        logger.info(f"Budget set for {stage_name}: ${max_budget}")
+        logger.info(
+            "budget_set",
+            stage_name=stage_name,
+            max_budget=max_budget,
+        )
         return budget
 
     def get_budget(self, stage_name: str) -> CostBudget | None:
@@ -194,7 +198,10 @@ class FinOpsService:
             severity=severity,
         )
         self._alerts.append(alert)
-        logger.warning(f"Cost alert: {message}")
+        logger.warning(
+            "cost_alert",
+            message=message,
+        )
 
         # Audit 로깅
         self._log_finops_audit(
@@ -235,7 +242,10 @@ class FinOpsService:
                 message=message,
             )
         except Exception as e:
-            logger.debug(f"[FinOpsService] Audit logging failed: {e}")
+            logger.debug(
+                "fin_ops_service.audit_logging_failed",
+                error=e,
+            )
 
     def get_cost_tier(self, cost: Decimal) -> CostTier:
         """비용 계층 반환"""
@@ -333,7 +343,10 @@ class FinOpsService:
         if budget:
             budget.current_spent = Decimal("0.00")
             budget.last_reset = datetime.now(timezone.utc)
-            logger.info(f"Budget reset for {stage_name}")
+            logger.info(
+                "budget_reset",
+                stage_name=stage_name,
+            )
             return True
         return False
 
@@ -395,7 +408,10 @@ class FinOpsService:
             hard_limit=hard_limit,
             reset_period=reset_period,
         )
-        logger.info(f"[FinOps] Chaos budget set: ${max_budget}")
+        logger.info(
+            "fin_ops.chaos_budget_set",
+            max_budget=max_budget,
+        )
         return budget
 
     def get_chaos_budget(self) -> CostBudget | None:
@@ -423,7 +439,11 @@ class FinOpsService:
         # Cap weight
         capped_weight = min(weight, self.MAX_CHAOS_WEIGHT_MULTIPLIER)
         self._domain_weights[domain.lower()] = capped_weight
-        logger.info(f"[FinOps] Domain weight set: {domain}={capped_weight}x")
+        logger.info(
+            "fin_ops.domain_weight_set",
+            domain=domain,
+            capped_weight=capped_weight,
+        )
 
     def get_domain_weight(self, domain: str) -> float:
         """도메인 가중치 조회 (없으면 1.0)."""
@@ -456,12 +476,15 @@ class FinOpsService:
             ValueError: 예산 초과 시 (hard_limit=True인 경우)
         """
         if dry_run:
-            logger.debug(f"[FinOps] Chaos cost skipped for dry_run experiment: {experiment_id}")
+            logger.debug(
+                "fin_ops.chaos_cost_skipped_experiment",
+                experiment_id=experiment_id,
+            )
             return None
 
         chaos_budget = self.get_chaos_budget()
         if chaos_budget is None:
-            logger.debug("[FinOps] No chaos budget configured, skipping cost recording")
+            logger.debug("fin_ops.no_chaos_budget_configured")
             return None
 
         # 기본 비용

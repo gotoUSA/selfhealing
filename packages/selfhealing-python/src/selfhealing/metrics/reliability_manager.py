@@ -18,7 +18,7 @@ Design Philosophy:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections.abc import Callable
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ReliabilityLevel(str, Enum):
@@ -231,7 +231,12 @@ class MetricReliabilityManager:
             state = self._states[domain]
             state.consecutive_successful_syncs = 0
 
-            logger.warning(f"[Reliability] Sync failed for {domain} from {source}: {reason}")
+            logger.warning(
+                "reliability.sync_failed",
+                domain=domain,
+                source=source,
+                reason=reason,
+            )
 
             self._update_reliability_level(state)
             self._update_operating_mode(state)
@@ -297,7 +302,10 @@ class MetricReliabilityManager:
                     # 안정화 완료 → 정상 모드
                     state.operating_mode = OperatingMode.NORMAL
                     state.stabilization_start = None
-                    logger.info(f"[Reliability] {state.domain}: Stabilization complete, " f"entering NORMAL mode")
+                    logger.info(
+                        "reliability.stabilization_complete_entering_normal",
+                        state=state.domain,
+                    )
             # NORMAL 유지
 
         # 모드 변경 알림
@@ -311,7 +319,10 @@ class MetricReliabilityManager:
             try:
                 listener(domain, new_mode)
             except Exception as e:
-                logger.warning(f"[Reliability] Mode listener error: {e}")
+                logger.warning(
+                    "reliability.mode_listener_error",
+                    error=e,
+                )
 
     def register_mode_listener(
         self,
@@ -364,7 +375,10 @@ class MetricReliabilityManager:
                 if snapshot_age <= self._thresholds.low_max_age:
                     return (snapshot_value, "snapshot", ReliabilityLevel.LOW)
         except Exception as e:
-            logger.debug(f"[Reliability] Snapshot fallback failed: {e}")
+            logger.debug(
+                "reliability.snapshot_fallback_failed",
+                error=e,
+            )
 
         # Safe Defaults 사용
         if self._safe_defaults_provider:
@@ -372,7 +386,10 @@ class MetricReliabilityManager:
                 default_value = self._safe_defaults_provider(domain)
                 return (default_value, "default", ReliabilityLevel.UNKNOWN)
             except Exception as e:
-                logger.warning(f"[Reliability] Safe defaults provider error: {e}")
+                logger.warning(
+                    "reliability.safe_defaults_provider_error",
+                    error=e,
+                )
 
         return (None, "none", ReliabilityLevel.UNKNOWN)
 
@@ -440,7 +457,11 @@ class MetricReliabilityManager:
             state.stabilization_start = None
             state.consecutive_successful_syncs = 0
 
-            logger.warning(f"[Reliability] {domain}: Forced STRICT mode ({reason})")
+            logger.warning(
+                "reliability.forced_strict_mode",
+                domain=domain,
+                reason=reason,
+            )
 
             if old_mode != OperatingMode.STRICT:
                 self._notify_mode_change(domain, OperatingMode.STRICT)
@@ -472,7 +493,12 @@ class MetricReliabilityManager:
             old_mode = self._global_mode
             self._global_mode = mode
 
-            logger.warning(f"[Reliability] Global mode changed: {old_mode.value} → {mode.value} ({reason})")
+            logger.warning(
+                "reliability.global_mode_changed",
+                old_mode=old_mode.value,
+                mode=mode.value,
+                reason=reason,
+            )
 
             # 모든 도메인에 동일 모드 적용
             for domain, state in self._states.items():

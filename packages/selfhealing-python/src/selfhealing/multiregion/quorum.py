@@ -13,14 +13,14 @@ Primary 승격 전 반드시 Witness 락을 획득해야 합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -196,16 +196,26 @@ class QuorumWitness:
                     lease_id=lease_id,
                 )
 
-            logger.info(f"[Quorum] Primary lease acquired: {self._region} " f"(expires_at={expires_at:.0f})")
+            logger.info(
+                "quorum.primary_lease_acquired",
+                self=self._region,
+                expires_at=expires_at,
+            )
             return True
 
         except Exception as e:
             # ConditionalCheckFailedException 처리
             error_name = type(e).__name__
             if "ConditionalCheckFailedException" in error_name or "ConditionalCheckFailed" in str(e):
-                logger.warning(f"[Quorum] Primary lease denied: {self._region} " "(another region holds the lease)")
+                logger.warning(
+                    "quorum.primary_lease_denied_another",
+                    self=self._region,
+                )
             else:
-                logger.error(f"[Quorum] Lease acquisition error: {e}")
+                logger.error(
+                    "quorum.lease_acquisition_error",
+                    error=e,
+                )
             return False
 
     def renew_lease(self) -> bool:
@@ -239,11 +249,17 @@ class QuorumWitness:
                 )
 
                 self._current_lease.expires_at = new_expires_at
-                logger.debug(f"[Quorum] Lease renewed: expires_at={new_expires_at:.0f}")
+                logger.debug(
+                    "quorum.lease_renewed",
+                    new_expires_at=new_expires_at,
+                )
                 return True
 
             except Exception as e:
-                logger.error(f"[Quorum] Lease renewal failed: {e}")
+                logger.error(
+                    "quorum.lease_renewal_failed",
+                    error=e,
+                )
                 self._current_lease = None
                 return False
 
@@ -266,9 +282,15 @@ class QuorumWitness:
                         ":lid": {"S": self._current_lease.lease_id},
                     },
                 )
-                logger.info(f"[Quorum] Lease released: {self._region}")
+                logger.info(
+                    "quorum.lease_released",
+                    self=self._region,
+                )
             except Exception as e:
-                logger.warning(f"[Quorum] Lease release failed: {e}")
+                logger.warning(
+                    "quorum.lease_release_failed",
+                    error=e,
+                )
             finally:
                 self._current_lease = None
 
@@ -296,7 +318,10 @@ class QuorumWitness:
             return item["region"]["S"]
 
         except Exception as e:
-            logger.error(f"[Quorum] Get primary failed: {e}")
+            logger.error(
+                "quorum.get_primary_failed",
+                error=e,
+            )
             return None
 
     def is_primary(self) -> bool:
@@ -333,14 +358,14 @@ class QuorumWitness:
             daemon=True,
         )
         self._renew_thread.start()
-        logger.info("[Quorum] Auto-renew started")
+        logger.info("quorum.auto_renew_started")
 
     def stop_auto_renew(self) -> None:
         """자동 갱신 중지."""
         self._renew_running = False
         if self._renew_thread:
             self._renew_thread.join(timeout=5.0)
-        logger.info("[Quorum] Auto-renew stopped")
+        logger.info("quorum.auto_renew_stopped")
 
 
 class InMemoryQuorumWitness:
@@ -382,7 +407,10 @@ class InMemoryQuorumWitness:
                     expires_at=expires_at,
                     lease_id=lease_id,
                 )
-                logger.info(f"[Quorum/InMemory] Lease acquired: {self._region}")
+                logger.info(
+                    "lease_acquired",
+                    self=self._region,
+                )
                 return True
             else:
                 logger.warning(
@@ -409,7 +437,10 @@ class InMemoryQuorumWitness:
         with InMemoryQuorumWitness._global_lock:
             if InMemoryQuorumWitness._global_lease and InMemoryQuorumWitness._global_lease.region == self._region:
                 InMemoryQuorumWitness._global_lease = None
-                logger.info(f"[Quorum/InMemory] Lease released: {self._region}")
+                logger.info(
+                    "lease_released",
+                    self=self._region,
+                )
 
     def get_current_primary(self) -> str | None:
         """현재 Primary 리전 조회."""

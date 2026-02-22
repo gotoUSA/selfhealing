@@ -18,7 +18,7 @@ Saga Orchestrator.
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
     from selfhealing.services.event_bus.bus import EventBus
     from selfhealing.services.idempotency.service import IdempotencyService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # =============================================================================
 # 상수

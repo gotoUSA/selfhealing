@@ -34,7 +34,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import mmap
 import os
 import struct
@@ -46,7 +46,7 @@ from enum import IntEnum
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CBState(IntEnum):
@@ -213,7 +213,11 @@ class CBStateSnapshot:
         self._write_count = 0
         self._last_update_ts = 0.0
 
-        logger.debug(f"[CBStateSnapshot] Initialized shm_path={shm_path}, " f"is_writer={is_writer}")
+        logger.debug(
+            "cb_state_snapshot.initialized",
+            shm_path=shm_path,
+            is_writer=is_writer,
+        )
 
     def start(self) -> None:
         """스냅샷 시작."""
@@ -231,10 +235,16 @@ class CBStateSnapshot:
                 )
                 self._update_thread.start()
 
-            logger.info(f"[CBStateSnapshot] Started " f"({'writer' if self.is_writer else 'reader'} mode)")
+            logger.info(
+                "cb_state_snapshot.started_mode",
+                value='writer' if self.is_writer else 'reader',
+            )
 
         except Exception as e:
-            logger.error(f"[CBStateSnapshot] Start failed: {e}")
+            logger.error(
+                "cb_state_snapshot.start_failed",
+                error=e,
+            )
             raise
 
     def stop(self) -> None:
@@ -246,7 +256,7 @@ class CBStateSnapshot:
             self._update_thread = None
 
         self._close_shm()
-        logger.info("[CBStateSnapshot] Stopped")
+        logger.info("cb_state_snapshot.stopped")
 
     def _open_shm(self) -> None:
         """Shared Memory 열기."""
@@ -376,7 +386,7 @@ class CBStateSnapshot:
             magic, version, timestamp, cb_count = self._read_header()
 
             if magic != MAGIC_NUMBER:
-                logger.warning("[CBStateSnapshot] Invalid magic number")
+                logger.warning("cb_state_snapshot.invalid_magic_number")
                 return None
 
             # CB 엔트리 검색
@@ -413,7 +423,10 @@ class CBStateSnapshot:
             return None
 
         except Exception as e:
-            logger.error(f"[CBStateSnapshot] Get state error: {e}")
+            logger.error(
+                "cb_state_snapshot.get_state_error",
+                error=e,
+            )
             return None
 
     def get_all_states(self) -> list[CBStateEntry]:
@@ -431,7 +444,7 @@ class CBStateSnapshot:
             magic, version, timestamp, cb_count = self._read_header()
 
             if magic != MAGIC_NUMBER:
-                logger.warning("[CBStateSnapshot] Invalid magic number")
+                logger.warning("cb_state_snapshot.invalid_magic_number")
                 return []
 
             entries = []
@@ -467,7 +480,10 @@ class CBStateSnapshot:
             return entries
 
         except Exception as e:
-            logger.error(f"[CBStateSnapshot] Get all states error: {e}")
+            logger.error(
+                "cb_state_snapshot.get_all_states_error",
+                error=e,
+            )
             return []
 
     def update_state(self, entry: CBStateEntry) -> bool:
@@ -510,7 +526,7 @@ class CBStateSnapshot:
                 if target_index == -1:
                     # 새 엔트리 추가
                     if cb_count >= MAX_CB_COUNT:
-                        logger.warning("[CBStateSnapshot] Max CB count reached")
+                        logger.warning("cb_state_snapshot.max_cb_count_reached")
                         return False
                     target_index = cb_count
                     cb_count += 1
@@ -548,7 +564,10 @@ class CBStateSnapshot:
                 return True
 
         except Exception as e:
-            logger.error(f"[CBStateSnapshot] Update state error: {e}")
+            logger.error(
+                "cb_state_snapshot.update_state_error",
+                error=e,
+            )
             return False
 
     def _update_loop(self) -> None:
@@ -557,7 +576,10 @@ class CBStateSnapshot:
             try:
                 self._sync_from_registry()
             except Exception as e:
-                logger.error(f"[CBStateSnapshot] Update loop error: {e}")
+                logger.error(
+                    "cb_state_snapshot.update_loop_error",
+                    error=e,
+                )
 
             time.sleep(self.update_interval_ms / 1000.0)
 
@@ -601,7 +623,10 @@ class CBStateSnapshot:
             # 서비스 모듈 없음
             pass
         except Exception as e:
-            logger.debug(f"[CBStateSnapshot] Sync from service error: {e}")
+            logger.debug(
+                "cb_state_snapshot.sync_service_error",
+                error=e,
+            )
 
     def get_stats(self) -> dict[str, Any]:
         """

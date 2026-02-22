@@ -17,7 +17,7 @@ Guard/Hook/Sink는 PolicyComposer가 외부에서 연결한다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -31,7 +31,7 @@ from selfhealing.interfaces.resilience_policy import (
 from selfhealing.services.throttle.base import SlidingWindowThrottle
 from selfhealing.services.throttle.config import ThrottleConfig, ThrottleResult
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 

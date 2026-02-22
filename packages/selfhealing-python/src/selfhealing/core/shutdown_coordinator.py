@@ -10,7 +10,7 @@ Manages graceful shutdown with in-flight request handling:
 Framework-agnostic design.
 """
 
-import logging
+import structlog
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ShutdownPhase(str, Enum):
@@ -256,7 +256,10 @@ class GracefulShutdownCoordinator:
         import signal
 
         def signal_handler(signum, frame):
-            logger.info(f"Received signal {signum}, initiating graceful shutdown")
+            logger.info(
+                "received_signal_initiating_graceful",
+                signum=signum,
+            )
             self.initiate_shutdown()
 
         signal.signal(signal.SIGTERM, signal_handler)
@@ -271,13 +274,16 @@ class GracefulShutdownCoordinator:
             self._phase = ShutdownPhase.DRAINING
             self._shutdown_started_at = datetime.now(timezone.utc)
 
-        logger.info("Graceful shutdown initiated, entering drain phase")
+        logger.info("graceful_shutdown_initiated_entering")
 
         if self._handler:
             try:
                 self._handler.on_shutdown_start()
             except Exception as e:
-                logger.error(f"Error in shutdown handler: {e}")
+                logger.error(
+                    "error_shutdown_handler",
+                    error=e,
+                )
 
         # Start drain process in background
         self._shutdown_thread = threading.Thread(target=self._drain_and_shutdown)
@@ -293,7 +299,7 @@ class GracefulShutdownCoordinator:
             pending = self._tracker.get_pending_count()
 
             if pending == 0:
-                logger.info("All in-flight requests drained successfully")
+                logger.info("all_flight_requests_drained")
                 self._phase = ShutdownPhase.TERMINATED
                 self._drained_count = self._tracker.completed_count
 
@@ -305,11 +311,14 @@ class GracefulShutdownCoordinator:
 
                 return
 
-            logger.debug(f"Waiting for {pending} requests to complete...")
+            logger.debug(
+                "waiting_requests_complete",
+                pending=pending,
+            )
             time.sleep(self._check_interval)
 
         # Timeout reached, force shutdown
-        logger.warning("Drain timeout reached, forcing shutdown")
+        logger.warning("drain_timeout_reached_forcing")
         self._phase = ShutdownPhase.TERMINATING
 
         pending_requests = self._tracker.get_pending_requests()

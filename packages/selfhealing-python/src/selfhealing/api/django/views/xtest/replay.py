@@ -15,7 +15,7 @@ Security:
 - production 환경에서는 완전 차단
 """
 
-import logging
+import structlog
 import time
 from typing import Any
 
@@ -27,7 +27,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin, collect_system_snapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -216,7 +216,10 @@ class ReplaySingleView(XTestModeMixin, APIView):
                 "block_message": result.block_message if not result.allowed else None,
             }
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Governance check failed: {e}")
+            logger.warning(
+                "test_mode_governance_check",
+                error=e,
+            )
             # fail-open: 체크 실패 시 허용
             return {
                 "allowed": True,
@@ -441,7 +444,10 @@ class ReplayBatchView(XTestModeMixin, APIView):
                 ],
             }
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to get eligible entries: {e}")
+            logger.warning(
+                "test_mode_failed_get",
+                error=e,
+            )
             return {"count": 0, "entries": [], "error": str(e)}
 
     def _get_governance_status(self) -> dict[str, Any]:
@@ -623,7 +629,10 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
             status = cb_service.get_status(service_name)
             return status.get("state", "UNKNOWN") if status else "UNKNOWN"
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to get CB state: {e}")
+            logger.warning(
+                "test_mode_failed_get",
+                error=e,
+            )
             return "UNKNOWN"
 
     def _simulate_cb_close(self, service_name: str) -> bool:
@@ -643,7 +652,10 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
                 return True
             return False
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to simulate CB close: {e}")
+            logger.warning(
+                "test_mode_failed_simulate",
+                error=e,
+            )
             return False
 
     def _get_eligible_count(self, service_name: str) -> int:
@@ -661,7 +673,10 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
             )
             return len(entries)
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to get eligible count: {e}")
+            logger.warning(
+                "test_mode_failed_get",
+                error=e,
+            )
             return 0
 
     def _execute_conditional_replay(self, service_name: str, max_items: int) -> dict[str, Any]:
@@ -794,7 +809,10 @@ class ReplayStatusView(XTestModeMixin, APIView):
                 "by_status": by_status,
             }
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to get pending stats: {e}")
+            logger.warning(
+                "test_mode_failed_get",
+                error=e,
+            )
             return {"total": 0, "by_domain": {}, "error": str(e)}
 
     def _get_governance_status(self) -> dict[str, Any]:
@@ -835,5 +853,8 @@ class ReplayStatusView(XTestModeMixin, APIView):
                 return {name: status.get("state", "UNKNOWN") for name, status in all_status.items()}
             return {}
         except Exception as e:
-            logger.warning(f"[X-Test-Mode] Failed to get CB states: {e}")
+            logger.warning(
+                "test_mode_failed_get",
+                error=e,
+            )
             return {"error": str(e)}

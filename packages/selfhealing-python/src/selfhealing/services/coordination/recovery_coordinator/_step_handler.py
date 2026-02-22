@@ -7,7 +7,7 @@ StepHandlerMixin for RecoveryCoordinator.
 from __future__ import annotations
 
 import concurrent.futures
-import logging
+import structlog
 from collections.abc import Callable
 from typing import Any
 
@@ -16,7 +16,7 @@ from ..enums import RecoveryStatus
 from ..recovery_state import RecoverySession, RecoveryStep, RecoveryStepType
 from . import LOCK_HEARTBEAT_INTERVAL_SECONDS, StepTimeoutError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class StepHandlerMixin:
@@ -46,7 +46,7 @@ class StepHandlerMixin:
                 provider = get_crisis_multiplier_provider()
                 provider.reset_multiplier(session.namespace)
             except ImportError:
-                logger.warning("[Recovery] CrisisMultiplierProvider not available, " "skipping budget reset")
+                logger.warning("recovery.crisismultiplierprovider_available_skipping_budget")
 
             return {"success": True, "multiplier": target}
         except Exception as e:
@@ -141,7 +141,7 @@ class StepHandlerMixin:
                     "triggered_by_whitelist": triggered_by_whitelist,
                 }
             except (ImportError, AttributeError):
-                logger.warning("[Recovery] CanaryService not available or missing method, " "skipping canary resume")
+                logger.warning("recovery.canaryservice_available_missing_method")
                 return {"success": True, "resumed_count": 0, "skipped": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -172,7 +172,7 @@ class StepHandlerMixin:
                     reason=reason,
                 )
             except (ImportError, AttributeError):
-                logger.warning("[Recovery] EmergencyModeTracker not available, " "skipping governance normal")
+                logger.warning("recovery.emergencymodetracker_available_skipping_governance")
                 return {"success": True, "mode": "NORMAL", "skipped": True}
 
             return {"success": True, "mode": "NORMAL"}

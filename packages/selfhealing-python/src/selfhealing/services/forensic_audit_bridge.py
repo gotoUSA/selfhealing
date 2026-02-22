@@ -15,12 +15,12 @@ Forensic Rate Limiter (SlidingWindow):
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 기본 민감 필드 패턴 (ForensicSettings가 없을 때 사용)
 DEFAULT_SENSITIVE_PATTERNS = [
@@ -264,7 +264,10 @@ class ForensicAuditBridge:
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[ForensicAuditBridge] Failed to get ForensicSettings: {e}")
+            logger.debug(
+                "forensic_audit_bridge.failed_get_forensicsettings",
+                error=e,
+            )
 
         return DEFAULT_SENSITIVE_PATTERNS
 
@@ -291,7 +294,10 @@ class ForensicAuditBridge:
             )
             return self._fallback_mask(context)
         except Exception as e:
-            logger.debug(f"[ForensicAuditBridge] Masking failed: {e}")
+            logger.debug(
+                "forensic_audit_bridge.masking_failed",
+                error=e,
+            )
             return self._fallback_mask(context)
 
     def _fallback_mask(self, context: dict[str, Any]) -> dict[str, Any]:
@@ -333,7 +339,7 @@ class ForensicAuditBridge:
         """
         # Rate Limiting 적용
         if not self._rate_limiter.try_acquire_exception():
-            logger.debug("[ForensicAuditBridge] Exception capture rate limited")
+            logger.debug("forensic_audit_bridge.exception_capture_rate_limited")
             return False
 
         # 실제 마스킹 수행
@@ -377,7 +383,7 @@ class ForensicAuditBridge:
         """
         # Rate Limiting 적용
         if not self._rate_limiter.try_acquire_anomaly():
-            logger.debug("[ForensicAuditBridge] Anomaly capture rate limited")
+            logger.debug("forensic_audit_bridge.anomaly_capture_rate_limited")
             return False
 
         self._record_audit(
@@ -413,7 +419,7 @@ class ForensicAuditBridge:
         """
         # Rate Limiting 적용
         if not self._rate_limiter.try_acquire_snapshot():
-            logger.debug("[ForensicAuditBridge] Snapshot capture rate limited")
+            logger.debug("forensic_audit_bridge.snapshot_capture_rate_limited")
             return False
 
         self._record_audit(
@@ -452,7 +458,10 @@ class ForensicAuditBridge:
                     details=details,
                 )
             except Exception as e:
-                logger.debug(f"[ForensicAuditBridge] Audit recording failed: {e}")
+                logger.debug(
+                    "forensic_audit_bridge.audit_recording_failed",
+                    error=e,
+                )
 
 
 # Singleton 패턴

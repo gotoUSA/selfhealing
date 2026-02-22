@@ -12,7 +12,7 @@ Universal Async Support:
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 import time
 from collections.abc import Callable
 from functools import wraps
@@ -23,7 +23,7 @@ from selfhealing.metrics.event_handlers import (
     ReplayEventHandler,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 P = ParamSpec("P")
 R = TypeVar("R")

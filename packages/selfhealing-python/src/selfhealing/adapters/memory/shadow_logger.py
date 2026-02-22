@@ -9,7 +9,7 @@ Version: 6.4.0 - Drift Detection 메트릭 추가
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -30,7 +30,7 @@ except ImportError:
     HAS_DRIFT_METRICS = False
 
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -190,7 +190,11 @@ class ShadowLogger:
                     "recovery_time": recovery_time.isoformat(),
                 },
             )
-            logger.info(f"[ShadowLog] Marked {count} records as synced for {service_name}")
+            logger.info(
+                "shadow_log.marked_records_synced",
+                count=count,
+                service_name=service_name,
+            )
         return count
 
     def mark_all_as_synced(self) -> int:
@@ -207,7 +211,10 @@ class ShadowLogger:
             if HAS_DRIFT_METRICS and count > 0:
                 self._update_drift_metrics()
         if count > 0:
-            logger.info(f"[ShadowLog] Marked all {count} records as synced")
+            logger.info(
+                "shadow_log.marked_all_records_synced",
+                count=count,
+            )
         return count
 
     def _update_drift_metrics(self) -> None:
@@ -419,10 +426,13 @@ class ShadowLogger:
             # 자동으로 actor_id, actor_roles, trace_id가 포함됨
         except ImportError:
             # _write_to_wal 미사용 환경: 로거로 폴백
-            logger.debug("[ShadowLogger] Audit recording skipped: _write_to_wal not available")
+            logger.debug("shadow_logger.audit_recording_skipped_available")
         except Exception as e:
             # Audit 실패가 메인 로직을 방해하면 안됨
-            logger.debug(f"[ShadowLogger] Audit recording failed: {e}")
+            logger.debug(
+                "shadow_logger.audit_recording_failed",
+                error=e,
+            )
 
 
 def get_shadow_logger() -> ShadowLogger:

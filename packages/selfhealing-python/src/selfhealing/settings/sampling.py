@@ -13,12 +13,12 @@ Environment Variables:
     SELFHEALING_SAMPLING_FULL_VERIFY_ON_FAILURE=true
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SamplingSettings(BaseSettings):
@@ -88,7 +88,10 @@ class SamplingSettings(BaseSettings):
     def validate_sample_rate(cls, v: float) -> float:
         """샘플링 비율 경고."""
         if v < 0.05:
-            logger.warning(f"[SafeDefault] Very low sample_rate={v}, may miss issues")
+            logger.warning(
+                "safe_default.very_low_miss_issues",
+                v=v,
+            )
         if v > 0.5:
             logger.warning(
                 f"[SafeDefault] High sample_rate={v}, may impact performance"

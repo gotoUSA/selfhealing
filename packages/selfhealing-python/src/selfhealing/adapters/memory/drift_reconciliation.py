@@ -8,7 +8,7 @@ L2 복구 시 L1과 L2 간 상태 불일치(드리프트)를 해결합니다.
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 import random
 import threading
 import time
@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class DriftReconciliationResult(str, Enum):
@@ -171,7 +171,10 @@ class DriftReconciler:
             try:
                 self._on_reconciled(record)
             except Exception as e:
-                logger.warning(f"[DriftReconciler] Callback error: {e}")
+                logger.warning(
+                    "drift_reconciler.callback_error",
+                    error=e,
+                )
 
         return winner_state, result
 

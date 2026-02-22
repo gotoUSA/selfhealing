@@ -12,12 +12,12 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import time
 from contextlib import contextmanager
 from typing import Any, Generator
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 def _is_otel_enabled() -> bool:
@@ -76,7 +76,10 @@ def bulkhead_span(
                     },
                 )
         except Exception as e:
-            logger.debug(f"[BulkheadOTel] Failed to create span: {e}")
+            logger.debug(
+                "bulkhead_o_tel.failed_create_span",
+                error=e,
+            )
 
     try:
         yield span_data
@@ -102,7 +105,10 @@ def bulkhead_span(
                         span.set_attribute(f"bulkhead.{key}", value)
                 span.end()
             except Exception as e:
-                logger.debug(f"[BulkheadOTel] Failed to end span: {e}")
+                logger.debug(
+                    "bulkhead_o_tel.failed_end_span",
+                    error=e,
+                )
 
 
 @contextmanager
@@ -144,7 +150,10 @@ def bulkhead_operation_span(
                     },
                 )
         except Exception as e:
-            logger.debug(f"[BulkheadOTel] Failed to create operation span: {e}")
+            logger.debug(
+                "bulkhead_o_tel.failed_create_operation_span",
+                error=e,
+            )
 
     try:
         yield span_data
@@ -167,4 +176,7 @@ def bulkhead_operation_span(
                         span.set_attribute(f"bulkhead.{key}", value)
                 span.end()
             except Exception as e:
-                logger.debug(f"[BulkheadOTel] Failed to end operation span: {e}")
+                logger.debug(
+                    "bulkhead_o_tel.failed_end_operation_span",
+                    error=e,
+                )

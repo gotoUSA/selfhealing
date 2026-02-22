@@ -37,13 +37,13 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class WeightCombinePolicy(str, Enum):
@@ -191,7 +191,11 @@ class ExceptionBudgetWeightMap:
         """
         code_str = error_code.value if hasattr(error_code, "value") else str(error_code)
         self.code_weights[code_str] = weight
-        logger.debug(f"[ExceptionWeights] Set weight: {code_str}={weight}")
+        logger.debug(
+            "exception_weights.set_weight",
+            code_str=code_str,
+            weight=weight,
+        )
 
     def set_category_weight(self, category: str, weight: float) -> None:
         """
@@ -202,7 +206,11 @@ class ExceptionBudgetWeightMap:
             weight: 가중치 값
         """
         self.category_weights[category.upper()] = weight
-        logger.debug(f"[ExceptionWeights] Set category weight: {category}={weight}")
+        logger.debug(
+            "exception_weights.set_category_weight",
+            category=category,
+            weight=weight,
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """딕셔너리로 변환."""
@@ -263,9 +271,12 @@ def get_exception_weight_map() -> ExceptionBudgetWeightMap:
 
                 data = json.loads(weights_json)
                 _weight_map = ExceptionBudgetWeightMap.from_dict(data)
-                logger.info("[ExceptionWeights] Loaded custom weights from settings")
+                logger.info("exception_weights.loaded_custom_weights_settings")
             except Exception as e:
-                logger.warning(f"[ExceptionWeights] Failed to parse weights JSON: {e}")
+                logger.warning(
+                    "exception_weights.failed_parse_weights_json",
+                    error=e,
+                )
                 _weight_map = ExceptionBudgetWeightMap()
         else:
             _weight_map = ExceptionBudgetWeightMap()
@@ -389,7 +400,10 @@ def get_weight_combine_policy() -> WeightCombinePolicy:
     try:
         return WeightCombinePolicy[policy_str]
     except KeyError:
-        logger.warning(f"[ExceptionWeights] Invalid policy '{policy_str}', using MAX")
+        logger.warning(
+            "exception_weights.invalid_policy_using_max",
+            policy_str=policy_str,
+        )
         return WeightCombinePolicy.MAX
 
 

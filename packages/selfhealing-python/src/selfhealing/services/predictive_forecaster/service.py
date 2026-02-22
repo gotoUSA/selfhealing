@@ -25,7 +25,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -50,7 +50,7 @@ from selfhealing.settings.predictive_forecaster import (
     get_predictive_forecaster_settings,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # =============================================================================
@@ -399,7 +399,10 @@ class PredictiveForecasterService:
                 metadata={"source": "predictive_forecaster"},
             )
         except Exception as e:
-            logger.debug(f"[PredictiveForecasterService] LearningService report skipped: {e}")
+            logger.debug(
+                "predictive_forecaster_service.learningservice_report_skipped",
+                error=e,
+            )
 
     def _evaluate_prediction_accuracy(
         self,
@@ -429,7 +432,10 @@ class PredictiveForecasterService:
                 },
             )
         except Exception as e:
-            logger.debug(f"[PredictiveForecasterService] Accuracy recording skipped: {e}")
+            logger.debug(
+                "predictive_forecaster_service.accuracy_recording_skipped",
+                error=e,
+            )
 
         # 연속 오판 추적 (정확도 0.5 미만 = 오판)
         if accuracy < 0.5:
@@ -473,7 +479,10 @@ class PredictiveForecasterService:
                 f"({misprediction_count} consecutive mispredictions)"
             )
         except Exception as e:
-            logger.debug(f"[PredictiveForecasterService] Blacklist registration skipped: {e}")
+            logger.debug(
+                "predictive_forecaster_service.blacklist_registration_skipped",
+                error=e,
+            )
 
     # =========================================================================
     # StateBackend 영속성

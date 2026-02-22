@@ -12,7 +12,7 @@ Rate Limit 에스컬레이션 핸들러.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING
 
 from selfhealing.meta.escalation import (
@@ -23,7 +23,7 @@ from selfhealing.meta.escalation import (
 if TYPE_CHECKING:
     from selfhealing.meta.escalation import EscalationManager
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 에스컬레이션 발동 임계값 (연속 429 횟수)
 ESCALATION_THRESHOLD_CONSECUTIVE_429S = 10
@@ -84,13 +84,19 @@ class RateLimitEscalationHandler:
                 self._handle_rate_limit_429,
                 subscriber_id="rate_limit_escalation_handler",
             )
-            logger.info(f"[RateLimitEscalationHandler] Subscribed to RATE_LIMIT_429 " f"(threshold={self._threshold})")
+            logger.info(
+                "rate_limit_escalation_handler.subscribed",
+                self=self._threshold,
+            )
             return True
         except ImportError:
-            logger.debug("[RateLimitEscalationHandler] EventBus not available")
+            logger.debug("rate_limit_escalation_handler.eventbus_available")
             return False
         except Exception as e:
-            logger.warning(f"[RateLimitEscalationHandler] Subscribe failed: {e}")
+            logger.warning(
+                "rate_limit_escalation_handler.subscribe_failed",
+                error=e,
+            )
             return False
 
     def _handle_rate_limit_429(self, event_data: dict) -> None:
@@ -113,7 +119,10 @@ class RateLimitEscalationHandler:
 
         # 이미 에스컬레이션 했으면 중복 방지
         if key in self._escalated_keys:
-            logger.debug(f"[RateLimitEscalationHandler] '{key}' already escalated, " f"skipping duplicate")
+            logger.debug(
+                "rate_limit_escalation_handler.already_escalated_skipping_duplicate",
+                key=key,
+            )
             return
 
         # 에스컬레이션 마킹 (중복 방지)
@@ -148,7 +157,11 @@ class RateLimitEscalationHandler:
                 f"(consecutive={consecutive}, channels={result.channels_sent})"
             )
         else:
-            logger.error(f"[RateLimitEscalationHandler] Escalation failed for '{key}': " f"{result.error_message}")
+            logger.error(
+                "rate_limit_escalation_handler.escalation_failed",
+                key=key,
+                result=result.error_message,
+            )
 
     def reset_escalation(self, key: str) -> None:
         """
@@ -159,13 +172,19 @@ class RateLimitEscalationHandler:
         """
         if key in self._escalated_keys:
             self._escalated_keys.discard(key)
-            logger.info(f"[RateLimitEscalationHandler] Reset escalation for '{key}'")
+            logger.info(
+                "rate_limit_escalation_handler.reset_escalation",
+                key=key,
+            )
 
     def reset_all_escalations(self) -> None:
         """모든 에스컬레이션 상태 초기화."""
         count = len(self._escalated_keys)
         self._escalated_keys.clear()
-        logger.info(f"[RateLimitEscalationHandler] Reset all escalations ({count} keys)")
+        logger.info(
+            "rate_limit_escalation_handler.reset_all_escalations_keys",
+            count=count,
+        )
 
     @property
     def escalated_keys(self) -> frozenset[str]:

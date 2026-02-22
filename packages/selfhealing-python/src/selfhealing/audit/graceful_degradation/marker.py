@@ -8,14 +8,14 @@ Contains:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -120,7 +120,10 @@ class DegradedEntryMarker:
             try:
                 self._track_in_redis(sequence, entry["integrity"])
             except Exception as e:
-                logger.debug(f"[DegradedMarker] Redis tracking failed: {e}")
+                logger.debug(
+                    "degraded_marker.redis_tracking_failed",
+                    error=e,
+                )
 
         return entry
 
@@ -175,7 +178,10 @@ class DegradedEntryMarker:
                 )
                 return True
             except Exception as e:
-                logger.debug(f"[DegradedMarker] Redis update failed: {e}")
+                logger.debug(
+                    "degraded_marker.redis_update_failed",
+                    error=e,
+                )
 
         return True
 

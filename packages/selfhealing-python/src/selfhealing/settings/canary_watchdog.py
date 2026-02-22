@@ -16,12 +16,12 @@ Environment Variables:
     SELFHEALING_CANARY_WATCHDOG_SLACK_CHANNEL=#selfhealing-alerts
 """
 
-import logging
+import structlog
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CanaryWatchdogSettings(BaseSettings):

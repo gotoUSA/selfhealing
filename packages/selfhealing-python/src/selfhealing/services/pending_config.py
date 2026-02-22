@@ -15,7 +15,7 @@ Audit:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -28,7 +28,7 @@ from selfhealing.core.state_backend import get_state_backend
 from selfhealing.services.audit import log_config_apply_audit
 from selfhealing.settings.audit_settings import get_audit_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class PendingStatus(str, Enum):
@@ -234,7 +234,11 @@ class PendingConfigService:
                 return None
 
             if change.status != PendingStatus.PENDING.value:
-                logger.warning(f"[PendingConfig] Cannot cancel {change_id}: status is {change.status}")
+                logger.warning(
+                    "pending_config.cannot_cancel_status",
+                    change_id=change_id,
+                    change=change.status,
+                )
                 return None
 
             change.status = PendingStatus.CANCELLED.value
@@ -244,7 +248,10 @@ class PendingConfigService:
             self._move_to_history(change)
             self._save_state()
 
-            logger.info(f"[PendingConfig] Cancelled pending change {change_id}")
+            logger.info(
+                "pending_config.cancelled_pending_change",
+                change_id=change_id,
+            )
 
             # === Audit 기록: 예약된 설정 변경 취소 ===
             log_config_apply_audit(
@@ -278,7 +285,10 @@ class PendingConfigService:
             self._move_to_history(change)
             self._save_state()
 
-            logger.info(f"[PendingConfig] Applied pending change {change_id}")
+            logger.info(
+                "pending_config.applied_pending_change",
+                change_id=change_id,
+            )
             return change
 
     def mark_failed(
@@ -298,7 +308,11 @@ class PendingConfigService:
             self._move_to_history(change)
             self._save_state()
 
-            logger.error(f"[PendingConfig] Failed to apply {change_id}: {error_message}")
+            logger.error(
+                "pending_config.failed_apply",
+                change_id=change_id,
+                error_message=error_message,
+            )
             return change
 
     def get_history(
@@ -336,7 +350,10 @@ class PendingConfigService:
 
             if expired:
                 self._save_state()
-                logger.info(f"[PendingConfig] Cleaned up {len(expired)} expired changes")
+                logger.info(
+                    "pending_config.cleaned_up_expired_changes",
+                    count=len(expired),
+                )
 
             return len(expired)
 

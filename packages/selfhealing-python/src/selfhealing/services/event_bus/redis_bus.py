@@ -16,7 +16,7 @@ Reference:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 from collections.abc import Callable
 from datetime import datetime
@@ -30,7 +30,7 @@ from selfhealing.services.event_bus.bus import (
     SelfHealingEventBus,
 )
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # 인프라 장애 시에도 반드시 전파해야 하는 이벤트 타입
 CRITICAL_EVENT_TYPES: frozenset[EventType] = frozenset(
@@ -177,7 +177,7 @@ class RedisEventBus:
     def _connect_redis(self) -> bool:
         """Redis 연결."""
         if not self._redis_url:
-            logger.info("[RedisEventBus] No Redis URL configured, using local bus only")
+            logger.info("redis_event_bus.no_redis_url_configured")
             return False
 
         try:
@@ -189,13 +189,16 @@ class RedisEventBus:
             )
             # 연결 테스트
             self._redis_client.ping()
-            logger.info("[RedisEventBus] Connected to Redis")
+            logger.info("redis_event_bus.connected_redis")
             return True
         except ImportError:
-            logger.warning("[RedisEventBus] redis package not installed, using local bus")
+            logger.warning("redis_event_bus.redis_package_installed_using")
             return False
         except Exception as e:
-            logger.warning(f"[RedisEventBus] Redis connection failed: {e}, using local bus")
+            logger.warning(
+                "redis_event_bus.redis_connection_failed_using",
+                error=e,
+            )
             self._redis_client = None
             return False
 
@@ -229,7 +232,10 @@ class RedisEventBus:
                 name="RedisEventBusListener",
             )
             self._listener_thread.start()
-            logger.info(f"[RedisEventBus] Listener started on channels: " f"{list(self._subscribed_redis_channels)}")
+            logger.info(
+                "redis_event_bus.listener_started_channels",
+                value=list(self._subscribed_redis_channels),
+            )
 
     def stop_listener(self) -> None:
         """Redis Pub/Sub 리스너 중지."""
@@ -242,7 +248,7 @@ class RedisEventBus:
                 except Exception:
                     pass
                 self._pubsub = None
-            logger.info("[RedisEventBus] Listener stopped")
+            logger.info("redis_event_bus.listener_stopped")
 
     def _listen_loop(self) -> None:
         """Redis 메시지 수신 루프."""
@@ -253,7 +259,10 @@ class RedisEventBus:
                     self._handle_redis_message(message["data"])
             except Exception as e:
                 if self._running:
-                    logger.error(f"[RedisEventBus] Listener error: {e}")
+                    logger.error(
+                        "redis_event_bus.listener_error",
+                        error=e,
+                    )
 
     def _handle_redis_message(self, data: str) -> None:
         """Redis 메시지 처리."""
@@ -270,7 +279,10 @@ class RedisEventBus:
             # 로컬 핸들러에 전달 (from_redis=True로 무한 루프 방지)
             self._local_bus.publish(event)
         except Exception as e:
-            logger.error(f"[RedisEventBus] Failed to process message: {e}")
+            logger.error(
+                "redis_event_bus.failed_process_message",
+                error=e,
+            )
 
     def publish(
         self,
@@ -306,7 +318,10 @@ class RedisEventBus:
                 )
                 return  # 성공 시 종료
             except Exception as e:
-                logger.warning(f"[RedisEventBus] Redis publish failed: {e}")
+                logger.warning(
+                    "redis_event_bus.redis_publish_failed",
+                    error=e,
+                )
 
         # 3. Kafka 폴백 (크리티컬 이벤트만)
         if self._is_critical_event(event):
@@ -314,7 +329,10 @@ class RedisEventBus:
                 self._publish_to_kafka_fallback(event)
                 return  # Kafka 성공 시 종료
             except Exception as e:
-                logger.error(f"[RedisEventBus] Kafka fallback failed: {e}")
+                logger.error(
+                    "redis_event_bus.kafka_fallback_failed",
+                    error=e,
+                )
 
             # 4. 최종 안전망: 로컬 WAL 기록
             self._write_to_wal(event)
@@ -357,7 +375,10 @@ class RedisEventBus:
         producer.flush(timeout=5)
         producer.close(timeout=5)
 
-        logger.info(f"[RedisEventBus] Event published to Kafka fallback: " f"{event.event_type.value}")
+        logger.info(
+            "redis_event_bus.event_published_kafka_fallback",
+            event_type=event.event_type.value,
+        )
 
     def _write_to_wal(self, event: SelfHealingEvent) -> None:
         """
@@ -380,9 +401,16 @@ class RedisEventBus:
             wal = WriteAheadLog(config=config)
             wal.write(event.to_dict())
 
-            logger.warning(f"[RedisEventBus] Critical event written to WAL: " f"{event.event_type.value}")
+            logger.warning(
+                "redis_event_bus.critical_event_written_wal",
+                event_type=event.event_type.value,
+            )
         except Exception as e:
-            logger.error(f"[RedisEventBus] WAL write failed for critical event " f"{event.event_type.value}: {e}")
+            logger.error(
+                "redis_event_bus.wal_write_failed_critical",
+                event_type=event.event_type.value,
+                error=e,
+            )
 
     def _get_channel_for_event(self, event_type: EventType) -> str:
         """EventType에 맞는 Redis 채널 반환."""

@@ -7,7 +7,7 @@ and rollback support.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import TYPE_CHECKING, Any
 
 from selfhealing.services.security.models import ProtectionResult
@@ -19,7 +19,7 @@ from selfhealing.services.security.policies import (
 if TYPE_CHECKING:
     from selfhealing.services.security.service import SecurityViolationService
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ProtectionOrchestrator:
@@ -157,7 +157,7 @@ class ProtectionOrchestrator:
                 },
                 source="protection_orchestrator",
             )
-            logger.critical("[ProtectionOrchestrator] Emergency Level 3 activated!")
+            logger.critical("protection_orchestrator.emergency_level_activated")
         except Exception as e:
             logger.error(
                 f"[ProtectionOrchestrator] Failed to emit emergency event: {e}"
@@ -180,7 +180,7 @@ class ProtectionOrchestrator:
                 },
                 source="protection_orchestrator",
             )
-            logger.warning("[ProtectionOrchestrator] Emergency Level 2 activated")
+            logger.warning("protection_orchestrator.emergency_level_activated")
         except Exception as e:
             logger.error(
                 f"[ProtectionOrchestrator] Failed to emit emergency event: {e}"
@@ -202,7 +202,7 @@ class ProtectionOrchestrator:
                 },
                 source="protection_orchestrator",
             )
-            logger.info("[ProtectionOrchestrator] Emergency Level 1 activated")
+            logger.info("protection_orchestrator.emergency_level_activated")
         except Exception as e:
             logger.error(
                 f"[ProtectionOrchestrator] Failed to emit emergency event: {e}"
@@ -237,7 +237,10 @@ class ProtectionOrchestrator:
 
     def _execute_block_and_log(self, context: dict[str, Any]) -> None:
         """차단 및 로깅."""
-        logger.warning(f"[ProtectionOrchestrator] Blocked and logged: {context}")
+        logger.warning(
+            "protection_orchestrator.blocked_logged",
+            context=context,
+        )
 
     # =========================================================================
     # Rollback Methods
@@ -264,7 +267,10 @@ class ProtectionOrchestrator:
             try:
                 rollback_fn(context)
                 rolled_back.append(policy)
-                logger.info(f"[ProtectionOrchestrator] Rolled back: {policy.value}")
+                logger.info(
+                    "protection_orchestrator.rolled_back",
+                    policy=policy.value,
+                )
             except Exception as e:
                 logger.error(
                     f"[ProtectionOrchestrator] Rollback failed for {policy.value}: {e}"
@@ -283,11 +289,17 @@ class ProtectionOrchestrator:
         """계정 동결 해제."""
         user_id = context.get("user_id")
         if user_id:
-            logger.info(f"[ProtectionOrchestrator] Account unfrozen: user_id={user_id}")
+            logger.info(
+                "protection_orchestrator.account_unfrozen",
+                user_id=user_id,
+            )
 
     def _rollback_ip_ban(self, context: dict[str, Any]) -> None:
         """IP 차단 해제."""
         source_ip = context.get("source_ip")
         if source_ip:
             self._service._remove_ip_ban(source_ip)
-            logger.info(f"[ProtectionOrchestrator] IP ban removed: {source_ip}")
+            logger.info(
+                "protection_orchestrator.ip_ban_removed",
+                source_ip=source_ip,
+            )

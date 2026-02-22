@@ -12,7 +12,7 @@ Audit Integration (85_AUDIT_INTEGRATION_OVERVIEW.md Phase 1):
 
 from __future__ import annotations
 
-import logging
+import structlog
 import re
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
     from selfhealing.interfaces.repositories import SecurityIncidentRepository
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SecurityViolationService:
@@ -193,7 +193,10 @@ class SecurityViolationService:
             try:
                 self._send_security_notification(incident.id, violation_type_str, severity.value)
             except Exception as e:
-                logger.error(f"[Security Violation] Notification failed but incident saved: {e}")
+                logger.error(
+                    "security_violation_notification_failed",
+                    error=e,
+                )
 
             # CRITICAL 보안 위반 시 EventBus 연동
             if severity == Severity.CRITICAL:
@@ -337,7 +340,10 @@ class SecurityViolationService:
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[Security] UserSessionRegistry cleanup failed: {e}")
+            logger.debug(
+                "security.usersessionregistry_cleanup_failed",
+                error=e,
+            )
         return items
 
     @staticmethod
@@ -366,11 +372,17 @@ class SecurityViolationService:
                 if deleted_count > 0:
                     items.append(f"django_sessions({deleted_count})")
             else:
-                logger.debug(f"[Security] Skipping DB session scan: " f"SESSION_ENGINE={session_engine}")
+                logger.debug(
+                    "security.skipping_db_session_scan",
+                    session_engine=session_engine,
+                )
         except ImportError:
             pass
         except Exception as e:
-            logger.debug(f"[Security] Django session cleanup skipped: {e}")
+            logger.debug(
+                "security.django_session_cleanup_skipped",
+                error=e,
+            )
         return items
 
     @staticmethod
@@ -388,7 +400,10 @@ class SecurityViolationService:
                     if result:
                         items.append(result)
                 except Exception as hook_err:
-                    logger.warning(f"[Security] Session invalidation hook failed: {hook_err}")
+                    logger.warning(
+                        "security.session_invalidation_hook_failed",
+                        hook_err=hook_err,
+                    )
         except ImportError:
             pass
         return items
@@ -407,7 +422,11 @@ class SecurityViolationService:
             invalidated_items.extend(self._invalidate_django_db_sessions(user_id))
             invalidated_items.extend(self._run_invalidation_hooks(user_id))
 
-            logger.info(f"[Security] Invalidated sessions for user {user_id}: " f"{', '.join(invalidated_items)}")
+            logger.info(
+                "security.invalidated_sessions_user",
+                user_id=user_id,
+                value=', '.join(invalidated_items),
+            )
 
             # === Audit 기록: 세션 무효화 ===
             log_security_violation_audit(
@@ -423,7 +442,10 @@ class SecurityViolationService:
 
             return f"User sessions cleared for user {user_id}: " f"{', '.join(invalidated_items)}"
         except Exception as e:
-            logger.error(f"[Security] Failed to invalidate sessions: {e}")
+            logger.error(
+                "security.failed_invalidate_sessions",
+                error=e,
+            )
 
             log_security_violation_audit(
                 violation_type="session_invalidation",
@@ -452,7 +474,11 @@ class SecurityViolationService:
 
         # 보안: 로그에는 마스킹된 IP만 기록
         masked_ip = mask_ip(ip_address)
-        logger.info(f"[Security] Suspicious IP logged: {masked_ip} (count: {new_count})")
+        logger.info(
+            "security.suspicious_ip_logged_count",
+            masked_ip=masked_ip,
+            new_count=new_count,
+        )
 
         if new_count >= self.config.permanent_ban_threshold:
             self._permanent_ip_ban(ip_address)
@@ -470,7 +496,11 @@ class SecurityViolationService:
         )
         # 보안: 로그에는 마스킹된 IP만 기록
         masked_ip = mask_ip(ip_address)
-        logger.info(f"[Security] IP temporarily banned: {masked_ip} for {hours} hours")
+        logger.info(
+            "security.ip_temporarily_banned_hours",
+            masked_ip=masked_ip,
+            hours=hours,
+        )
 
         # === Audit 기록: 임시 IP 차단 (85_AUDIT_INTEGRATION Phase 1) ===
         log_security_violation_audit(
@@ -493,7 +523,10 @@ class SecurityViolationService:
         self.cache.set(cache_key, {"banned": True, "type": "permanent"}, ttl=None)
         # 보안: 로그에는 마스킹된 IP만 기록
         masked_ip = mask_ip(ip_address)
-        logger.warning(f"[Security] IP permanently banned: {masked_ip}")
+        logger.warning(
+            "security.ip_permanently_banned",
+            masked_ip=masked_ip,
+        )
 
         # === Audit 기록: 영구 IP 차단 (85_AUDIT_INTEGRATION Phase 1) ===
         log_security_violation_audit(
@@ -516,7 +549,10 @@ class SecurityViolationService:
         self.cache.delete(cache_key)
         # Security Hardening (214_SECURITY_VULNERABILITY_FIXES): 로그/반환값 IP 마스킹
         masked_ip = mask_ip(ip_address)
-        logger.info(f"[Security] IP ban removed: {masked_ip}")
+        logger.info(
+            "security.ip_ban_removed",
+            masked_ip=masked_ip,
+        )
         return f"IP {masked_ip} ban removed"
 
     def is_ip_banned(self, ip_address: str) -> bool:
@@ -609,7 +645,10 @@ class SecurityViolationService:
             return sanitize(raw_data)
 
         except Exception as e:
-            logger.error(f"[Security] Masking failed, returning placeholder: {e}")
+            logger.error(
+                "security.masking_failed_returning_placeholder",
+                error=e,
+            )
             return {"error": "MASKING_ERROR: SENSITIVE_DATA_HIDDEN"}
 
     def _send_security_notification(
@@ -627,7 +666,11 @@ class SecurityViolationService:
             service = get_security_notification_service()
             service.notify_security_incident_by_id(incident_id, incident_type, severity)
         except Exception as e:
-            logger.error(f"[Security] Failed to send notification for incident {incident_id}: {e}")
+            logger.error(
+                "security.failed_send_notification_incident",
+                incident_id=incident_id,
+                error=e,
+            )
 
     def _emit_critical_violation_event(
         self,
@@ -658,4 +701,7 @@ class SecurityViolationService:
                 f"for incident {incident_id}, type={violation_type}"
             )
         except Exception as e:
-            logger.error(f"[SecurityViolationService] Failed to emit critical event: {e}")
+            logger.error(
+                "security_violation_service.failed_emit_critical_event",
+                error=e,
+            )

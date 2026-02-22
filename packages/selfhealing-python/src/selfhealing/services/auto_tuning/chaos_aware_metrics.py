@@ -7,10 +7,10 @@ Chaos 실험 인식 메트릭 어댑터.
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Protocol
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ChaosAwareMetricsProtocol(Protocol):
@@ -84,7 +84,10 @@ class ChaosAwareMetricsAdapter:
             running = scheduler.get_running_experiments()
             return len(running) > 0
         except Exception as e:
-            logger.debug(f"[ChaosAwareMetrics] Could not check chaos status: {e}")
+            logger.debug(
+                "chaos_aware_metrics.check_chaos_status",
+                error=e,
+            )
             return False
 
     def is_chaos_active(self) -> bool:

@@ -13,13 +13,13 @@ Configuration:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 
 from selfhealing.adapters.airgap.base import AirGapStorageAdapter
 from selfhealing.adapters.airgap.null_adapter import NullAirGapAdapter
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 # Singleton adapter instance
@@ -61,7 +61,7 @@ def get_airgap_adapter() -> AirGapStorageAdapter:
             _adapter_instance = NullAirGapAdapter()
     else:
         _adapter_instance = NullAirGapAdapter()
-        logger.info("[AirGap] Air-Gap disabled, using NullAirGapAdapter")
+        logger.info("air_gap.air_gap_disabled_using")
 
     _adapter_configured = True
     return _adapter_instance
@@ -89,7 +89,10 @@ def configure_airgap_adapter(adapter: AirGapStorageAdapter) -> None:
 
     _adapter_instance = adapter
     _adapter_configured = True
-    logger.info(f"[AirGap] Configured: {type(adapter).__name__}")
+    logger.info(
+        "air_gap.configured",
+        value=type(adapter).__name__,
+    )
 
 
 def reset_airgap_adapter() -> None:
@@ -99,7 +102,7 @@ def reset_airgap_adapter() -> None:
     global _adapter_instance, _adapter_configured
     _adapter_instance = None
     _adapter_configured = False
-    logger.debug("[AirGap] Adapter reset")
+    logger.debug("air_gap.adapter_reset")
 
 
 def _create_redis_adapter() -> AirGapStorageAdapter | None:
@@ -129,14 +132,20 @@ def _create_redis_adapter() -> AirGapStorageAdapter | None:
         from selfhealing.adapters.airgap.redis_adapter import RedisAirGapAdapter
 
         adapter = RedisAirGapAdapter(client, prefix=prefix, default_ttl=ttl)
-        logger.info(f"[AirGap] RedisAirGapAdapter created (url={redis_url})")
+        logger.info(
+            "air_gap.redisairgapadapter_created",
+            redis_url=redis_url,
+        )
         return adapter
 
     except ImportError:
-        logger.error("[AirGap] redis package not installed")
+        logger.error("air_gap.redis_package_installed")
         return None
     except Exception as e:
-        logger.error(f"[AirGap] Failed to create Redis adapter: {e}")
+        logger.error(
+            "air_gap.failed_create_redis_adapter",
+            error=e,
+        )
         return None
 
 

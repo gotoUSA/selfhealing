@@ -8,7 +8,7 @@ OpenTelemetry 활성화 시 자동 계측을 활용하고,
 
 from __future__ import annotations
 
-import logging
+import structlog
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any, Generator
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 from selfhealing.settings.http_client import get_http_client_settings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Kubernetes / 내부 DNS 기본 접미사 — Settings 로드 실패 시 폴백
 _DEFAULT_INTERNAL_DNS_SUFFIXES = (
@@ -332,7 +332,10 @@ class SelfHealingHttpClient:
         """
         _is_chaos_request.set(is_chaos)
         if experiment_id:
-            logger.debug("[SelfHealingHttpClient] Chaos context set: %s", experiment_id)
+            logger.debug(
+                "self_healing_http_client.chaos_context_set",
+                experiment_id=experiment_id,
+            )
 
     @classmethod
     def clear_chaos_context(cls) -> None:

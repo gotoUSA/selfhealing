@@ -14,7 +14,7 @@ Handles security-related notifications across multiple channels:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from typing import Any
 
 from selfhealing.settings import get_config
@@ -29,7 +29,7 @@ from .pagerduty_handler import PagerDutyHandlerMixin
 from .slack_handler import SlackHandlerMixin
 from .sms_handler import SMSHandlerMixin
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SecurityNotificationService(
@@ -88,7 +88,7 @@ class SecurityNotificationService(
             SecurityNotificationResult with results from all channels
         """
         if not self.config.enabled:
-            logger.debug("[Security Notification] Notifications disabled")
+            logger.debug("security_notification_notifications_disabled")
             return SecurityNotificationResult(incident_id=incident_id)
 
         result = SecurityNotificationResult(incident_id=incident_id)
@@ -256,7 +256,7 @@ class SecurityNotificationService(
             SecurityNotificationResult with results from all channels
         """
         if not self.config.enabled:
-            logger.debug("[Security Notification] Notifications disabled")
+            logger.debug("security_notification_notifications_disabled")
             return SecurityNotificationResult(incident_id=0)
 
         result = SecurityNotificationResult(incident_id=0)

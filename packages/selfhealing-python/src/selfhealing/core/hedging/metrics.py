@@ -7,9 +7,9 @@ Prometheus 메트릭을 정의합니다.
 
 from __future__ import annotations
 
-import logging
+import structlog
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # Prometheus 메트릭 (선택적 의존성)
 try:

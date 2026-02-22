@@ -5,9 +5,9 @@ GovernanceEventMixin for AdaptiveThrottle.
 """
 
 import selfhealing.services.throttle.adaptive as _adaptive_mod
-import logging
+import structlog
 import time
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 
@@ -30,17 +30,20 @@ class GovernanceEventMixin:
             bus = get_event_bus()
             bus.subscribe(EventType.KILL_SWITCH_ACTIVATED, self._handle_kill_switch_activated)
             bus.subscribe(EventType.KILL_SWITCH_DEACTIVATED, self._handle_kill_switch_deactivated)
-            logger.info("[AdaptiveThrottle] Subscribed to kill switch events")
+            logger.info("adaptive_throttle.subscribed_kill_switch_events")
         except ImportError:
-            logger.debug("[AdaptiveThrottle] EventBus not available for kill switch")
+            logger.debug("adaptive_throttle.eventbus_available_kill_switch")
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to subscribe to kill switch events: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_subscribe_kill_switch",
+                error=e,
+            )
 
     def _handle_kill_switch_activated(self, event) -> None:
         """Kill Switch 활성화 → Gradient Freeze + limit 유지 (즉시)."""
         self._kill_switch_active = True
         self._gradient_frozen = True
-        logger.warning("[AdaptiveThrottle] Kill Switch activated: gradient frozen, limit preserved")
+        logger.warning("adaptive_throttle.kill_switch_activated_gradient")
 
         _adaptive_mod._record_audit_safe(
             action="throttle_kill_switch_activated",
@@ -58,7 +61,7 @@ class GovernanceEventMixin:
             self._gradient_frozen = False
 
         self.start_recovery_dampening()
-        logger.info("[AdaptiveThrottle] Kill Switch deactivated: recovery started")
+        logger.info("adaptive_throttle.kill_switch_deactivated_recovery")
 
         _adaptive_mod._record_audit_safe(
             action="throttle_kill_switch_deactivated",
@@ -78,9 +81,12 @@ class GovernanceEventMixin:
 
             self._break_glass_active = get_governance_settings().break_glass_enabled
         except ImportError:
-            logger.debug("[AdaptiveThrottle] Governance settings not available")
+            logger.debug("adaptive_throttle.governance_settings_available")
         except Exception as e:
-            logger.debug(f"[AdaptiveThrottle] Break glass sync failed: {e}")
+            logger.debug(
+                "adaptive_throttle.break_glass_sync_failed",
+                error=e,
+            )
 
     # =========================================================================
     # Load Shedding EventBus 연동
@@ -96,11 +102,14 @@ class GovernanceEventMixin:
                 EventType.LOAD_SHEDDING_LEVEL_CHANGED,
                 self._handle_shedding_changed,
             )
-            logger.info("[AdaptiveThrottle] Subscribed to load shedding events")
+            logger.info("adaptive_throttle.subscribed_load_shedding_events")
         except ImportError:
-            logger.debug("[AdaptiveThrottle] EventBus not available for load shedding subscription")
+            logger.debug("adaptive_throttle.eventbus_available_load_shedding")
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Failed to subscribe to load shedding events: {e}")
+            logger.warning(
+                "adaptive_throttle.failed_subscribe_load_shedding",
+                error=e,
+            )
 
     def _handle_shedding_changed(self, event) -> None:
         """Load Shedding 상태 변경 이벤트 처리 — 최소 연산 보장."""
@@ -202,7 +211,10 @@ class GovernanceEventMixin:
         except ImportError:
             return False
         except Exception as e:
-            logger.warning(f"[AdaptiveThrottle] Governance state sync failed: {e}")
+            logger.warning(
+                "adaptive_throttle.governance_state_sync_failed",
+                error=e,
+            )
             return False
 
     def _sync_kill_switch_state(self) -> None:
@@ -216,18 +228,21 @@ class GovernanceEventMixin:
                 # Kill Switch 활성화 Drift 교정 (EventBus 이벤트 유실 대비)
                 self._kill_switch_active = True
                 self._gradient_frozen = True
-                logger.warning("[AdaptiveThrottle] Kill Switch drift detected: " "activating gradient freeze")
+                logger.warning("adaptive_throttle.kill_switch_drift_detected")
             elif system_enabled and self._kill_switch_active:
                 # Kill Switch 비활성화 Drift 교정 (EventBus 이벤트 유실 대비)
                 self._kill_switch_active = False
                 if self._emergency_level < 3:
                     self._gradient_frozen = False
                 self.start_recovery_dampening()
-                logger.info("[AdaptiveThrottle] Kill Switch drift corrected: deactivated")
+                logger.info("adaptive_throttle.kill_switch_drift_corrected")
         except ImportError:
-            logger.debug("[AdaptiveThrottle] Governance checks not available for kill switch sync")
+            logger.debug("adaptive_throttle.governance_checks_available_kill")
         except Exception as e:
-            logger.debug(f"[AdaptiveThrottle] Kill switch sync failed: {e}")
+            logger.debug(
+                "adaptive_throttle.kill_switch_sync_failed",
+                error=e,
+            )
 
     def check_and_sync_emergency_state(self) -> bool:
         """하위호환 래퍼: _sync_governance_state()로 위임."""

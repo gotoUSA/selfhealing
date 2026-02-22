@@ -21,7 +21,7 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from selfhealing.services.circuit_breaker.service import CircuitBreakerService
     from selfhealing.services.throttle.registry import ThrottleRegistry
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -190,7 +190,12 @@ class ThrottleCircuitBreakerBridge:
         RTT가 지속적으로 Critical이면 CB failure로 카운트할 수 있습니다.
         단, 단일 RTT Critical로 바로 CB를 열지는 않습니다.
         """
-        logger.warning(f"[ThrottleCBBridge] RTT CRITICAL for '{service_name}': " f"{rtt_ms:.1f}ms >= {self.sla_critical_ms}ms")
+        logger.warning(
+            "throttle_cb_bridge.rtt_critical_ms_ms",
+            service_name=service_name,
+            rtt_ms=rtt_ms,
+            self=self.sla_critical_ms,
+        )
 
         # 이벤트 발행 (CB에서 구독하여 처리)
         try:
@@ -208,7 +213,10 @@ class ThrottleCircuitBreakerBridge:
                 source="throttle_cb_bridge",
             )
         except Exception as e:
-            logger.debug(f"[ThrottleCBBridge] Event publish failed: {e}")
+            logger.debug(
+                "throttle_cb_bridge.event_publish_failed",
+                error=e,
+            )
 
     def record_success(self, service_name: str, rtt_ms: float | None = None) -> None:
         """
@@ -230,7 +238,10 @@ class ThrottleCircuitBreakerBridge:
     def _notify_cb_success(self, service_name: str) -> None:
         """CB에 success 신호."""
         # 현재는 로깅만 수행 (CB에서 직접 record_success 호출 권장)
-        logger.debug(f"[ThrottleCBBridge] RTT normal for '{service_name}'")
+        logger.debug(
+            "throttle_cb_bridge.rtt_normal",
+            service_name=service_name,
+        )
 
     def get_cb_state(self, service_name: str) -> str | None:
         """
@@ -248,7 +259,10 @@ class ThrottleCircuitBreakerBridge:
             cb_service = get_circuit_breaker_service()
             return cb_service.get_state(service_name)
         except Exception as e:
-            logger.debug(f"[ThrottleCBBridge] Failed to get CB state: {e}")
+            logger.debug(
+                "throttle_cb_bridge.failed_get_cb_state",
+                error=e,
+            )
             return None
 
     def get_cb_info(self, service_name: str) -> dict[str, Any] | None:
@@ -275,7 +289,10 @@ class ThrottleCircuitBreakerBridge:
                 "opened_at": state.opened_at.isoformat() if state.opened_at else None,
             }
         except Exception as e:
-            logger.debug(f"[ThrottleCBBridge] Failed to get CB info: {e}")
+            logger.debug(
+                "throttle_cb_bridge.failed_get_cb_info",
+                error=e,
+            )
             return None
 
     def should_record_as_cb_failure(
@@ -359,7 +376,7 @@ class ThrottleCircuitBreakerBridge:
             self._cb_service = None
             self._throttle_registry = None
 
-        logger.info("[ThrottleCBBridge] Bridge reset")
+        logger.info("throttle_cb_bridge.bridge_reset")
 
 
 # =============================================================================

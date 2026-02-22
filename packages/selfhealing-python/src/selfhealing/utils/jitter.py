@@ -11,14 +11,14 @@ utilities are general-purpose and not metrics-specific.
 from __future__ import annotations
 
 import asyncio
-import logging
+import structlog
 import random
 import time
 from collections.abc import Callable
 from functools import wraps
 from typing import ParamSpec, TypeVar
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -63,14 +63,22 @@ def with_jitter(
         @wraps(func)
         def sync_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             jitter = random.uniform(min_delay_seconds, max_delay_seconds)
-            logger.debug(f"[Jitter] Sleeping for {jitter:.2f}s before {func.__name__}")
+            logger.debug(
+                "jitter.sleeping_before",
+                jitter=jitter,
+                func=func.__name__,
+            )
             time.sleep(jitter)
             return func(*args, **kwargs)
 
         @wraps(func)
         async def async_wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
             jitter = random.uniform(min_delay_seconds, max_delay_seconds)
-            logger.debug(f"[Jitter] Sleeping for {jitter:.2f}s before {func.__name__}")
+            logger.debug(
+                "jitter.sleeping_before",
+                jitter=jitter,
+                func=func.__name__,
+            )
             await asyncio.sleep(jitter)
             return await func(*args, **kwargs)
 

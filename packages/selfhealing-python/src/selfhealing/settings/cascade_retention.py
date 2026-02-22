@@ -17,12 +17,12 @@ Reference:
 - docs/self_healing/middleware_system/76_CASCADE_EVENT_AUDIT.md
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class CascadeRetentionSettings(BaseSettings):
@@ -163,7 +163,10 @@ class CascadeRetentionSettings(BaseSettings):
         # Note: cross-field validation은 model_validator에서 더 적합하지만
         # 여기서는 경고만 발생
         if v <= 0.7:
-            logger.warning(f"[CascadeRetention] buffer_critical_threshold={v}는 낮습니다. " "0.85 이상을 권장합니다.")
+            logger.warning(
+                "cascade_retention.낮습니다_이상을_권장합니다",
+                v=v,
+            )
         return v
 
 

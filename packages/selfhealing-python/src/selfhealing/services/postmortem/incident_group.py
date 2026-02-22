@@ -17,7 +17,7 @@ Features:
 from __future__ import annotations
 
 import json
-import logging
+import structlog
 import threading
 import time
 from collections import defaultdict
@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from selfhealing.services.event_bus import SelfHealingEvent
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class IncidentGroupStatus(str, Enum):
@@ -256,13 +256,16 @@ class IncidentGroupManager:
             backend = get_state_backend()
             if isinstance(backend, RedisStateBackend):
                 self._redis_client = backend._client
-                logger.info("[IncidentGroupManager] Redis mode enabled")
+                logger.info("incident_group_manager.redis_mode_enabled")
             else:
-                logger.info("[IncidentGroupManager] File backend, using memory mode")
+                logger.info("incident_group_manager.file_backend_using_memory")
         except Exception as e:
             from selfhealing.adapters.resilient.backend import _safe_error_message
 
-            logger.warning("[IncidentGroupManager] Redis init failed: %s", _safe_error_message(e))
+            logger.warning(
+                "resilient_storage.redis_init_failed",
+                _safe_error_message=_safe_error_message(e),
+            )
 
     def _generate_group_id(self) -> str:
         """그룹 ID 생성."""
@@ -294,7 +297,10 @@ class IncidentGroupManager:
             try:
                 return self._add_incident_redis(service_name, event, namespace)
             except Exception as e:
-                logger.warning(f"[IncidentGroupManager] Redis error, fallback to memory: {e}")
+                logger.warning(
+                    "incident_group_manager.redis_error_fallback_memory",
+                    error=e,
+                )
 
         return self._add_incident_memory(service_name, event, namespace)
 
@@ -360,7 +366,11 @@ class IncidentGroupManager:
         self._redis_client.zadd(entries_key, {member: now})
         self._redis_client.expire(entries_key, self.DEFAULT_DATA_TTL)
 
-        logger.info(f"[IncidentGroupManager] Incident added to group {active_group_id}: " f"{service_name}")
+        logger.info(
+            "incident_group_manager.incident_added_group",
+            active_group_id=active_group_id,
+            service_name=service_name,
+        )
 
         return active_group_id, is_new_group
 
@@ -390,7 +400,10 @@ class IncidentGroupManager:
                 self._groups[namespace] = group
                 is_new_group = True
 
-                logger.info(f"[IncidentGroupManager] New group created (memory): {group_id}")
+                logger.info(
+                    "incident_group_manager.new_group_created_memory",
+                    group_id=group_id,
+                )
 
             # 엔트리 추가
             entry = IncidentGroupEntry(
@@ -402,7 +415,11 @@ class IncidentGroupManager:
             )
             group.entries.append(entry)
 
-            logger.info(f"[IncidentGroupManager] Incident added to group {group.group_id}: " f"{service_name}")
+            logger.info(
+                "incident_group_manager.incident_added_group",
+                group=group.group_id,
+                service_name=service_name,
+            )
 
             return group.group_id, is_new_group
 
@@ -420,7 +437,10 @@ class IncidentGroupManager:
             try:
                 return self._get_active_group_redis(namespace)
             except Exception as e:
-                logger.warning(f"[IncidentGroupManager] Redis error, fallback to memory: {e}")
+                logger.warning(
+                    "incident_group_manager.redis_error_fallback_memory",
+                    error=e,
+                )
 
         return self._get_active_group_memory(namespace)
 
@@ -514,7 +534,11 @@ class IncidentGroupManager:
 
         # 타임아웃 체크
         if now - created_ts >= self.window_seconds:
-            logger.info(f"[IncidentGroupManager] Group {group_id} timeout " f"(elapsed={now - created_ts:.0f}s)")
+            logger.info(
+                "incident_group_manager.group_timeout",
+                group_id=group_id,
+                value=now - created_ts,
+            )
             return True
 
         # 비활성 체크 (마지막 엔트리)
@@ -554,7 +578,10 @@ class IncidentGroupManager:
         lock = self._acquire_group_close_lock(group_id)
         if lock is not None:
             if not lock.acquire(blocking=True, timeout=2.0):
-                logger.info(f"[IncidentGroupManager] Skip duplicate close, lock held: {group_id}")
+                logger.info(
+                    "incident_group_manager.skip_duplicate_close_lock",
+                    group_id=group_id,
+                )
                 return None
 
         try:
@@ -562,7 +589,10 @@ class IncidentGroupManager:
                 try:
                     return self._close_group_redis(group_id, namespace)
                 except Exception as e:
-                    logger.warning(f"[IncidentGroupManager] Redis error, fallback to memory: {e}")
+                    logger.warning(
+                        "incident_group_manager.redis_error_fallback_memory",
+                        error=e,
+                    )
 
             return self._close_group_memory(group_id, namespace)
         finally:
@@ -570,7 +600,10 @@ class IncidentGroupManager:
                 try:
                     lock.release()
                 except Exception as e:
-                    logger.debug(f"[IncidentGroupManager] Lock release error: {e}")
+                    logger.debug(
+                        "incident_group_manager.lock_release_error",
+                        error=e,
+                    )
 
     def _acquire_group_close_lock(self, group_id: str):
         """
@@ -589,7 +622,10 @@ class IncidentGroupManager:
         except ImportError:
             return None
         except Exception as e:
-            logger.debug(f"[IncidentGroupManager] Failed to acquire lock: {e}")
+            logger.debug(
+                "incident_group_manager.failed_acquire_lock",
+                error=e,
+            )
             return None
 
     def _close_group_redis(
@@ -601,7 +637,10 @@ class IncidentGroupManager:
         # 현재 그룹 조회
         group = self.get_active_group(namespace)
         if not group or group.group_id != group_id:
-            logger.warning(f"[IncidentGroupManager] Group {group_id} not found or not active")
+            logger.warning(
+                "incident_group_manager.group_found_active",
+                group_id=group_id,
+            )
             return None
 
         now_iso = self._get_current_timestamp()
@@ -642,13 +681,20 @@ class IncidentGroupManager:
         with self._lock:
             group = self._groups.get(namespace)
             if not group or group.group_id != group_id:
-                logger.warning(f"[IncidentGroupManager] Group {group_id} not found (memory)")
+                logger.warning(
+                    "incident_group_manager.group_found_memory",
+                    group_id=group_id,
+                )
                 return None
 
             group.status = IncidentGroupStatus.CLOSED
             group.closed_at = now_iso
 
-            logger.info(f"[IncidentGroupManager] Group {group_id} closed (memory) " f"(entries={group.incident_count})")
+            logger.info(
+                "incident_group_manager.group_closed_memory",
+                group_id=group_id,
+                group=group.incident_count,
+            )
 
             return group
 
@@ -677,7 +723,10 @@ class IncidentGroupManager:
                 )
                 return True
             except Exception as e:
-                logger.warning(f"[IncidentGroupManager] Redis error: {e}")
+                logger.warning(
+                    "incident_group_manager.redis_error",
+                    error=e,
+                )
 
         with self._lock:
             group = self._groups.get(namespace)
@@ -699,7 +748,10 @@ class IncidentGroupManager:
                     entries_key = self.REDIS_KEY_ENTRIES.format(group_id=active_group_id)
                     self._redis_client.delete(active_key, data_key, entries_key)
             except Exception as e:
-                logger.warning(f"[IncidentGroupManager] Redis clear error: {e}")
+                logger.warning(
+                    "incident_group_manager.redis_clear_error",
+                    error=e,
+                )
 
         with self._lock:
             if namespace in self._groups:

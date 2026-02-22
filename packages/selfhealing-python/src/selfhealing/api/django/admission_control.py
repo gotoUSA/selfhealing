@@ -26,12 +26,12 @@ Configuration:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import os
 import random
 import time
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 # RTT 샘플 수집 — 3중 필터링 상수
 # 최소 임계치 미만의 초단기 요청(Health Check 등)은 노이즈로 간주하여 수집 제외
@@ -84,9 +84,9 @@ class AdmissionControlMiddleware:
 
         if self._enabled:
             self._init_dependencies()
-            logger.info("[AdmissionControlMiddleware] Initialized and enabled")
+            logger.info("admission_control_middleware.initialized_enabled")
         else:
-            logger.info("[AdmissionControlMiddleware] Initialized but DISABLED")
+            logger.info("admission_control_middleware.initialized_disabled")
 
     def _init_dependencies(self) -> None:
         """TierRegistry, TrafficGate, BulkheadRegistry 초기화."""

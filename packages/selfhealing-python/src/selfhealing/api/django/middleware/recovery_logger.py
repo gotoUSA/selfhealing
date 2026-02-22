@@ -25,14 +25,14 @@ Usage:
 
 from __future__ import annotations
 
-import logging
+import structlog
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SelfHealingRecoveryLogger:
@@ -120,7 +120,10 @@ class SelfHealingRecoveryLogger:
         with self._lock:
             chain = self._chains.get(chain_id)
             if not chain:
-                logger.warning(f"[RecoveryLogger] Chain not found: {chain_id}")
+                logger.warning(
+                    "recovery_logger.chain_found",
+                    chain_id=chain_id,
+                )
                 return False
 
             event = {
@@ -169,7 +172,10 @@ class SelfHealingRecoveryLogger:
                     }
                 )
         except Exception as e:
-            logger.warning(f"[RecoveryLogger] Audit log failed: {e}")
+            logger.warning(
+                "recovery_logger.audit_log_failed",
+                error=e,
+            )
 
         return True
 

@@ -15,7 +15,7 @@ Provides:
 
 from __future__ import annotations
 
-import logging
+import structlog
 import ssl
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, TypeVar
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -339,7 +339,10 @@ class SimpleTLSResilientClient(TLSResilientClient):
             try:
                 self._error_callback(error_info)
             except Exception as e:
-                logger.error(f"Error in TLS error callback: {e}")
+                logger.error(
+                    "error_tls_error_callback",
+                    error=e,
+                )
 
     @property
     def client(self) -> Any:

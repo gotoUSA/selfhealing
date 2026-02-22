@@ -16,12 +16,12 @@ Environment Variables:
     SELFHEALING_AUDIT_RECONCILER_MAX_CONFIRMED_IDS=10000
 """
 
-import logging
+import structlog
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class AuditReconcilerSettings(BaseSettings):

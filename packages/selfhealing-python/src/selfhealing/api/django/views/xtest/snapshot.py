@@ -5,7 +5,7 @@ X-Test-Mode Snapshot Views
 - SystemSnapshotView: 시스템 스냅샷 조회
 """
 
-import logging
+import structlog
 
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 
 from .base import XTestModeMixin, collect_system_snapshot
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class SystemSnapshotView(XTestModeMixin, APIView):

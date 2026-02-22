@@ -7,7 +7,7 @@ Endpoints:
 - POST /api/self-healing/l2-storage/config/reset - Reset config to defaults
 """
 
-import logging
+import structlog
 
 from django.utils import timezone
 from rest_framework import status
@@ -20,7 +20,7 @@ from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
 from selfhealing.api.django.serializers.config import L2StorageConfigSerializer
 from selfhealing.config import get_l2_storage_runtime_config
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class L2StorageConfigView(APIView):
@@ -68,7 +68,11 @@ class L2StorageConfigView(APIView):
             updated_by=str(request.user),
         )
 
-        logger.info(f"[L2StorageAPI] Config updated by {request.user}: {changes}")
+        logger.info(
+            "l2_storage_api.config_updated",
+            request=request.user,
+            changes=changes,
+        )
 
         return Response(
             {
@@ -97,7 +101,10 @@ class L2StorageConfigResetView(APIView):
         config = get_l2_storage_runtime_config()
         config.reset()
 
-        logger.info(f"[L2StorageAPI] Config reset to defaults by {request.user}")
+        logger.info(
+            "l2_storage_api.config_reset_defaults",
+            request=request.user,
+        )
 
         return Response(
             {

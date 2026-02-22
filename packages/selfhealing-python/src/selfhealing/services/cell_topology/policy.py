@@ -19,7 +19,7 @@ LeaderScheduler의 aggregate_all() 루프에서 매 tick마다 호출되는
 
 from __future__ import annotations
 
-import logging
+import structlog
 import threading
 import time
 from collections import deque
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
     from selfhealing.services.cell_topology.registry import CellRegistry
     from selfhealing.settings.cell_topology import CellTopologySettings
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -404,7 +404,10 @@ class CellEvacuationPolicy:
             # 대피 이력 완료 기록 (최신순 역방향 탐색)
             self._complete_evacuation_record(cell_id)
 
-            logger.info("Cell %s: restored to ACTIVE", cell_id)
+            logger.info(
+                "cell_evacuation.cell_restored",
+                cell_id=cell_id,
+            )
             return True
         else:
             # 임계치 미달 — 카운터 리셋
@@ -451,11 +454,18 @@ class CellEvacuationPolicy:
             # Fire-and-forget: 감사 로그 통보
             self._notify_restore_region(cell_id)
 
-            logger.info("Cell %s: manually restored to ACTIVE", cell_id)
+            logger.info(
+                "cell_evacuation.cell_restored",
+                cell_id=cell_id,
+            )
             return True
 
         except Exception as e:
-            logger.error("Cell %s: manual restore failed: %s", cell_id, e)
+            logger.error(
+                "cell_manual_restore_failed",
+                cell_id=cell_id,
+                error=e,
+            )
             return False
 
     # =========================================================================
@@ -521,7 +531,7 @@ class CellEvacuationPolicy:
                 duration_seconds=duration_seconds,
             )
         except ImportError:
-            logger.debug("RegionalIsolationGate not available")
+            logger.debug("regionalisolationgate_available")
         except Exception as e:
             logger.warning(
                 "Cell %s: isolation gate sync notify failed: %s",
@@ -609,7 +619,7 @@ class CellEvacuationPolicy:
             gate = get_regional_isolation_gate()
             gate.restore_region(cell_id)
         except ImportError:
-            logger.debug("RegionalIsolationGate not available")
+            logger.debug("regionalisolationgate_available")
         except Exception as e:
             logger.warning(
                 "Cell %s: restore region sync notify failed: %s",
