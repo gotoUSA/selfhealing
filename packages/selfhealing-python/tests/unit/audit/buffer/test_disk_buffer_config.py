@@ -6,21 +6,85 @@ DiskBufferSettings 설정 단위 테스트.
 
 from __future__ import annotations
 
+import sys
 
-class TestDiskBufferSettings:
-    """DiskBufferSettings 테스트."""
 
-    def test_default_settings(self):
-        """기본 설정 테스트."""
+class TestDiskBufferSettingsContract:
+    """DiskBufferSettings 기본값 계약 검증."""
+
+    def test_storage_type_default(self):
+        """스토리지 유형 기본값은 lmdb이다."""
         from selfhealing.audit.persistence.config import DiskBufferSettings
 
         settings = DiskBufferSettings()
-
         assert settings.storage_type == "lmdb"
-        assert settings.lmdb_map_size_mb == 10240  # 10GB
+
+    def test_lmdb_map_size_mb_windows_default(self, monkeypatch):
+        """Windows에서 LMDB map_size 기본값은 256MB이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        settings = DiskBufferSettings()
+        assert settings.lmdb_map_size_mb == 256
+
+    def test_lmdb_map_size_mb_linux_default(self, monkeypatch):
+        """Linux에서 LMDB map_size 기본값은 10240MB이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        monkeypatch.setattr(sys, "platform", "linux")
+        settings = DiskBufferSettings()
+        assert settings.lmdb_map_size_mb == 10240
+
+    def test_lmdb_writemap_windows_default(self, monkeypatch):
+        """Windows에서 writemap 기본값은 False이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        settings = DiskBufferSettings()
+        assert settings.lmdb_writemap is False
+
+    def test_lmdb_writemap_linux_default(self, monkeypatch):
+        """Linux에서 writemap 기본값은 True이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        monkeypatch.setattr(sys, "platform", "linux")
+        settings = DiskBufferSettings()
+        assert settings.lmdb_writemap is True
+
+    def test_max_entries_default(self):
+        """최대 엔트리 수 기본값은 100000이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        settings = DiskBufferSettings()
         assert settings.max_entries == 100000
+
+    def test_checksum_enabled_by_default(self):
+        """체크섬은 기본 활성화이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        settings = DiskBufferSettings()
         assert settings.enable_checksum is True
+
+    def test_group_commit_enabled_by_default(self):
+        """Group Commit은 기본 활성화이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        settings = DiskBufferSettings()
         assert settings.group_commit_enabled is True
+
+    def test_retention_hours_default(self):
+        """보관 기간 기본값은 72시간이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        settings = DiskBufferSettings()
+        assert settings.retention_hours == 72
+
+    def test_include_pid_in_db_name_default(self):
+        """PID 포함 기본값은 True이다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        settings = DiskBufferSettings()
+        assert settings.include_pid_in_db_name is True
 
     def test_custom_settings(self):
         """커스텀 설정 테스트."""
@@ -135,3 +199,90 @@ class TestDiskBufferSettingsEnvironment:
         # 리셋 후 새 인스턴스 생성됨
         # (같은 설정이지만 다른 객체일 수 있음)
         assert settings1 is not settings2 or True  # 캐시 구현에 따라 다름
+
+
+class TestDiskBufferPlatformDefaultsBehavior:
+    """플랫폼별 기본값 팩토리 함수 동작 검증."""
+
+    def test_is_windows_returns_true_on_win32(self, monkeypatch):
+        """sys.platform이 win32이면 _is_windows()는 True를 반환한다."""
+        from selfhealing.audit.persistence.config import _is_windows
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        assert _is_windows() is True
+
+    def test_is_windows_returns_false_on_linux(self, monkeypatch):
+        """sys.platform이 linux이면 _is_windows()는 False를 반환한다."""
+        from selfhealing.audit.persistence.config import _is_windows
+
+        monkeypatch.setattr(sys, "platform", "linux")
+        assert _is_windows() is False
+
+    def test_data_dir_uses_temp_on_windows(self, monkeypatch):
+        """Windows에서 데이터 디렉토리는 TEMP 환경변수 기반이다."""
+        from selfhealing.audit.persistence.config import _get_default_data_dir
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setenv("TEMP", "C:\\TestTemp")
+
+        result = _get_default_data_dir()
+        assert "C:\\TestTemp" in result
+        assert "selfhealing" in result
+
+    def test_data_dir_uses_var_lib_on_linux(self, monkeypatch):
+        """Linux에서 데이터 디렉토리는 /var/lib/selfhealing/buffer이다."""
+        from selfhealing.audit.persistence.config import _get_default_data_dir
+
+        monkeypatch.setattr(sys, "platform", "linux")
+
+        result = _get_default_data_dir()
+        assert result == "/var/lib/selfhealing/buffer"
+
+    def test_map_size_smaller_on_windows(self, monkeypatch):
+        """Windows map_size 기본값은 Linux보다 작아야 한다."""
+        from selfhealing.audit.persistence.config import _get_default_lmdb_map_size_mb
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        win_size = _get_default_lmdb_map_size_mb()
+
+        monkeypatch.setattr(sys, "platform", "linux")
+        linux_size = _get_default_lmdb_map_size_mb()
+
+        assert win_size < linux_size
+
+    def test_writemap_disabled_on_windows(self, monkeypatch):
+        """Windows에서 writemap은 비활성화되어야 한다."""
+        from selfhealing.audit.persistence.config import _get_default_lmdb_writemap
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        assert _get_default_lmdb_writemap() is False
+
+    def test_writemap_enabled_on_linux(self, monkeypatch):
+        """Linux에서 writemap은 활성화되어야 한다."""
+        from selfhealing.audit.persistence.config import _get_default_lmdb_writemap
+
+        monkeypatch.setattr(sys, "platform", "linux")
+        assert _get_default_lmdb_writemap() is True
+
+    def test_env_override_takes_precedence_over_platform_default(self, monkeypatch):
+        """환경변수 설정은 플랫폼 기본값보다 우선한다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        monkeypatch.setenv("SELFHEALING_DISK_BUFFER_LMDB_MAP_SIZE_MB", "4096")
+        monkeypatch.setenv("SELFHEALING_DISK_BUFFER_LMDB_WRITEMAP", "true")
+
+        settings = DiskBufferSettings()
+        assert settings.lmdb_map_size_mb == 4096
+        assert settings.lmdb_writemap is True
+
+    def test_lmdb_open_kwargs_reflects_platform_defaults(self, monkeypatch):
+        """get_lmdb_open_kwargs()는 플랫폼별 기본값을 반영한다."""
+        from selfhealing.audit.persistence.config import DiskBufferSettings
+
+        monkeypatch.setattr(sys, "platform", "win32")
+        settings = DiskBufferSettings()
+        kwargs = settings.get_lmdb_open_kwargs()
+
+        assert kwargs["map_size"] == 256 * 1024 * 1024
+        assert kwargs["writemap"] is False

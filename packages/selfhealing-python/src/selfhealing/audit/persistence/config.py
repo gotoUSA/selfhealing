@@ -28,12 +28,37 @@ from pydantic_settings import BaseSettings
 logger = structlog.get_logger()
 
 
+def _is_windows() -> bool:
+    """현재 플랫폼이 Windows인지 반환."""
+    return sys.platform == "win32"
+
+
 def _get_default_data_dir() -> str:
     """플랫폼별 기본 데이터 디렉토리 반환."""
-    if sys.platform == "win32":
+    if _is_windows():
         # Windows: 임시 디렉토리 사용
         return os.path.join(os.environ.get("TEMP", "C:\\Temp"), "selfhealing", "buffer")
     return "/var/lib/selfhealing/buffer"
+
+
+def _get_default_lmdb_map_size_mb() -> int:
+    """플랫폼별 LMDB map_size 기본값 (MB).
+
+    Linux: 10GB (가상 주소 공간만 예약, 실제 디스크 사용량은 데이터 크기에 비례)
+    Windows: 256MB (writemap 모드에서 map_size 전체가 파일로 할당되므로 작게 설정)
+    """
+    if _is_windows():
+        return 256
+    return 10240
+
+
+def _get_default_lmdb_writemap() -> bool:
+    """플랫폼별 LMDB writemap 기본값.
+
+    Linux (ext4/XFS): True (성능 향상)
+    Windows: False (writemap=True 시 map_size 전체가 파일로 미리 할당됨)
+    """
+    return not _is_windows()
 
 
 class DiskBufferSettings(BaseSettings):
@@ -70,8 +95,12 @@ class DiskBufferSettings(BaseSettings):
     # ─────────────────────────────────────────────────────
 
     lmdb_map_size_mb: int = Field(
-        default=10240,  # 10GB - 가상 주소 공간만 예약
-        description="LMDB 최대 데이터베이스 크기 (MB). 넉넉히 설정 권장.",
+        default_factory=_get_default_lmdb_map_size_mb,
+        description=(
+            "LMDB 최대 데이터베이스 크기 (MB). "
+            "Linux: 10GB (가상 주소만 예약). "
+            "Windows: 256MB (파일이 실제 할당되므로 작게 설정)."
+        ),
     )
 
     lmdb_max_dbs: int = Field(
@@ -80,8 +109,12 @@ class DiskBufferSettings(BaseSettings):
     )
 
     lmdb_writemap: bool = Field(
-        default=True,
-        description="LMDB writemap 모드 (ext4/XFS 성능 향상)",
+        default_factory=_get_default_lmdb_writemap,
+        description=(
+            "LMDB writemap 모드. "
+            "Linux (ext4/XFS): True (성능 향상). "
+            "Windows: False (map_size 전체가 파일로 할당되는 문제 방지)."
+        ),
     )
 
     lmdb_metasync: bool = Field(
@@ -100,7 +133,7 @@ class DiskBufferSettings(BaseSettings):
 
     include_pid_in_db_name: bool = Field(
         default=True,
-        description="DB 이름에 PID 포함 (멀티 프로세스 안전)",
+        description=("DB 이름에 PID 포함 (멀티 프로세스 안전). " "개발 환경에서 재시작 시 DB가 누적되면 False로 설정."),
     )
 
     instance_name: str = Field(
