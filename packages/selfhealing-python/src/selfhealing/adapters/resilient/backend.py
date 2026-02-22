@@ -175,7 +175,7 @@ class ResilientStorageBackend:
             err_msg = _safe_error_message(e)
             logger.warning(
                 "resilient_storage.redis_init_failed",
-                err_msg=err_msg,
+                error=err_msg,
             )
             self._mode = ResilientStorageMode.DEGRADED
 
@@ -188,7 +188,11 @@ class ResilientStorageBackend:
                 )
 
             if not self.config.allow_memory_only:
-                logger.critical("resilient_storage.degraded_mode_entered")
+                logger.critical(
+                    "resilient_storage.degraded_mode_entered",
+                    reason="redis_unavailable",
+                    fallback="memory_wal",
+                )
 
     def _init_wal(self) -> None:
         """Initialize Write-Ahead Log."""

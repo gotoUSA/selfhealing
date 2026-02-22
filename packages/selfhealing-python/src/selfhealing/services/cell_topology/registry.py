@@ -199,7 +199,7 @@ class CellRegistry:
                 "cell_registry.state_changed",
                 cell_id=cell_id,
                 old_state=old_state.value,
-                state=state.value,
+                new_state=state.value,
                 reason=reason,
             )
             return True

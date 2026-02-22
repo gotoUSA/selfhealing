@@ -32,7 +32,7 @@ from selfhealing.meta.health_probe import (
     ProbeResult,
 )
 
-logger = structlog.get_logger()
+logger = structlog.get_logger().bind(component="watchdog")
 
 
 @dataclass
@@ -328,7 +328,10 @@ class SelfHealerWatchdog:
                 self._record_recovery_complete_audit(recorder, session_id, component, success, duration_ms)
 
             logger.info(
-                f"[SelfHealerWatchdog] Recovery {component}: " f"{'success' if success else 'failed'} ({duration_ms:.1f}ms)"
+                "watchdog.recovery_completed",
+                component=component,
+                success=success,
+                duration_ms=round(duration_ms, 1),
             )
 
             return success
@@ -572,8 +575,8 @@ class SelfHealerWatchdog:
 
             if isinstance(e, _INFRA_RECOVERABLE_ERRORS):
                 logger.warning(
-                    f"[SelfHealerWatchdog] Redis Stage 1 failed (recoverable): {e}, "
-                    "proceeding to Stage 2 (infrastructure restart)"
+                    "watchdog.redis_stage1_failed_recoverable",
+                    error=str(e),
                 )
             else:
                 logger.error(

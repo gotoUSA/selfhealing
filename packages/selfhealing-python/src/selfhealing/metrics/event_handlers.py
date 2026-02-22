@@ -51,27 +51,27 @@ def _get_logging_config():
     return _logging_config
 
 
-def _log_event(level_getter: str, message: str, **extra) -> None:
+def _log_event(level_getter: str, event: str, **kw) -> None:
     """
     Log an event with dynamic log level from EventLoggingConfig.
 
     Args:
         level_getter: Method name on EventLoggingConfig (e.g., 'get_dlq_log_level')
-        message: Log message
-        **extra: Extra structured logging fields
+        event: Structured log event name
+        **kw: Structured logging keyword arguments
     """
     config = _get_logging_config()
     if config is None:
         # Fallback to INFO if config not available
-        logger.info(message, extra=extra)
+        logger.info(event, **kw)
         return
 
     try:
         level_name = getattr(config, level_getter)()
         level = config.get_log_level_int(level_name)
-        logger.log(level, message, extra=extra)
+        logger.log(level, event, **kw)
     except Exception:
-        logger.info(message, extra=extra)
+        logger.info(event, **kw)
 
 
 def _get_safe_pending_gauge() -> SafeGauge | None:
