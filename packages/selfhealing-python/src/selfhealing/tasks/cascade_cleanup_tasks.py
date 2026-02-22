@@ -103,7 +103,7 @@ def archive_cascade_events(
         except Exception as e:
             logger.exception(
                 "cascade_cleanup.archive_failed",
-                event=event.id,
+                _event=event.id,
                 error=e,
             )
             failed_count += 1
@@ -249,7 +249,7 @@ def purge_old_cascade_events(
         except Exception as e:
             logger.exception(
                 "cascade_cleanup.purge_failed",
-                event=event.id,
+                _event=event.id,
                 error=e,
             )
             failed_count += 1

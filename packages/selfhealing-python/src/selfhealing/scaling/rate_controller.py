@@ -463,7 +463,7 @@ class RateController:
                     new_rate=new_rate,
                     new_level=new_level.value,
                     queue_size=queue_size,
-                    self=self._settings.get_rate_multiplier(new_level),
+                    _self=self._settings.get_rate_multiplier(new_level),
                 )
 
     def _run_loop(self) -> None:

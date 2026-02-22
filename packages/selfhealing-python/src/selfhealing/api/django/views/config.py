@@ -241,7 +241,7 @@ class BaseConfigView(APIView):
             client_ip = self._get_client_ip(request)
             logger.warning(
                 "config_audit.validation_failed",
-                self=self.config_name,
+                _self=self.config_name,
                 serializer=serializer.errors,
                 request=request.user,
                 client_ip=client_ip,
@@ -277,7 +277,7 @@ class BaseConfigView(APIView):
             change_summary = format_changes_summary(config_changes, previous_config)
             logger.info(
                 "config_api.config_updated_applied",
-                self=self.config_name.upper(),
+                _self=self.config_name.upper(),
                 request=request.user,
                 change_summary=change_summary,
                 result=result.get('applied_strategy', 'immediate'),
@@ -290,7 +290,7 @@ class BaseConfigView(APIView):
             )
             logger.info(
                 "config_api.config_updated",
-                self=self.config_name,
+                _self=self.config_name,
                 request=request.user,
                 config_changes=config_changes,
                 result=result.get('applied_strategy'),
@@ -436,7 +436,7 @@ class SLOConfigView(BaseConfigView):
             client_ip = self._get_client_ip(request)
             logger.warning(
                 "config_audit.validation_failed",
-                self=self.config_name,
+                _self=self.config_name,
                 serializer=serializer.errors,
                 request=request.user,
                 client_ip=client_ip,

@@ -63,7 +63,7 @@ class Error5xxExperiment(ChaosExperiment):
         """Inject 5xx errors into target service with TTL."""
         logger.info(
             "error5xx_injection.injecting_errors_rate_ttl",
-            self=self.error_code,
+            _self=self.error_code,
             self_1=self.config.target_service,
             self_2=self.config.injection_rate*100,
             self_3=self._effective_ttl,
@@ -101,13 +101,13 @@ class Error5xxExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "error5xx_injection.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "error5xx_injection.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:
@@ -175,7 +175,7 @@ class Error4xxExperiment(ChaosExperiment):
         """Inject 4xx errors into target service with TTL."""
         logger.info(
             "error4xx_injection.injecting_errors_rate_ttl",
-            self=self.error_code,
+            _self=self.error_code,
             self_1=self.config.target_service,
             self_2=self.config.injection_rate*100,
             self_3=self._effective_ttl,
@@ -213,13 +213,13 @@ class Error4xxExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "error4xx_injection.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "error4xx_injection.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:

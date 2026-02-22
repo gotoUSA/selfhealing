@@ -519,7 +519,7 @@ class PartitionReconciliationService:
 
         logger.info(
             "partition_reconciliation.heartbeat_loop_started",
-            self=self._heartbeat_interval,
+            _self=self._heartbeat_interval,
             self_1=self._partition_threshold,
         )
 

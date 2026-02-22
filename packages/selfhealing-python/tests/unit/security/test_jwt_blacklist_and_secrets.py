@@ -151,7 +151,7 @@ class TestValidateSecretsBehavior:
                 app_config._validate_secrets()
 
                 mock_logger.error.assert_called_once()
-                assert "1 CRITICAL" in mock_logger.error.call_args[0][0]
+                assert mock_logger.error.call_args[0][0] == "self_healing.critical_secrets_configured_check"
 
     def test_validate_secrets_logs_warning_count(self, app_config):
         """IMPORTANT 시크릿 미설정 시 경고 로그가 출력되는지 확인."""
@@ -163,7 +163,7 @@ class TestValidateSecretsBehavior:
                 app_config._validate_secrets()
 
                 mock_logger.warning.assert_called_once()
-                assert "1 important" in mock_logger.warning.call_args[0][0]
+                assert mock_logger.warning.call_args[0][0] == "self_healing.important_secrets_configured_check"
 
     def test_validate_secrets_logs_success(self, app_config):
         """모든 시크릿이 설정되었을 때 성공 로그가 출력되는지 확인."""
@@ -175,7 +175,7 @@ class TestValidateSecretsBehavior:
                 app_config._validate_secrets()
 
                 mock_logger.info.assert_called_once()
-                assert "All secrets validated" in mock_logger.info.call_args[0][0]
+                assert mock_logger.info.call_args[0][0] == "self_healing.all_secrets_validated_successfully"
 
     def test_validate_secrets_critical_failure_blocks_startup(self, app_config):
         """프로덕션 CRITICAL 시크릿 미설정 시 RuntimeError가 재발생하는지 확인."""
@@ -198,11 +198,9 @@ class TestValidateSecretsBehavior:
 
                 mock_logger.critical.assert_called_once()
                 log_message = mock_logger.critical.call_args[0][0]
-                assert "SELFHEALING_SECRET_ENCRYPTION_KEY" in log_message
-                assert "SELFHEALING_SECRET_AUDIT_SIGNING_KEY" in log_message
-                assert "Resolution:" in log_message
-                # exc_info=True 확인
-                assert mock_logger.critical.call_args[1].get("exc_info") is True
+                assert log_message == "self_healing.secrets_validation_failed_resolution"
+                # error kwarg에 RuntimeError가 전달되어야 함
+                assert "error" in mock_logger.critical.call_args[1]
 
     def test_validate_secrets_other_error_continues(self, app_config):
         """기타 오류 시 시작이 계속되는지 확인 (best-effort)."""

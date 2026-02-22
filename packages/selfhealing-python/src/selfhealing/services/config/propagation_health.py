@@ -174,7 +174,7 @@ class PropagationHealthMonitor:
                         "propagation_health.tier_sla_violation_propagation",
                         config_type=config_type,
                         latency_ms=latency_ms,
-                        self=self.TIER1_SLA_THRESHOLD_MS,
+                        _self=self.TIER1_SLA_THRESHOLD_MS,
                         source_cluster=source_cluster,
                         target_cluster=target_cluster,
                     )
@@ -185,7 +185,7 @@ class PropagationHealthMonitor:
                         "propagation_health.tier_sla_violation_propagation",
                         config_type=config_type,
                         latency_ms=latency_ms,
-                        self=self.TIER2_SLA_THRESHOLD_MS,
+                        _self=self.TIER2_SLA_THRESHOLD_MS,
                     )
 
             logger.debug(

@@ -22,6 +22,7 @@ Reference:
 
 from __future__ import annotations
 
+import logging
 import threading
 import uuid
 from dataclasses import dataclass, field
@@ -121,9 +122,7 @@ class EscalationAuditEntry:
     """명령 우선순위 (수동 오버라이드 시)."""
 
     # 메타데이터
-    timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     # Global 상태 스냅샷 (비교용)
     global_state_snapshot: dict[str, Any] | None = None
@@ -209,11 +208,7 @@ class EscalationAuditTrail:
         """
         self._lock = threading.RLock()
         self._memory_buffer: list[EscalationAuditEntry] = []
-        self._max_buffer_size = (
-            max_buffer_size
-            if max_buffer_size is not None
-            else self._get_max_buffer_size()
-        )
+        self._max_buffer_size = max_buffer_size if max_buffer_size is not None else self._get_max_buffer_size()
 
     @staticmethod
     def _get_max_buffer_size() -> int:

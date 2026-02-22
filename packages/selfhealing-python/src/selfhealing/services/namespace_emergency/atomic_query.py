@@ -288,7 +288,7 @@ class AtomicStateQuery:
             self._script_sha = self._redis.script_load(ATOMIC_STATE_QUERY_SCRIPT)
             logger.info(
                 "atomic_state_query.script_loaded",
-                self=self._script_sha[:8],
+                _self=self._script_sha[:8],
             )
         return self._script_sha
 

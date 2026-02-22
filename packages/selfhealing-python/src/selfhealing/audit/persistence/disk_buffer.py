@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import logging
 import os
 import shutil
 import signal
@@ -232,7 +233,7 @@ class DiskPersistentBuffer:
         logger.info(
             "disk_buffer.initialized",
             db_path=db_path,
-            self=self._sequence,
+            _self=self._sequence,
             self_2=self._db_name,
         )
 

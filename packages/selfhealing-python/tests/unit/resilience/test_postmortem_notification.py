@@ -79,7 +79,7 @@ class TestSendPostmortemNotification:
 
             # DEBUG 로그 확인: notification disabled
             debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
-            assert any("notification disabled" in call for call in debug_calls)
+            assert any("postmortem_notification_disabled" in call for call in debug_calls)
 
     def test_notification_skipped_when_duration_below_min(self):
         """duration이 notification_min_duration 미만일 때 알림 미발송 확인."""
@@ -109,7 +109,7 @@ class TestSendPostmortemNotification:
 
             # DEBUG 로그 확인: duration < min
             debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
-            assert any("duration" in call and "< min" in call for call in debug_calls)
+            assert any("postmortem_notification_skipped_duration" in call for call in debug_calls)
 
     def test_notification_sent_when_enabled(self):
         """알림 활성화 시 정상 발송 확인."""
@@ -419,7 +419,7 @@ class TestSendPostmortemNotification:
 
                 # WARNING 로그 확인
                 warning_calls = [str(call) for call in mock_logger.warning.call_args_list]
-                assert any("Failed to send postmortem notification" in call for call in warning_calls)
+                assert any("failed_send_postmortem_notification" in call for call in warning_calls)
 
     def test_notification_suppressed_logged(self):
         """알림이 suppressed된 경우 DEBUG 로그 확인."""

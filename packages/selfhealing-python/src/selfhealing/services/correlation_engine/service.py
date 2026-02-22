@@ -737,7 +737,7 @@ class CorrelationEngineService:
 
             logger.info(
                 "correlation_engine.config_reloaded",
-                self=self._settings.zscore_threshold,
+                _self=self._settings.zscore_threshold,
                 self_1=self._settings.window_seconds,
             )
 

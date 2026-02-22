@@ -109,7 +109,7 @@ class AdaptiveReplayManager:
 
             logger.info(
                 "adaptive_replay.initialized",
-                self=self._config.initial_items,
+                _self=self._config.initial_items,
                 self_1=self._config.min_items,
                 self_2=self._config.max_items,
             )
@@ -137,7 +137,7 @@ class AdaptiveReplayManager:
                 old_config=old_config.min_items,
                 config_2=config.max_items,
                 old_config_3=old_config.max_items,
-                self=self._current_items,
+                _self=self._current_items,
             )
 
     def get_current_max_items(self) -> int:
@@ -206,7 +206,7 @@ class AdaptiveReplayManager:
                 "adaptive_replay.high_failure_rate_reduced",
                 failure_rate=failure_rate,
                 old_items=old_items,
-                self=self._current_items,
+                _self=self._current_items,
             )
 
         elif failures == 0:
@@ -220,14 +220,14 @@ class AdaptiveReplayManager:
 
                 logger.info(
                     "adaptive_replay.consecutive_successes_increased",
-                    self=self._config.success_streak_required,
+                    _self=self._config.success_streak_required,
                     old_items=old_items,
                     self_2=self._current_items,
                 )
             else:
                 logger.debug(
                     "adaptive_replay.perfect_batch_streak",
-                    self=self._success_streak,
+                    _self=self._success_streak,
                 )
         else:
             # Some failures but below threshold
@@ -235,7 +235,7 @@ class AdaptiveReplayManager:
             logger.debug(
                 "adaptive_replay.partial_success_streak_reset",
                 failure_rate=failure_rate,
-                self=self._current_items,
+                _self=self._current_items,
             )
 
     def get_stats(self) -> dict:
@@ -284,7 +284,7 @@ class AdaptiveReplayManager:
 
             logger.info(
                 "adaptive_replay.reset_initial_state",
-                self=self._current_items,
+                _self=self._current_items,
             )
 
 

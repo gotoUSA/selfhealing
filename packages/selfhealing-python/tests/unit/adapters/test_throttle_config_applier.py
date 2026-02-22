@@ -106,7 +106,7 @@ class TestThrottleConfigApplierApply:
         assert result is True
         assert throttle.config.sla_warning_ms == original_warning
         assert throttle.config.sla_critical_ms == original_critical
-        assert any("deprecated" in r.message and "No-op" in r.message for r in caplog.records)
+        assert any("deprecated_no_op" in r.message for r in caplog.records)
 
     def test_apply_unknown_parameter_returns_false(self, applier, throttle):
         """미지원 파라미터는 False를 반환해야 한다."""

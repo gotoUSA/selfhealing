@@ -9,7 +9,10 @@ Refactored to use Factory Pattern (Phase 3):
 - MockDistributedLock → factories.MockDistributedLock
 """
 
+import gc
+import shutil
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,6 +24,7 @@ from tests.factories import MockRedisClient
 # =============================================================================
 # Test Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def mock_redis():
@@ -37,8 +41,27 @@ def failing_redis():
 @pytest.fixture
 def temp_dir():
     """Create temporary directory for WAL files."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+    tmpdir = tempfile.mkdtemp()
+    yield Path(tmpdir)
+    # Close disk buffer before temp dir is removed (Windows file locking)
+    try:
+        from selfhealing.audit.persistence.disk_buffer import reset_disk_buffer
+
+        reset_disk_buffer()
+    except Exception:
+        pass
+    # Force GC to close file handles held by fallback chain objects (Windows)
+    gc.collect()
+    # Retry cleanup to handle lingering file locks on Windows
+    for attempt in range(3):
+        try:
+            shutil.rmtree(tmpdir, ignore_errors=False)
+            break
+        except PermissionError:
+            gc.collect()
+            time.sleep(0.1 * (attempt + 1))
+    else:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 @pytest.fixture

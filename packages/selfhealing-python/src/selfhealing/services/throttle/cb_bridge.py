@@ -195,7 +195,7 @@ class ThrottleCircuitBreakerBridge:
             "throttle_cb_bridge.rtt_critical_ms_ms",
             service_name=service_name,
             rtt_ms=rtt_ms,
-            self=self.sla_critical_ms,
+            _self=self.sla_critical_ms,
         )
 
         # 이벤트 발행 (CB에서 구독하여 처리)

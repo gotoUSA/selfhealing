@@ -430,7 +430,7 @@ class RedisHealthChecker:
                 self._state = RedisHealthState.UNHEALTHY
                 logger.critical(
                     "redis_health.unhealthy_consecutive_failures_error",
-                    self=self._consecutive_failures,
+                    _self=self._consecutive_failures,
                     error=error,
                 )
                 self._record_degraded_mode(True)

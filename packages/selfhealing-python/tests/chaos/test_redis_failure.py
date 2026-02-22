@@ -269,8 +269,32 @@ def chaos_redis():
 @pytest.fixture
 def temp_fallback_dir():
     """Create temp directory for fallback files."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir)
+    tmpdir = tempfile.mkdtemp()
+    yield Path(tmpdir)
+    # Close disk buffer before temp dir is removed (Windows file locking)
+    try:
+        from selfhealing.audit.persistence.disk_buffer import reset_disk_buffer
+
+        reset_disk_buffer()
+    except Exception:
+        pass
+    # Force GC to close file handles held by fallback chain objects (Windows)
+    import gc
+
+    gc.collect()
+    # Retry cleanup to handle lingering file locks on Windows
+    import shutil
+    import time as _time
+
+    for attempt in range(3):
+        try:
+            shutil.rmtree(tmpdir, ignore_errors=False)
+            break
+        except PermissionError:
+            gc.collect()
+            _time.sleep(0.1 * (attempt + 1))
+    else:
+        shutil.rmtree(tmpdir, ignore_errors=True)
 
 
 # =============================================================================
@@ -443,9 +467,13 @@ class TestRedisRecovery:
 
         # Mock local tier to fail, forcing memory tier
         with patch.object(fallback, "_add_integrity_local", side_effect=RuntimeError("Local storage unavailable")):
-            # Write entries during "outage" - goes to memory
-            for i in range(5):
-                fallback.add_integrity({"event": f"degraded_{i}"})
+            # Also mock disk buffer to fail so we reach the volatile memory tier
+            with patch(
+                "selfhealing.audit.persistence.disk_buffer.get_disk_buffer", side_effect=Exception("DiskBuffer unavailable")
+            ):
+                # Write entries during "outage" - goes to memory
+                for i in range(5):
+                    fallback.add_integrity({"event": f"degraded_{i}"})
 
         # Get degraded entries from memory buffer
         degraded = fallback.get_degraded_entries()

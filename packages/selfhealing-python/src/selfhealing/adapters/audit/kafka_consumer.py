@@ -190,7 +190,7 @@ class BaseAuditConsumer(ABC):
 
         logger.info(
             "consumer.starting_consumer_topic",
-            self=self._config.topic,
+            _self=self._config.topic,
         )
 
         try:
@@ -247,7 +247,7 @@ class BaseAuditConsumer(ABC):
 
         logger.info(
             "consumer.closed_processed_errors_skipped",
-            self=self._processed_count,
+            _self=self._processed_count,
             self_1=self._error_count,
             self_2=self._skipped_count,
         )

@@ -264,7 +264,7 @@ class LeaderScheduler:
 
         logger.info(
             "scheduler.시작",
-            self=self._resource_name,
+            _self=self._resource_name,
         )
         self._stop_event.clear()
         self._running = True
@@ -276,7 +276,7 @@ class LeaderScheduler:
         """스케줄러 중지."""
         logger.info(
             "scheduler.중지",
-            self=self._resource_name,
+            _self=self._resource_name,
         )
         self._running = False
         self._stop_event.set()
@@ -289,7 +289,7 @@ class LeaderScheduler:
         self._elector.stop()
         logger.info(
             "scheduler.중지됨",
-            self=self._resource_name,
+            _self=self._resource_name,
         )
 
     def _on_become_leader(self) -> None:

@@ -224,7 +224,7 @@ class RegionFailover:
             logger.debug(
                 "failover.cooldown",
                 elapsed=elapsed,
-                self=self._settings.failover_cooldown_seconds,
+                _self=self._settings.failover_cooldown_seconds,
             )
             return False
 
@@ -269,7 +269,7 @@ class RegionFailover:
 
         logger.warning(
             "failover.executing_failover",
-            self=self._current_primary,
+            _self=self._current_primary,
             target_region=target_region,
             reason=reason,
         )
@@ -363,7 +363,7 @@ class RegionFailover:
 
         logger.info(
             "failover.traffic_routing_updated",
-            self=self._current_primary,
+            _self=self._current_primary,
             target_region=target_region,
             result=result.details,
         )
@@ -643,7 +643,7 @@ class RegionFailover:
         # 승격 성공 → 페일오버 실행
         logger.warning(
             "failover.secondary_promoting_taking_over",
-            self=self._settings.current_region,
+            _self=self._settings.current_region,
             primary_region=primary_region,
         )
         self._execute_failover(

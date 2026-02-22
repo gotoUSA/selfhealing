@@ -16,9 +16,10 @@ Usage in CELERY_BEAT_SCHEDULE:
 """
 
 from celery import shared_task
-from celery.utils.log import get_task_logger
 
-logger = get_task_logger(__name__)
+import structlog
+
+logger = structlog.get_logger()
 
 
 @shared_task(
@@ -421,7 +422,7 @@ def send_cb_open_notification(
     logger.info(
         "send_cb_open_notification.sending_notification_attempt",
         service_name=service_name,
-        self=self.request.retries + 1,
+        _self=self.request.retries + 1,
     )
 
     try:

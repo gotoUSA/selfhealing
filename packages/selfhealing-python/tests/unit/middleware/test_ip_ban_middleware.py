@@ -233,8 +233,8 @@ class TestIPBanMiddlewareBehavior:
 
         mock_logger.warning.assert_called_once()
         log_message = mock_logger.warning.call_args[0][0]
-        assert "type=temporary" in log_message
-        assert "Blocked banned IP" in log_message
+        assert log_message == "ip_ban_middleware.blocked_banned_ip"
+        assert mock_logger.warning.call_args[1]["ban_type"] == "temporary"
 
     # =================================================================
     # IP 추출 동작 검증

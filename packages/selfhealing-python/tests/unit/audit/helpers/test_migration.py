@@ -14,13 +14,16 @@ class TestChaosExperimentMigration:
 
     def test_audit_method_calls_helper(self):
         """ChaosExperiment._audit should call log_chaos_experiment_audit."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit_helpers.log_chaos_experiment_audit",
-            return_value="audit-test1234",
-        ) as mock_helper:
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch(
+                "selfhealing.services.audit_helpers.log_chaos_experiment_audit",
+                return_value="audit-test1234",
+            ) as mock_helper,
+        ):
             from selfhealing.services.chaos.base import (
                 ChaosExperiment,
                 ExperimentConfig,
@@ -41,10 +44,13 @@ class TestChaosExperimentMigration:
                 config=ExperimentConfig(target_service="test-service"),
             )
 
-            experiment._audit("experiment_started", {
-                "config": {"target_service": "test-service"},
-                "ttl_seconds": 600,
-            })
+            experiment._audit(
+                "experiment_started",
+                {
+                    "config": {"target_service": "test-service"},
+                    "ttl_seconds": 600,
+                },
+            )
 
             mock_helper.assert_called_once()
             call_kwargs = mock_helper.call_args[1]
@@ -88,16 +94,21 @@ class TestEmergencyModeManagerMigration:
 
     def test_log_audit_calls_helper(self):
         """EmergencyModeManager._log_audit should call log_emergency_mode_audit."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit_helpers.log_emergency_mode_audit",
-            return_value=1,
-        ) as mock_helper, patch(
-            "selfhealing.core.state_backend.get_state_backend",
-        ), patch(
-            "selfhealing.services.event_bus.get_event_bus",
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch(
+                "selfhealing.services.audit_helpers.log_emergency_mode_audit",
+                return_value=1,
+            ) as mock_helper,
+            patch(
+                "selfhealing.core.state_backend.get_state_backend",
+            ),
+            patch(
+                "selfhealing.services.event_bus.get_event_bus",
+            ),
         ):
             from selfhealing.services.emergency_mode.enums import EmergencyLevel
             from selfhealing.services.emergency_mode.manager import (
@@ -133,13 +144,16 @@ class TestErrorBudgetGateMigration:
 
     def test_audit_block_calls_helper(self):
         """ErrorBudgetGate._audit_block should call log_error_budget_blocked_audit."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit_helpers.log_error_budget_blocked_audit",
-            return_value=1,
-        ) as mock_helper:
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch(
+                "selfhealing.services.audit_helpers.log_error_budget_blocked_audit",
+                return_value=1,
+            ) as mock_helper,
+        ):
             from selfhealing.services.error_budget_gate.config import (
                 GateCheckResult,
                 GateStatus,
@@ -167,12 +181,13 @@ class TestErrorBudgetGateMigration:
 
     def test_audit_block_handles_exceptions_gracefully(self):
         """Should not raise exception if audit helper fails."""
-        with patch(
-            "selfhealing.services.audit_helpers.log_error_budget_blocked_audit",
-            side_effect=Exception("Audit failed"),
-        ), patch(
-            "selfhealing.services.error_budget_gate.gate.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit_helpers.log_error_budget_blocked_audit",
+                side_effect=Exception("Audit failed"),
+            ),
+            patch("selfhealing.services.error_budget_gate.gate.logger") as mock_logger,
+        ):
             from selfhealing.services.error_budget_gate.config import (
                 GateCheckResult,
                 GateStatus,
@@ -194,4 +209,4 @@ class TestErrorBudgetGateMigration:
 
             mock_logger.warning.assert_called()
             call_args = mock_logger.warning.call_args[0][0]
-            assert "Failed to audit block" in call_args
+            assert call_args == "error_budget_gate.failed_audit_block"

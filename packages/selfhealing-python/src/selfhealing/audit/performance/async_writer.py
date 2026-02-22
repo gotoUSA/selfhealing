@@ -92,7 +92,7 @@ class AsyncAuditWriter:
         self._is_running = False
         logger.info(
             "async_audit_writer.stopped_queued_written",
-            self=self._entries_queued,
+            _self=self._entries_queued,
             self_1=self._entries_written,
         )
 
@@ -119,7 +119,7 @@ class AsyncAuditWriter:
             self._entries_dropped += 1
             logger.warning(
                 "async_audit_writer.queue_full_entry_dropped",
-                self=self._entries_dropped,
+                _self=self._entries_dropped,
             )
             return False
 

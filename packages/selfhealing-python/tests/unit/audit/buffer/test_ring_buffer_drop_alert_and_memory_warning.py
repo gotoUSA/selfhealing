@@ -157,8 +157,8 @@ class TestRingBufferHighCapacityWarning:
             # Verify warning was called with expected message
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args
-            assert "[RingBuffer]" in call_args[0][0]
-            assert "High capacity" in call_args[0][0]
+            assert call_args[0][0] == "ring_buffer.high_use_mb_ram"
+            assert call_args[1]["capacity"] == 200000
 
     def test_normal_capacity_no_warning(self, caplog):
         """정상 용량 시 경고 로그 없음."""
@@ -166,7 +166,7 @@ class TestRingBufferHighCapacityWarning:
             buffer: RingBuffer[int] = RingBuffer(capacity=10000)
 
         # RingBuffer 관련 경고 없음
-        ringbuffer_warnings = [r for r in caplog.records if "[RingBuffer]" in r.message]
+        ringbuffer_warnings = [r for r in caplog.records if "ring_buffer" in r.message]
         assert len(ringbuffer_warnings) == 0
 
 

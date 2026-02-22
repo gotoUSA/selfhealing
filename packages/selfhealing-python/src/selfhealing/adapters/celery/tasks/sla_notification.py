@@ -11,9 +11,9 @@ from __future__ import annotations
 from typing import Any
 
 from celery import shared_task
-from celery.utils.log import get_task_logger
+import structlog
 
-logger = get_task_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @shared_task(
@@ -60,7 +60,7 @@ def send_sla_notification(
         logger.info(
             "send_sla_notification.sent_notification_attempt",
             notification_type=notification_type,
-            self=self.request.retries + 1,
+            _self=self.request.retries + 1,
         )
     else:
         logger.warning(

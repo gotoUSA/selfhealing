@@ -809,7 +809,7 @@ class ChaosSchedulerService:
                 config.dry_run = True
                 logger.info(
                     "chaos_scheduler.running_dry_run_mode",
-                    self=self._config.dry_run_reason,
+                    _self=self._config.dry_run_reason,
                 )
 
             experiment = create_experiment(

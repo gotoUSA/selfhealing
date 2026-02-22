@@ -335,7 +335,7 @@ class TestRecoverySessionArchiveService:
         sample_session.status = RecoveryStatus.FAILED
         archive_service.archive_session(sample_session)
 
-        stats = archive_service.get_statistics()
+        stats = archive_service.get_statistics(days=365)
 
         assert stats["total_sessions"] == 4
         assert stats["completed"] == 3

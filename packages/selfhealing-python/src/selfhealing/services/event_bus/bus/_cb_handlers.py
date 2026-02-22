@@ -208,7 +208,7 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
             logger.critical(
                 "event_handler.replay_blocked_integrity_gate",
                 service_name=service_name,
-                event=event.data.get('integrity_gate_result', {}),
+                _event=event.data.get('integrity_gate_result', {}),
             )
             return  # 리플레이 중단
     except ImportError:

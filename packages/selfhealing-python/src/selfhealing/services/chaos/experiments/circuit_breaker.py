@@ -65,7 +65,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
         """Force CB to OPEN state."""
         logger.info(
             "cb_open_injection.forcing_cb_open_ttl",
-            self=self.config.target_service,
+            _self=self.config.target_service,
             self_1=self._effective_ttl,
         )
 
@@ -116,13 +116,13 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "cb_open_injection.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "cb_open_injection.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:

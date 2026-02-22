@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import logging
 import json
 import urllib.error
 import urllib.request
@@ -261,7 +262,7 @@ class RFC3161Client:
         except urllib.error.URLError as e:
             logger.exception(
                 "failed_get_timestamp",
-                self=self._tsa_url,
+                _self=self._tsa_url,
                 error=e,
             )
             return None
@@ -281,9 +282,7 @@ class RFC3161Client:
         # 간소화: 해시값만 전송 (실제로는 ASN.1 구조 필요)
         return data_hash
 
-    def _parse_timestamp_response(
-        self, response_data: bytes, original_hash: bytes
-    ) -> RFC3161Timestamp | None:
+    def _parse_timestamp_response(self, response_data: bytes, original_hash: bytes) -> RFC3161Timestamp | None:
         """
         RFC 3161 TimeStampResp 파싱 (간소화 버전).
 
@@ -612,7 +611,7 @@ class SignedManifest:
         if computed_root != self._merkle_root:
             logger.error(
                 "merkle_root_mismatch_expected",
-                self=self._merkle_root,
+                _self=self._merkle_root,
                 computed_root=computed_root,
             )
             return False

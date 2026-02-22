@@ -91,7 +91,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         self.default_ttl = default_ttl if default_ttl is not None else _get_airgap_redis_ttl()
         logger.info(
             "air_gap.redisairgapadapter_initialized",
-            self=self.prefix,
+            _self=self.prefix,
         )
 
     def _make_key(self, key: str) -> str:

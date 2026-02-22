@@ -88,12 +88,13 @@ class TestLogErrorBudgetBlockedAudit:
 
     def test_logs_to_standard_logger_fallback(self):
         """Should log to standard logger when no request/buffer available."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=4,
-        ), patch(
-            "selfhealing.services.audit.chaos_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=4,
+            ),
+            patch("selfhealing.services.audit.chaos_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import (
                 log_error_budget_blocked_audit,
             )
@@ -108,19 +109,20 @@ class TestLogErrorBudgetBlockedAudit:
 
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
-            assert "[ErrorBudgetAudit]" in call_args
-            assert "BLOCKED" in call_args
-            assert "chaos_experiment" in call_args
-            assert "5.5%" in call_args
+            assert call_args == "error_budget_audit.blocked"
+            call_kwargs = mock_logger.warning.call_args[1]
+            assert call_kwargs["action"] == "chaos_experiment"
+            assert call_kwargs["budget_str"] == "5.5%"
 
     def test_handles_none_error_budget_percent(self):
         """Should handle None error_budget_percent gracefully."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=5,
-        ), patch(
-            "selfhealing.services.audit.chaos_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=5,
+            ),
+            patch("selfhealing.services.audit.chaos_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import (
                 log_error_budget_blocked_audit,
             )
@@ -135,7 +137,9 @@ class TestLogErrorBudgetBlockedAudit:
 
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
-            assert "N/A" in call_args  # None displayed as N/A
+            assert call_args == "error_budget_audit.blocked"
+            call_kwargs = mock_logger.warning.call_args[1]
+            assert call_kwargs["budget_str"] == "N/A"  # None displayed as N/A
 
     def test_includes_forensic_fields_when_provided(self):
         """Should include forensic fields (trace_id, actor_roles) when provided."""
@@ -171,12 +175,15 @@ class TestLogErrorBudgetBlockedAudit:
 
     def test_auto_extracts_trace_id_from_context(self):
         """Should auto-extract trace_id when not provided."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=7,
-        ) as mock_wal, patch(
-            "selfhealing.audit.trace.get_trace_id",
-            return_value="auto-trace-456",
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=7,
+            ) as mock_wal,
+            patch(
+                "selfhealing.audit.trace.get_trace_id",
+                return_value="auto-trace-456",
+            ),
         ):
             from selfhealing.services.audit_helpers import (
                 log_error_budget_blocked_audit,
@@ -195,12 +202,15 @@ class TestLogErrorBudgetBlockedAudit:
 
     def test_handles_missing_trace_context_gracefully(self):
         """Should handle missing trace context without error."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=8,
-        ) as mock_wal, patch.dict(
-            "sys.modules",
-            {"selfhealing.audit.trace": None},
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=8,
+            ) as mock_wal,
+            patch.dict(
+                "sys.modules",
+                {"selfhealing.audit.trace": None},
+            ),
         ):
             from selfhealing.services.audit_helpers import (
                 log_error_budget_blocked_audit,
@@ -221,12 +231,13 @@ class TestLogErrorBudgetBlockedAudit:
 
     def test_forensic_fields_in_log_message(self):
         """Should include trace_id in log warning message."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=9,
-        ), patch(
-            "selfhealing.services.audit.chaos_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=9,
+            ),
+            patch("selfhealing.services.audit.chaos_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import (
                 log_error_budget_blocked_audit,
             )
@@ -240,5 +251,7 @@ class TestLogErrorBudgetBlockedAudit:
 
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
-            # trace_id 앞 8자리가 로그에 포함되어야 함
-            assert "trace_id=" in call_args
+            assert call_args == "error_budget_audit.blocked"
+            call_kwargs = mock_logger.warning.call_args[1]
+            # trace_id 앞 8자리가 kwargs에 포함되어야 함
+            assert call_kwargs["trace_str"] == "trace-xy"

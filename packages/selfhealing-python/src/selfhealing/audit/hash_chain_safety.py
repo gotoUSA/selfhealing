@@ -167,7 +167,7 @@ class MonotonicTimestamp:
                     )
                     logger.warning(
                         "monotonic_timestamp.clock_skew_detected_adjusted",
-                        self=self._monotonic_offset,
+                        _self=self._monotonic_offset,
                     )
                 else:
                     # Clock is normal - reset offset
@@ -715,7 +715,7 @@ class ShardedDateLock:
                     self.acquired = True
                     logger.debug(
                         "sharded_date_lock.lock_acquired",
-                        self=self._date,
+                        _self=self._date,
                     )
                     return self
 
@@ -728,7 +728,7 @@ class ShardedDateLock:
         except Exception as e:
             logger.exception(
                 "sharded_date_lock.lock_error",
-                self=self._date,
+                _self=self._date,
                 error=e,
             )
             self.acquired = False
@@ -752,13 +752,13 @@ class ShardedDateLock:
             self._redis.eval(lua_script, 1, lock_key, self._lock_token)
             logger.debug(
                 "sharded_date_lock.lock_released",
-                self=self._date,
+                _self=self._date,
             )
 
         except Exception as e:
             logger.exception(
                 "sharded_date_lock.release_error",
-                self=self._date,
+                _self=self._date,
                 error=e,
             )
 

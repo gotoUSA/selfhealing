@@ -224,7 +224,7 @@ class HedgingExecutor:
             logger.debug(
                 "hedging.primary_respond_within_adding",
                 primary=primary.name,
-                self=self._config.delay,
+                _self=self._config.delay,
             )
             for candidate in candidates[1:]:
                 future = self._submit_with_context(executor, candidate.fn)

@@ -179,7 +179,7 @@ class GracefulDegradationManager:
                 record_emergency_cache_drift()
                 logger.warning(
                     "emergency_mode.drift_detected_cached_backend",
-                    self=self._state.is_active,
+                    _self=self._state.is_active,
                     backend_state=backend_state.is_active,
                 )
                 self._state = backend_state
@@ -206,7 +206,7 @@ class GracefulDegradationManager:
                 logger.info(
                     "emergency_mode.loaded_state",
                     level=self._state.level.name,
-                    self=self._state.is_active,
+                    _self=self._state.is_active,
                 )
             # 로드 시간 기록 (TTL 캐시용)
             self._last_load_time = datetime.now(timezone.utc)
@@ -471,7 +471,7 @@ class GracefulDegradationManager:
                 activated_by=activated_by,
                 level=level.name,
                 reason=reason,
-                self=self._state.expires_at or 'manual',
+                _self=self._state.expires_at or 'manual',
                 value=', chaos_experiment=True' if is_chaos_experiment else '',
             )
 

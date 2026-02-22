@@ -829,7 +829,7 @@ class AdaptiveThrottle(
                 logger.warning(
                     "adaptive_throttle.critical_ms_ms_limit",
                     rtt_ms=rtt_ms,
-                    self=self.config.sla_critical_ms,
+                    _self=self.config.sla_critical_ms,
                     self_2=self._current_limit,
                     new_limit=new_limit,
                 )
@@ -898,7 +898,7 @@ class AdaptiveThrottle(
                 logger.info(
                     "adaptive_throttle.warning_ms_ms_limit",
                     rtt_ms=rtt_ms,
-                    self=self.config.sla_warning_ms,
+                    _self=self.config.sla_warning_ms,
                     self_2=self._current_limit,
                     new_limit=new_limit,
                 )
@@ -963,7 +963,7 @@ class AdaptiveThrottle(
                 logger.debug(
                     "adaptive_throttle.limit",
                     gradient=gradient,
-                    self=self._current_limit,
+                    _self=self._current_limit,
                     new_limit=new_limit,
                 )
                 self.current_limit = new_limit
@@ -1001,7 +1001,7 @@ class AdaptiveThrottle(
                 logger.debug(
                     "adaptive_throttle.limit",
                     gradient=gradient,
-                    self=self._current_limit,
+                    _self=self._current_limit,
                     new_limit=new_limit,
                 )
                 self.current_limit = new_limit
@@ -1046,7 +1046,7 @@ class AdaptiveThrottle(
             self._current_limit = self._limit_before_429
             logger.debug(
                 "adaptive_throttle.critical_tier_protected_using",
-                self=self._limit_before_429,
+                _self=self._limit_before_429,
             )
             result = super().check(key)
             self._current_limit = original_limit
@@ -1236,7 +1236,7 @@ class AdaptiveThrottle(
         logger.warning(
             "adaptive_throttle.rolled_back_base_limit",
             previous=previous,
-            self=self._base_limit_before_emergency,
+            _self=self._base_limit_before_emergency,
         )
 
         return self._base_limit_before_emergency

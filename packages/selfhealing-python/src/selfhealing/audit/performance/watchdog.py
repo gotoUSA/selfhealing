@@ -105,7 +105,7 @@ class PendingSequenceWatchdog:
             self._is_running = False
             logger.info(
                 "pending_watchdog.stopped_cleaned",
-                self=self._cleaned_count,
+                _self=self._cleaned_count,
             )
 
     def register_pending(self, sequence: int) -> None:

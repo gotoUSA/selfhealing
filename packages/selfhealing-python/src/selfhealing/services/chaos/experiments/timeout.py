@@ -38,7 +38,7 @@ class TimeoutExperiment(ChaosExperiment):
         """Inject timeout delays with TTL."""
         logger.info(
             "timeout.injecting_timeout_delays_rate",
-            self=self.timeout_delay_seconds,
+            _self=self.timeout_delay_seconds,
             self_1=self.config.target_service,
             self_2=self.config.injection_rate*100,
             self_3=self._effective_ttl,
@@ -75,13 +75,13 @@ class TimeoutExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "timeout.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "timeout.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:

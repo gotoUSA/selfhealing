@@ -111,7 +111,7 @@ class EmergencyModeMixin:
                     "adaptive_throttle.emergency_level_limit",
                     previous_level=previous_level,
                     level=level,
-                    self=self._current_limit,
+                    _self=self._current_limit,
                     new_limit=new_limit,
                     multiplier=multiplier,
                 )

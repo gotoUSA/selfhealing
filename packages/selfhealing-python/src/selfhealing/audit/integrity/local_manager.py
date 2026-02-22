@@ -56,7 +56,7 @@ class HashChainManager:
                 self._previous_hash = data.get("previous_hash", self.GENESIS_HASH)
                 logger.debug(
                     "hash_chain.loaded_state",
-                    self=self._sequence,
+                    _self=self._sequence,
                 )
             except Exception as e:
                 logger.warning(

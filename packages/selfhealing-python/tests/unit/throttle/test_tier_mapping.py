@@ -111,7 +111,7 @@ class TestGetTierFromCriticality:
         with caplog.at_level(logging.WARNING, logger="selfhealing.services.throttle.tier_mapping"):
             get_tier_from_criticality("unknown_value")
 
-        assert any("Unknown criticality" in record.message for record in caplog.records)
+        assert any("unknown_criticality" in record.message for record in caplog.records)
 
 
 class TestGetCriticalityFromTier:
@@ -144,7 +144,7 @@ class TestGetCriticalityFromTier:
         with caplog.at_level(logging.WARNING, logger="selfhealing.services.throttle.tier_mapping"):
             get_criticality_from_tier("unknown_tier")
 
-        assert any("Unknown tier_id" in record.message for record in caplog.records)
+        assert any("unknown_falling_back" in record.message for record in caplog.records)
 
 
 class TestValidTierIds:

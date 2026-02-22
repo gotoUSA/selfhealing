@@ -126,7 +126,7 @@ class SystemControlManager:
                 self._cached_state = SystemState.from_dict(data)
                 logger.info(
                     "system_control.loaded_state",
-                    self=self._cached_state.enabled,
+                    _self=self._cached_state.enabled,
                     value=type(self._backend).__name__,
                 )
             else:

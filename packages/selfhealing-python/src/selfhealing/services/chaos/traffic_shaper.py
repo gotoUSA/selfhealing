@@ -297,7 +297,7 @@ class TrafficShaper:
 
         logger.info(
             "traffic_shaper.configured",
-            self=self.experiment_id,
+            _self=self.experiment_id,
             mode=config.mode.value,
             config=config.target_rps,
         )
@@ -496,7 +496,7 @@ class TrafficShaper:
         logger.debug(
             "traffic_shaper.adapted_rate_rps_multiplier",
             new_rate=new_rate,
-            self=self._current_rate_multiplier,
+            _self=self._current_rate_multiplier,
             avg_latency=avg_latency,
         )
 

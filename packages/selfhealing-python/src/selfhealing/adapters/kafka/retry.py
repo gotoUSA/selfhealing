@@ -252,7 +252,7 @@ class NonBlockingRetryHandler:
                 self._stats["dlq_sent"] += 1
                 logger.warning(
                     "retry_handler.dlq로_이동",
-                    self=self._config.final_dlq_topic,
+                    _self=self._config.final_dlq_topic,
                     retry_count=retry_count,
                     error=error,
                 )
@@ -260,7 +260,7 @@ class NonBlockingRetryHandler:
                 self._stats["errors"] += 1
                 logger.error(
                     "retry_handler.dlq_전송_실패",
-                    self=self._config.final_dlq_topic,
+                    _self=self._config.final_dlq_topic,
                 )
 
             return success

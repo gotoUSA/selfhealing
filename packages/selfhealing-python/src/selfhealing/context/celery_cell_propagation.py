@@ -113,3 +113,36 @@ def add_cell_id_to_task(
 
 # extract_cell_id_on_prerun / clear_cell_id_on_postrun은
 # context/celery_context_utils.py의 restore_all_task_context / cleanup_all_task_context로 통합되었다.
+# 하위 호환을 위해 래퍼 함수 유지.
+
+
+def extract_cell_id_on_prerun(task: Any = None, **kwargs) -> None:
+    """task_prerun 시 cell_id를 ContextVar에 설정 (하위 호환 래퍼)."""
+    if task is None:
+        return
+    try:
+        from selfhealing.context.cell_context import _current_cell_id
+
+        request = getattr(task, "request", None)
+        if request is None:
+            return
+        cell_id = request.get("cell_id") if hasattr(request, "get") else None
+        if cell_id:
+            token = _current_cell_id.set(cell_id)
+            task._cell_id_token = token
+    except Exception:
+        pass
+
+
+def clear_cell_id_on_postrun(task: Any = None, **kwargs) -> None:
+    """task_postrun 시 cell_id ContextVar 복원 (하위 호환 래퍼)."""
+    if task is None:
+        return
+    try:
+        from selfhealing.context.cell_context import _current_cell_id
+
+        token = getattr(task, "_cell_id_token", None)
+        if token is not None:
+            _current_cell_id.reset(token)
+    except Exception:
+        pass

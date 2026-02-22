@@ -291,7 +291,7 @@ class EmergencyEscalationPermission(BasePermission):
                     "rbac.emergency_escalation_strict_operator",
                     request=request.user,
                     reason=reason[:50],
-                    self=self.emergency_expiry_hours,
+                    _self=self.emergency_expiry_hours,
                 )
             return has_perm
 
@@ -746,7 +746,7 @@ class HasChaosTestPermission(BasePermission):
                     "rbac.test_access_denied_production",
                     request=request.user,
                     getattr=getattr(request, 'path', 'unknown'),
-                    self=self._get_client_ip(request),
+                    _self=self._get_client_ip(request),
                 )
                 self.message = (
                     "X-Test/Chaos API는 프로덕션 환경에서 사용할 수 없습니다. " "보안 정책에 따라 접근이 차단되었습니다."

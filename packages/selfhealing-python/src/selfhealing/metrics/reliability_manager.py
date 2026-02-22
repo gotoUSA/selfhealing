@@ -293,7 +293,7 @@ class MetricReliabilityManager:
                 logger.info(
                     "reliability.starting_stabilization",
                     state=state.domain,
-                    self=self._thresholds.stabilization_duration,
+                    _self=self._thresholds.stabilization_duration,
                 )
             elif old_mode == OperatingMode.CAUTIOUS:
                 # 안정화 기간 확인

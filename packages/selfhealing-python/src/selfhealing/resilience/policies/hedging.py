@@ -192,7 +192,7 @@ class HedgingPolicy(ResiliencePolicy[T]):
             self._current_load_level = config_value.lower()
             logger.info(
                 "hedging_policy.load_level_updated",
-                self=self._current_load_level,
+                _self=self._current_load_level,
             )
 
     # -------------------------------------------------------------------------
@@ -590,7 +590,7 @@ class AsyncHedgingPolicy:
             self._current_load_level = config_value.lower()
             logger.info(
                 "async_hedging_policy.load_level_updated",
-                self=self._current_load_level,
+                _self=self._current_load_level,
             )
 
     # -------------------------------------------------------------------------

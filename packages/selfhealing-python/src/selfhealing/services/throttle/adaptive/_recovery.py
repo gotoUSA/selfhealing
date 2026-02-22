@@ -115,7 +115,7 @@ class RecoveryDampeningMixin:
 
         logger.info(
             "adaptive_throttle.recovery_dampening_advanced",
-            self=self._recovery_dampening_step,
+            _self=self._recovery_dampening_step,
             int=int(multiplier * 100),
             target_limit=target_limit,
         )
@@ -140,7 +140,7 @@ class RecoveryDampeningMixin:
 
         logger.info(
             "adaptive_throttle.recovery_dampening_completed_immediately",
-            self=self._base_limit_before_emergency,
+            _self=self._base_limit_before_emergency,
         )
 
         # 감사 로깅 (Recovery Dampening 완료)

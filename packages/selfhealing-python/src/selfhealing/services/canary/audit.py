@@ -21,6 +21,7 @@ Usage:
 
 import hashlib
 import json
+import logging
 from typing import TYPE_CHECKING, Any
 
 import structlog

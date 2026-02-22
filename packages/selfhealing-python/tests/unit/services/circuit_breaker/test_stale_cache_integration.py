@@ -487,9 +487,7 @@ class TestRecordSuccessAutoCacheBehavior:
                 response_data={"data": "test"},
             )
             mock_logger.warning.assert_called_once()
-            assert "Auto cache update failed" in str(
-                mock_logger.warning.call_args,
-            )
+            assert mock_logger.warning.call_args[0][0] == "auto_cache_update_failed"
 
     def test_backward_compatible_signature(self):
         """기존 시그니처 record_success(service_id)와 하위 호환된다."""

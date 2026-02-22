@@ -291,7 +291,7 @@ class KafkaAuditAdapter(AuditLogAdapter):
 
         logger.info(
             "kafka_audit_adapter.closed_sent_errors",
-            self=self._sent_count,
+            _self=self._sent_count,
             self_1=self._error_count,
         )
 

@@ -358,7 +358,7 @@ class SelfHealingMiddleware:
                     logger.debug(
                         "self_healing_middleware.cb_service",
                         state=state.upper(),
-                        self=self.CB_SERVICE_NAME,
+                        _self=self.CB_SERVICE_NAME,
                     )
                     return True
 
@@ -400,7 +400,7 @@ class SelfHealingMiddleware:
                 )
                 logger.info(
                     "self_healing_middleware.cb_failure_recorded",
-                    self=self.CB_SERVICE_NAME,
+                    _self=self.CB_SERVICE_NAME,
                     error_context=error_context.get('error_type'),
                 )
 

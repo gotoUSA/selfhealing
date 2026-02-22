@@ -217,7 +217,7 @@ class AuditReconciler:
 
         logger.info(
             "audit_reconciler.initialized",
-            self=self._config.check_interval_seconds,
+            _self=self._config.check_interval_seconds,
         )
 
     @classmethod

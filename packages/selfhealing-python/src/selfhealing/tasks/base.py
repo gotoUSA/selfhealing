@@ -113,7 +113,7 @@ class BaseNotifyingTask:
             }
             logger.exception(
                 "celery_task.task_failed",
-                self=self.name,
+                _self=self.name,
                 error=e,
             )
 
@@ -305,7 +305,7 @@ class BaseNotifyingTask:
 
             logger.info(
                 "celery_task.notification_sent",
-                self=self.name,
+                _self=self.name,
                 severity=severity,
             )
 
@@ -351,7 +351,7 @@ class BaseNotifyingTask:
         """
         logger.warning(
             "celery_task.task_requires_approval_execution",
-            self=self.name,
+            _self=self.name,
         )
 
         # Send approval request notification
@@ -399,7 +399,7 @@ class BaseNotifyingTask:
             # For now, just log
             logger.info(
                 "celery_task.adding_daily_report",
-                self=self.name,
+                _self=self.name,
                 result=result,
             )
 

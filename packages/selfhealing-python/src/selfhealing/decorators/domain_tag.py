@@ -98,7 +98,7 @@ class DomainContext:
 
         logger.debug(
             "domain_context.entered",
-            self=self.domain,
+            _self=self.domain,
             self_1=self._previous_domain,
         )
 
@@ -112,7 +112,7 @@ class DomainContext:
 
         logger.debug(
             "domain_context.exited",
-            self=self.domain,
+            _self=self.domain,
             _current_domain=_current_domain.get(),
         )
 

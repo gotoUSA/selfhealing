@@ -138,7 +138,7 @@ class WALRecoveryMixin:
             _append_to_wal(event.to_dict())
             logger.info(
                 "cascade_audit.saved_local_wal",
-                event=event.id,
+                _event=event.id,
             )
         except Exception as e:
             logger.exception(

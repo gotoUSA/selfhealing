@@ -145,13 +145,16 @@ class TestLogComplianceAudit:
         mock_request = MagicMock()
         mock_request.META = {}
 
-        with patch(
-            "selfhealing.services.audit.compliance_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.compliance_audit._try_add_to_buffer",
-            return_value=True,
-        ) as mock_buffer:
+        with (
+            patch(
+                "selfhealing.services.audit.compliance_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch(
+                "selfhealing.services.audit.compliance_audit._try_add_to_buffer",
+                return_value=True,
+            ) as mock_buffer,
+        ):
             from selfhealing.services.audit_helpers import log_compliance_audit
 
             log_compliance_audit(
@@ -166,12 +169,13 @@ class TestLogComplianceAudit:
 
     def test_fallback_logging_without_request(self):
         """Should fallback to logger when no request."""
-        with patch(
-            "selfhealing.services.audit.compliance_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.compliance_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.compliance_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch("selfhealing.services.audit.compliance_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_compliance_audit
 
             log_compliance_audit(
@@ -183,8 +187,7 @@ class TestLogComplianceAudit:
 
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
-            assert "ComplianceAudit" in call_args
-            assert "PASSED" in call_args
+            assert call_args == "compliance_audit.passed"
 
 
 # =============================================================================
@@ -272,12 +275,13 @@ class TestLogBlastRadiusAudit:
 
     def test_fallback_logging_for_violation(self):
         """Should fallback to logger for violations."""
-        with patch(
-            "selfhealing.services.audit.compliance_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.compliance_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.compliance_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch("selfhealing.services.audit.compliance_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_blast_radius_audit
 
             log_blast_radius_audit(
@@ -291,8 +295,7 @@ class TestLogBlastRadiusAudit:
 
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
-            assert "BlastRadiusAudit" in call_args
-            assert "VIOLATION" in call_args
+            assert call_args == "blast_radius_audit.violation"
 
 
 # =============================================================================
@@ -373,12 +376,13 @@ class TestLogFinopsAudit:
 
     def test_fallback_logging_for_critical(self):
         """Should use critical log level for over_budget."""
-        with patch(
-            "selfhealing.services.audit.compliance_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.compliance_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.compliance_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch("selfhealing.services.audit.compliance_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_finops_audit
 
             log_finops_audit(
@@ -450,13 +454,16 @@ class TestLogDataAccessAudit:
         mock_request = MagicMock()
         mock_request.META = {}
 
-        with patch(
-            "selfhealing.services.audit.compliance_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.compliance_audit._try_add_to_buffer",
-            return_value=True,
-        ) as mock_buffer:
+        with (
+            patch(
+                "selfhealing.services.audit.compliance_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch(
+                "selfhealing.services.audit.compliance_audit._try_add_to_buffer",
+                return_value=True,
+            ) as mock_buffer,
+        ):
             from selfhealing.services.audit_helpers import log_data_access_audit
 
             log_data_access_audit(
@@ -523,10 +530,7 @@ class TestComplianceServiceIntegration:
 
             assert violation is not None
             # Should have logged violation to WAL
-            assert any(
-                "COMPLIANCE_VIOLATION" in str(call)
-                for call in mock_wal.call_args_list
-            )
+            assert any("COMPLIANCE_VIOLATION" in str(call) for call in mock_wal.call_args_list)
 
 
 class TestBlastRadiusManagerIntegration:

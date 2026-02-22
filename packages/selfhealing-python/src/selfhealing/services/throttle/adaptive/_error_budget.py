@@ -87,7 +87,7 @@ class ErrorBudgetHandlerMixin:
             logger.debug(
                 "adaptive_throttle.ignoring_warning_slo_target",
                 slo_name=slo_name,
-                self=self._target_slo_patterns,
+                _self=self._target_slo_patterns,
             )
             return
 
@@ -153,7 +153,7 @@ class ErrorBudgetHandlerMixin:
             logger.debug(
                 "adaptive_throttle.ignoring_critical_slo_target",
                 slo_name=slo_name,
-                self=self._target_slo_patterns,
+                _self=self._target_slo_patterns,
             )
             return
 
@@ -240,7 +240,7 @@ class ErrorBudgetHandlerMixin:
             logger.debug(
                 "adaptive_throttle.ignoring_recovery_slo_target",
                 slo_name=slo_name,
-                self=self._target_slo_patterns,
+                _self=self._target_slo_patterns,
             )
             return
 
@@ -346,7 +346,7 @@ class ErrorBudgetHandlerMixin:
             "adaptive_throttle.preemptive_limit_reduction_applied",
             previous_limit=previous_limit,
             new_limit=new_limit,
-            self=self._error_budget_multiplier,
+            _self=self._error_budget_multiplier,
         )
 
         # 메트릭 기록

@@ -14,12 +14,15 @@ class TestLogDlqStoreAudit:
         """Should call adapter.log_dlq_store when adapter is available."""
         mock_adapter = MagicMock()
 
-        with patch(
-            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
-            return_value=mock_adapter,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit._write_to_wal",
-            return_value=1,
+        with (
+            patch(
+                "selfhealing.services.audit.dlq_audit._get_audit_adapter",
+                return_value=mock_adapter,
+            ),
+            patch(
+                "selfhealing.services.audit.dlq_audit._write_to_wal",
+                return_value=1,
+            ),
         ):
             from selfhealing.services.audit_helpers import log_dlq_store_audit
 
@@ -39,15 +42,17 @@ class TestLogDlqStoreAudit:
 
     def test_logs_to_standard_logger_when_adapter_unavailable(self):
         """Should log to standard logger when adapter is not available."""
-        with patch(
-            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
-            return_value=None,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.dlq_audit._get_audit_adapter",
+                return_value=None,
+            ),
+            patch(
+                "selfhealing.services.audit.dlq_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_dlq_store_audit
 
             log_dlq_store_audit(
@@ -58,24 +63,27 @@ class TestLogDlqStoreAudit:
 
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
-            assert "[DLQAudit] STORE" in call_args
-            assert "id=456" in call_args
-            assert "domain=point" in call_args
+            assert call_args == "dlq_audit.store"
+            call_kwargs = mock_logger.info.call_args[1]
+            assert call_kwargs["dlq_id"] == 456
+            assert call_kwargs["domain"] == "point"
 
     def test_handles_adapter_exception_gracefully(self):
         """Should not raise when adapter.log_dlq_store fails."""
         mock_adapter = MagicMock()
         mock_adapter.log_dlq_store.side_effect = Exception("Adapter error")
 
-        with patch(
-            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
-            return_value=mock_adapter,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.dlq_audit._get_audit_adapter",
+                return_value=mock_adapter,
+            ),
+            patch(
+                "selfhealing.services.audit.dlq_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_dlq_store_audit
 
             # Should not raise
@@ -87,7 +95,7 @@ class TestLogDlqStoreAudit:
 
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
-            assert "[DLQAudit] Failed to log store" in call_args
+            assert call_args == "dlq_audit.failed_log_store"
 
 
 class TestLogDlqReplayAudit:
@@ -97,12 +105,15 @@ class TestLogDlqReplayAudit:
         """Should call adapter.log_dlq_replay with success=True."""
         mock_adapter = MagicMock()
 
-        with patch(
-            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
-            return_value=mock_adapter,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit._write_to_wal",
-            return_value=1,
+        with (
+            patch(
+                "selfhealing.services.audit.dlq_audit._get_audit_adapter",
+                return_value=mock_adapter,
+            ),
+            patch(
+                "selfhealing.services.audit.dlq_audit._write_to_wal",
+                return_value=1,
+            ),
         ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
 
@@ -125,12 +136,15 @@ class TestLogDlqReplayAudit:
         """Should call adapter.log_dlq_replay with success=False and error."""
         mock_adapter = MagicMock()
 
-        with patch(
-            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
-            return_value=mock_adapter,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit._write_to_wal",
-            return_value=1,
+        with (
+            patch(
+                "selfhealing.services.audit.dlq_audit._get_audit_adapter",
+                return_value=mock_adapter,
+            ),
+            patch(
+                "selfhealing.services.audit.dlq_audit._write_to_wal",
+                return_value=1,
+            ),
         ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
 
@@ -151,15 +165,17 @@ class TestLogDlqReplayAudit:
 
     def test_logs_success_to_standard_logger_when_adapter_unavailable(self):
         """Should log SUCCESS to standard logger when adapter is unavailable."""
-        with patch(
-            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
-            return_value=None,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.dlq_audit._get_audit_adapter",
+                return_value=None,
+            ),
+            patch(
+                "selfhealing.services.audit.dlq_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
 
             log_dlq_replay_audit(
@@ -170,20 +186,24 @@ class TestLogDlqReplayAudit:
 
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
-            assert "[DLQAudit] REPLAY_SUCCESS" in call_args
-            assert "id=789" in call_args
+            assert call_args == "dlq_audit.event"
+            call_kwargs = mock_logger.info.call_args[1]
+            assert call_kwargs["dlq_id"] == 789
+            assert call_kwargs["status"] == "SUCCESS"
 
     def test_logs_failure_to_standard_logger_when_adapter_unavailable(self):
         """Should log FAILED to standard logger when adapter is unavailable."""
-        with patch(
-            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
-            return_value=None,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.dlq_audit._get_audit_adapter",
+                return_value=None,
+            ),
+            patch(
+                "selfhealing.services.audit.dlq_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
 
             log_dlq_replay_audit(
@@ -195,24 +215,28 @@ class TestLogDlqReplayAudit:
 
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
-            assert "[DLQAudit] REPLAY_FAILED" in call_args
-            assert "id=101" in call_args
-            assert "error=Handler crashed" in call_args
+            assert call_args == "dlq_audit.event"
+            call_kwargs = mock_logger.info.call_args[1]
+            assert call_kwargs["dlq_id"] == 101
+            assert call_kwargs["status"] == "FAILED"
+            assert call_kwargs["value"] == "Handler crashed"
 
     def test_handles_adapter_exception_gracefully(self):
         """Should not raise when adapter.log_dlq_replay fails."""
         mock_adapter = MagicMock()
         mock_adapter.log_dlq_replay.side_effect = Exception("Adapter error")
 
-        with patch(
-            "selfhealing.services.audit.dlq_audit._get_audit_adapter",
-            return_value=mock_adapter,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit._write_to_wal",
-            return_value=1,
-        ), patch(
-            "selfhealing.services.audit.dlq_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.dlq_audit._get_audit_adapter",
+                return_value=mock_adapter,
+            ),
+            patch(
+                "selfhealing.services.audit.dlq_audit._write_to_wal",
+                return_value=1,
+            ),
+            patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_dlq_replay_audit
 
             # Should not raise
@@ -224,7 +248,7 @@ class TestLogDlqReplayAudit:
 
             mock_logger.warning.assert_called_once()
             call_args = mock_logger.warning.call_args[0][0]
-            assert "[DLQAudit] Failed to log replay" in call_args
+            assert call_args == "dlq_audit.failed_log_replay"
 
 
 class TestGetAuditAdapter:

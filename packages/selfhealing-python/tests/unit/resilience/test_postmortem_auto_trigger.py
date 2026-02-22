@@ -92,7 +92,7 @@ class TestCircuitBreakerClosedPostmortemHandler:
             _on_circuit_breaker_closed_postmortem(event)
             # DEBUG 로그가 호출되었는지 확인
             debug_calls = [call for call in mock_logger.debug.call_args_list]
-            assert any("Auto postmortem disabled" in str(call) for call in debug_calls)
+            assert any("auto_postmortem_disabled_skipping" in str(call) for call in debug_calls)
 
     def test_handler_generates_postmortem_when_enabled_with_full_mocking(self, monkeypatch):
         """auto_postmortem_enabled=True일 때 Celery task으로 Postmortem 생성이 위임되는지 확인."""

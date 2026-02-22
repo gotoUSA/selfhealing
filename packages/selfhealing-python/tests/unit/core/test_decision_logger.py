@@ -151,20 +151,12 @@ class TestLogOutput:
 
     def test_logs_produced_with_correct_fields(self):
         """Verify logs are produced with required fields."""
-        import io
         import json
+        from unittest.mock import MagicMock, patch
 
-        # Create a string buffer handler to capture logs
-        log_buffer = io.StringIO()
-        handler = logging.StreamHandler(log_buffer)
-        handler.setLevel(logging.INFO)
+        mock_logger = MagicMock()
 
-        decision_logger = logging.getLogger("selfhealing.decision_record")
-        original_level = decision_logger.level
-        decision_logger.addHandler(handler)
-        decision_logger.setLevel(logging.INFO)
-
-        try:
+        with patch("selfhealing.core.decision_logger.logger", mock_logger):
             log_enter_pre_decision_zone(service_name="test_service")
             log_intervention_evaluated(
                 service_name="test_service",
@@ -173,86 +165,61 @@ class TestLogOutput:
             )
             log_exit_pre_decision_zone(service_name="test_service")
 
-            handler.flush()
-            log_content = log_buffer.getvalue()
-            log_lines = [line for line in log_content.strip().split("\n") if line]
+        assert mock_logger.info.call_count == 3
 
-            # Parse JSON records
-            json_records = []
-            for line in log_lines:
-                json_records.append(json.loads(line))
+        # Parse JSON records from the first positional argument of each call
+        json_records = []
+        for call in mock_logger.info.call_args_list:
+            json_records.append(json.loads(call[0][0]))
 
-            assert len(json_records) == 3
+        # Verify ENTER event
+        enter_record = json_records[0]
+        assert enter_record["event"] == "ENTER_PRE_DECISION_ZONE"
+        assert enter_record["service_name"] == "test_service"
+        assert "timestamp" in enter_record
 
-            # Verify ENTER event
-            enter_record = json_records[0]
-            assert enter_record["event"] == "ENTER_PRE_DECISION_ZONE"
-            assert enter_record["service_name"] == "test_service"
-            assert "timestamp" in enter_record
+        # Verify INTERVENTION_EVALUATED event
+        eval_record = json_records[1]
+        assert eval_record["event"] == "INTERVENTION_EVALUATED"
+        assert eval_record["allowed"] is True
+        assert eval_record["reason"] == "INTERVENTION_ALLOWED"
+        assert eval_record["service_name"] == "test_service"
+        assert "timestamp" in eval_record
 
-            # Verify INTERVENTION_EVALUATED event
-            eval_record = json_records[1]
-            assert eval_record["event"] == "INTERVENTION_EVALUATED"
-            assert eval_record["allowed"] is True
-            assert eval_record["reason"] == "INTERVENTION_ALLOWED"
-            assert eval_record["service_name"] == "test_service"
-            assert "timestamp" in eval_record
-
-            # Verify EXIT event
-            exit_record = json_records[2]
-            assert exit_record["event"] == "EXIT_PRE_DECISION_ZONE"
-            assert exit_record["service_name"] == "test_service"
-            assert "timestamp" in exit_record
-        finally:
-            decision_logger.removeHandler(handler)
-            decision_logger.setLevel(original_level)
+        # Verify EXIT event
+        exit_record = json_records[2]
+        assert exit_record["event"] == "EXIT_PRE_DECISION_ZONE"
+        assert exit_record["service_name"] == "test_service"
+        assert "timestamp" in exit_record
 
     def test_policy_version_included_when_provided(self):
         """Verify policy_version is included when provided."""
-        import io
         import json
+        from unittest.mock import MagicMock, patch
 
-        log_buffer = io.StringIO()
-        handler = logging.StreamHandler(log_buffer)
-        handler.setLevel(logging.INFO)
+        mock_logger = MagicMock()
 
-        decision_logger = logging.getLogger("selfhealing.decision_record")
-        original_level = decision_logger.level
-        decision_logger.addHandler(handler)
-        decision_logger.setLevel(logging.INFO)
-
-        try:
+        with patch("selfhealing.core.decision_logger.logger", mock_logger):
             log_enter_pre_decision_zone(
                 service_name="test_service",
                 policy_version="v1.0.0",
             )
 
-            handler.flush()
-            log_content = log_buffer.getvalue()
-            record = json.loads(log_content.strip())
-            assert record["policy_version"] == "v1.0.0"
-        finally:
-            decision_logger.removeHandler(handler)
-            decision_logger.setLevel(original_level)
+        assert mock_logger.info.call_count == 1
+        record = json.loads(mock_logger.info.call_args[0][0])
+        assert record["policy_version"] == "v1.0.0"
 
     def test_only_allowed_fields_present(self):
         """Verify no extra fields beyond specification."""
-        import io
         import json
+        from unittest.mock import MagicMock, patch
 
         allowed_fields_enter = {"event", "service_name", "policy_version", "timestamp"}
         allowed_fields_eval = {"event", "allowed", "reason", "service_name", "policy_version", "timestamp"}
 
-        log_buffer = io.StringIO()
-        handler = logging.StreamHandler(log_buffer)
-        handler.setLevel(logging.INFO)
+        mock_logger = MagicMock()
 
-        decision_logger = logging.getLogger("selfhealing.decision_record")
-        original_level = decision_logger.level
-        decision_logger.addHandler(handler)
-        decision_logger.setLevel(logging.INFO)
-
-        try:
+        with patch("selfhealing.core.decision_logger.logger", mock_logger):
             log_enter_pre_decision_zone(service_name="test")
             log_intervention_evaluated(
                 service_name="test",
@@ -260,20 +227,17 @@ class TestLogOutput:
                 reason=ReasonCode.THRESHOLD_NOT_MET,
             )
 
-            handler.flush()
-            log_content = log_buffer.getvalue()
-            log_lines = [line for line in log_content.strip().split("\n") if line]
+        assert mock_logger.info.call_count == 2
 
-            json_records = [json.loads(line) for line in log_lines]
+        json_records = []
+        for call in mock_logger.info.call_args_list:
+            json_records.append(json.loads(call[0][0]))
 
-            enter_record = json_records[0]
-            assert set(enter_record.keys()) == allowed_fields_enter
+        enter_record = json_records[0]
+        assert set(enter_record.keys()) == allowed_fields_enter
 
-            eval_record = json_records[1]
-            assert set(eval_record.keys()) == allowed_fields_eval
-        finally:
-            decision_logger.removeHandler(handler)
-            decision_logger.setLevel(original_level)
+        eval_record = json_records[1]
+        assert set(eval_record.keys()) == allowed_fields_eval
 
 
 class TestImportFromCore:

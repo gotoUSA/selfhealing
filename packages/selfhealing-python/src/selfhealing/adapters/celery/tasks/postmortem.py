@@ -22,10 +22,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import structlog
 from celery import shared_task
-from celery.utils.log import get_task_logger
 
-logger = get_task_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @shared_task(
@@ -219,7 +219,7 @@ def _create_individual_postmortems(group) -> dict[str, Any]:
 
             logger.info(
                 "close_incident_group.individual_postmortem_created",
-                postmortem=postmortem['incident_id'],
+                postmortem=postmortem["incident_id"],
             )
 
         return {
@@ -659,7 +659,7 @@ def process_individual_postmortem(
         "process_individual_postmortem.starting_attempt",
         service_name=service_name,
         event_type=event_type,
-        self=self.request.retries + 1,
+        _self=self.request.retries + 1,
     )
 
     if event_bus_history is None:

@@ -7,6 +7,8 @@ and compatibility layer with existing trace_id system.
 
 from __future__ import annotations
 
+import logging
+
 import structlog
 
 logger = structlog.get_logger()

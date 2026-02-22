@@ -119,7 +119,7 @@ class KafkaAuditProducer:
 
             logger.info(
                 "kafka_producer.초기화_완료",
-                self=self._settings.bootstrap_servers,
+                _self=self._settings.bootstrap_servers,
                 self_1=self._settings.producer_idempotent,
             )
         except ImportError:

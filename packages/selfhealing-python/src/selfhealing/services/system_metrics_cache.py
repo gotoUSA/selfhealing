@@ -89,7 +89,7 @@ class SystemMetricsCache:
             self._running = True
             logger.info(
                 "system_metrics_cache.starting",
-                self=self._refresh_interval,
+                _self=self._refresh_interval,
                 self_1=self._sample_interval,
             )
 

@@ -20,10 +20,10 @@ Usage:
 
 from typing import Any
 
+import structlog
 from celery import shared_task
-from celery.utils.log import get_task_logger
 
-logger = get_task_logger(__name__)
+logger = structlog.get_logger(__name__)
 
 
 @shared_task(
@@ -52,7 +52,7 @@ def async_persist_dlq_entry(self, entry_data: dict[str, Any]) -> dict:
     """
     logger.debug(
         "async_persist.persisting_dlq_entry",
-        entry_data=entry_data.get('id', 'unknown'),
+        entry_data=entry_data.get("id", "unknown"),
     )
 
     try:

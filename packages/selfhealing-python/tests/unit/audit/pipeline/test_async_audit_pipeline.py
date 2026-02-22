@@ -200,6 +200,11 @@ class TestAsyncHealingLoggerBatchFlush:
         # 수동 플러시
         AsyncHealingLogger.flush()
 
+        # 워커 스레드가 이미 큐에서 꺼낸 이벤트를 flush할 시간을 대기
+        deadline = time.time() + 3.0
+        while len(events_received) < 5 and time.time() < deadline:
+            time.sleep(0.05)
+
         # 모든 이벤트 플러시됨
         assert len(events_received) == 5
 

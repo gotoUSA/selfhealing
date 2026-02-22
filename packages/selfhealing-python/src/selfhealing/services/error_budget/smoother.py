@@ -137,7 +137,7 @@ class MultiplierSmoother:
 
             logger.debug(
                 "smoother.target_changed",
-                self=self._current_value,
+                _self=self._current_value,
                 target_multiplier=target_multiplier,
             )
 
@@ -253,7 +253,7 @@ class MultiplierSmoother:
         self._current_value = self._target_value
         logger.debug(
             "smoother.forced_convergence",
-            self=self._target_value,
+            _self=self._target_value,
         )
 
     def reset(self) -> None:

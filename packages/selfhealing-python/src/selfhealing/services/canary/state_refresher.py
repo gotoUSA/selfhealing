@@ -205,7 +205,7 @@ class EmergencyStateRefresher:
                 self._consecutive_failures += 1
                 logger.exception(
                     "emergency_state_refresher.refresh_error_failures",
-                    self=self._consecutive_failures,
+                    _self=self._consecutive_failures,
                     error=e,
                 )
 

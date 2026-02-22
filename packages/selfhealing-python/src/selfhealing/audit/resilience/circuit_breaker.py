@@ -159,7 +159,7 @@ class CircuitBreaker:
 
         logger.warning(
             "circuitbreaker_state_transition",
-            self=self.name,
+            _self=self.name,
             old_state=old_state.value,
             new_state=new_state.value,
         )
@@ -170,7 +170,7 @@ class CircuitBreaker:
             self._transition_to(CircuitState.CLOSED)
             logger.info(
                 "circuitbreaker_manually_reset",
-                self=self.name,
+                _self=self.name,
             )
 
     def force_open(self) -> None:
@@ -179,7 +179,7 @@ class CircuitBreaker:
             self._transition_to(CircuitState.OPEN)
             logger.warning(
                 "circuitbreaker_manually_opened",
-                self=self.name,
+                _self=self.name,
             )
 
     def get_stats(self) -> dict[str, Any]:

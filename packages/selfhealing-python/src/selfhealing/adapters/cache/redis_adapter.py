@@ -109,7 +109,7 @@ class RedisDistributedLock(DistributedLock):
                 self._acquired = True
                 logger.debug(
                     "redis_lock.acquired_lock",
-                    self=self._name,
+                    _self=self._name,
                 )
                 return True
 
@@ -119,7 +119,7 @@ class RedisDistributedLock(DistributedLock):
             if stop_time is not None and time.time() >= stop_time:
                 logger.debug(
                     "redis_lock.timeout_acquiring_lock",
-                    self=self._name,
+                    _self=self._name,
                 )
                 return False
 
@@ -137,7 +137,7 @@ class RedisDistributedLock(DistributedLock):
         if not self._acquired:
             logger.warning(
                 "redis_lock.attempting_release_non_acquired",
-                self=self._name,
+                _self=self._name,
             )
             return
 
@@ -157,12 +157,12 @@ class RedisDistributedLock(DistributedLock):
                 self._acquired = False
                 logger.debug(
                     "redis_lock.released_lock",
-                    self=self._name,
+                    _self=self._name,
                 )
             else:
                 logger.warning(
                     "redis_lock.lock_owned_expired",
-                    self=self._name,
+                    _self=self._name,
                 )
                 self._acquired = False
         except Exception as e:

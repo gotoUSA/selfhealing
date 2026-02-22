@@ -164,9 +164,7 @@ class TestLogEnvSnapshotToAudit:
             },
             clear=True,
         ):
-            with mock.patch(
-                "selfhealing.audit.env_snapshot._log_to_audit_service"
-            ) as mock_log:
+            with mock.patch("selfhealing.audit.env_snapshot._log_to_audit_service") as mock_log:
                 mock_log.return_value = True
 
                 result = log_env_snapshot_to_audit()
@@ -183,9 +181,7 @@ class TestLogEnvSnapshotToAudit:
             {"UNRELATED_VAR": "value"},
             clear=True,
         ):
-            with mock.patch(
-                "selfhealing.audit.env_snapshot._log_to_audit_service"
-            ) as mock_log:
+            with mock.patch("selfhealing.audit.env_snapshot._log_to_audit_service") as mock_log:
                 result = log_env_snapshot_to_audit()
 
                 assert result is True
@@ -444,8 +440,10 @@ class TestEmitCriticalLog:
 
             mock_logger.critical.assert_called_once()
             log_message = mock_logger.critical.call_args[0][0]
-            assert "FALLBACK" in log_message
-            assert "sha256:abc123" in log_message
+            assert log_message == "env_audit.snapshot"
+            call_kwargs = mock_logger.critical.call_args[1]
+            assert call_kwargs["status"] == "FALLBACK"
+            assert call_kwargs["snapshot"] == "sha256:abc123"
 
     def test_emits_failed_status(self):
         """모든 실패 시 FAILED 상태 로깅."""
@@ -461,7 +459,9 @@ class TestEmitCriticalLog:
 
             mock_logger.critical.assert_called_once()
             log_message = mock_logger.critical.call_args[0][0]
-            assert "FAILED" in log_message
+            assert log_message == "env_audit.snapshot"
+            call_kwargs = mock_logger.critical.call_args[1]
+            assert call_kwargs["status"] == "FAILED"
 
 
 class TestGetEnvSnapshotSummary:

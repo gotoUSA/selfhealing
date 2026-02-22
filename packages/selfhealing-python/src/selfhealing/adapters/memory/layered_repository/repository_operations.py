@@ -273,3 +273,17 @@ class RepositoryOperationsMixin:
                 self._sync_to_l2_async(service_name, updated)
 
         return result
+
+    def delete_state(self, service_name: str) -> bool:
+        """Delete circuit breaker state for service. L1 primary, L2 sync."""
+        result = self._l1.pop(service_name, None) is not None
+        if self._l2:
+            try:
+                if hasattr(self._l2, 'delete_state'):
+                    self._l2.delete_state(service_name)
+                elif hasattr(self._l2, 'pop'):
+                    self._l2.pop(service_name, None)
+            except Exception:
+                pass
+        return result
+

@@ -93,4 +93,4 @@ class TestSwapConfig:
         with caplog.at_level("INFO"):
             throttle.swap_config(new_config)
 
-        assert any("Config swapped" in record.message for record in caplog.records)
+        assert any("config_swapped" in record.message for record in caplog.records)

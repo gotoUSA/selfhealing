@@ -289,7 +289,7 @@ class TestLoggingNotificationBackend:
 
         # caplog 또는 captured_stderr에서 확인
         log_output = caplog.text + captured_stderr.getvalue()
-        assert "CrossClusterNotification" in log_output
+        assert "cross_cluster_notification" in log_output
         assert "#test-channel" in log_output
 
 

@@ -230,7 +230,7 @@ class KafkaAuditConsumer:
                 # 핸들러 없으면 로깅만
                 logger.debug(
                     "kafka_consumer.수신",
-                    event=event.topic,
+                    _event=event.topic,
                     event_1=event.partition,
                     event_2=event.offset,
                 )
@@ -261,7 +261,7 @@ class KafkaAuditConsumer:
 
             logger.debug(
                 "kafka_consumer.커밋_완료",
-                event=event.topic,
+                _event=event.topic,
                 event_1=event.partition,
                 event_2=event.offset,
             )

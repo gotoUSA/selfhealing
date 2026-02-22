@@ -185,7 +185,7 @@ class EscalationManager:
         if self._settings.dry_run_mode:
             logger.info(
                 "escalation.dry_run_escalation",
-                event=event.component,
+                _event=event.component,
                 event_1=event.title,
             )
             return EscalationResult(
@@ -198,7 +198,7 @@ class EscalationManager:
         if self._is_maintenance_component(event.component):
             logger.debug(
                 "escalation.maintenance_skipped",
-                event=event.component,
+                _event=event.component,
             )
             return EscalationResult(
                 success=False,
@@ -211,7 +211,7 @@ class EscalationManager:
         if not self._can_escalate(event.component):
             logger.debug(
                 "escalation.cooldown_active",
-                event=event.component,
+                _event=event.component,
             )
             return EscalationResult(
                 success=False,
@@ -248,7 +248,7 @@ class EscalationManager:
             self._record_escalation(event.component)
             logger.warning(
                 "escalation.escalated",
-                event=event.component,
+                _event=event.component,
                 event_1=event.title,
                 channels_sent=channels_sent,
             )
@@ -304,7 +304,7 @@ class EscalationManager:
                 if resp.status == 202:
                     logger.info(
                         "escalation.pagerduty_sent",
-                        event=event.title,
+                        _event=event.title,
                     )
                     return True
 
@@ -394,7 +394,7 @@ class EscalationManager:
                 if resp.status == 200:
                     logger.info(
                         "escalation.slack_sent",
-                        event=event.title,
+                        _event=event.title,
                     )
                     return True
 

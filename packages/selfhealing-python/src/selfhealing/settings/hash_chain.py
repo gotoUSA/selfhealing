@@ -92,13 +92,13 @@ class HashChainSettings(BaseSettings):
         if self.merge_swap_timeout_seconds <= self.merge_swap_blocking_timeout_seconds:
             logger.warning(
                 "hash_chain_settings.greater_than",
-                self=self.merge_swap_timeout_seconds,
+                _self=self.merge_swap_timeout_seconds,
                 self_1=self.merge_swap_blocking_timeout_seconds,
             )
         if self.date_lock_timeout_seconds <= self.date_lock_blocking_timeout_seconds:
             logger.warning(
                 "hash_chain_settings.greater_than",
-                self=self.date_lock_timeout_seconds,
+                _self=self.date_lock_timeout_seconds,
                 self_1=self.date_lock_blocking_timeout_seconds,
             )
         return self

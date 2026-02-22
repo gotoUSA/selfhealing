@@ -71,9 +71,7 @@ class TestActorContextGetClientIpFailOpen:
             with caplog.at_level(logging.WARNING):
                 result = ActorContext._get_client_ip(request)
                 assert result is None
-                assert "Failed to extract client IP" in caplog.text
-
-    def test_actor_created_with_none_ip(self):
+                assert "actor_context.failed_extract_client_ip" in caplog.text or "failed_extract_client_ip" in caplog.text
         """IP 추출 실패해도 Actor가 ip_address=None으로 정상 생성."""
         from selfhealing.context.actor_context import ActorContext
 
@@ -143,9 +141,10 @@ class TestFeatureFlagGetClientIpFailOpen:
             with caplog.at_level(logging.WARNING):
                 result = RequestContextExtractor.get_client_ip(request)
                 assert result is None
-                assert "Failed to extract client IP" in caplog.text
-
-    def test_ip_hash_uses_baseline_on_failure(self):
+                assert (
+                    "canary_context_extractor.failed_extract_client_ip" in caplog.text
+                    or "failed_extract_client_ip" in caplog.text
+                )
         """IP 추출 실패 시 _evaluate_ip_hash가 baseline 설정을 사용."""
         from selfhealing.services.canary.feature_flag import (
             CanaryFeatureFlag,

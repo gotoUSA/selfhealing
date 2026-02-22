@@ -159,7 +159,7 @@ class AntiFlappingGuard:
             logger.warning(
                 "anti_flapping_guard.flapping_detected_transitions_last",
                 count=len(recent_transitions),
-                self=self.flapping_lockout_minutes,
+                _self=self.flapping_lockout_minutes,
             )
             return (
                 False,
@@ -262,7 +262,7 @@ class AntiFlappingGuard:
         self._last_recovery_at = at or datetime.now(timezone.utc)
         logger.info(
             "anti_flapping_guard.recovery_completed",
-            self=self._last_recovery_at.isoformat(),
+            _self=self._last_recovery_at.isoformat(),
         )
 
     def clear_lockout(self) -> None:
@@ -331,7 +331,7 @@ class AntiFlappingGuard:
             logger.debug(
                 "anti_flapping_guard.recovery_stability_duration",
                 base_duration=base_duration,
-                self=self.recovery_hysteresis_factor,
+                _self=self.recovery_hysteresis_factor,
                 effective_duration=effective_duration,
             )
             return effective_duration

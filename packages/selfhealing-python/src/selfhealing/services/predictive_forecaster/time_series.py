@@ -269,7 +269,7 @@ class HoltLinearForecaster:
             logger.info(
                 "holt_linear_forecaster.saved_state_points",
                 metric_name=metric_name,
-                self=self._count,
+                _self=self._count,
                 self_2=self._level,
             )
             return True
@@ -328,7 +328,7 @@ class HoltLinearForecaster:
             logger.info(
                 "holt_linear_forecaster.restored_state_points",
                 metric_name=metric_name,
-                self=self._count,
+                _self=self._count,
                 self_2=self._level,
             )
             return True

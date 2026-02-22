@@ -268,7 +268,7 @@ class LocalFileBackend(AuditBackend):
                 self._anchor_manager.create_anchor(date=self._last_anchor_date)
                 logger.info(
                     "local_file_backend.created_anchor_backup",
-                    self=self._last_anchor_date,
+                    _self=self._last_anchor_date,
                 )
 
             self._last_anchor_date = today

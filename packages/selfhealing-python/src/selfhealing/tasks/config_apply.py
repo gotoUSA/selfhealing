@@ -161,7 +161,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
             logger.info(
                 "config_task.waiting_progress_ops_retry",
                 pending_id=pending_id,
-                self=self.request.retries + 1,
+                _self=self.request.retries + 1,
             )
             raise self.retry(countdown=min(5 * (self.request.retries + 1), 30))
 

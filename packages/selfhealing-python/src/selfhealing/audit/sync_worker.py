@@ -211,7 +211,7 @@ class AuditSyncWorker:
 
         logger.info(
             "audit_sync_worker.initialized",
-            self=self._config.sync_interval_seconds,
+            _self=self._config.sync_interval_seconds,
             self_1=self._config.batch_size,
         )
 
@@ -599,7 +599,7 @@ class AuditSyncWorker:
                 checkpoint.save(last_sequence=self._last_processed_seq)
                 logger.debug(
                     "audit_sync_worker.checkpoint_saved_via_legacy",
-                    self=self._last_processed_seq,
+                    _self=self._last_processed_seq,
                 )
             except Exception as e:
                 logger.warning(
@@ -619,7 +619,7 @@ class AuditSyncWorker:
             strategy.commit()  # 영속적 저장 보장
             logger.debug(
                 "audit_sync_worker.checkpoint_saved_via_strategy",
-                self=self._last_processed_seq,
+                _self=self._last_processed_seq,
             )
         except Exception as e:
             logger.warning(

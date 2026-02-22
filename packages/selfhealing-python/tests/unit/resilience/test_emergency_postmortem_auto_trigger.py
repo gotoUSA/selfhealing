@@ -216,7 +216,7 @@ class TestEmergencyPostmortemHandler:
         with patch("selfhealing.services.event_bus.bus._emergency_postmortem.logger") as mock_logger:
             _on_emergency_recovery_completed_postmortem(event)
             debug_calls = [str(call) for call in mock_logger.debug.call_args_list]
-            assert any("Auto postmortem disabled" in call for call in debug_calls)
+            assert any("auto_postmortem_disabled_skipping" in call for call in debug_calls)
 
     def test_handler_skips_when_duration_below_min(self, monkeypatch):
         """duration이 최소 duration 미만일 때 스킵 확인."""

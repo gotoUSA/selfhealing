@@ -13,11 +13,14 @@ class TestLogEmergencyModeAudit:
 
     def test_logs_activation_to_wal(self):
         """Should write activation events with EMERGENCY_MODE_ACTIVATED event type."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=1,
-        ) as mock_wal, patch(
-            "selfhealing.audit.log_config_change",
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=1,
+            ) as mock_wal,
+            patch(
+                "selfhealing.audit.log_config_change",
+            ),
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
 
@@ -38,11 +41,14 @@ class TestLogEmergencyModeAudit:
 
     def test_logs_auto_activation_to_wal(self):
         """Should use EMERGENCY_MODE_ACTIVATED for auto_activate action."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=2,
-        ) as mock_wal, patch(
-            "selfhealing.audit.log_config_change",
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=2,
+            ) as mock_wal,
+            patch(
+                "selfhealing.audit.log_config_change",
+            ),
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
 
@@ -61,11 +67,14 @@ class TestLogEmergencyModeAudit:
 
     def test_logs_deactivation_to_wal(self):
         """Should write deactivation events with EMERGENCY_MODE_DEACTIVATED event type."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=3,
-        ) as mock_wal, patch(
-            "selfhealing.audit.log_config_change",
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=3,
+            ) as mock_wal,
+            patch(
+                "selfhealing.audit.log_config_change",
+            ),
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
 
@@ -83,11 +92,14 @@ class TestLogEmergencyModeAudit:
 
     def test_includes_severity_based_on_action(self):
         """Should set severity based on action type."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=4,
-        ) as mock_wal, patch(
-            "selfhealing.audit.log_config_change",
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=4,
+            ) as mock_wal,
+            patch(
+                "selfhealing.audit.log_config_change",
+            ),
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
 
@@ -117,11 +129,14 @@ class TestLogEmergencyModeAudit:
 
     def test_includes_tag_field(self):
         """Should include formatted tag field."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=5,
-        ) as mock_wal, patch(
-            "selfhealing.audit.log_config_change",
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=5,
+            ) as mock_wal,
+            patch(
+                "selfhealing.audit.log_config_change",
+            ),
         ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
 
@@ -138,14 +153,16 @@ class TestLogEmergencyModeAudit:
 
     def test_logs_to_standard_logger_fallback(self):
         """Should log to standard logger when no request/buffer available."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=6,
-        ), patch(
-            "selfhealing.audit.log_config_change",
-        ), patch(
-            "selfhealing.services.audit.chaos_audit.logger"
-        ) as mock_logger:
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=6,
+            ),
+            patch(
+                "selfhealing.audit.log_config_change",
+            ),
+            patch("selfhealing.services.audit.chaos_audit.logger") as mock_logger,
+        ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
 
             log_emergency_mode_audit(
@@ -158,18 +175,22 @@ class TestLogEmergencyModeAudit:
 
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
-            assert "[EmergencyModeAudit]" in call_args
-            assert "ACTIVATE" in call_args
-            assert "level=LEVEL_1" in call_args
+            assert call_args == "emergency_mode_audit.event"
+            call_kwargs = mock_logger.info.call_args[1]
+            assert call_kwargs["action"] == "ACTIVATE"
+            assert call_kwargs["level"] == "LEVEL_1"
 
     def test_calls_log_config_change_for_compatibility(self):
         """Should also call log_config_change for backward compatibility."""
-        with patch(
-            "selfhealing.services.audit.chaos_audit._write_to_wal",
-            return_value=7,
-        ), patch(
-            "selfhealing.audit.log_config_change",
-        ) as mock_config_change:
+        with (
+            patch(
+                "selfhealing.services.audit.chaos_audit._write_to_wal",
+                return_value=7,
+            ),
+            patch(
+                "selfhealing.audit.log_config_change",
+            ) as mock_config_change,
+        ):
             from selfhealing.services.audit_helpers import log_emergency_mode_audit
 
             log_emergency_mode_audit(

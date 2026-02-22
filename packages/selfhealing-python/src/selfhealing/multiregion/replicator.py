@@ -300,7 +300,7 @@ class RedisReplicationTarget:
         except Exception as e:
             logger.exception(
                 "replicator.apply_event_error",
-                self=self.endpoint.region,
+                _self=self.endpoint.region,
                 error=e,
             )
             return False
@@ -391,7 +391,7 @@ class RegionReplicator:
         if not self._filter.should_replicate(event.key):
             logger.debug(
                 "replicator.filtered_out",
-                event=event.key,
+                _event=event.key,
             )
             with self._stats_lock:
                 self._stats["filtered"] += 1
@@ -508,7 +508,7 @@ class RegionReplicator:
         if resolved_event is None:
             logger.debug(
                 "replicator.event_dropped_conflict_resolver",
-                event=event.key,
+                _event=event.key,
             )
             return True
 
@@ -571,7 +571,7 @@ class RegionReplicator:
 
         logger.info(
             "replicator.started",
-            self=self._settings.replication_mode,
+            _self=self._settings.replication_mode,
             count=len(self._workers),
         )
 

@@ -45,7 +45,7 @@ class RateLimitExperiment(ChaosExperiment):
         """Inject rate limit responses to trigger CB cascade."""
         logger.info(
             "rate_limit_injection.injecting_rate_limits_ttl",
-            self=self.rate_limit_count,
+            _self=self.rate_limit_count,
             self_1=self.config.target_service,
             self_2=self._effective_ttl,
         )
@@ -92,13 +92,13 @@ class RateLimitExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "rate_limit_injection.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "rate_limit_injection.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:

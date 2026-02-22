@@ -497,7 +497,7 @@ class SelfHealingEventBus:
         logger.info(
             "adaptive_throttle.event_published",
             event_type=event.event_type.value,
-            event=event.source,
+            _event=event.source,
             handlers_called=handlers_called,
         )
 

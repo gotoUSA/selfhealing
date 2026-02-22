@@ -446,7 +446,7 @@ class DomainPropagationMultiplier:
                 "domain_propagation.depth_limit_reached",
                 crisis_domain=crisis_domain,
                 error_domain=error_domain,
-                self=self.config.max_hops,
+                _self=self.config.max_hops,
             )
         except Exception:
             pass  # 메트릭 실패는 무시

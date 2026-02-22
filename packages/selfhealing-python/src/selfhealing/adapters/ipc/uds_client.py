@@ -119,7 +119,7 @@ class UDSClient:
             self._connected = True
             logger.info(
                 "uds_client.connected",
-                self=self._socket_path,
+                _self=self._socket_path,
             )
             return True
         except Exception as e:

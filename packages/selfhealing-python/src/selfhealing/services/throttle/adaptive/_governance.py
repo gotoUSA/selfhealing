@@ -145,7 +145,7 @@ class GovernanceEventMixin:
                 "adaptive_throttle.load_shedding",
                 new_level=new_level,
                 traffic_limit=traffic_limit,
-                self=self._shedding_suggested_limit,
+                _self=self._shedding_suggested_limit,
                 affected=affected,
             )
 
@@ -191,7 +191,7 @@ class GovernanceEventMixin:
             if current_level != self._emergency_level:
                 logger.warning(
                     "adaptive_throttle.emergency_state_drift_detected",
-                    self=self._emergency_level,
+                    _self=self._emergency_level,
                     current_level=current_level,
                 )
                 self.adjust_for_emergency(current_level)

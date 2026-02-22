@@ -268,7 +268,7 @@ class IntegrationScenario(ABC):
         except Exception as e:
             logger.exception(
                 "test_integration_scenario_failed",
-                self=self.scenario_name,
+                _self=self.scenario_name,
                 error=e,
             )
             self.result.status = ScenarioStatus.FAILED

@@ -76,7 +76,7 @@ class CellRegistry:
 
         logger.info(
             "cellregistry_initialized_cells",
-            self=self._settings.cell_count,
+            _self=self._settings.cell_count,
             self_1=self._settings.bulkhead_isolation_enabled,
         )
 
@@ -331,7 +331,7 @@ class CellRegistry:
             logger.info(
                 "cell_registry.bulkheads_registered",
                 count=len(self._cells),
-                self=self._settings.bulkhead_max_concurrent_per_cell,
+                _self=self._settings.bulkhead_max_concurrent_per_cell,
             )
         except ImportError:
             logger.warning("cell_registry.bulkhead_registry_unavailable")

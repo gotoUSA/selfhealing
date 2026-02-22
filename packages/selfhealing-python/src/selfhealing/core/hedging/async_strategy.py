@@ -163,7 +163,7 @@ class AsyncHedgingStrategy:
                 self._current_load_level = config_value.lower()
                 logger.info(
                     "async_hedging_strategy.load_level_updated",
-                    self=self._current_load_level,
+                    _self=self._current_load_level,
                 )
         except Exception as e:
             logger.warning(
@@ -245,7 +245,7 @@ class AsyncHedgingStrategy:
         if self._should_disable_hedging():
             logger.warning(
                 "async_hedging_strategy.hedging_disabled_due_load",
-                self=self._current_load_level,
+                _self=self._current_load_level,
             )
             record_hedging_disabled(self._current_load_level)
             return await self._execute_single(primary_fn, default_value)

@@ -91,7 +91,7 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
         self._recover_orphan_tmp_files()
         logger.info(
             "state_backend.file_backend_initialized",
-            self=self._directory,
+            _self=self._directory,
         )
 
     def _recover_orphan_tmp_files(self) -> None:
@@ -255,7 +255,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             self._client.ping()
             logger.info(
                 "state_backend.redis_backend_connected",
-                self=self._redis_url,
+                _self=self._redis_url,
             )
         except ImportError:
             logger.exception("state_backend.redis_package_installed_run")

@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import logging
 import json
 import sys
 from collections.abc import Iterator
@@ -154,9 +155,7 @@ class AuditExporter:
                     files.append(path)
         return sorted(files)
 
-    def _read_and_filter_entries(
-        self, input_files: list[Path]
-    ) -> Iterator[dict[str, Any]]:
+    def _read_and_filter_entries(self, input_files: list[Path]) -> Iterator[dict[str, Any]]:
         """엔트리 읽기 및 필터링."""
         for file_path in input_files:
             try:
@@ -200,10 +199,7 @@ class AuditExporter:
                         timestamp_str = timestamp_str[:-1] + "+00:00"
                     timestamp = datetime.fromisoformat(timestamp_str)
 
-                    if (
-                        self._options.start_time
-                        and timestamp < self._options.start_time
-                    ):
+                    if self._options.start_time and timestamp < self._options.start_time:
                         return False
                     if self._options.end_time and timestamp > self._options.end_time:
                         return False
@@ -224,9 +220,7 @@ class AuditExporter:
 
         return True
 
-    def _verify_integrity(
-        self, entries: Iterator[dict[str, Any]]
-    ) -> Iterator[dict[str, Any]]:
+    def _verify_integrity(self, entries: Iterator[dict[str, Any]]) -> Iterator[dict[str, Any]]:
         """무결성 검증 (해시 체인)."""
         prev_hash = None
 
@@ -240,7 +234,7 @@ class AuditExporter:
                     self._stats.integrity_errors += 1
                     logger.warning(
                         "hash_chain_broken_expected",
-                        entry=entry.get('audit_id'),
+                        entry=entry.get("audit_id"),
                         prev_hash=prev_hash,
                         prev_hash_in_entry=prev_hash_in_entry,
                     )
@@ -305,9 +299,7 @@ class AuditExporter:
             writer = csv.DictWriter(output, fieldnames=headers, extrasaction="ignore")
             writer.writeheader()
             for entry in entries_list:
-                writer.writerow(
-                    {k: str(v) if v is not None else "" for k, v in entry.items()}
-                )
+                writer.writerow({k: str(v) if v is not None else "" for k, v in entry.items()})
                 self._stats.exported_entries += 1
 
         elif format_type == ExportFormat.PARQUET:
@@ -325,9 +317,7 @@ class AuditExporter:
         # 임시 파일에 쓰기
         import tempfile
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
             temp_path = f.name
             self._write_entries(entries, f)
 
@@ -342,9 +332,7 @@ class AuditExporter:
         try:
             import boto3
         except ImportError:
-            raise ImportError(
-                "S3 export requires boto3. Install with: pip install boto3"
-            )
+            raise ImportError("S3 export requires boto3. Install with: pip install boto3")
 
         s3 = boto3.client("s3", region_name=self._options.s3_region)
 
@@ -354,7 +342,7 @@ class AuditExporter:
         s3.upload_file(file_path, self._options.s3_bucket, key)
         logger.info(
             "uploaded",
-            self=self._options.s3_bucket,
+            _self=self._options.s3_bucket,
             key=key,
         )
 
@@ -414,9 +402,7 @@ class AuditExporter:
             import pyarrow as pa
             import pyarrow.parquet as pq
         except ImportError:
-            raise ImportError(
-                "Parquet export requires pyarrow. Install with: pip install pyarrow"
-            )
+            raise ImportError("Parquet export requires pyarrow. Install with: pip install pyarrow")
 
         # 모든 엔트리 수집
         entries = []

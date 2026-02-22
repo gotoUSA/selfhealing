@@ -54,9 +54,7 @@ class TestRuntimeConfigHistoryIntegration:
 
     def test_update_config_saves_to_history(self, mock_state_backend):
         """설정 업데이트 시 ConfigHistory에 자동 저장."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
@@ -79,9 +77,7 @@ class TestRuntimeConfigHistoryIntegration:
 
     def test_update_config_with_default_changed_by(self, mock_state_backend):
         """changed_by 미지정 시 기본값 'system' 사용."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
@@ -100,9 +96,7 @@ class TestRuntimeConfigHistoryIntegration:
 
     def test_update_config_includes_field_names_in_reason(self, mock_state_backend):
         """reason 미지정 시 변경된 필드명 포함."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
@@ -117,13 +111,9 @@ class TestRuntimeConfigHistoryIntegration:
             call_kwargs = mock_service.save_version.call_args[1]
             assert "max_attempts" in call_kwargs["reason"]
 
-    def test_history_save_failure_does_not_break_config_update(
-        self, mock_state_backend
-    ):
+    def test_history_save_failure_does_not_break_config_update(self, mock_state_backend):
         """History 저장 실패해도 설정 변경은 성공."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_service.save_version.side_effect = Exception("Redis connection failed")
             mock_get.return_value = mock_service
@@ -147,9 +137,7 @@ class TestDiffAwareSaving:
 
     def test_no_save_when_no_changes(self, mock_state_backend):
         """동일한 값으로 업데이트 시 두 번째 호출은 History 저장 안 함."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
@@ -173,9 +161,7 @@ class TestDiffAwareSaving:
 
     def test_save_when_value_changes(self, mock_state_backend):
         """값이 실제로 변경될 때 저장."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
@@ -204,19 +190,13 @@ class TestSafeDefaultTracking:
 
     def test_safe_default_applied_in_reason(self, mock_state_backend):
         """Safe Default 적용 시 reason에 표식 추가."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
             # Mock safe_defaults to return a value different from current
-            with patch(
-                "selfhealing.core.safe_defaults.is_valid_value", return_value=False
-            ):
-                with patch(
-                    "selfhealing.core.safe_defaults.get_safe_default", return_value=99
-                ):
+            with patch("selfhealing.core.safe_defaults.is_valid_value", return_value=False):
+                with patch("selfhealing.core.safe_defaults.get_safe_default", return_value=99):
                     manager = RuntimeConfigManager()
                     result = manager._update_config(
                         "circuit_breaker",
@@ -232,9 +212,7 @@ class TestSafeDefaultTracking:
 
     def test_valid_value_no_safe_default_marker(self, mock_state_backend):
         """유효한 값은 Safe Default 표식 없음."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
@@ -258,9 +236,7 @@ class TestUpdateWithStrategyHistoryIntegration:
 
     def test_immediate_strategy_saves_history(self, mock_state_backend):
         """IMMEDIATE 전략 시 History에 저장."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
@@ -281,9 +257,7 @@ class TestUpdateWithStrategyHistoryIntegration:
 
     def test_update_with_strategy_default_changed_by(self, mock_state_backend):
         """update_with_strategy changed_by 기본값 테스트."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_get.return_value = mock_service
 
@@ -329,9 +303,7 @@ class TestSaveToHistoryHelper:
 
     def test_save_to_history_graceful_degradation(self, mock_state_backend):
         """_save_to_history는 예외를 전파하지 않음."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_get.side_effect = Exception("Service unavailable")
 
             manager = RuntimeConfigManager()
@@ -346,9 +318,7 @@ class TestSaveToHistoryHelper:
 
     def test_save_to_history_logs_warning_on_failure(self, mock_state_backend):
         """_save_to_history 실패 시 경고 로그."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_get:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_get:
             mock_service = MagicMock()
             mock_service.save_version.side_effect = Exception("Save failed")
             mock_get.return_value = mock_service
@@ -364,7 +334,7 @@ class TestSaveToHistoryHelper:
 
                 mock_logger.warning.assert_called()
                 warning_msg = mock_logger.warning.call_args[0][0]
-                assert "Failed to save history" in warning_msg
+                assert warning_msg == "runtime_config.failed_save_history"
 
 
 class TestApplyPendingChangeHistory:
@@ -372,15 +342,11 @@ class TestApplyPendingChangeHistory:
 
     def test_apply_pending_change_saves_history(self, mock_state_backend):
         """apply_pending_change 시 History 저장."""
-        with patch(
-            "selfhealing.services.config_history.get_config_history_service"
-        ) as mock_hist:
+        with patch("selfhealing.services.config_history.get_config_history_service") as mock_hist:
             mock_hist_service = MagicMock()
             mock_hist.return_value = mock_hist_service
 
-            with patch(
-                "selfhealing.services.pending_config.get_pending_config_service"
-            ) as mock_pending:
+            with patch("selfhealing.services.pending_config.get_pending_config_service") as mock_pending:
                 mock_pending_service = MagicMock()
                 mock_change = MagicMock()
                 mock_change.config_type = "circuit_breaker"

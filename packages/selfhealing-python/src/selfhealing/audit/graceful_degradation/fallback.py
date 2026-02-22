@@ -348,7 +348,7 @@ class HashChainFallbackChain:
                 removed = self._memory_buffer.pop(0)
                 logger.warning(
                     "fallback_chain.memory_buffer_full_dropped",
-                    removed=removed.get('integrity', {}).get('sequence'),
+                    removed=removed.get("integrity", {}).get("sequence"),
                 )
 
             return entry
@@ -397,6 +397,10 @@ class HashChainFallbackChain:
         if self._local_file_handle:
             self._local_file_handle.close()
             self._local_file_handle = None
+
+    def __del__(self) -> None:
+        """Ensure file handles are closed on garbage collection."""
+        self.close()
 
     @property
     def current_tier(self) -> str:

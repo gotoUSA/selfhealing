@@ -204,7 +204,7 @@ class TestApiRateLimitSettings:
             mock_logger.warning.assert_called_once()
             # 호출된 메시지에 핵심 내용 포함 확인
             call_args = mock_logger.warning.call_args[0][0]
-            assert "High emergency_limit=51" in call_args
+            assert call_args == "api_rate_limit.high_consider_using_safety"
 
     def test_singleton_pattern(self, monkeypatch):
         """get_api_rate_limit_settings 싱글톤 패턴 검증."""

@@ -137,7 +137,7 @@ class BatchFlushWriter:
             logger.debug(
                 "batch_flush_writer.flushed_entries_total",
                 flushed_count=flushed_count,
-                self=self._entries_written,
+                _self=self._entries_written,
             )
             return True
 

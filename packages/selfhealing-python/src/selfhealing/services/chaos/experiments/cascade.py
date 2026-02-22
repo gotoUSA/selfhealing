@@ -53,7 +53,7 @@ class PartialFailureExperiment(ChaosExperiment):
         """Inject partial failures."""
         logger.info(
             "partial_failure.injecting_failures_ttl",
-            self=self.failure_rate*100,
+            _self=self.failure_rate*100,
             self_1=self.config.target_service,
             self_2=self._effective_ttl,
         )
@@ -89,13 +89,13 @@ class PartialFailureExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "partial_failure.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "partial_failure.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:
@@ -222,7 +222,7 @@ class PartialFailureExperiment(ChaosExperiment):
                 )
                 logger.info(
                     "partial_failure.load_shedding_deactivated",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
         except ImportError:
             pass
@@ -274,7 +274,7 @@ class CascadingFailureExperiment(ChaosExperiment):
         logger.warning(
             "cascading_failure.critical_injecting_cascading_failures",
             count=len(self.affected_services),
-            self=self._effective_ttl,
+            _self=self._effective_ttl,
         )
 
         if not self.affected_services:
@@ -351,13 +351,13 @@ class CascadingFailureExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "cascading_failure.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "cascading_failure.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:

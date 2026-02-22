@@ -539,7 +539,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 "circuit_breaker.circuit_auto_opened_failures",
                 service_name=service_name,
                 updated_state=updated_state.failure_count,
-                self=self.get_total_calls(service_name),
+                _self=self.get_total_calls(service_name),
             )
 
             # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
@@ -607,7 +607,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 "circuit_breaker.opening",
                 state=state.service_name,
                 total_calls=total_calls,
-                self=self.config.minimum_calls,
+                _self=self.config.minimum_calls,
             )
             return False
 
@@ -619,7 +619,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                     "circuit_breaker.rate_threshold_exceeded",
                     state=state.service_name,
                     failure_rate=failure_rate,
-                    self=self.config.failure_rate_threshold,
+                    _self=self.config.failure_rate_threshold,
                     window_size=window_size,
                 )
                 return True
@@ -852,7 +852,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             logger.info(
                 "circuit_breaker.circuit_auto_closed_successes",
                 service_name=service_name,
-                self=self.config.success_threshold,
+                _self=self.config.success_threshold,
             )
 
             # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)

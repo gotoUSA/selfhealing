@@ -300,7 +300,7 @@ class ThrottleDLQReplayMixin:
             logger.debug(
                 "adaptive_throttle.recovery_skipping_dlq_replay",
                 recovery_percent=recovery_percent,
-                self=self._replay_min_recovery_percent,
+                _self=self._replay_min_recovery_percent,
             )
             return
 

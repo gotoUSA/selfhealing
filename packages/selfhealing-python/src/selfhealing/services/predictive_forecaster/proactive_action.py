@@ -352,7 +352,7 @@ class ProactiveActionTrigger:
                 "proactive_action_trigger.low_confidence",
                 confidence=confidence,
                 parameter=parameter,
-                self=self._min_confidence,
+                _self=self._min_confidence,
             )
             return None
 

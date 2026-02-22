@@ -812,7 +812,7 @@ class ContinuousAuditRecorder:
                 logger.warning(
                     "continuous_audit.write_failed_fail_open",
                     error=e,
-                    self=self._failed_write_count,
+                    _self=self._failed_write_count,
                 )
 
             # ID 생성 (timestamp + sequence)

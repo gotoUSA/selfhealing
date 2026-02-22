@@ -51,10 +51,11 @@ class TestDiskBufferSettingsContract:
         settings = DiskBufferSettings()
         assert settings.lmdb_writemap is True
 
-    def test_max_entries_default(self):
+    def test_max_entries_default(self, monkeypatch):
         """최대 엔트리 수 기본값은 100000이다."""
         from selfhealing.audit.persistence.config import DiskBufferSettings
 
+        monkeypatch.delenv("SELFHEALING_DISK_BUFFER_MAX_ENTRIES", raising=False)
         settings = DiskBufferSettings()
         assert settings.max_entries == 100000
 
@@ -65,24 +66,27 @@ class TestDiskBufferSettingsContract:
         settings = DiskBufferSettings()
         assert settings.enable_checksum is True
 
-    def test_group_commit_enabled_by_default(self):
+    def test_group_commit_enabled_by_default(self, monkeypatch):
         """Group Commit은 기본 활성화이다."""
         from selfhealing.audit.persistence.config import DiskBufferSettings
 
+        monkeypatch.delenv("SELFHEALING_DISK_BUFFER_GROUP_COMMIT_ENABLED", raising=False)
         settings = DiskBufferSettings()
         assert settings.group_commit_enabled is True
 
-    def test_retention_hours_default(self):
+    def test_retention_hours_default(self, monkeypatch):
         """보관 기간 기본값은 72시간이다."""
         from selfhealing.audit.persistence.config import DiskBufferSettings
 
+        monkeypatch.delenv("SELFHEALING_DISK_BUFFER_RETENTION_HOURS", raising=False)
         settings = DiskBufferSettings()
         assert settings.retention_hours == 72
 
-    def test_include_pid_in_db_name_default(self):
+    def test_include_pid_in_db_name_default(self, monkeypatch):
         """PID 포함 기본값은 True이다."""
         from selfhealing.audit.persistence.config import DiskBufferSettings
 
+        monkeypatch.delenv("SELFHEALING_DISK_BUFFER_INCLUDE_PID_IN_DB_NAME", raising=False)
         settings = DiskBufferSettings()
         assert settings.include_pid_in_db_name is True
 

@@ -255,7 +255,7 @@ class AuditWatchdog:
             )
             logger.info(
                 "audit_watchdog_started",
-                self=self._config.heartbeat_interval_seconds,
+                _self=self._config.heartbeat_interval_seconds,
             )
 
     def stop(self, timeout: float = 5.0) -> None:

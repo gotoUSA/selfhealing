@@ -135,9 +135,8 @@ class TestAuthBypassFailSecure:
         with patch("selfhealing.api.django.permissions.logger") as mock_logger:
             _is_auth_disabled()
             mock_logger.error.assert_called_once()
-            call_args = str(mock_logger.error.call_args)
-            assert "SECURITY" in call_args
-            assert "PRODUCTION" in call_args
+            call_args = mock_logger.error.call_args[0][0]
+            assert call_args == "security.set_production_environment_auth"
 
 
 # =============================================================================

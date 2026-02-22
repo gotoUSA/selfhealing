@@ -62,7 +62,7 @@ class AuditStorageFailureExperiment(ChaosExperiment):
         """Inject audit storage failure simulation."""
         logger.warning(
             "audit_storage_failure.injecting_failures_rate",
-            self=self.failure_type,
+            _self=self.failure_type,
             self_1=self.failure_rate*100,
         )
 
@@ -100,7 +100,7 @@ class AuditStorageFailureExperiment(ChaosExperiment):
 
             logger.info(
                 "audit_storage_failure.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:
@@ -230,7 +230,7 @@ class ReplayFloodExperiment(ChaosExperiment):
         """Inject replay flood simulation."""
         logger.warning(
             "replay_flood.starting_flood_payload",
-            self=self.flood_rate,
+            _self=self.flood_rate,
             self_1=self.duration_seconds,
             self_2=self.payload_size_bytes,
         )
@@ -270,7 +270,7 @@ class ReplayFloodExperiment(ChaosExperiment):
 
             logger.info(
                 "replay_flood.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:

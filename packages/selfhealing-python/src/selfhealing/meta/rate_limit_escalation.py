@@ -87,7 +87,7 @@ class RateLimitEscalationHandler:
             )
             logger.info(
                 "rate_limit_escalation_handler.subscribed",
-                self=self._threshold,
+                _self=self._threshold,
             )
             return True
         except ImportError:
@@ -116,7 +116,7 @@ class RateLimitEscalationHandler:
                 "rate_limit_escalation_handler.skipping_escalation",
                 key=key,
                 consecutive=consecutive,
-                self=self._threshold,
+                _self=self._threshold,
             )
             return
 

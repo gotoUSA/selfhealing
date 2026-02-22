@@ -199,7 +199,7 @@ class QuorumWitness:
 
             logger.info(
                 "quorum.primary_lease_acquired",
-                self=self._region,
+                _self=self._region,
                 expires_at=expires_at,
             )
             return True
@@ -210,7 +210,7 @@ class QuorumWitness:
             if "ConditionalCheckFailedException" in error_name or "ConditionalCheckFailed" in str(e):
                 logger.warning(
                     "quorum.primary_lease_denied_another",
-                    self=self._region,
+                    _self=self._region,
                 )
             else:
                 logger.error(
@@ -285,7 +285,7 @@ class QuorumWitness:
                 )
                 logger.info(
                     "quorum.lease_released",
-                    self=self._region,
+                    _self=self._region,
                 )
             except Exception as e:
                 logger.warning(
@@ -410,13 +410,13 @@ class InMemoryQuorumWitness:
                 )
                 logger.info(
                     "lease_acquired",
-                    self=self._region,
+                    _self=self._region,
                 )
                 return True
             else:
                 logger.warning(
                     "lease_denied_held",
-                    self=self._region,
+                    _self=self._region,
                     InMemoryQuorumWitness=InMemoryQuorumWitness._global_lease.region,
                 )
                 return False
@@ -441,7 +441,7 @@ class InMemoryQuorumWitness:
                 InMemoryQuorumWitness._global_lease = None
                 logger.info(
                     "lease_released",
-                    self=self._region,
+                    _self=self._region,
                 )
 
     def get_current_primary(self) -> str | None:

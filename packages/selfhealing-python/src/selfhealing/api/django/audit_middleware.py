@@ -204,7 +204,7 @@ class AuditMiddleware:
 
             logger.debug(
                 "audit_middleware.read_audit_paths",
-                self=self._read_audit_paths,
+                _self=self._read_audit_paths,
             )
         except Exception as e:
             logger.debug(
@@ -409,7 +409,7 @@ class AuditMiddleware:
             logger.warning(
                 "audit_middleware.recording_failed_fail_open",
                 error=e,
-                self=self._failed_recordings,
+                _self=self._failed_recordings,
             )
             # Fallback 시도
             self._fallback_log_events(buffer)

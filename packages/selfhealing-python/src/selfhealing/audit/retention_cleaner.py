@@ -84,7 +84,7 @@ class WALRetentionCleaner:
         if not self._wal_dir.exists():
             logger.debug(
                 "retention_cleaner.wal_directory_found",
-                self=self._wal_dir,
+                _self=self._wal_dir,
             )
             return 0
 

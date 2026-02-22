@@ -115,7 +115,7 @@ class MmapBuffer:
         self._open_existing_file()
         logger.info(
             "mmap_buffer.created_new_file",
-            self=self._file_path,
+            _self=self._file_path,
         )
 
     def _open_existing_file(self) -> None:
@@ -130,7 +130,7 @@ class MmapBuffer:
 
         logger.info(
             "mmap_buffer.opened",
-            self=self._file_path,
+            _self=self._file_path,
         )
 
     def _read_header(self) -> tuple[int, int]:

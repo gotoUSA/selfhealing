@@ -84,7 +84,7 @@ class ResourceExhaustionExperiment(ChaosExperiment):
                     "resource_exhaustion.capping_memory_mb_cgroup",
                     value=actual_bytes / 1024 / 1024,
                     value_1=max_bytes / 1024 / 1024,
-                    self=self.SAFETY_MARGIN_PERCENT * 100,
+                    _self=self.SAFETY_MARGIN_PERCENT * 100,
                 )
 
             return actual_bytes
@@ -109,7 +109,7 @@ class ResourceExhaustionExperiment(ChaosExperiment):
 
         logger.info(
             "resource_exhaustion.exhausting_ttl_mb_else",
-            self=self.resource_type,
+            _self=self.resource_type,
             self_1=self.exhaustion_percent*100,
             self_2=self.config.target_service,
             self_3=self._effective_ttl,
@@ -146,13 +146,13 @@ class ResourceExhaustionExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "resource_exhaustion.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "resource_exhaustion.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:
@@ -232,7 +232,7 @@ class PoolExhaustionExperiment(ChaosExperiment):
 
         logger.info(
             "pool_exhaustion.injecting_simulated_status_pool",
-            self=self.simulated_status,
+            _self=self.simulated_status,
             self_1=self.target_pool,
             self_2=self._effective_ttl,
         )
@@ -291,13 +291,13 @@ class PoolExhaustionExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "pool_exhaustion.rollback_already_completed",
-                    self=self.experiment_id,
+                    _self=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "pool_exhaustion.rolling_back",
-                self=self.experiment_id,
+                _self=self.experiment_id,
             )
 
             try:

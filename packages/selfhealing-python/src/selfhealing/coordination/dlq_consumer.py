@@ -90,7 +90,7 @@ class DLQConsumerCoordinator:
         """DLQ Consumer 시작 (Leader Election 시작)."""
         logger.info(
             "dlq_consumer.시작",
-            self=self._resource_name,
+            _self=self._resource_name,
         )
         self._stop_event.clear()
         self._elector.start()
@@ -99,7 +99,7 @@ class DLQConsumerCoordinator:
         """DLQ Consumer 중지 (Leader Election 중지)."""
         logger.info(
             "dlq_consumer.중지",
-            self=self._resource_name,
+            _self=self._resource_name,
         )
         self._stop_event.set()
         self._consuming = False
@@ -111,7 +111,7 @@ class DLQConsumerCoordinator:
         self._elector.stop()
         logger.info(
             "dlq_consumer.중지됨",
-            self=self._resource_name,
+            _self=self._resource_name,
         )
 
     def _on_become_leader(self) -> None:

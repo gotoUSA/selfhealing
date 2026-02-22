@@ -353,7 +353,7 @@ class RetryHandler:
             if multiplier > 1.0:
                 logger.info(
                     "retry_handler.backoff_adjusted",
-                    self=self.backoff.calculate(attempt),
+                    _self=self.backoff.calculate(attempt),
                     delay=delay,
                     multiplier=multiplier,
                     reason=reason,
@@ -426,7 +426,7 @@ class RetryHandler:
         if not _is_system_enabled():
             logger.warning(
                 "retry_handler.execute_blocked_kill_switch",
-                self=self.config.domain,
+                _self=self.config.domain,
             )
             return RetryResult(
                 success=False,
@@ -601,7 +601,7 @@ class RetryHandler:
             if attempt > 1 and not is_critical_tier and not self._retry_budget.should_allow_retry():
                 logger.warning(
                     "retry_handler.retry_budget_exhausted",
-                    self=self._retry_budget.get_stats(),
+                    _self=self._retry_budget.get_stats(),
                 )
                 break
 
@@ -618,7 +618,7 @@ class RetryHandler:
                 logger.debug(
                     "retry_handler.success_attempt",
                     attempt=attempt,
-                    self=self.config.max_attempts,
+                    _self=self.config.max_attempts,
                 )
 
                 # Audit 기록: 재시도 성공

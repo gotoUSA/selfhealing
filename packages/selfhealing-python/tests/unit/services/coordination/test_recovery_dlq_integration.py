@@ -506,7 +506,7 @@ class TestDlqCallOrderBehavior:
         with patch("selfhealing.services.coordination.recovery_coordinator._session_persistence.logger") as mock_logger:
 
             def tracking_error(*args, **kwargs):
-                if args and "[Recovery] Failed:" in str(args[0]):
+                if args and "recovery.failed" in str(args[0]):
                     call_order.append("logger_error")
 
             mock_logger.error = MagicMock(side_effect=tracking_error)

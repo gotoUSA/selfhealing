@@ -156,7 +156,7 @@ class CheckpointManager:
             fallback_path = Path(tempfile.gettempdir()) / "selfhealing" / "checkpoint.json"
             logger.warning(
                 "checkpoint_manager.no_write_permission_falling",
-                self=self._path,
+                _self=self._path,
                 fallback_path=fallback_path,
             )
             self._path = fallback_path

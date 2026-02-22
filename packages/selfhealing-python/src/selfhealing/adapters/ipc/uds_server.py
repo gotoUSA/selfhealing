@@ -226,7 +226,7 @@ class UDSServer:
         self._running = True
         logger.info(
             "uds_server.started",
-            self=self._socket_path,
+            _self=self._socket_path,
         )
 
         if background:
