@@ -362,7 +362,7 @@ class CellTaggingMiddleware:
         패턴 참조: registry.py L153 get_cell_info() — None 반환 시 존재하지 않는 Cell
         패턴 참조: registry.py L141-145 — DRAINING/ISOLATED Cell 건너뛰기 로직
         """
-        from selfhealing.services.cell_topology import get_cell_registry
+        from selfhealing.services.cell_topology.registry import get_cell_registry
         from selfhealing.services.cell_topology.models import CellState
 
         registry = get_cell_registry()

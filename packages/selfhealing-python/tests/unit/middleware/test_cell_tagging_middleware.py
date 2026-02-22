@@ -17,13 +17,7 @@ import pytest
 
 from selfhealing.context.cell_context import _current_cell_id, get_current_cell_id
 
-
-@pytest.fixture(autouse=True)
-def _reset_cell_context():
-    """테스트 간 ContextVar 상태 초기화."""
-    token = _current_cell_id.set(None)
-    yield
-    _current_cell_id.reset(token)
+# _reset_cell_context fixture는 conftest.py에서 autouse로 제공 (§5.1: 2+ 파일 공유)
 
 
 def _make_response():
