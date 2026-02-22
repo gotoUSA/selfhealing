@@ -306,16 +306,17 @@ def trace_id_middleware(get_response):
         # Store on request for easy access
         request.trace_id = trace_id
 
-        # Process request
-        response = get_response(request)
+        try:
+            # Process request
+            response = get_response(request)
 
-        # Add trace ID to response headers
-        response["X-Request-ID"] = trace_id
+            # Add trace ID to response headers
+            response["X-Request-ID"] = trace_id
 
-        # Clear trace ID after request
-        clear_trace_id()
-
-        return response
+            return response
+        finally:
+            # Clear trace ID after request — 예외 발생 시에도 반드시 정리
+            clear_trace_id()
 
     return middleware
 

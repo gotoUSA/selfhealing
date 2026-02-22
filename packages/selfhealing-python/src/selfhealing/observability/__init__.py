@@ -20,6 +20,7 @@ _logger_provider = None
 _logging_instrumented: bool = False
 _requests_instrumented: bool = False
 _celery_instrumented: bool = False
+_django_instrumented: bool = False
 
 
 def _is_otel_available() -> bool:
@@ -130,6 +131,12 @@ def initialize_opentelemetry() -> bool:
             settings.exporter_otlp_endpoint,
             settings.traces_sampler_arg * 100,
         )
+
+        # Baggage Propagator 등록 — traceparent + baggage 헤더 자동 전파
+        from selfhealing.observability.baggage import setup_baggage_propagation
+
+        setup_baggage_propagation()
+
         return True
 
     except Exception as e:
@@ -271,7 +278,7 @@ def reset_opentelemetry() -> None:
     This forces re-initialization on next use.
     """
     global _initialized, _tracer_provider, _tracer, _logger_provider
-    global _requests_instrumented, _celery_instrumented, _logging_instrumented
+    global _requests_instrumented, _celery_instrumented, _logging_instrumented, _django_instrumented
     _initialized = False
     _tracer_provider = None
     _tracer = None
@@ -279,6 +286,7 @@ def reset_opentelemetry() -> None:
     _requests_instrumented = False
     _celery_instrumented = False
     _logging_instrumented = False
+    _django_instrumented = False
 
 
 def instrument_requests() -> bool:
@@ -399,6 +407,90 @@ def is_requests_instrumented() -> bool:
 def is_celery_instrumented() -> bool:
     """Check if Celery is instrumented."""
     return _celery_instrumented
+
+
+def is_django_instrumented() -> bool:
+    """Check if Django is instrumented."""
+    return _django_instrumented
+
+
+def instrument_django() -> bool:
+    """
+    Enable automatic instrumentation for Django.
+
+    WSGI 레벨에서 traceparent + baggage 헤더를 자동 추출하고,
+    Django 요청에 대한 span을 자동 생성한다.
+
+    DjangoInstrumentor는 내부적으로 MIDDLEWARE 최상단에
+    _DjangoMiddleware를 자동 삽입한다.
+    따라서 BaggageSyncMiddleware보다 반드시 먼저 실행된다.
+
+    excluded_urls: /health, /metrics 등 불필요한 span/baggage 파싱 제외.
+
+    Returns:
+        bool: True if instrumentation was successful, False otherwise
+    """
+    global _django_instrumented
+
+    if _django_instrumented:
+        return True
+
+    if not is_otel_enabled():
+        return False
+
+    try:
+        import os
+
+        from opentelemetry.instrumentation.django import DjangoInstrumentor
+
+        from selfhealing.settings.observability import get_otel_settings
+
+        settings = get_otel_settings()
+
+        if not settings.django_instrument_enabled:
+            logger.debug("Django instrumentation disabled via OTEL_DJANGO_INSTRUMENT_ENABLED=false")
+            return False
+
+        # excluded_urls 설정 적용 — 환경변수 OTEL_PYTHON_DJANGO_EXCLUDED_URLS 사용
+        excluded = ",".join(settings.get_excluded_urls_list())
+        if excluded:
+            os.environ.setdefault("OTEL_PYTHON_DJANGO_EXCLUDED_URLS", excluded)
+
+        DjangoInstrumentor().instrument()
+        _django_instrumented = True
+        logger.info(
+            "OpenTelemetry Django instrumentation enabled " "(excluded_urls=%s)",
+            excluded or "none",
+        )
+        return True
+
+    except ImportError:
+        logger.debug("opentelemetry-instrumentation-django not installed")
+        return False
+    except Exception as e:
+        logger.warning("Failed to instrument Django: %s", e)
+        return False
+
+
+def uninstrument_django() -> None:
+    """
+    Disable automatic instrumentation for Django.
+
+    Used primarily for testing to ensure clean state.
+    """
+    global _django_instrumented
+
+    if not _django_instrumented:
+        return
+
+    try:
+        from opentelemetry.instrumentation.django import DjangoInstrumentor
+
+        DjangoInstrumentor().uninstrument()
+        _django_instrumented = False
+        logger.debug("OpenTelemetry Django instrumentation disabled")
+    except Exception:
+        pass
 
 
 def is_logging_instrumented() -> bool:

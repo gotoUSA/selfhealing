@@ -1,9 +1,9 @@
 """
-단위 테스트 — SelfHealingHttpClient의 Deadline 전파 및 timeout 조정.
+단위 테스트 — SelfHealingHttpClient의 Deadline timeout 조정.
 
 테스트 항목:
-- deadline 활성 시 X-Deadline-Remaining 헤더 자동 주입
-- deadline 미설정 시 헤더 미포함
+- deadline 활성 시 X-Deadline-Remaining 헤더가 _get_headers()에 포함되지 않음
+  (266 문서에 따라 OTel Baggage 전파로 대체됨)
 - deadline 기반 timeout 자동 축소
 - timeout이 deadline보다 짧으면 timeout 유지
 """
@@ -31,8 +31,8 @@ def _reset_deadline():
     _request_deadline.set(None)
 
 
-class TestHttpClientDeadlinePropagationBehavior:
-    """SelfHealingHttpClient Deadline 헤더 전파 동작 검증."""
+class TestHttpClientDeadlineHeaderRemovalBehavior:
+    """SelfHealingHttpClient Deadline 헤더가 OTel Baggage로 대체된 동작 검증."""
 
     @pytest.fixture
     def client(self):
@@ -42,17 +42,19 @@ class TestHttpClientDeadlinePropagationBehavior:
             mock_settings.return_value = settings
             return SelfHealingHttpClient()
 
-    def test_deadline_header_propagation(self, client):
-        """deadline 활성 시 X-Deadline-Remaining 헤더가 포함된다."""
+    def test_deadline_header_no_longer_in_get_headers(self, client):
+        """deadline 활성 시에도 _get_headers()에 X-Deadline-Remaining이 포함되지 않는다.
+
+        OTel Baggage 전파로 대체되었으므로 수동 헤더 주입은 제거됨.
+        """
         set_deadline(3000.0)
 
         headers = client._get_headers()
 
-        assert DEADLINE_HEADER in headers
-        assert headers[DEADLINE_HEADER].endswith("ms")
+        assert DEADLINE_HEADER not in headers
 
     def test_no_deadline_no_header(self, client):
-        """deadline 미설정 시 헤더가 포함되지 않는다."""
+        """deadline 미설정 시에도 헤더가 포함되지 않는다."""
         headers = client._get_headers()
 
         assert DEADLINE_HEADER not in headers

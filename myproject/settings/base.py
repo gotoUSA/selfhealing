@@ -139,6 +139,12 @@ MIDDLEWARE = [
     # 비활성화: SELFHEALING_CELL_TOPOLOGY_ENABLED=false 또는 SELFHEALING_CELL_TAGGING_ENABLED=false
     "selfhealing.api.django.cell.middleware.CellTaggingMiddleware",
     # ==========================================================================
+    # [6.6] Baggage Sync Middleware (OTel Baggage ↔ ContextVar 동기화)
+    # ==========================================================================
+    # CellTaggingMiddleware 직후 배치 — 모든 ContextVar 설정 후 Baggage 동기화
+    # DjangoInstrumentor가 [auto-0]에서 baggage 헤더를 파싱한 후 실행
+    "selfhealing.api.django.cell.middleware.BaggageSyncMiddleware",
+    # ==========================================================================
     # [7] Self-Healing Rate Limit (Hybrid: Redis + Local Memory Fallback)
     # ==========================================================================
     "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",

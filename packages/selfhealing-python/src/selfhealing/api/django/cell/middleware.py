@@ -1,8 +1,14 @@
 """
-Cell Tagging Django Middleware.
+Cell Tagging & Baggage Sync Django Middlewares.
 
-HTTP 요청에 cell_id 어트리뷰트를 추가하고,
-ContextVar에 설정하여 서비스 레이어에서도 접근 가능하게 합니다.
+CellTaggingMiddleware:
+    HTTP 요청에 cell_id 어트리뷰트를 추가하고,
+    ContextVar에 설정하여 서비스 레이어에서도 접근 가능하게 합니다.
+
+BaggageSyncMiddleware:
+    ContextVar ↔ OTel Baggage 양방향 동기화.
+    수신: Baggage → ContextVar 복원
+    송신: ContextVar → Baggage 동기화 (outgoing 요청에 자동 전파)
 
 활성화:
     SELFHEALING_CELL_TOPOLOGY_ENABLED=true
@@ -10,7 +16,9 @@ ContextVar에 설정하여 서비스 레이어에서도 접근 가능하게 합�
 
 MIDDLEWARE 설정:
     "selfhealing.api.django.cell.middleware.CellTaggingMiddleware"
-    → AuthenticationMiddleware 이후, HybridRateLimitMiddleware 이전 배치
+    → AuthenticationMiddleware 이후, BaggageSyncMiddleware 이전 배치
+    "selfhealing.api.django.cell.middleware.BaggageSyncMiddleware"
+    → CellTaggingMiddleware 직후 배치
 """
 
 from __future__ import annotations
@@ -86,3 +94,41 @@ class CellTaggingMiddleware:
 
             self._tagger = CellTagger()
         return self._tagger
+
+
+class BaggageSyncMiddleware:
+    """
+    ContextVar ↔ OTel Baggage 양방향 동기화 미들웨어.
+
+    실행 순서:
+    1. 수신 측: DjangoInstrumentor가 파싱한 Baggage → ContextVar 복원
+    2. 송신 측: ContextVar 값 → OTel Baggage 동기화
+
+    배치: CellTaggingMiddleware 직후
+    - 모든 ContextVar가 설정된 후 실행되어야 Baggage에 최신값이 반영됨
+    - try/finally로 OTel Context token의 격리를 보장
+
+    패턴 참조: services/http_client.py suppress_otel_instrumentation()
+    """
+
+    def __init__(self, get_response: Any):
+        self.get_response = get_response
+
+    def __call__(self, request: HttpRequest) -> HttpResponse:
+        from selfhealing.observability.baggage import (
+            detach_baggage_token,
+            restore_contextvars_from_baggage,
+            sync_contextvars_to_baggage,
+        )
+
+        # 수신 측: Baggage → ContextVar 복원
+        restore_contextvars_from_baggage()
+
+        # 송신 측: ContextVar → Baggage 동기화
+        token = sync_contextvars_to_baggage()
+        try:
+            response = self.get_response(request)
+        finally:
+            # 요청 종료 시 OTel Context 복원 — 누수 방지
+            detach_baggage_token(token)
+        return response

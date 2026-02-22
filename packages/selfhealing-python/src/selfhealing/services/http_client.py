@@ -145,18 +145,8 @@ class SelfHealingHttpClient:
             if self._experiment_id:
                 headers[CHAOS_EXPERIMENT_ID_HEADER] = self._experiment_id
 
-        # Deadline 헤더 전파 (상위 서비스 → 하위 서비스)
-        try:
-            from selfhealing.scaling.deadline_context import (
-                DEADLINE_HEADER,
-                get_propagation_header_value,
-            )
-
-            deadline_value = get_propagation_header_value()
-            if deadline_value is not None:
-                headers[DEADLINE_HEADER] = deadline_value
-        except ImportError:
-            pass
+        # Deadline 헤더 전파는 OTel Baggage로 대체됨
+        # (observability/baggage.py sync_contextvars_to_baggage → W3C baggage 헤더 자동 전파)
 
         return headers
 
@@ -198,11 +188,22 @@ class SelfHealingHttpClient:
 
         request_func = getattr(req_lib, method.lower())
 
-        if self._suppress_internal_spans and _is_otel_enabled():
-            with suppress_otel_instrumentation():
-                return request_func(url, headers=headers, timeout=timeout, **kwargs)
+        # Pre-request: ContextVar → Baggage 재동기화
+        # 비즈니스 로직에서 ContextVar가 중간 변경된 경우 최신값을 반영
+        from selfhealing.observability.baggage import (
+            detach_baggage_token,
+            sync_contextvars_to_baggage,
+        )
 
-        return request_func(url, headers=headers, timeout=timeout, **kwargs)
+        baggage_token = sync_contextvars_to_baggage()
+        try:
+            if self._suppress_internal_spans and _is_otel_enabled():
+                with suppress_otel_instrumentation():
+                    return request_func(url, headers=headers, timeout=timeout, **kwargs)
+
+            return request_func(url, headers=headers, timeout=timeout, **kwargs)
+        finally:
+            detach_baggage_token(baggage_token)
 
     def get(
         self,
