@@ -169,8 +169,13 @@ class MetricReconciler:
                 result.circuit_breaker_states[service] = state
 
                 if metrics and hasattr(metrics, "circuit_breaker_state"):
+                    from selfhealing.services.cell_topology.cb_namespace import (
+                        parse_composite_cb_name,
+                    )
+
+                    base_service, cell_id = parse_composite_cb_name(service)
                     state_value = state_values.get(state, 0)
-                    metrics.circuit_breaker_state.labels(service_name=service).set(state_value)
+                    metrics.circuit_breaker_state.labels(service_name=base_service, cell_id=cell_id).set(state_value)
             except Exception as e:
                 logger.warning(f"[Reconciler] Failed to sync CB state for {service}: {e}")
 

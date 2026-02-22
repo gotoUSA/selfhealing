@@ -169,11 +169,15 @@ def record_circuit_breaker_state_change(
         to_state: New state
     """
     try:
+        from selfhealing.services.cell_topology.cb_namespace import parse_composite_cb_name
+
+        base_service, cell_id = parse_composite_cb_name(service)
         is_synthetic = TestModeContext.get_synthetic_label_value()
         state_value = {"closed": 0, "open": 1, "half_open": 2}.get(to_state, 0)
-        circuit_breaker_state.labels(service=service).set(state_value)
+        circuit_breaker_state.labels(service=base_service, cell_id=cell_id).set(state_value)
         circuit_breaker_transitions.labels(
-            service=service,
+            service=base_service,
+            cell_id=cell_id,
             from_state=from_state,
             to_state=to_state,
             is_synthetic=is_synthetic,

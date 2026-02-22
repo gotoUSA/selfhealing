@@ -446,12 +446,12 @@ class CircuitBreakerEventHandler:
             state_value = CircuitBreakerEventHandler.STATE_VALUES.get(to_state, 0)
             if hasattr(metrics, "circuit_breaker_state"):
                 metrics.circuit_breaker_state.labels(
-                    service=base_service, cell_id=cell_id,
+                    service_name=base_service, cell_id=cell_id,
                 ).set(state_value)
 
             if hasattr(metrics, "circuit_breaker_transitions"):
                 metrics.circuit_breaker_transitions.labels(
-                    service=base_service, cell_id=cell_id,
+                    service_name=base_service, cell_id=cell_id,
                     from_state=from_state, to_state=to_state,
                 ).inc()
         except Exception as e:
@@ -880,6 +880,10 @@ Lua 스크립트 재생 전략이 정의되지 않았다 (§2.6.3).
 | `services/cell_topology/cb_namespace.py` | `make_cell_scoped_cb_name()`, `parse_composite_cb_name()` 신규 | 신규 | ❌ |
 | `services/metrics/definitions.py` | `circuit_breaker_state` Label에 `cell_id` 추가 | 수정 | ⚠️ Grafana 대시보드 쿼리 수정 필요 |
 | `metrics/event_handlers.py` | `on_state_changed()` Composite Key 파싱 | 수정 | ❌ 내부 구현만 |
+| `metrics/prometheus.py` | `circuit_breaker_state`, `circuit_breaker_transitions` Label에 `cell_id` 추가 | 수정 | ⚠️ Grafana 대시보드 쿼리 수정 필요 |
+| `services/metrics/recorders.py` | `record_circuit_breaker_state_change()` Composite Key 파싱 | 수정 | ❌ 내부 구현만 |
+| `services/metrics/updaters.py` | `update_circuit_breaker_gauges()` Composite Key 파싱 | 수정 | ❌ 내부 구현만 |
+| `metrics/reconciler.py` | `sync()` CB 상태 동기화 시 Composite Key 파싱 | 수정 | ❌ 내부 구현만 |
 | `services/cell_topology/health.py` | `_get_cb_open_ratio()` Phase 2 전환 | 수정 | ❌ 내부 구현만 |
 | `services/circuit_breaker/service.py` | `reconcile_cb_cell_mapping()` 신규 | 수정 | ❌ 신규 메서드 |
 

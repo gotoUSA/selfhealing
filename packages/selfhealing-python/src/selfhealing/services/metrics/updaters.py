@@ -147,11 +147,14 @@ def update_circuit_breaker_gauges(
 
             repository = ProviderRegistry.get_circuit_breaker_repo()
 
+        from selfhealing.services.cell_topology.cb_namespace import parse_composite_cb_name
+
         all_states = repository.get_all()
         states = {}
         for cb in all_states:
+            base_service, cell_id = parse_composite_cb_name(cb.service_name)
             state_value = {"closed": 0, "open": 1, "half_open": 2}.get(cb.state, 0)
-            circuit_breaker_state.labels(service=cb.service_name).set(state_value)
+            circuit_breaker_state.labels(service=base_service, cell_id=cell_id).set(state_value)
             states[cb.service_name] = cb.state
 
         logger.debug(f"[Metrics] Updated circuit breaker gauges: {states}")

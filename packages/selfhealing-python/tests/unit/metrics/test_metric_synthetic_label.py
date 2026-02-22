@@ -98,6 +98,7 @@ class TestMetricSyntheticLabel:
 
                     mock_counter.labels.assert_called_once_with(
                         service="payment-gateway",
+                        cell_id="",
                         from_state="closed",
                         to_state="open",
                         is_synthetic="true",

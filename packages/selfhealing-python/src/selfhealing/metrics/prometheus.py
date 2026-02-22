@@ -165,7 +165,7 @@ class SelfHealingMetrics:
         self.circuit_breaker_state = Gauge(
             f"{prefix}_circuit_breaker_state",
             "Circuit breaker state (0=closed, 1=open, 2=half_open)",
-            ["service_name"],
+            ["service_name", "cell_id"],
         )
 
         self.circuit_breaker_failures = Counter(
@@ -183,7 +183,7 @@ class SelfHealingMetrics:
         self.circuit_breaker_transitions = Counter(
             f"{prefix}_circuit_breaker_transitions_total",
             "Total circuit breaker state transitions",
-            ["service_name", "from_state", "to_state"],
+            ["service_name", "cell_id", "from_state", "to_state"],
         )
 
         self.circuit_breaker_open_duration = Histogram(
@@ -413,14 +413,14 @@ class SelfHealingMetrics:
     # Circuit Breaker Recording Methods
     # =========================================================================
 
-    def set_circuit_state(self, service_name: str, state: str) -> None:
+    def set_circuit_state(self, service_name: str, state: str, cell_id: str = "") -> None:
         """Set the circuit breaker state metric."""
         if not self._initialized:
             return
         try:
             state_map = {"closed": 0, "open": 1, "half_open": 2}
             value = state_map.get(state, 0)
-            self.circuit_breaker_state.labels(service_name=service_name).set(value)
+            self.circuit_breaker_state.labels(service_name=service_name, cell_id=cell_id).set(value)
         except Exception as e:
             logger.warning(f"[Metrics] Failed to set circuit breaker state: {e}")
 
@@ -447,17 +447,19 @@ class SelfHealingMetrics:
         service_name: str,
         from_state: str,
         to_state: str,
+        cell_id: str = "",
     ) -> None:
         """Record a circuit breaker state transition."""
         if not self._initialized:
             return
         try:
             # Update state gauge
-            self.set_circuit_state(service_name, to_state)
+            self.set_circuit_state(service_name, to_state, cell_id=cell_id)
 
             # Record transition
             self.circuit_breaker_transitions.labels(
                 service_name=service_name,
+                cell_id=cell_id,
                 from_state=from_state,
                 to_state=to_state,
             ).inc()
