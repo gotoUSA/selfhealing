@@ -2,7 +2,7 @@
 
 > **문서 번호**: 269
 > **작성일**: 2026-02-22
-> **상태**: Phase 2 완료 (일괄 자동 변환 적용) — Phase 3 수동 검수 대기 중
+> **상태**: Phase 3 완료 (수동 검수 완료 — import 복구, self._logger 전환, 이벤트 이름 정규화, 단위 테스트 27개 통과)
 > **대상**: `packages/selfhealing-python/src/selfhealing/` 전체
 > **관련 문서**: 156_OTEL_OBSERVABILITY_OVERVIEW.md, 157_OTEL_SDK_INTEGRATION.md
 
@@ -793,6 +793,23 @@ select = [
 | `self._logger` 패턴 | `audit/self_audit.py` 등 | 인스턴스 로거 패턴 별도 처리 |
 | 동적 로그 레벨 | `metrics/event_handlers.py` | `_log_event()` 함수의 `logger.log()` 호출 검증 |
 | `logging.Handler` 서브클래스 | `services/postmortem/log_buffer.py` | `IncidentLogHandler`의 stdlib 호환성 재확인 |
+
+#### Phase 3 검수 결과 (완료: 2026-02-22)
+
+| 처리 항목 | 파일 | 내용 |
+|---|---|---|
+| `import logging` 복구 | `services/postmortem/log_buffer.py` | `IncidentLogHandler`가 `logging.Handler` 서브클래스이므로 stdlib import 필수 재추가 |
+| `self._logger` 전환 | `audit/self_audit.py` | `logging.getLogger("audit.self")` → `structlog.get_logger().bind(component="self_audit")`  |
+| `LoggingNotificationAdapter` 전환 | `interfaces/notification.py` | `import logging` 제거, `_SEVERITY_TO_LOG_METHOD` 매핑 + structlog 사용 |
+| 인라인 logging 제거 (6건) | `core/connection_health.py` | 모듈 레벨 `logger = structlog.get_logger().bind(component="connection_health_monitor")` 추가 |
+| 인라인 logging 제거 (3건) | `core/pool_monitor.py` | 모듈 레벨 `logger = structlog.get_logger().bind(component="pool_monitor")` 추가 |
+| 고아 import 제거 | `audit/persistence/config.py` | 함수 내 `import logging` + 중복 `logger` 선언 제거, 모듈 레벨로 정리 |
+| `[Tag]` 이벤트 이름 변환 | `adapters/celery/tasks/`, `celery_tasks/`, `services/throttle/` | 18건 `"{component}.{action}"` 형식으로 변환 |
+| dot-less 이벤트 이름 변환 | 30+ 파일 | 60건 `opentelemetry_*`, `shutdown_*` 등 → `otel.*`, `shutdown.*` 형식 |
+| `adapters/celery/signal_hooks.py` | — | 3건 dot-less/f-string 이벤트 이름 변환 |
+| 한글 이벤트 이름 수동 수정 | `api/django/views/grafana_webhook.py` | `grafana_webhook_alert_목록` → `grafana_webhook.no_alerts` |
+
+**단위 테스트**: `tests/unit/audit/test_self_audit_structlog.py` (10개), `tests/unit/test_phase3_structlog_migration.py` (17개) — **27개 전체 통과**
 
 ### 7.4 Phase 4: 테스트 및 린트
 

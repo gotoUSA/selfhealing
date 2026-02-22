@@ -51,7 +51,7 @@ class RollbackService:
         self._enabled = True
         self._initialized = True
 
-        logger.info("rollbackservice_initialized")
+        logger.info("rollback_service.initialized")
 
     def set_policy(
         self,

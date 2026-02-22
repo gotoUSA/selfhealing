@@ -284,7 +284,7 @@ class LearningService:
 
         self._initialized = True
 
-        logger.info("learningservice_initialized")
+        logger.info("learning_service.initialized")
 
     def start_session(self, stage_name: str) -> LearningSession:
         """

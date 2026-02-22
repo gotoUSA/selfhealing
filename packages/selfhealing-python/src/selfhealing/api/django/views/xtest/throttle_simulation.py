@@ -412,7 +412,7 @@ class ThrottleStatusView(XTestModeMixin, APIView):
         settings = get_throttle_settings()
         stats = throttle.get_stats()
 
-        logger.info("test_mode_throttle_status")
+        logger.info("test_mode.throttle_status")
 
         self.log_xtest_audit(
             request=request,

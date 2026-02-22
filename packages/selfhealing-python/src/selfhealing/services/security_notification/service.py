@@ -88,7 +88,7 @@ class SecurityNotificationService(
             SecurityNotificationResult with results from all channels
         """
         if not self.config.enabled:
-            logger.debug("security_notification_notifications_disabled")
+            logger.debug("security_notification.notifications_disabled")
             return SecurityNotificationResult(incident_id=incident_id)
 
         result = SecurityNotificationResult(incident_id=incident_id)
@@ -256,7 +256,7 @@ class SecurityNotificationService(
             SecurityNotificationResult with results from all channels
         """
         if not self.config.enabled:
-            logger.debug("security_notification_notifications_disabled")
+            logger.debug("security_notification.notifications_disabled")
             return SecurityNotificationResult(incident_id=0)
 
         result = SecurityNotificationResult(incident_id=0)

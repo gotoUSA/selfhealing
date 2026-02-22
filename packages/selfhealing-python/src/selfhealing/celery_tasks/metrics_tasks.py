@@ -35,15 +35,12 @@ def collect_self_healing_metrics(self) -> dict:
     """
     from selfhealing.services import collect_all_metrics
 
-    logger.debug("[Metrics] Collecting self-healing metrics")
+    logger.debug("metrics.collection_started")
 
     try:
         metrics = collect_all_metrics()
 
-        logger.debug(
-            f"[Metrics] Collection complete: "
-            f"pending={sum(metrics.get('dlq_pending_by_domain', {}).values())}"
-        )
+        logger.debug(f"[Metrics] Collection complete: " f"pending={sum(metrics.get('dlq_pending_by_domain', {}).values())}")
 
         return {
             "success": True,
@@ -80,7 +77,7 @@ def check_and_report_sla_breaches(self) -> dict:
     """
     from selfhealing.services import get_dlq_service, record_sla_breach
 
-    logger.debug("[SLA Check] Checking for SLA breaches")
+    logger.debug("sla_check.breach_check_started")
 
     try:
         dlq_service = get_dlq_service()
@@ -96,11 +93,9 @@ def check_and_report_sla_breaches(self) -> dict:
         total_breaches = sum(breaches_by_domain.values())
 
         if total_breaches > 0:
-            logger.warning(
-                f"[SLA Check] Found {total_breaches} SLA breaches: {breaches_by_domain}"
-            )
+            logger.warning(f"[SLA Check] Found {total_breaches} SLA breaches: {breaches_by_domain}")
         else:
-            logger.debug("[SLA Check] No SLA breaches found")
+            logger.debug("sla_check.no_breaches_found")
 
         return {
             "success": True,

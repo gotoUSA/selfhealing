@@ -60,9 +60,9 @@ def setup_baggage_propagation() -> None:
                 ]
             )
         )
-        logger.info("otel_baggage_propagation_enabled")
+        logger.info("otel.baggage_propagation_enabled")
     except ImportError:
-        logger.debug("opentelemetry_propagation_packages_installed")
+        logger.debug("otel.propagation_packages_installed")
     except Exception as e:
         logger.warning(
             "failed_setup_baggage_propagation",

@@ -60,16 +60,14 @@ def check_recovery_monitoring_experiments(self) -> dict:
     Returns:
         Dictionary with check results
     """
-    logger.info("[ChaosRecoveryMonitor] Checking RECOVERY_MONITORING experiments")
+    logger.info("chaos_monitor.recovery_monitoring_checked")
 
     try:
         from selfhealing.services.chaos import get_chaos_scheduler
         from selfhealing.services.chaos.base import ExperimentStatus
 
         scheduler = get_chaos_scheduler()
-        monitoring_experiments = scheduler.get_experiments_by_status(
-            ExperimentStatus.RECOVERY_MONITORING.value
-        )
+        monitoring_experiments = scheduler.get_experiments_by_status(ExperimentStatus.RECOVERY_MONITORING.value)
 
         checked = 0
         completed = 0
@@ -91,25 +89,18 @@ def check_recovery_monitoring_experiments(self) -> dict:
                     if hasattr(experiment, "complete_recovery_monitoring"):
                         experiment.complete_recovery_monitoring()
                         completed += 1
-                        logger.info(
-                            f"[ChaosRecoveryMonitor] Experiment {exp_id} recovery completed"
-                        )
+                        logger.info(f"[ChaosRecoveryMonitor] Experiment {exp_id} recovery completed")
 
                         # Unregister from scheduler
                         scheduler.unregister_experiment_instance(exp_id)
                     continue
 
                 # Check Hard TTL
-                if (
-                    hasattr(experiment, "is_hard_ttl_expired")
-                    and experiment.is_hard_ttl_expired()
-                ):
+                if hasattr(experiment, "is_hard_ttl_expired") and experiment.is_hard_ttl_expired():
                     if hasattr(experiment, "force_complete"):
                         experiment.force_complete(reason="hard_ttl_expired")
                         force_completed += 1
-                        logger.warning(
-                            f"[ChaosRecoveryMonitor] Experiment {exp_id} force completed (Hard TTL)"
-                        )
+                        logger.warning(f"[ChaosRecoveryMonitor] Experiment {exp_id} force completed (Hard TTL)")
 
                         # Unregister from scheduler
                         scheduler.unregister_experiment_instance(exp_id)

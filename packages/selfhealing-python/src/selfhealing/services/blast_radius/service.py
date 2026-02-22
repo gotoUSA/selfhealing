@@ -55,7 +55,7 @@ class BlastRadiusService:
         self._enabled = True
         self._initialized = True
 
-        logger.info("blastradiusservice_initialized")
+        logger.info("blast_radius_service.initialized")
 
     def set_policy(
         self,

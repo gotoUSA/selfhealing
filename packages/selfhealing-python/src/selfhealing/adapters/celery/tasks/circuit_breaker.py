@@ -139,7 +139,7 @@ def check_circuit_breaker_recovery(self) -> dict:
     Returns:
         Dictionary with check results
     """
-    logger.debug("[Circuit Check] Checking for circuit breakers to transition")
+    logger.debug("circuit_check.transition_check_started")
 
     try:
         from selfhealing.core.timezone import now
@@ -562,7 +562,7 @@ def expire_manual_overrides(self) -> dict:
     Returns:
         Dictionary with expiration results
     """
-    logger.debug("[Circuit Breaker] Checking for expired manual overrides")
+    logger.debug("circuit_breaker.expired_overrides_checked")
 
     try:
         from selfhealing.core.timezone import now

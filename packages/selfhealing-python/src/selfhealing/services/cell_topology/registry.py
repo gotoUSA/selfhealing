@@ -332,7 +332,7 @@ class CellRegistry:
                 f"{self._settings.bulkhead_max_concurrent_per_cell})"
             )
         except ImportError:
-            logger.warning("bulkheadregistry_available_skipping_cell")
+            logger.warning("cell_registry.bulkhead_registry_unavailable")
         except Exception as e:
             logger.error(
                 "cell_bulkhead_registration_failed",

@@ -49,7 +49,7 @@ def initialize_opentelemetry() -> bool:
 
     # Check if OTEL is available
     if not _is_otel_available():
-        logger.debug("opentelemetry_sdk_installed_skipping")
+        logger.debug("otel.sdk_already_installed")
         _initialized = True
         return False
 
@@ -59,7 +59,7 @@ def initialize_opentelemetry() -> bool:
     settings = get_otel_settings()
 
     if not settings.enabled:
-        logger.debug("opentelemetry_disabled_via")
+        logger.debug("otel.sdk_disabled")
         _initialized = True
         return False
 
@@ -256,7 +256,7 @@ def shutdown_opentelemetry() -> None:
     if _logger_provider is not None:
         try:
             _logger_provider.shutdown()
-            logger.debug("opentelemetry_loggerprovider_shutdown_completed")
+            logger.debug("otel.logger_provider_shutdown")
         except Exception as e:
             logger.warning(
                 "error_during_loggerprovider_shutdown",
@@ -267,7 +267,7 @@ def shutdown_opentelemetry() -> None:
     if _tracer_provider is not None:
         try:
             _tracer_provider.shutdown()
-            logger.debug("opentelemetry_tracerprovider_shutdown_completed")
+            logger.debug("otel.tracer_provider_shutdown")
         except Exception as e:
             logger.warning(
                 "error_during_tracerprovider_shutdown",
@@ -320,11 +320,11 @@ def instrument_requests() -> bool:
 
         RequestsInstrumentor().instrument()
         _requests_instrumented = True
-        logger.info("opentelemetry_requests_instrumentation_enabled")
+        logger.info("otel.requests_instrumentation_enabled")
         return True
 
     except ImportError:
-        logger.debug("opentelemetry_instrumentation_requests_installed")
+        logger.debug("otel.requests_instrumentation_installed")
         return False
     except Exception as e:
         logger.warning(
@@ -350,7 +350,7 @@ def uninstrument_requests() -> None:
 
         RequestsInstrumentor().uninstrument()
         _requests_instrumented = False
-        logger.debug("opentelemetry_requests_instrumentation_disabled")
+        logger.debug("otel.requests_instrumentation_disabled")
     except Exception:
         pass
 
@@ -378,11 +378,11 @@ def instrument_celery() -> bool:
 
         CeleryInstrumentor().instrument()
         _celery_instrumented = True
-        logger.info("opentelemetry_celery_instrumentation_enabled")
+        logger.info("otel.celery_instrumentation_enabled")
         return True
 
     except ImportError:
-        logger.debug("opentelemetry_instrumentation_celery_installed")
+        logger.debug("otel.celery_instrumentation_installed")
         return False
     except Exception as e:
         logger.warning(
@@ -408,7 +408,7 @@ def uninstrument_celery() -> None:
 
         CeleryInstrumentor().uninstrument()
         _celery_instrumented = False
-        logger.debug("opentelemetry_celery_instrumentation_disabled")
+        logger.debug("otel.celery_instrumentation_disabled")
     except Exception:
         pass
 
@@ -462,7 +462,7 @@ def instrument_django() -> bool:
         settings = get_otel_settings()
 
         if not settings.django_instrument_enabled:
-            logger.debug("django_instrumentation_disabled_via")
+            logger.debug("otel.django_instrumentation_disabled_config")
             return False
 
         # excluded_urls 설정 적용 — 환경변수 OTEL_PYTHON_DJANGO_EXCLUDED_URLS 사용
@@ -479,7 +479,7 @@ def instrument_django() -> bool:
         return True
 
     except ImportError:
-        logger.debug("opentelemetry_instrumentation_django_installed")
+        logger.debug("otel.django_instrumentation_installed")
         return False
     except Exception as e:
         logger.warning(
@@ -505,7 +505,7 @@ def uninstrument_django() -> None:
 
         DjangoInstrumentor().uninstrument()
         _django_instrumented = False
-        logger.debug("opentelemetry_django_instrumentation_disabled")
+        logger.debug("otel.django_instrumentation_disabled")
     except Exception:
         pass
 
@@ -545,7 +545,7 @@ def initialize_logger_provider() -> bool:
         return False
 
     if not _is_otel_logging_available():
-        logger.debug("opentelemetry_logging_sdk_installed")
+        logger.debug("otel.logging_sdk_installed")
         return False
 
     try:
@@ -643,11 +643,11 @@ def instrument_logging() -> bool:
         )
 
         _logging_instrumented = True
-        logger.info("opentelemetry_logging_instrumentation_enabled")
+        logger.info("otel.logging_instrumentation_enabled")
         return True
 
     except ImportError:
-        logger.debug("opentelemetry_instrumentation_logging_installed")
+        logger.debug("otel.logging_instrumentation_installed")
         return False
     except Exception as e:
         logger.warning(
@@ -673,7 +673,7 @@ def uninstrument_logging() -> None:
 
         LoggingInstrumentor().uninstrument()
         _logging_instrumented = False
-        logger.debug("opentelemetry_logging_instrumentation_disabled")
+        logger.debug("otel.logging_instrumentation_disabled")
     except Exception:
         pass
 
@@ -689,7 +689,7 @@ def shutdown_logger_provider() -> None:
     if _logger_provider is not None:
         try:
             _logger_provider.shutdown()
-            logger.debug("opentelemetry_loggerprovider_shutdown_completed")
+            logger.debug("otel.logger_provider_shutdown")
         except Exception as e:
             logger.warning(
                 "error_during_loggerprovider_shutdown",

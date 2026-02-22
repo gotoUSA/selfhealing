@@ -50,15 +50,13 @@ def async_persist_dlq_entry(self, entry_data: dict[str, Any]) -> dict:
     Returns:
         Dictionary with persistence result
     """
-    logger.debug(
-        f"[AsyncPersist] Persisting DLQ entry: {entry_data.get('id', 'unknown')}"
-    )
+    logger.debug(f"[AsyncPersist] Persisting DLQ entry: {entry_data.get('id', 'unknown')}")
 
     try:
         from selfhealing.factory import ProviderRegistry
 
         if not ProviderRegistry.has_statistics_adapter():
-            logger.debug("[AsyncPersist] No statistics adapter registered, skipping")
+            logger.debug("async_persist.stats_adapter_unavailable")
             return {
                 "success": True,
                 "skipped": True,
@@ -69,13 +67,13 @@ def async_persist_dlq_entry(self, entry_data: dict[str, Any]) -> dict:
         entry_id = stats_repo.persist_entry(entry_data)
 
         if entry_id:
-            logger.info(f"[AsyncPersist] Successfully persisted DLQ entry: {entry_id}")
+            logger.info("async_persist.entry_persisted", entry_id=entry_id)
             return {
                 "success": True,
                 "entry_id": entry_id,
             }
         else:
-            logger.warning("[AsyncPersist] persist_entry returned None")
+            logger.warning("async_persist.entry_returned_none")
             return {
                 "success": False,
                 "error": "persist_returned_none",

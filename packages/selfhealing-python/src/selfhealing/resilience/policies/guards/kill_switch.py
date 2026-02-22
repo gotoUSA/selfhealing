@@ -48,7 +48,7 @@ class KillSwitchGuard:
                     reason="System kill switch is disabled",
                 )
         except ImportError:
-            logger.debug("systemcontrolmanager_available_fail_open")
+            logger.debug("kill_switch.system_control_unavailable")
         except Exception as e:
             logger.warning(
                 "killswitchguard_check_failed_fail",

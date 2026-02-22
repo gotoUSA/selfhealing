@@ -263,7 +263,7 @@ class XTestModeMixin:
                 )
                 return True, None
 
-            logger.warning("test_mode_set_global")
+            logger.warning("test_mode.global_flag_warning")
             return False, Response(
                 {
                     "status": "error",
@@ -363,7 +363,7 @@ class XTestModeMixin:
             return None
 
         except ImportError:
-            logger.debug("test_mode_resourceguard_available")
+            logger.debug("test_mode.resource_guard_unavailable")
             return None
         except Exception as e:
             logger.warning(
@@ -453,7 +453,7 @@ class XTestModeMixin:
                 )
 
         except ImportError:
-            logger.debug("test_mode_session_manager")
+            logger.debug("test_mode.session_manager_unavailable")
         except Exception as e:
             logger.warning(
                 "test_mode_failed_ensure",
@@ -504,7 +504,7 @@ class XTestModeMixin:
             return success
 
         except ImportError:
-            logger.debug("test_mode_session_manager")
+            logger.debug("test_mode.session_manager_unavailable")
             return False
         except Exception as e:
             logger.warning(
@@ -527,7 +527,7 @@ class XTestModeMixin:
         session_id = self.ensure_xtest_session(request)
         TestModeContext.enter_synthetic_mode(session_id=session_id)
         logger.debug(
-            "test_mode_synthetic_context",
+            "test_mode.synthetic_context_unavailable",
             session_id=session_id,
         )
 
@@ -538,7 +538,7 @@ class XTestModeMixin:
         X-Test 요청 처리 완료 시 호출하여 TestModeContext를 비활성화합니다.
         """
         TestModeContext.exit_synthetic_mode()
-        logger.debug("test_mode_synthetic_context")
+        logger.debug("test_mode.synthetic_context_unavailable")
 
     def get_xtest_user(self, request: Request) -> str:
         """X-Test 사용자 추출."""

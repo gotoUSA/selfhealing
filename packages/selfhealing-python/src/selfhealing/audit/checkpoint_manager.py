@@ -267,7 +267,7 @@ class CheckpointManager:
         """
         with self._lock:
             if not self._path.exists():
-                logger.debug("checkpoint_file_found_returning")
+                logger.debug("audit_checkpoint.cache_hit")
                 return 0
 
             try:

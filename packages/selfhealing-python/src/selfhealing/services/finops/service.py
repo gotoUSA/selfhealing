@@ -56,7 +56,7 @@ class FinOpsService:
         self._enabled = True
         self._initialized = True
 
-        logger.info("finopsservice_initialized")
+        logger.info("finops_service.initialized")
 
     def set_budget(
         self,

@@ -68,7 +68,7 @@ class ErrorBudgetGuard:
                     },
                 )
         except ImportError:
-            logger.debug("errorbudgetgate_available_fail_open")
+            logger.debug("error_budget_gate.fail_open")
         except Exception as e:
             logger.warning(
                 "errorbudgetguard_check_failed_fail",

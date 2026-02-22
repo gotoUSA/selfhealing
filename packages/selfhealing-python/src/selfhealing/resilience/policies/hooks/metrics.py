@@ -58,7 +58,7 @@ def _ensure_metrics() -> bool:
         )
         return True
     except ImportError:
-        logger.debug("available_metrics_disabled")
+        logger.debug("metrics.collection_disabled")
         return False
 
 

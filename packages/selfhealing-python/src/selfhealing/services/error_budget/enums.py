@@ -169,7 +169,7 @@ def _send_failsafe_alert(
             )
     except ImportError:
         # AlertAdapter가 설정되지 않은 경우 - 로그만 남김
-        logger.warning("fail_safe_alertadapter_configured")
+        logger.warning("error_budget.fail_safe_adapter_configured")
     except Exception as alert_error:
         # 알림 발송 실패해도 Fail-Safe 응답은 반환해야 함
         logger.error(

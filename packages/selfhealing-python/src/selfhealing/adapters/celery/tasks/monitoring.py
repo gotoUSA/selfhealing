@@ -50,7 +50,7 @@ def collect_self_healing_metrics(self) -> dict:
     Returns:
         Dictionary with collected metric values
     """
-    logger.debug("[Metrics] Collecting self-healing metrics")
+    logger.debug("metrics.collection_started")
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -112,7 +112,7 @@ def check_and_report_sla_breaches(self) -> dict:
     Returns:
         Dictionary with SLA breach information
     """
-    logger.debug("[SLA Check] Checking for SLA breaches")
+    logger.debug("sla_check.breach_check_started")
 
     try:
         from selfhealing.factory import ProviderRegistry
@@ -133,10 +133,12 @@ def check_and_report_sla_breaches(self) -> dict:
 
         if total_breaches > 0:
             logger.warning(
-                f"[SLA Check] Found {total_breaches} SLA breaches: {breaches_by_domain}"
+                "sla_check.breaches_found",
+                total=total_breaches,
+                by_domain=breaches_by_domain,
             )
         else:
-            logger.debug("[SLA Check] No SLA breaches found")
+            logger.debug("sla_check.no_breaches_found")
 
         return {
             "success": True,
@@ -288,18 +290,11 @@ def notify_failsafe_recovery(
                     downtime_seconds=downtime_seconds,
                     recovery_reason=recovery_reason,
                 )
-                logger.info(
-                    f"[Recovery] Sent recovery alert for {component}, "
-                    f"downtime={downtime_seconds:.1f}s"
-                )
+                logger.info(f"[Recovery] Sent recovery alert for {component}, " f"downtime={downtime_seconds:.1f}s")
             else:
-                logger.warning(
-                    "[Recovery] Alert adapter does not support recovery notifications"
-                )
+                logger.warning("[Recovery] Alert adapter does not support recovery notifications")
         except Exception as adapter_error:
-            logger.warning(
-                f"[Recovery] Could not send alert via adapter: {adapter_error}"
-            )
+            logger.warning(f"[Recovery] Could not send alert via adapter: {adapter_error}")
 
         return {
             "success": True,
@@ -310,9 +305,7 @@ def notify_failsafe_recovery(
         }
 
     except Exception as e:
-        logger.error(
-            f"[Recovery] Failed to send recovery notification: {e}", exc_info=True
-        )
+        logger.error(f"[Recovery] Failed to send recovery notification: {e}", exc_info=True)
         return {
             "success": False,
             "component": component,

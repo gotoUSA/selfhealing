@@ -32,17 +32,14 @@ def check_circuit_breaker_recovery(self) -> dict:
     """
     from selfhealing.services import get_circuit_breaker_service
 
-    logger.debug("[Circuit Check] Checking for circuit breakers to transition")
+    logger.debug("circuit_check.transition_check_started")
 
     try:
         service = get_circuit_breaker_service()
         result = service.check_recovery_transitions()
 
         if result.get("count", 0) > 0:
-            logger.info(
-                f"[Circuit Check] Transitioned {result['count']} circuit(s): "
-                f"{result.get('transitioned', [])}"
-            )
+            logger.info(f"[Circuit Check] Transitioned {result['count']} circuit(s): " f"{result.get('transitioned', [])}")
 
         return result
 
@@ -81,7 +78,7 @@ def expire_manual_overrides(self) -> dict:
     """
     from selfhealing.services import get_circuit_breaker_service
 
-    logger.debug("[Circuit Breaker] Checking for expired manual overrides")
+    logger.debug("circuit_breaker.expired_overrides_checked")
 
     try:
         service = get_circuit_breaker_service()
@@ -133,9 +130,7 @@ def force_open_circuit_breaker(
     """
     from selfhealing.services import get_circuit_breaker_service
 
-    logger.warning(
-        f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}"
-    )
+    logger.warning(f"[Circuit Breaker] Force opening circuit for '{service_name}': {reason}")
 
     try:
         service = get_circuit_breaker_service()
@@ -146,9 +141,7 @@ def force_open_circuit_breaker(
         )
 
         if result.success:
-            logger.warning(
-                f"[Circuit Breaker] Successfully opened circuit for '{service_name}'"
-            )
+            logger.warning(f"[Circuit Breaker] Successfully opened circuit for '{service_name}'")
             return {
                 "success": True,
                 "service_name": service_name,
@@ -203,9 +196,7 @@ def force_close_circuit_breaker(
     """
     from selfhealing.services import get_circuit_breaker_service
 
-    logger.info(
-        f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}"
-    )
+    logger.info(f"[Circuit Breaker] Force closing circuit for '{service_name}': {reason}")
 
     try:
         service = get_circuit_breaker_service()
@@ -217,9 +208,7 @@ def force_close_circuit_breaker(
         )
 
         if result.success:
-            logger.info(
-                f"[Circuit Breaker] Successfully closed circuit for '{service_name}'"
-            )
+            logger.info(f"[Circuit Breaker] Successfully closed circuit for '{service_name}'")
             return {
                 "success": True,
                 "service_name": service_name,

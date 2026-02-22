@@ -11,11 +11,14 @@ Enables graceful degradation when partial failures occur.
 
 from __future__ import annotations
 
+import structlog
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+
+logger = structlog.get_logger().bind(component="connection_health_monitor")
 
 
 class ConnectionType(str, Enum):
@@ -181,8 +184,6 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
                 experiment_id="exp-123",
             )
         """
-        import logging
-
         key = f"{connection_type.value}:{name}"
         self._simulation_overrides[key] = ConnectionHealth(
             connection_type=connection_type,
@@ -190,8 +191,11 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
             status=status,
         )
         self._simulation_experiment_id = experiment_id
-        logging.getLogger(__name__).info(
-            f"[ConnectionHealthMonitor] Simulation override set: {key}={status.value} " f"(experiment_id={experiment_id})"
+        logger.info(
+            "connection_health.simulation_override_set",
+            override_key=key,
+            status=status.value,
+            experiment_id=experiment_id,
         )
 
     def set_partition_simulation(
@@ -206,27 +210,23 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
             partition_state: 강제할 파티션 상태
             experiment_id: 관련 카오스 실험 ID (감사 추적용)
         """
-        import logging
-
         self._partition_override = partition_state
         self._simulation_experiment_id = experiment_id
-        logging.getLogger(__name__).info(
-            f"[ConnectionHealthMonitor] Partition simulation set: "
-            f"partial={partition_state.is_partial_partition}, "
-            f"full={partition_state.is_full_partition} "
-            f"(experiment_id={experiment_id})"
+        logger.info(
+            "connection_health.partition_simulation_set",
+            is_partial_partition=partition_state.is_partial_partition,
+            is_full_partition=partition_state.is_full_partition,
+            experiment_id=experiment_id,
         )
 
     def clear_all_simulation_overrides(self) -> None:
         """
         모든 시뮬레이션 오버라이드 해제.
         """
-        import logging
-
         self._simulation_overrides.clear()
         self._partition_override = None
         self._simulation_experiment_id = None
-        logging.getLogger(__name__).info("[ConnectionHealthMonitor] All simulation overrides cleared")
+        logger.info("connection_health.simulation_overrides_cleared")
 
     def is_simulation_active(self) -> bool:
         """시뮬레이션 오버라이드가 활성화되어 있는지 확인."""
@@ -268,9 +268,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
 
         # 시뮬레이션 오버라이드 체크
         if key in self._simulation_overrides:
-            import logging
-
-            logging.getLogger(__name__).debug(f"[ConnectionHealthMonitor] Returning simulated health for {key}")
+            logger.debug("connection_health.simulated_health_returned", override_key=key)
             return self._simulation_overrides[key]
 
         if key not in self._health_checks:
@@ -325,9 +323,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         """
         # 파티션 시뮬레이션 오버라이드 체크
         if self._partition_override is not None:
-            import logging
-
-            logging.getLogger(__name__).debug("[ConnectionHealthMonitor] Returning simulated partition state")
+            logger.debug("connection_health.simulated_partition_returned")
             return self._partition_override
 
         state = PartitionState()
@@ -377,9 +373,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         except ImportError:
             return {}
         except Exception as e:
-            import logging
-
-            logging.getLogger(__name__).debug(f"[ConnectionHealthMonitor] Failed to collect bulkhead states: {e}")
+            logger.debug("connection_health.bulkhead_states_collection_failed", error=str(e))
             return {}
 
     def get_all_health_states(self) -> dict[str, ConnectionHealth]:

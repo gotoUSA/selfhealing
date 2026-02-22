@@ -24,7 +24,6 @@ Usage:
 
 from __future__ import annotations
 
-import logging
 import structlog
 import sys
 import threading
@@ -123,7 +122,7 @@ class SelfAuditLogger:
 
     def __init__(self):
         """Initialize SelfAuditLogger."""
-        self._logger = logging.getLogger("audit.self")
+        self._logger = structlog.get_logger().bind(component="self_audit")
         self._start_time = datetime.now(timezone.utc)
         self._stats = SelfAuditStats()
         self._recent_events: list[dict[str, Any]] = []
@@ -218,20 +217,21 @@ class SelfAuditLogger:
 
             # 로그 레벨 결정
             if event_type in self.FAILURE_EVENTS:
-                log_level = logging.ERROR
+                log_method = self._logger.error
             elif event_type in (
                 SelfAuditEvent.FALLBACK_ACTIVATED,
                 SelfAuditEvent.SYSLOG_ACTIVATED,
                 SelfAuditEvent.CIRCUIT_OPENED,
             ):
-                log_level = logging.WARNING
+                log_method = self._logger.warning
             else:
-                log_level = logging.INFO
+                log_method = self._logger.info
 
             # 로깅
-            detail_str = f" | {details}" if details else ""
-            log_message = f"[SELF-AUDIT] {event_type.value}: {message}{detail_str}"
-            self._logger.log(log_level, log_message)
+            log_kwargs: dict[str, Any] = {"event_type": event_type.value, "message": message}
+            if details:
+                log_kwargs["details"] = details
+            log_method("self_audit.event", **log_kwargs)
 
             # stderr 출력 (실패 이벤트만)
             if event_type in self.FAILURE_EVENTS:

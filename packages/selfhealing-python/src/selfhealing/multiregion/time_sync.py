@@ -66,7 +66,7 @@ class TimeSyncChecker:
         # 정확도만 확인
         accuracy_ms = checker.get_clock_accuracy_ms()
         if accuracy_ms > 5:
-            logger.warning("clock_accuracy_degraded")
+            logger.warning("time_sync.clock_accuracy_degraded")
     """
 
     AWS_TIME_SYNC_IP = "169.254.169.123"

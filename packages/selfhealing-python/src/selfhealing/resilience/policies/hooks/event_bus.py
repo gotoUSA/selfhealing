@@ -46,7 +46,7 @@ class EventBusHook:
             self._bus = get_event_bus()
             return True
         except ImportError:
-            logger.debug("eventbus_available")
+            logger.debug("event_bus.not_available")
             return False
         except Exception as e:
             logger.warning(

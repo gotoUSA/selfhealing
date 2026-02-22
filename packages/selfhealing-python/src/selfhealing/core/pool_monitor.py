@@ -12,11 +12,14 @@ Framework-agnostic design - works with any pool implementation.
 """
 
 import threading
+import structlog
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any
+
+logger = structlog.get_logger().bind(component="pool_monitor")
 
 
 class PoolHealthStatus(str, Enum):
@@ -196,15 +199,13 @@ class ConnectionPoolMonitor:
             self._simulation_experiment_id = experiment_id
 
             if health_status:
-                import logging
-
-                logging.getLogger(__name__).info(
-                    f"[PoolMonitor] Simulation override set: {health_status.value} " f"(experiment_id={experiment_id})"
+                logger.info(
+                    "pool_monitor.simulation_override_set",
+                    status=health_status.value,
+                    experiment_id=experiment_id,
                 )
             else:
-                import logging
-
-                logging.getLogger(__name__).info("[PoolMonitor] Simulation override cleared")
+                logger.info("pool_monitor.simulation_override_cleared")
 
     def clear_simulation_override(self) -> None:
         """시뮬레이션 오버라이드 해제."""
@@ -267,9 +268,10 @@ class ConnectionPoolMonitor:
         """
         # 시뮬레이션 모드 체크
         if self._simulation_override is not None:
-            import logging
-
-            logging.getLogger(__name__).debug(f"[PoolMonitor] Returning simulated status: {self._simulation_override.value}")
+            logger.debug(
+                "pool_monitor.simulated_status_returned",
+                status=self._simulation_override.value,
+            )
             stats = self._simulation_stats or self._get_default_simulated_stats()
             return self._simulation_override, stats
 

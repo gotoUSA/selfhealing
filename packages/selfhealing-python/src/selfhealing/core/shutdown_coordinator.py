@@ -274,7 +274,7 @@ class GracefulShutdownCoordinator:
             self._phase = ShutdownPhase.DRAINING
             self._shutdown_started_at = datetime.now(timezone.utc)
 
-        logger.info("graceful_shutdown_initiated_entering")
+        logger.info("shutdown.graceful_initiated")
 
         if self._handler:
             try:
@@ -299,7 +299,7 @@ class GracefulShutdownCoordinator:
             pending = self._tracker.get_pending_count()
 
             if pending == 0:
-                logger.info("all_flight_requests_drained")
+                logger.info("shutdown.in_flight_drained")
                 self._phase = ShutdownPhase.TERMINATED
                 self._drained_count = self._tracker.completed_count
 
@@ -318,7 +318,7 @@ class GracefulShutdownCoordinator:
             time.sleep(self._check_interval)
 
         # Timeout reached, force shutdown
-        logger.warning("drain_timeout_reached_forcing")
+        logger.warning("shutdown.drain_timeout_reached")
         self._phase = ShutdownPhase.TERMINATING
 
         pending_requests = self._tracker.get_pending_requests()

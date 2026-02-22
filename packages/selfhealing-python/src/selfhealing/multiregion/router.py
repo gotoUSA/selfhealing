@@ -69,7 +69,7 @@ class ServiceLocalityRouter:
             cb_service.update_state("payment_kakao", "OPEN")
         else:
             # 현재 리전이 미국이면 쓰기 스킵 (복제로 받음)
-            logger.debug("skipping_write_preferred_region")
+            logger.debug("multiregion_router.write_skipped_preferred_region")
     """
 
     # 기본 Locality 규칙

@@ -79,9 +79,7 @@ def replay_single_dlq_entry(
         }
 
     except Exception as e:
-        logger.error(
-            f"[DLQ Replay Task] Unexpected error replaying DLQ entry {dlq_id}: {e}"
-        )
+        logger.error(f"[DLQ Replay Task] Unexpected error replaying DLQ entry {dlq_id}: {e}")
         return {
             "success": False,
             "dlq_id": dlq_id,
@@ -125,9 +123,7 @@ def replay_batch_by_domain(
     Returns:
         Dictionary with batch replay summary
     """
-    logger.info(
-        f"[DLQ Batch Replay Task] Starting batch replay for domain={domain}, max_items={max_items}"
-    )
+    logger.info(f"[DLQ Batch Replay Task] Starting batch replay for domain={domain}, max_items={max_items}")
 
     try:
         from selfhealing.context.actor_context import restore_actor_from_celery
@@ -189,7 +185,7 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
         from selfhealing.factory import ProviderRegistry
 
         if not ProviderRegistry.has_statistics_adapter():
-            logger.info("[DLQ Cleanup] No statistics adapter, skipping cleanup")
+            logger.info("dlq_cleanup.stats_adapter_unavailable")
             return {
                 "success": True,
                 "skipped": True,

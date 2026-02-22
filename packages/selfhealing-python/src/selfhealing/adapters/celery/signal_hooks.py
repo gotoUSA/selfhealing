@@ -432,12 +432,12 @@ def on_before_task_publish(
 
         # headers 딕셔너리가 없으면 생략 (발행 시점에 headers 설정 불가)
         if headers is None:
-            logger.debug("selfhealing_signal_headers_none")
+            logger.debug("celery_signal.headers_unavailable")
             return
 
         # 이미 causation 헤더가 있으면 덮어쓰지 않음 (명시적 설정 우선)
         if headers.get(CELERY_HEADER_CASCADE_ID):
-            logger.debug("selfhealing_signal_causation_headers")
+            logger.debug("celery_signal.causation_headers_present")
             return
 
         # Causation 헤더 주입
@@ -447,7 +447,9 @@ def on_before_task_publish(
         headers[CELERY_HEADER_NAMESPACE] = info.namespace
 
         logger.debug(
-            f"[SelfHealing Signal] Causation headers injected: " f"cascade={info.cascade_id}, depth={info.chain_depth}"
+            "celery_signal.causation_headers_injected",
+            cascade_id=info.cascade_id,
+            chain_depth=info.chain_depth,
         )
 
     except ImportError:

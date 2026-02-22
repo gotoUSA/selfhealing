@@ -185,7 +185,7 @@ class EmergencyLevelAdaptiveSampler:
         Next span will be sampled at 100%.
         """
         self._force_sample_next = True
-        logger.debug("sla_violation_marked_forcing")
+        logger.debug("otel_sampler.sla_violation_forced")
 
     def mark_throttle_response(self) -> None:
         """
@@ -194,7 +194,7 @@ class EmergencyLevelAdaptiveSampler:
         Next span will be sampled at 100%.
         """
         self._force_sample_next = True
-        logger.debug("throttle_response_marked_forcing")
+        logger.debug("otel_sampler.throttle_response_forced")
 
 
 class StaticRatioSampler:

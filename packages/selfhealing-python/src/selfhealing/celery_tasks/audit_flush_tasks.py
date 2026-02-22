@@ -65,7 +65,7 @@ def flush_redis_audit_buffer(
 
     except ImportError:
         # 분산 락 없이 진행 (단일 워커 환경)
-        logger.warning("[flush_redis_audit_buffer] DistributedRecoveryLock not available")
+        logger.warning("redis_audit_buffer.distributed_lock_unavailable")
         lock_acquired = True
     except Exception as e:
         logger.error(f"[flush_redis_audit_buffer] Lock acquisition error: {e}")
@@ -309,7 +309,7 @@ def _get_target_adapter():
         )
         return FileAuditLogAdapter(log_dir=log_dir)
     except ImportError:
-        logger.warning("[_get_target_adapter] FileAuditLogAdapter not available")
+        logger.warning("audit_flush.file_adapter_unavailable")
         return None
     except Exception as e:
         logger.error(f"[_get_target_adapter] Failed: {e}")

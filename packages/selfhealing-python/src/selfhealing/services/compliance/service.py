@@ -178,7 +178,7 @@ class ComplianceService:
         # DORA-003 자동 검사 함수 등록 (Resilience Testing 요구사항)
         self._register_resilience_testing_check()
 
-        logger.info("complianceservice_initialized")
+        logger.info("compliance_service.initialized")
 
     def _log_compliance_audit(
         self,

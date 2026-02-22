@@ -125,7 +125,7 @@ class AuditExporter:
         self._stats.total_files = len(input_files)
 
         if not input_files:
-            logger.warning("no_input_files_found")
+            logger.warning("audit_export.no_input_files")
             self._stats.end_time = datetime.now(timezone.utc)
             return self._stats
 
@@ -424,7 +424,7 @@ class AuditExporter:
                         entries.append(json.loads(line))
 
         if not entries:
-            logger.warning("no_entries_export")
+            logger.warning("audit_export.no_entries")
             return
 
         # PyArrow Table 생성

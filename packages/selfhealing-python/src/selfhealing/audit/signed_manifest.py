@@ -473,7 +473,7 @@ class SignedManifest:
             RFC3161Timestamp or None
         """
         if not self._tsa_client:
-            logger.warning("rfc_timestamp_disabled")
+            logger.warning("signed_manifest.rfc_timestamp_disabled")
             return None
 
         if data is None:
@@ -615,7 +615,7 @@ class SignedManifest:
             )
             return False
 
-        logger.info("manifest_verification_passed")
+        logger.info("signed_manifest.verification_passed")
         return True
 
 

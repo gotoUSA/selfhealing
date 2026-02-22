@@ -8,12 +8,8 @@ import selfhealing.services.throttle.adaptive as _adaptive_mod
 import structlog
 import threading
 import time
+
 logger = structlog.get_logger()
-
-
-
-
-
 
 
 class RecoveryDampeningMixin:
@@ -106,7 +102,7 @@ class RecoveryDampeningMixin:
             # 복구 완료
             self._recovery_dampening_active = False
             self._recovery_dampening_step = 0
-            logger.info("[AdaptiveThrottle] Recovery dampening completed: 100%")
+            logger.info("adaptive_throttle.recovery_dampening_completed")
             return False
 
         # 다음 단계 적용
@@ -181,4 +177,3 @@ class RecoveryDampeningMixin:
             "elapsed_seconds": time.time() - self._recovery_dampening_last_time,
             "interval_seconds": self._recovery_dampening_interval_seconds,
         }
-

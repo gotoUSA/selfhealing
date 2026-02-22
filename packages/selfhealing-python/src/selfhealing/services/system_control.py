@@ -423,7 +423,7 @@ def should_execute_action() -> bool:
         def my_healing_action():
             if not should_execute_action():
                 if is_dry_run():
-                    logger.info("dry_run_taken_action")
+                    logger.info("system_control.dry_run_action")
                 return
 
             # Execute the actual action

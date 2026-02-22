@@ -28,7 +28,6 @@ Environment Variables:
 
 from __future__ import annotations
 
-import logging
 import structlog
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -177,22 +176,27 @@ class StdoutNotificationAdapter:
 class LoggingNotificationAdapter:
     """Adapter that logs notifications."""
 
+    # severity → structlog 메서드 매핑
+    _SEVERITY_TO_LOG_METHOD = {
+        "CRITICAL": "critical",
+        "HIGH": "error",
+        "MEDIUM": "warning",
+        "LOW": "info",
+        "INFO": "debug",
+    }
+
     def __init__(self, logger_name: str = "selfhealing.notifications"):
-        self._logger = logging.getLogger(logger_name)
+        self._logger = structlog.get_logger().bind(logger_name=logger_name)
 
     def send(self, notification: Notification) -> bool:
-        level = {
-            NotificationSeverity.CRITICAL: logging.CRITICAL,
-            NotificationSeverity.HIGH: logging.ERROR,
-            NotificationSeverity.MEDIUM: logging.WARNING,
-            NotificationSeverity.LOW: logging.INFO,
-            NotificationSeverity.INFO: logging.DEBUG,
-        }.get(notification.severity, logging.INFO)
-
-        self._logger.log(
-            level,
-            f"[{notification.source}] {notification.title}: {notification.message}",
-            extra={"notification": notification.to_dict()},
+        method_name = self._SEVERITY_TO_LOG_METHOD.get(notification.severity.value.upper(), "info")
+        log_method = getattr(self._logger, method_name)
+        log_method(
+            "notification.sent",
+            source=notification.source,
+            title=notification.title,
+            message=notification.message,
+            notification=notification.to_dict(),
         )
         return True
 
@@ -216,7 +220,7 @@ _default_adapter: NotificationAdapter = LoggingNotificationAdapter()
 def register_notification_adapter(adapter: NotificationAdapter) -> None:
     """Register a notification adapter for its channel."""
     _notification_adapters[adapter.channel] = adapter
-    logger.info(f"[Notification] Registered adapter for channel: {adapter.channel.value}")
+    logger.info("notification.adapter_registered", channel=adapter.channel.value)
 
 
 def get_notification_adapter(

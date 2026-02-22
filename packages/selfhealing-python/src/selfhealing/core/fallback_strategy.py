@@ -182,7 +182,7 @@ class PartitionAwareFallback(FallbackStrategy):
             if self._db_fallback:
                 try:
                     result = self._db_fallback()
-                    logger.info("using_db_fallback_due")
+                    logger.info("fallback_strategy.db_fallback_used")
                     return FallbackResult(
                         value=result,
                         used_fallback=True,
@@ -200,7 +200,7 @@ class PartitionAwareFallback(FallbackStrategy):
             if self._cache_fallback:
                 try:
                     result = self._cache_fallback()
-                    logger.info("using_cache_fallback_due")
+                    logger.info("fallback_strategy.cache_fallback_used")
                     return FallbackResult(
                         value=result,
                         used_fallback=True,
@@ -215,7 +215,7 @@ class PartitionAwareFallback(FallbackStrategy):
 
         # 4. 기본값 반환
         if default_value is not None:
-            logger.info("using_default_value_all")
+            logger.info("fallback_strategy.default_value_used")
             return FallbackResult(
                 value=default_value,
                 used_fallback=True,

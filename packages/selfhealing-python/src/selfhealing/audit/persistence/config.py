@@ -16,6 +16,7 @@ Disk-Persistent Buffer 설정.
 from __future__ import annotations
 
 import os
+import structlog
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -24,6 +25,8 @@ from typing import Any
 from pydantic import Field
 from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
+
+logger = structlog.get_logger()
 
 
 def _get_default_data_dir() -> str:
@@ -305,9 +308,6 @@ def get_disk_buffer_settings() -> DiskBufferSettings:
     # 검증 경고 로깅
     warnings = settings.validate_settings()
     if warnings:
-        import logging
-
-        logger = structlog.get_logger()
         for warning in warnings:
             logger.warning(
                 "disk_buffer_settings.event",

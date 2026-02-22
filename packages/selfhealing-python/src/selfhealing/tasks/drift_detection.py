@@ -100,7 +100,7 @@ class SLADriftDetector:
         Returns:
             Dictionary with drift detection results
         """
-        logger.info("sla_drift_starting_sla")
+        logger.info("drift_detection.sla_check_started")
 
         try:
             sla_config = self.get_sla_thresholds()
@@ -142,7 +142,7 @@ class SLADriftDetector:
                     f"[SLA Drift] Completed with {len(results['warnings'])} warning(s)"
                 )
             else:
-                logger.info("sla_drift_completed_no")
+                logger.info("drift_detection.sla_check_no_violations")
 
             return results
 

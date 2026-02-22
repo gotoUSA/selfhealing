@@ -163,7 +163,7 @@ class GrafanaAlertWebhookView(APIView):
         # Alert 목록 추출 (DRF가 자동으로 JSON 파싱)
         alerts = request.data.get("alerts", [])
         if not alerts:
-            logger.info("grafana_webhook_alert_목록")
+            logger.info("grafana_webhook.no_alerts")
             return Response(
                 {"status": "ok", "message": "No alerts to process"},
                 status=status.HTTP_200_OK,

@@ -230,7 +230,7 @@ class AuditWatchdog:
         """Watchdog 시작."""
         with self._lock:
             if self._state != AuditWatchdogStatus.STOPPED:
-                logger.warning("watchdog_already_running")
+                logger.warning("audit_watchdog.already_running")
                 return
 
             self._state = AuditWatchdogStatus.RUNNING
@@ -274,7 +274,7 @@ class AuditWatchdog:
             "Audit Watchdog stopped",
             details=self.get_stats().__dict__,
         )
-        logger.info("audit_watchdog_stopped")
+        logger.info("audit_watchdog.stopped")
 
     def pet(self) -> None:
         """

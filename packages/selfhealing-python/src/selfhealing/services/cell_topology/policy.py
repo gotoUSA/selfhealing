@@ -531,7 +531,7 @@ class CellEvacuationPolicy:
                 duration_seconds=duration_seconds,
             )
         except ImportError:
-            logger.debug("regionalisolationgate_available")
+            logger.debug("cell_policy.region_isolation_gate_unavailable")
         except Exception as e:
             logger.warning(
                 "Cell %s: isolation gate sync notify failed: %s",
@@ -619,7 +619,7 @@ class CellEvacuationPolicy:
             gate = get_regional_isolation_gate()
             gate.restore_region(cell_id)
         except ImportError:
-            logger.debug("regionalisolationgate_available")
+            logger.debug("cell_policy.region_isolation_gate_unavailable")
         except Exception as e:
             logger.warning(
                 "Cell %s: restore region sync notify failed: %s",

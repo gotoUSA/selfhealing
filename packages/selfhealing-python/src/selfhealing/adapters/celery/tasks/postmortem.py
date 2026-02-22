@@ -352,7 +352,7 @@ def flush_aggregated_notifications(
         settings = get_postmortem_settings()
 
         if not settings.notification_aggregation_enabled:
-            logger.debug("[FlushNotifications] Aggregation disabled")
+            logger.debug("flush_notifications.aggregation_disabled")
             return {
                 "success": True,
                 "message": "Aggregation disabled",
