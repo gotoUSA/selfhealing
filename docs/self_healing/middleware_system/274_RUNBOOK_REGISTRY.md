@@ -115,7 +115,9 @@ class Runbook:
     description: str                   # 설명
 
     # 트리거 조건 (273번 문서의 PatternCondition)
-    trigger: PatternCondition
+    # PatternMatcher의 RunbookLike Protocol이 trigger_condition 프로퍼티를 요구하므로
+    # 필드명을 trigger_condition으로 지정한다 (pattern_matcher.py RunbookLike 참조)
+    trigger_condition: PatternCondition
 
     # 실행 단계
     steps: list[RunbookStep]
@@ -567,6 +569,17 @@ class RunbookRegistry:
 3. 생성자 주입으로 테스트 Seam 확보
 
 ```python
+# 내장 primitive 카테고리 — 운영자 참고용 (모듈 레벨 정의로 직접 import 가능)
+BUILTIN_CATEGORIES: dict[str, str] = {
+        "config":    "설정 변경 (RuntimeConfigManager 연동)",
+        "assert":    "검증 게이트 (메트릭 조건 확인)",
+        "notify":    "알림 발송 (UnifiedNotificationManager 연동)",
+        "recovery":  "기존 복구 컴포넌트 호출",
+    "emergency": "Emergency Mode 제어",
+    "wait":      "대기 (안정화 확인)",
+}
+
+
 class ActionPrimitiveRegistry:
     """action 문자열 → 실행 함수 + 파라미터 스키마 매핑.
 
@@ -581,18 +594,8 @@ class ActionPrimitiveRegistry:
       → settings/api_rate_limit.py
     """
 
-    # 내장 primitive 카테고리
-    BUILTIN_CATEGORIES = {
-        "config":    "설정 변경 (RuntimeConfigManager 연동)",
-        "assert":    "검증 게이트 (메트릭 조건 확인)",
-        "notify":    "알림 발송 (UnifiedNotificationManager 연동)",
-        "recovery":  "기존 복구 컴포넌트 호출",
-        "emergency": "Emergency Mode 제어",
-        "wait":      "대기 (안정화 확인)",
-    }
-
     def __init__(self) -> None:
-        self._primitives: dict[str, ActionHandler] = {}   # action → handler
+        self._handlers: dict[str, ActionHandler] = {}    # action → handler
         self._schemas: dict[str, type[BaseModel]] = {}    # action → Pydantic schema
         self._register_builtins()
 
@@ -644,13 +647,13 @@ class ActionPrimitiveRegistry:
             @field_validator("emergency_limit")
             def validate_emergency_limit(cls, v, info) -> int: ...
         """
-        self._primitives[action_name] = handler
+        self._handlers[action_name] = handler
         if params_schema is not None:
             self._schemas[action_name] = params_schema
 
     def get(self, action_name: str) -> ActionHandler | None:
         """action 이름으로 실행 함수 조회."""
-        return self._primitives.get(action_name)
+        return self._handlers.get(action_name)
 
     def get_schema(self, action_name: str) -> type[BaseModel] | None:
         """action 이름으로 파라미터 스키마 조회.
@@ -671,7 +674,7 @@ class ActionPrimitiveRegistry:
                 execute_fn=lambda: repository.atomic_force_open(...),
             )
         """
-        handler = self._primitives[action_name]
+        handler = self._handlers[action_name]
         return Action(
             name=action_name,
             target=f"runbook:{context.runbook_id}",

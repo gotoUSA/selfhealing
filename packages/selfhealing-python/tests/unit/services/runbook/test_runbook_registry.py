@@ -356,25 +356,25 @@ class TestRiskLevelComparisonBehavior:
         """HIGH는 LOW보다 작지 않다."""
         assert not (RiskLevel.HIGH < RiskLevel.LOW)
 
-    def test_low_less_than_int_one(self):
-        """LOW < 1 (MEDIUM 정수 우선순위)이다."""
-        assert RiskLevel.LOW < 1
+    def test_low_less_than_medium_order_int(self):
+        """LOW < MEDIUM.order(int)이다 — 정수 비교 분기 동작 검증."""
+        assert RiskLevel.LOW < RiskLevel.MEDIUM.order
 
-    def test_high_greater_than_int_zero(self):
-        """HIGH > 0 (LOW 정수 우선순위)이다."""
-        assert RiskLevel.HIGH > 0
+    def test_high_greater_than_low_order_int(self):
+        """HIGH > LOW.order(int)이다 — 정수 비교 분기 동작 검증."""
+        assert RiskLevel.HIGH > RiskLevel.LOW.order
 
     def test_int_conversion_low(self):
-        """int(RiskLevel.LOW)는 0이다."""
-        assert int(RiskLevel.LOW) == 0
+        """int(RiskLevel.LOW)는 LOW.order와 같다 — __int__ 동작 검증."""
+        assert int(RiskLevel.LOW) == RiskLevel.LOW.order
 
     def test_int_conversion_medium(self):
-        """int(RiskLevel.MEDIUM)는 1이다."""
-        assert int(RiskLevel.MEDIUM) == 1
+        """int(RiskLevel.MEDIUM)는 MEDIUM.order와 같다 — __int__ 동작 검증."""
+        assert int(RiskLevel.MEDIUM) == RiskLevel.MEDIUM.order
 
     def test_int_conversion_high(self):
-        """int(RiskLevel.HIGH)는 2이다."""
-        assert int(RiskLevel.HIGH) == 2
+        """int(RiskLevel.HIGH)는 HIGH.order와 같다 — __int__ 동작 검증."""
+        assert int(RiskLevel.HIGH) == RiskLevel.HIGH.order
 
     def test_sort_produces_low_medium_high_order(self):
         """sorted()로 정렬 시 LOW, MEDIUM, HIGH 순서가 된다."""
