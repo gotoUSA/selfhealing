@@ -217,6 +217,10 @@ class EventType(str, Enum):
     RUNBOOK_APPROVAL_REJECTED = "runbook_approval_rejected"
     """런북 수동 승인 거부."""
 
+    # Pattern Matcher Events (273_RUNBOOK_PATTERN_MATCHER.md §7)
+    RUNBOOK_SKIPPED_COOLDOWN = "runbook_skipped_cooldown"
+    """런북 트리거 조건 충족되었으나 쿨다운 중이라 스킵."""
+
 
 class EventPriority(IntEnum):
     """이벤트 처리 우선순위."""

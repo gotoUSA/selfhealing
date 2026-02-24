@@ -2,7 +2,7 @@
 Unit tests for Runbook EventType entries.
 
 검증 항목:
-- RUNBOOK_* 이벤트 8개의 존재 및 문자열 값 계약
+- RUNBOOK_* 이벤트 9개의 존재 및 문자열 값 계약
 - EventType enum 멤버 타입 일관성
 
 테스트 대상: selfhealing.services.event_bus.bus.EventType
@@ -64,11 +64,11 @@ class TestRunbookEventTypeContract:
         assert EventType.RUNBOOK_APPROVAL_REJECTED == "runbook_approval_rejected"
 
     def test_runbook_event_count(self):
-        """RUNBOOK_* 이벤트는 8개 존재한다."""
+        """RUNBOOK_* 이벤트는 9개 존재한다."""
         from selfhealing.services.event_bus.bus import EventType
 
         runbook_events = [e for e in EventType if e.value.startswith("runbook_")]
-        assert len(runbook_events) == 8
+        assert len(runbook_events) == 9
 
     def test_all_runbook_events_are_str_enum(self):
         """모든 RUNBOOK_* 이벤트는 str 타입이다."""

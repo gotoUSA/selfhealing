@@ -16,6 +16,7 @@ from selfhealing.utils.jitter import (
     with_jitter,
 )
 from selfhealing.utils.network import extract_client_ip
+from selfhealing.utils.template import SafeFormatDict
 from selfhealing.utils.time import (
     add_seconds,
     elapsed_seconds,
@@ -47,4 +48,6 @@ __all__ = [
     "sleep_with_jitter",
     "async_sleep_with_jitter",
     "JitterConfig",
+    # Template utilities (safe format_map)
+    "SafeFormatDict",
 ]
