@@ -198,6 +198,19 @@ class TestMatchResultDefaultContract:
         )
         assert mr.runner_up_runbook_ids == []
 
+    def test_risk_level_default_zero(self):
+        """risk_level 기본값은 0 (SAFE). select_runbook Tie-breaker 2차 키."""
+        mr = MatchResult(
+            runbook_id="r1",
+            confidence=0.9,
+            matched_conditions=[],
+            historical_success_rate=None,
+            similar_pattern_count=0,
+            triggered_by_event=None,
+            metric_snapshot={},
+        )
+        assert mr.risk_level == 0
+
 
 class TestRunbookSkippedCooldownEventContract:
     """RUNBOOK_SKIPPED_COOLDOWN EventType 계약값 검증."""
@@ -439,14 +452,80 @@ class TestPatternConditionEvaluateBehavior:
         )
         assert pc.evaluate({"error_rate": 0.06}, None) is True
 
-    def test_has_event_conditions_but_no_triggered_event_returns_true(self):
-        """이벤트 조건이 있지만 triggered_event가 None이면 메트릭만으로 매칭."""
+    def test_event_conditions_present_but_no_triggered_event_returns_false(self):
+        """Proactive 경로에서 이벤트 조건이 있으면 triggered_event가 None일 때 False.
+
+        이벤트 조건이 있는 런북은 이벤트 트리거 없이는 비활성화되어야 한다.
+        triggered_event가 None이면 any() 조건이 충족될 수 없으므로 False를 반환한다.
+        """
         pc = _make_pattern_condition(
             metric_conditions=[_make_metric_condition(threshold=0.05)],
             event_conditions=[_make_event_condition("circuit_breaker_opened")],
         )
-        # triggered_event=None이면 event_conditions 무시, 메트릭만으로 판단
-        assert pc.evaluate({"error_rate": 0.06}, None) is True
+        # triggered_event=None 시 이벤트 조건 있는 런북은 Proactive 경로에서 차단됨
+        assert pc.evaluate({"error_rate": 0.06}, None) is False
+
+    def test_event_source_filter_matching_returns_true(self):
+        """EventCondition.source_filter: 소스가 일치하면 True."""
+        pc = _make_pattern_condition(
+            event_conditions=[
+                _make_event_condition(
+                    event_type="circuit_breaker_opened",
+                    source_filter="payment_api",
+                )
+            ],
+        )
+        assert pc.evaluate({}, "circuit_breaker_opened", event_source="payment_api") is True
+
+    def test_event_source_filter_mismatch_returns_false(self):
+        """EventCondition.source_filter: 소스가 다르면 False."""
+        pc = _make_pattern_condition(
+            event_conditions=[
+                _make_event_condition(
+                    event_type="circuit_breaker_opened",
+                    source_filter="payment_api",
+                )
+            ],
+        )
+        assert pc.evaluate({}, "circuit_breaker_opened", event_source="order_api") is False
+
+    def test_event_source_filter_set_but_event_source_none_returns_false(self):
+        """EventCondition.source_filter: source_filter 있는데 event_source=None이면 False."""
+        pc = _make_pattern_condition(
+            event_conditions=[
+                _make_event_condition(
+                    event_type="circuit_breaker_opened",
+                    source_filter="payment_api",
+                )
+            ],
+        )
+        assert pc.evaluate({}, "circuit_breaker_opened", event_source=None) is False
+
+    def test_event_data_filter_all_matching_returns_true(self):
+        """EventCondition.data_filter: 모든 key-value 일치 시 True."""
+        pc = _make_pattern_condition(
+            event_conditions=[
+                _make_event_condition(
+                    event_type="circuit_breaker_opened",
+                    data_filter={"new_state": "open", "service": "payment"},
+                )
+            ],
+        )
+        event_ctx = {"new_state": "open", "service": "payment", "_source": "payment_api"}
+        assert pc.evaluate({}, "circuit_breaker_opened", event_data=event_ctx) is True
+
+    def test_event_data_filter_partial_match_returns_false(self):
+        """EventCondition.data_filter: AND 조건 — data_filter 키 일부 불일치 시 False."""
+        pc = _make_pattern_condition(
+            event_conditions=[
+                _make_event_condition(
+                    event_type="circuit_breaker_opened",
+                    data_filter={"new_state": "open", "service": "payment"},
+                )
+            ],
+        )
+        event_ctx = {"new_state": "open", "service": "order"}
+        assert pc.evaluate({}, "circuit_breaker_opened", event_data=event_ctx) is False
 
 
 class TestMatchResultDataIntegrityBehavior:

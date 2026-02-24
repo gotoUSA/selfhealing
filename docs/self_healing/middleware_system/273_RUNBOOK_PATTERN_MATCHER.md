@@ -128,11 +128,21 @@ class PatternCondition:
     event_conditions: list[EventCondition] = field(default_factory=list)
     min_duration_seconds: int = 0  # 조건 지속 시간 (짧은 스파이크 필터링)
 
-    def evaluate(self, metrics: dict[str, float], triggered_event: str | None = None) -> bool:
+    def evaluate(
+        self,
+        metrics: dict[str, float],
+        triggered_event: str | None = None,
+        event_source: str | None = None,
+        event_data: dict[str, Any] | None = None,
+    ) -> bool:
         """모든 조건을 평가하여 매칭 여부 반환.
 
         AND 게이트: 모든 메트릭 조건이 충족되어야 True.
         OR 트리거: event_conditions 중 하나라도 매칭되면 트리거 인정.
+
+        이벤트 조건이 있는 런북은 Reactive 경로(triggered_event != None)에서만
+        매칭된다. Proactive 경로(triggered_event=None)에서는 이벤트 조건 있는
+        런북은 반드시 False를 반환한다.
         """
         # 1단계: 메트릭 AND 게이트 — 하나라도 미충족이면 즉시 False
         for mc in self.metric_conditions:
@@ -141,14 +151,40 @@ class PatternCondition:
                 return False
 
         # 2단계: 이벤트 OR 트리거
-        if self.event_conditions and triggered_event is not None:
+        if self.event_conditions:
+            if triggered_event is None:
+                # 이벤트 조건이 있는 런북은 Proactive 경로에서 매칭 불가
+                return False
             return any(
-                ec.event_type == triggered_event
+                _event_condition_matches(ec, triggered_event, event_source, event_data)
                 for ec in self.event_conditions
             )
 
-        # event_conditions가 비어있으면 메트릭만으로 매칭 (Proactive 경로)
-        return not self.event_conditions or triggered_event is None
+        # 이벤트 조건 없음 — 메트릭만으로 매칭 (Proactive/Reactive 모두 허용)
+        return True
+
+
+def _event_condition_matches(
+    ec: EventCondition,
+    triggered_event: str,
+    event_source: str | None,
+    event_data: dict[str, Any] | None,
+) -> bool:
+    """단일 EventCondition과 이벤트를 대조.
+
+    event_type 일치 + source_filter(None이면 무조건 통과) +
+    data_filter 키-값 AND 검사.
+    """
+    if ec.event_type != triggered_event:
+        return False
+    if ec.source_filter is not None:
+        if event_source is None or event_source != ec.source_filter:
+            return False
+    if ec.data_filter:
+        for key, expected in ec.data_filter.items():
+            if (event_data or {}).get(key) != expected:
+                return False
+    return True
 ```
 
 ### 3.2 MatchResult — 매칭 결과
@@ -182,6 +218,7 @@ class MatchResult:
     metric_snapshot: dict[str, float]  # 매칭 시점 메트릭 스냅샷
     event_context: dict[str, Any] = field(default_factory=dict)  # 원본 이벤트 data + source
     runner_up_runbook_ids: list[str] = field(default_factory=list)  # 탈락 후보 런북 ID 목록
+    risk_level: int = 0  # 런북 위험도 (RunbookLike.risk_level, 기본 0). select_runbook Tie-breaker 2차 키.
 ```
 
 ### 3.3 MatchSelectionResult — 최종 선택 결과
@@ -267,18 +304,23 @@ class PatternMatcher:
         registry: RunbookRegistry,
         learning_service: LearningService | None = None,
         metrics_provider: RunbookMetricsProvider | None = None,
+        duration_tracker: DurationTracker | None = None,
+        on_runbook_selected: Callable[[MatchSelectionResult], None] | None = None,
     ):
         """
         Args:
             registry: 런북 레지스트리 (활성 런북 목록 조회)
             learning_service: 패턴 학습 서비스 (과거 사례 조회용, optional)
             metrics_provider: 범용 메트릭 제공자 (§5의 RunbookMetricsProvider)
+            duration_tracker: min_duration 추적기 (None이면 인메모리 생성)
+            on_runbook_selected: 런북 선택 시 콜백 (275 Executor와의 연결용).
+                MatchSelectionResult를 인자로 받으며, None이면 실행 안 함.
         """
         self._registry = registry
         self._learning_service = learning_service
         self._metrics_provider = metrics_provider
-        # min_duration 추적용 Redis 상태 저장소
-        self._duration_tracker: DurationTracker | None = None
+        self._duration_tracker = duration_tracker or DurationTracker()
+        self._on_runbook_selected = on_runbook_selected
 
     def initialize(self) -> None:
         """EventBus에 이벤트 구독 등록.
@@ -346,31 +388,51 @@ class PatternMatcher:
         """
         results: list[MatchResult] = []
 
+        # 이벤트 콘텍스트에서 소스/데이터 분리 (_source 키: _on_event() 내부 컨벤션)
+        ctx = event_context or {}
+        event_source: str | None = ctx.get("_source")
+        event_data: dict[str, Any] | None = ctx if ctx else None
+
+        # LearningService 패턴을 1회 조회하여 캐시 (O(3N) → O(1) RPC)
+        # N 런북 × 3 패턴 종류 반복 호출 대신 호출 시작 시 1회만 조회.
+        learning = self._precompute_learning_snapshot()
+
         for runbook in self._registry.get_active_runbooks():
             condition = runbook.trigger_condition
 
-            # AND 게이트 — 모든 메트릭 조건 동시 충족 필수
-            if not condition.evaluate(metrics, triggered_event):
-                continue  # 완전 탈락 — 부분 매칭 후보 없음
+            # 라벨이 있는 메트릭은 개별 조회로 스냅샷 보완
+            resolved_metrics = self._resolve_labeled_metrics(condition, metrics)
+
+            # AND 게이트 — 이벤트 소스/데이터 포함 전체 조건 평가
+            if not condition.evaluate(resolved_metrics, triggered_event, event_source, event_data):
+                # 조건 미충족: min_duration pending 상태였다면 기록 삭제
+                if condition.min_duration_seconds > 0:
+                    self._duration_tracker.clear_condition(runbook.id)
+                continue
 
             # min_duration 확인 (§4.4)
             if condition.min_duration_seconds > 0:
-                if not self._check_duration(runbook.id, condition.min_duration_seconds):
-                    self._record_condition_met(runbook.id)  # "pending" 기록
+                if not self._duration_tracker.check_duration_met(
+                    runbook.id, condition.min_duration_seconds
+                ):
+                    self._duration_tracker.record_condition_met(
+                        runbook.id, condition.min_duration_seconds
+                    )
                     continue
 
-            # Confidence 산정 (§4.3)
-            confidence = self._calculate_confidence(runbook)
+            # Confidence 산정 (§4.3) — learning 스냅샷 재사용
+            confidence = self._calculate_confidence(runbook, learning)
 
             results.append(MatchResult(
                 runbook_id=runbook.id,
                 confidence=confidence,
                 matched_conditions=self._describe_conditions(condition),
-                historical_success_rate=self._get_historical_success_rate(runbook.id),
-                similar_pattern_count=self._count_similar_patterns(runbook.id),
+                historical_success_rate=self._get_historical_success_rate(runbook.id, learning),
+                similar_pattern_count=self._count_similar_patterns(runbook.id, learning),
                 triggered_by_event=triggered_event,
                 metric_snapshot=dict(metrics),
                 event_context=event_context or {},
+                risk_level=getattr(runbook, "risk_level", 0),
             ))
 
         # Confidence 내림차순 정렬

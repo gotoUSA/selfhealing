@@ -168,6 +168,42 @@ class EventCondition:
 
 
 # =============================================================================
+# 이벤트 조건 매칭 헬퍼
+# =============================================================================
+
+
+def _event_condition_matches(
+    ec: "EventCondition",
+    triggered_event: str,
+    event_source: str | None,
+    event_data: dict[str, Any] | None,
+) -> bool:
+    """EventCondition의 event_type, source_filter, data_filter 일치 여부 확인.
+
+    event_type은 필수 일치. source_filter와 data_filter는 설정된 경우에만 검사한다.
+    data_filter는 모든 키-값 쌍이 event_data에 존재해야 한다 (AND 조건).
+    """
+    # event_type 불일치 시 즉시 False
+    if ec.event_type != triggered_event:
+        return False
+
+    # source_filter 검사 — 설정된 경우에만 대조
+    if ec.source_filter is not None:
+        if event_source is None or event_source != ec.source_filter:
+            return False
+
+    # data_filter 검사 — 모든 키-값 쌍이 event_data에 존재해야 함 (AND)
+    if ec.data_filter:
+        if event_data is None:
+            return False
+        for key, expected in ec.data_filter.items():
+            if event_data.get(key) != expected:
+                return False
+
+    return True
+
+
+# =============================================================================
 # 트리거 조건 (AND 조합)
 # =============================================================================
 
@@ -192,11 +228,22 @@ class PatternCondition:
     min_duration_seconds: int = 0
     """조건 지속 시간 (짧은 스파이크 필터링)"""
 
-    def evaluate(self, metrics: dict[str, float], triggered_event: str | None = None) -> bool:
+    def evaluate(
+        self,
+        metrics: dict[str, float],
+        triggered_event: str | None = None,
+        event_source: str | None = None,
+        event_data: dict[str, Any] | None = None,
+    ) -> bool:
         """모든 조건을 평가하여 매칭 여부 반환.
 
         AND 게이트: 모든 메트릭 조건이 충족되어야 True.
         OR 트리거: event_conditions 중 하나라도 매칭되면 트리거 인정.
+
+        이벤트 조건이 있는 런북은 Reactive 경로(triggered_event != None)에서만
+        매칭된다. Proactive 경로(triggered_event=None)에서는 매칭하지 않는다.
+        메트릭 조건만 있는 런북(event_conditions 비어있음)은 Proactive/Reactive
+        경로 모두에서 매칭된다.
         """
         # 1단계: 메트릭 AND 게이트 — 하나라도 미충족이면 즉시 False
         for mc in self.metric_conditions:
@@ -205,11 +252,15 @@ class PatternCondition:
                 return False
 
         # 2단계: 이벤트 OR 트리거
-        if self.event_conditions and triggered_event is not None:
-            return any(ec.event_type == triggered_event for ec in self.event_conditions)
+        if self.event_conditions:
+            if triggered_event is None:
+                # 이벤트 조건이 있는 런북은 Proactive 경로에서 매칭 불가
+                # 설계 §4.1: Reactive가 "감지"를, Proactive가 "지속 확인"을 담당
+                return False
+            return any(_event_condition_matches(ec, triggered_event, event_source, event_data) for ec in self.event_conditions)
 
-        # event_conditions가 비어있으면 메트릭만으로 매칭 (Proactive 경로)
-        return not self.event_conditions or triggered_event is None
+        # 이벤트 조건 없음 — 메트릭만으로 매칭 (Proactive/Reactive 모두 허용)
+        return True
 
 
 # =============================================================================
@@ -251,6 +302,10 @@ class MatchResult:
 
     runner_up_runbook_ids: list[str] = field(default_factory=list)
     """탈락 후보 런북 ID 목록"""
+
+    risk_level: int = 0
+    """런북 위험도 (RunbookLike.risk_level, 기본 0). select_runbook Tie-breaker 2차 키.
+    값이 작을수록 우선 선택 (0=SAFE, 1=MODERATE, 2=DANGEROUS)."""
 
 
 # =============================================================================

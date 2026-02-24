@@ -10,6 +10,8 @@ Reference:
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from math import exp
 from typing import Any, Protocol, runtime_checkable
@@ -28,6 +30,24 @@ from selfhealing.services.runbook.models import (
 from selfhealing.utils.jitter import with_jitter
 
 logger = structlog.get_logger()
+
+
+# =============================================================================
+# 런븵별 LearningService 조회 캐시
+# =============================================================================
+
+
+@dataclass
+class _LearningSnapshot:
+    """evaluate_all() 단일 호출 내 LearningService 패턴 조회 캐시.
+
+    evaluate_all()이 런북마다 get_patterns()을 반복 호출하면
+    N 런북 x 패턴 종류 회 = O(3N)이 되모로,
+    호출 시작 시 1회 조회 후 재사용한다.
+    """
+
+    failure_patterns: list[Any]
+    recovery_patterns: list[Any]
 
 
 # =============================================================================
@@ -118,6 +138,7 @@ class PatternMatcher:
         learning_service: LearningServiceLike | None = None,
         metrics_provider: RunbookMetricsProvider | None = None,
         duration_tracker: DurationTracker | None = None,
+        on_runbook_selected: Callable[[MatchSelectionResult], None] | None = None,
     ):
         """
         Args:
@@ -125,11 +146,14 @@ class PatternMatcher:
             learning_service: 패턴 학습 서비스 (과거 사례 조회용, optional)
             metrics_provider: 범용 메트릭 제공자
             duration_tracker: min_duration 추적기 (None이면 인메모리 생성)
+            on_runbook_selected: 런북 선택 시 코백 (275 Executor와의 연결용).
+                MatchSelectionResult를 인자로 받으며, None이면 실행 안 함.
         """
         self._registry = registry
         self._learning_service = learning_service
         self._metrics_provider = metrics_provider
         self._duration_tracker = duration_tracker or DurationTracker()
+        self._on_runbook_selected = on_runbook_selected
 
     # ------------------------------------------------------------------
     # 초기화 — EventBus 구독 등록
@@ -209,6 +233,9 @@ class PatternMatcher:
                     triggered_by=triggered_event,
                     candidates_count=len(selection.all_candidates),
                 )
+                # 런북 선택 결과를 Executor(또는 외부 컴포넌트)에 전달
+                if self._on_runbook_selected is not None:
+                    self._on_runbook_selected(selection)
 
     # ------------------------------------------------------------------
     # Proactive 경로 — 주기적 평가
@@ -251,11 +278,27 @@ class PatternMatcher:
         """
         results: list[MatchResult] = []
 
+        # 이벤트 콘텍스트에서 소스/데이터 분리
+        # _source 키는 _on_event()에서 event.source를 저장하는 내부 쾁벤션
+        ctx = event_context or {}
+        event_source: str | None = ctx.get("_source")
+        event_data: dict[str, Any] | None = ctx if ctx else None
+
+        # LearningService 패턴을 1회 조회하여 캐시 (O(3N) → O(1))
+        learning = self._precompute_learning_snapshot()
+
         for runbook in self._registry.get_active_runbooks():
             condition: PatternCondition = runbook.trigger_condition
 
-            # AND 게이트 — 모든 메트릭 조건 동시 충족 필수
-            if not condition.evaluate(metrics, triggered_event):
+            # 라벨이 있는 메트릭은 개별 조회로 보완한 스냅샷 사용
+            resolved_metrics = self._resolve_labeled_metrics(condition, metrics)
+
+            # AND 게이트 — 이벤트 코소스/데이터 포함 전체 조건 평가
+            if not condition.evaluate(resolved_metrics, triggered_event, event_source, event_data):
+                # 해제 작업: min_duration pending 상태였다면 기록 삭제
+                # 다음 평가 주기에 조건이 다시 충족되면 갱신함
+                if condition.min_duration_seconds > 0:
+                    self._duration_tracker.clear_condition(runbook.id)
                 continue
 
             # min_duration 확인
@@ -276,18 +319,19 @@ class PatternMatcher:
                     continue
 
             # Confidence 산정
-            confidence = self._calculate_confidence(runbook)
+            confidence = self._calculate_confidence(runbook, learning)
 
             results.append(
                 MatchResult(
                     runbook_id=runbook.id,
                     confidence=confidence,
                     matched_conditions=self._describe_conditions(condition),
-                    historical_success_rate=self._get_historical_success_rate(runbook.id),
-                    similar_pattern_count=self._count_similar_patterns(runbook.id),
+                    historical_success_rate=self._get_historical_success_rate(runbook.id, learning),
+                    similar_pattern_count=self._count_similar_patterns(runbook.id, learning),
                     triggered_by_event=triggered_event,
                     metric_snapshot=dict(metrics),
                     event_context=event_context or {},
+                    risk_level=getattr(runbook, "risk_level", 0),
                 )
             )
 
@@ -336,11 +380,16 @@ class PatternMatcher:
     # Confidence 계산 — AND 게이트 통과 후 품질 점수
     # ------------------------------------------------------------------
 
-    def _calculate_confidence(self, runbook: Any) -> float:
+    def _calculate_confidence(
+        self,
+        runbook: Any,
+        learning: _LearningSnapshot | None = None,
+    ) -> float:
         """AND 게이트 통과 후 confidence 산정.
 
         룰 기반 60% + 학습 보강 40% 가중합.
         학습 데이터가 없으면 룰 기반 기본 점수 100% (콜드스타트 안전).
+        learning 스냅샷을 전달하면 LearningService get_patterns() 중복 호출을 방지한다.
         """
         # 1단계: 룰 기반 기본 점수 (AND 게이트 통과 = 1.0)
         base_score = 1.0
@@ -352,7 +401,7 @@ class PatternMatcher:
         # 2단계: 학습 보강 (optional)
         learning_boost = 0.0
         if self._learning_service is not None:
-            learning_boost = self._calculate_learning_boost(runbook.id)
+            learning_boost = self._calculate_learning_boost(runbook.id, learning)
 
         # 3단계: 가중 합성
         if learning_boost > 0:
@@ -366,26 +415,34 @@ class PatternMatcher:
     # LearningService 연동 — Time Decay 적용
     # ------------------------------------------------------------------
 
-    def _calculate_learning_boost(self, runbook_id: str) -> float:
+    def _calculate_learning_boost(
+        self,
+        runbook_id: str,
+        learning: _LearningSnapshot | None = None,
+    ) -> float:
         """LearningService 패턴 기반 confidence 보강 — Time Decay 적용.
 
         Time Decay 공식: decay = exp(-0.693 * age_days / HALF_LIFE_DAYS)
         - 반감기 90일: 90일 전 패턴은 confidence 50%로 감쇠
         - 180일 전 패턴은 25%로 감쇠
+        learning 스냅샷이 있으면 failure_patterns를 재사용하고, 없으면 직접 조회한다.
         """
         if self._learning_service is None:
             return 0.0
 
-        try:
-            from selfhealing.services.learning.models import PatternType
+        if learning is not None:
+            patterns = learning.failure_patterns
+        else:
+            try:
+                from selfhealing.services.learning.models import PatternType
 
-            patterns = self._learning_service.get_patterns(
-                pattern_type=PatternType.FAILURE,
-                min_confidence=self.LEARNING_MIN_CONFIDENCE,
-            )
-        except (ImportError, Exception):
-            logger.debug("pattern_matcher.learning_unavailable", runbook_id=runbook_id)
-            return 0.0
+                patterns = self._learning_service.get_patterns(
+                    pattern_type=PatternType.FAILURE,
+                    min_confidence=self.LEARNING_MIN_CONFIDENCE,
+                )
+            except (ImportError, Exception):
+                logger.debug("pattern_matcher.learning_unavailable", runbook_id=runbook_id)
+                return 0.0
 
         similar = self._find_similar_patterns(runbook_id, patterns)
         if not similar:
@@ -433,6 +490,75 @@ class PatternMatcher:
         return similar
 
     # ------------------------------------------------------------------
+    # LearningService 스냅샷 / 라벨 메트릭 해석
+    # ------------------------------------------------------------------
+
+    def _precompute_learning_snapshot(self) -> _LearningSnapshot:
+        """evaluate_all() 시작 시 LearningService 패턴을 1회 조회하여 캐시.
+
+        호출마다 get_patterns()를 직접 호출하면 N 런북 × 3 패턴 종류 = O(3N) RPC가
+        발생하므로, evaluate_all() 진입 시 한 번 조회 후 _LearningSnapshot으로 반환한다.
+        LearningService가 없거나 예외 발생 시 빈 스냅샷(콜드스타트 안전)을 반환한다.
+        """
+        if self._learning_service is None:
+            return _LearningSnapshot(failure_patterns=[], recovery_patterns=[])
+        try:
+            from selfhealing.services.learning.models import PatternType
+
+            failure_patterns = self._learning_service.get_patterns(
+                pattern_type=PatternType.FAILURE,
+                min_confidence=self.LEARNING_MIN_CONFIDENCE,
+            )
+            recovery_patterns = self._learning_service.get_patterns(
+                pattern_type=PatternType.RECOVERY,
+                min_confidence=0.0,
+            )
+            return _LearningSnapshot(
+                failure_patterns=failure_patterns,
+                recovery_patterns=recovery_patterns,
+            )
+        except Exception:
+            logger.debug("pattern_matcher.learning_snapshot_failed", exc_info=True)
+            return _LearningSnapshot(failure_patterns=[], recovery_patterns=[])
+
+    def _resolve_labeled_metrics(
+        self,
+        condition: PatternCondition,
+        snapshot: dict[str, float],
+    ) -> dict[str, float]:
+        """LabelFilter가 붙은 MetricCondition에 대해 개별 메트릭 조회로 스냅샷 보완.
+
+        MetricCondition.labels가 비어 있으면 전달받은 snapshot을 그대로 반환한다.
+        라벨이 있는 조건만 MetricsProvider에 개별 조회(label 딕셔너리 전달)를 요청하고,
+        기존 snapshot을 덮어쓴 새 dict를 반환한다. 원본 snapshot은 변경하지 않는다.
+        """
+        if self._metrics_provider is None:
+            return snapshot
+
+        has_labeled = any(mc.labels for mc in condition.metric_conditions)
+        if not has_labeled:
+            return snapshot
+
+        # 원본 snapshot 불변성 유지를 위해 복사
+        resolved = dict(snapshot)
+        for mc in condition.metric_conditions:
+            if not mc.labels:
+                continue
+            # LabelFilter.value가 단일 값인 경우만 label dict로 변환
+            label_dict = {lf.key: str(lf.value) for lf in mc.labels if not isinstance(lf.value, list)}
+            try:
+                value = self._metrics_provider.get_metric(mc.metric_name, labels=label_dict)
+                if value is not None:
+                    resolved[mc.metric_name] = value
+            except Exception:
+                logger.warning(
+                    "pattern_matcher.labeled_metric_failed",
+                    metric=mc.metric_name,
+                    labels=label_dict,
+                )
+        return resolved
+
+    # ------------------------------------------------------------------
     # 메트릭 수집
     # ------------------------------------------------------------------
 
@@ -478,18 +604,28 @@ class PatternMatcher:
             descriptions.append(desc)
         return descriptions
 
-    def _get_historical_success_rate(self, runbook_id: str) -> float | None:
-        """과거 실행 성공률 조회. LearningService가 없으면 None."""
+    def _get_historical_success_rate(
+        self,
+        runbook_id: str,
+        learning: _LearningSnapshot | None = None,
+    ) -> float | None:
+        """과거 실행 성공률 조회. LearningService가 없으면 None.
+
+        learning 스냅샷이 있으면 recovery_patterns를 재사용하고, 없으면 직접 조회한다.
+        """
         if self._learning_service is None:
             return None
 
         try:
-            from selfhealing.services.learning.models import PatternType
+            if learning is not None:
+                patterns = learning.recovery_patterns
+            else:
+                from selfhealing.services.learning.models import PatternType
 
-            patterns = self._learning_service.get_patterns(
-                pattern_type=PatternType.RECOVERY,
-                min_confidence=0.0,
-            )
+                patterns = self._learning_service.get_patterns(
+                    pattern_type=PatternType.RECOVERY,
+                    min_confidence=0.0,
+                )
             matching = [p for p in patterns if (getattr(p, "features", {}) or {}).get("runbook_id") == runbook_id]
             if not matching:
                 return None
@@ -500,18 +636,28 @@ class PatternMatcher:
         except Exception:
             return None
 
-    def _count_similar_patterns(self, runbook_id: str) -> int:
-        """LearningService에서 유사 패턴 수 조회."""
+    def _count_similar_patterns(
+        self,
+        runbook_id: str,
+        learning: _LearningSnapshot | None = None,
+    ) -> int:
+        """LearningService에서 유사 패턴 수 조회.
+
+        learning 스냅샷이 있으면 failure_patterns를 재사용하고, 없으면 직접 조회한다.
+        """
         if self._learning_service is None:
             return 0
 
         try:
-            from selfhealing.services.learning.models import PatternType
+            if learning is not None:
+                patterns = learning.failure_patterns
+            else:
+                from selfhealing.services.learning.models import PatternType
 
-            patterns = self._learning_service.get_patterns(
-                pattern_type=PatternType.FAILURE,
-                min_confidence=self.LEARNING_MIN_CONFIDENCE,
-            )
+                patterns = self._learning_service.get_patterns(
+                    pattern_type=PatternType.FAILURE,
+                    min_confidence=self.LEARNING_MIN_CONFIDENCE,
+                )
             return len(self._find_similar_patterns(runbook_id, patterns))
         except Exception:
             return 0

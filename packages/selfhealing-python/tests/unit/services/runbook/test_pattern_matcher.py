@@ -33,6 +33,7 @@ class FakeRunbook:
     trigger_condition: PatternCondition = field(default_factory=PatternCondition)
     cooldown_seconds: int = 300
     priority_weight: float = 1.0
+    risk_level: int = 0
 
 
 class FakeRegistry:
@@ -431,6 +432,40 @@ class TestSelectRunbookBehavior:
         assert result is not None
         assert result.selected.runbook_id == "rb_alpha"
 
+    def test_tie_broken_by_risk_level_lower_wins(self):
+        """confidence 동점 시 risk_level 낮은 것(SAFE)이 우선 선택된다."""
+        from selfhealing.services.runbook.models import MatchResult
+
+        # Given
+        safe_runbook = MatchResult(
+            runbook_id="rb_safe",
+            confidence=0.8,
+            matched_conditions=[],
+            historical_success_rate=None,
+            similar_pattern_count=0,
+            triggered_by_event=None,
+            metric_snapshot={},
+            risk_level=0,
+        )
+        dangerous_runbook = MatchResult(
+            runbook_id="rb_dangerous",
+            confidence=0.8,
+            matched_conditions=[],
+            historical_success_rate=None,
+            similar_pattern_count=0,
+            triggered_by_event=None,
+            metric_snapshot={},
+            risk_level=2,
+        )
+        matcher = _make_matcher()
+
+        # When
+        result = matcher.select_runbook([dangerous_runbook, safe_runbook])
+
+        # Then
+        assert result is not None
+        assert result.selected.runbook_id == "rb_safe"
+
     def test_runner_up_ids_populated(self):
         """선택 후 runner_up_runbook_ids에 탈락 후보 ID가 기록된다."""
         from selfhealing.services.runbook.models import MatchResult
@@ -726,3 +761,97 @@ class TestDataImmutabilityBehavior:
         matcher.evaluate_all(metrics)
 
         assert metrics == original
+
+
+# =============================================================================
+# Behavior Tests — risk_level 런북 반영
+# =============================================================================
+
+
+class TestRiskLevelBehavior:
+    """evaluate_all()이 런북의 risk_level을 MatchResult에 올바르게 반영하는지 검증."""
+
+    def test_risk_level_populated_from_runbook(self):
+        """evaluate_all()이 runbook.risk_level을 MatchResult.risk_level에 복사한다."""
+        runbook = FakeRunbook(
+            id="rb_moderate",
+            trigger_condition=_make_error_rate_condition(0.05),
+            risk_level=1,
+        )
+        matcher = _make_matcher(runbooks=[runbook])
+
+        results = matcher.evaluate_all({"error_rate": 0.06})
+
+        assert len(results) == 1
+        assert results[0].risk_level == 1
+
+    def test_risk_level_defaults_to_zero_when_runbook_has_no_attr(self):
+        """runbook에 risk_level 속성이 없으면 MatchResult.risk_level은 0."""
+        runbook = FakeRunbook(
+            id="rb_no_risk",
+            trigger_condition=_make_error_rate_condition(0.05),
+        )
+        # FakeRunbook는 risk_level=0으로 선언됨 (설계 기본값과 일치)
+        matcher = _make_matcher(runbooks=[runbook])
+
+        results = matcher.evaluate_all({"error_rate": 0.06})
+
+        assert results[0].risk_level == 0
+
+
+# =============================================================================
+# Behavior Tests — on_runbook_selected 콜백
+# =============================================================================
+
+
+class TestOnRunbookSelectedCallbackBehavior:
+    """PatternMatcher.on_runbook_selected 콜백 동작 검증."""
+
+    def test_callback_called_when_runbook_selected_via_event(self):
+        """_on_event()가 런북을 선택했을 때 on_runbook_selected 콜백이 호출된다."""
+        from unittest.mock import MagicMock
+
+        from selfhealing.services.runbook.models import EventCondition, PatternCondition
+        from selfhealing.services.runbook.pattern_matcher import PatternMatcher
+
+        # Given
+        runbook = FakeRunbook(
+            id="rb_cb",
+            trigger_condition=PatternCondition(
+                event_conditions=[EventCondition(event_type="circuit_breaker_opened")],
+            ),
+        )
+        callback = MagicMock()
+        matcher = PatternMatcher(
+            registry=FakeRegistry([runbook]),
+            on_runbook_selected=callback,
+        )
+
+        # When: 이벤트 발행으로 _on_event() 호출 시뮬레이션
+        # _on_event는 내부 EventBus 구독 콜백이므로 직접 호출
+        class FakeEvent:
+            event_type = "circuit_breaker_opened"
+            source = "payment_api"
+            data = {"new_state": "open"}
+
+        matcher._on_event(FakeEvent())
+
+        # Then
+        callback.assert_called_once()
+        call_args = callback.call_args[0][0]
+        assert call_args.selected.runbook_id == "rb_cb"
+
+    def test_no_callback_no_error_when_no_match(self):
+        """콜백 없이 매칭이 없을 때도 에러 없이 동작한다."""
+        matcher = PatternMatcher(
+            registry=FakeRegistry([]),
+            on_runbook_selected=None,
+        )
+
+        class FakeEvent:
+            event_type = "circuit_breaker_opened"
+            source = None
+            data = {}
+
+        # 예외 없이 실행되어야 함
+        matcher._on_event(FakeEvent())
