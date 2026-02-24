@@ -336,13 +336,377 @@ def test_service_name_default(self, default_service_name):
 
 테스트 작성 시 다음을 확인:
 
+### 6.1 분류 정책
 - [ ] **계약 vs 동작 구분**: 테스트 목적이 계약 검증인지 동작 검증인지 판단
 - [ ] 계약 검증 → `Test*Contract` 클래스, 하드코딩 기대값 사용
 - [ ] 동작 검증 → `Test*Behavior` 클래스, 소스 참조 사용
+
+### 6.2 하드코딩 정책
 - [ ] 기본값 하드코딩 대신 소스 참조 사용 (동작 검증의 경우)
 - [ ] 상수 하드코딩 대신 상수 import 사용 (동작 검증의 경우)
 - [ ] 변환 결과 검증 시 동일 함수로 기대값 계산
 - [ ] 필요시 소스에 상수 추출 후 테스트에서 참조
+- [ ] model_fields.default 동어반복 방지 (§0.4)
+
+### 6.3 검증 기법 커버리지 (해당 시 — §7 참조)
+- [ ] **경계값**: ge/le 제약이 있는 필드 → 경계 직전/직후 값 테스트 (§7.1)
+- [ ] **예외/엣지 케이스**: None, 빈 문자열, 범위 초과 입력 처리 (§7.2)
+- [ ] **멱등성**: 동일 입력 N회 호출 시 동일 결과 (§7.3)
+- [ ] **부수효과**: 로그, 이벤트, 상태 변경이 의도대로 발생 (§7.4)
+- [ ] **의존성 상호작용**: Mock 대상이 정확한 횟수/인자로 호출됨 (§7.5)
+- [ ] **데이터 불변성**: 입력 파라미터가 함수 내부에서 변경되지 않음 (§7.6)
+- [ ] **동시성/스레드 안전**: 멀티스레드 접근 시 데이터 정합성 유지 (§7.7)
+- [ ] **상태 전이**: 이벤트 시퀀스에 따른 상태 머신 전환이 올바른지 (§7.8)
+- [ ] **직렬화 왕복**: `to_dict()`→`from_dict()` 라운드트립 데이터 보존 (§7.9)
+- [ ] **싱글톤/라이프사이클**: `get_*()`/`reset_*()` 캐싱/초기화 동작 (§7.10)
+
+### 6.4 conftest.py
 - [ ] conftest.py 배치: 2파일 이상 공유 시에만 conftest 이동 (§5.1)
 - [ ] conftest.py 크기: 300줄 초과 시 분리 검토 (§5.3)
-- [ ] model_fields.default 동어반복 방지 (§0.4)
+
+---
+
+## 7. 검증 기법 상세 가이드
+
+§0의 **Contract/Behavior 분류**는 "기대값을 어떻게 작성할 것인가(하드코딩 vs 소스 참조)"에 대한 정책이다.
+본 섹션은 **"무엇을 테스트할 것인가"** — 즉, 하나의 모듈에 대해 어떤 검증 기법을 적용해야 하는지 안내한다.
+
+> **모든 기법이 항상 필요한 것은 아니다.** 구현 코드의 특성에 따라 해당되는 기법만 선택적으로 적용한다.
+
+### 7.0 기법 선택 기준
+
+구현 코드 특성 → 적용 기법
+│
+├─ Pydantic Settings / Field 제약 → §7.1 경계값 + §7.2 예외
+├─ 외부 서비스 호출 (Mock 대상) → §7.4 부수효과 + §7.5 상호작용
+├─ 캐시/레지스트리/카운터 등 상태 보유 → §7.3 멱등성 + §7.8 상태 전이
+├─ 입력 데이터 가공/변환 함수 → §7.6 불변성
+├─ threading.Lock, 싱글톤, 공유 자원 → §7.7 동시성
+├─ to_dict/from_dict, model_dump → §7.9 직렬화
+└─ get_*() / reset_*() 팩토리 → §7.10 싱글톤
+
+### 7.1 경계값 분석 (Boundary Value Analysis)
+
+**적용 시점**: Pydantic `Field(ge=, le=)` 제약, 수치 비교 로직(`<`, `<=`, `>`, `>=`), 범위 판정 함수
+
+**핵심 원칙**: 경계의 **직전(실패)**, **경계(성공/실패)**, **직후(성공)** 3개 값을 테스트한다.
+
+```python
+# ✅ 경계값 테스트 (Contract — 제약 조건이 설계 사양인 경우)
+class TestRunbookSettingsBoundaryContract:
+    """RunbookSettings 필드 경계값 계약 검증."""
+
+    def test_approval_timeout_minimum_boundary(self):
+        """approval_timeout_seconds의 최소 경계: ge=30."""
+        # 경계 직전 (29) → 실패
+        with pytest.raises(ValidationError):
+            RunbookSettings(approval_timeout_seconds=29)
+        # 경계 값 (30) → 성공
+        settings = RunbookSettings(approval_timeout_seconds=30)
+        assert settings.approval_timeout_seconds == 30
+
+    def test_approval_timeout_maximum_boundary(self):
+        """approval_timeout_seconds의 최대 경계: le=3600."""
+        # 경계 값 (3600) → 성공
+        settings = RunbookSettings(approval_timeout_seconds=3600)
+        assert settings.approval_timeout_seconds == 3600
+        # 경계 직후 (3601) → 실패
+        with pytest.raises(ValidationError):
+            RunbookSettings(approval_timeout_seconds=3601)
+
+# ✅ 경계값 테스트 (Behavior — 비교 로직 동작 검증)
+class TestSafetyBoundsBoundaryBehavior:
+    """범위 판정 함수의 경계 동작 검증."""
+
+    def test_at_exact_minimum_is_within_bounds(self, default_settings):
+        """최솟값 정확히 일치 시 범위 내 판정."""
+        safety = SafetyBounds()
+        assert safety.is_within_bounds(
+            "throttle_sla_warning_ms",
+            default_settings.throttle_sla_warning_ms_min,
+        ) is True
+
+    def test_below_minimum_is_out_of_bounds(self, default_settings):
+        """최솟값 미만 시 범위 외 판정."""
+        safety = SafetyBounds()
+        assert safety.is_within_bounds(
+            "throttle_sla_warning_ms",
+            default_settings.throttle_sla_warning_ms_min - 1,
+        ) is False
+```
+
+### 7.2 예외 및 엣지 케이스 (Exception & Edge Case)
+적용 시점: 외부 입력을 받는 함수, None/빈 값 가능성, 시스템 한계치 초과 가능성
+
+핵심 원칙: 시스템이 크래시하지 않고 정의된 예외를 발생시키는지, 또는 graceful하게 처리하는지 확인한다.
+
+```python
+# ✅ 예외 테스트 (Behavior)
+class TestPatternMatcherEdgeCaseBehavior:
+    """패턴 매처 엣지 케이스 동작 검증."""
+
+    def test_empty_metrics_returns_no_match(self):
+        """빈 메트릭 딕셔너리 입력 시 매칭 결과 없음."""
+        matcher = PatternMatcher(registry)
+        result = matcher.match({})
+        assert result is None
+
+    def test_none_input_raises_type_error(self):
+        """None 입력 시 TypeError 발생."""
+        matcher = PatternMatcher(registry)
+        with pytest.raises(TypeError):
+            matcher.match(None)
+
+    def test_unknown_metric_key_is_ignored(self):
+        """등록되지 않은 메트릭 키는 무시."""
+        matcher = PatternMatcher(registry)
+        result = matcher.match({"unknown_metric": 99.9})
+        assert result is None
+```
+
+### 7.3 멱등성 검증 (Idempotency)
+적용 시점: 같은 요청을 여러 번 처리하는 핸들러, 캐시 갱신, 상태 설정 함수
+
+핵심 원칙: 동일 입력을 N회 호출해도 결과와 부수효과가 1회 호출과 동일한지 확인한다.
+```python
+# ✅ 멱등성 테스트 (Behavior)
+class TestIdempotentStepHandlerBehavior:
+    """멱등 step 핸들러 동작 검증."""
+
+    def test_duplicate_execution_returns_same_result(self):
+        """동일 step을 2회 실행해도 결과가 같다."""
+        handler = IdempotentStepHandler(store=mock_store)
+        result_1 = handler.execute(step_id="s1", action=my_action)
+        result_2 = handler.execute(step_id="s1", action=my_action)
+        assert result_1 == result_2
+
+    def test_duplicate_execution_does_not_double_apply(self):
+        """동일 step을 2회 실행해도 실제 액션은 1회만 수행."""
+        handler = IdempotentStepHandler(store=mock_store)
+        handler.execute(step_id="s1", action=mock_action)
+        handler.execute(step_id="s1", action=mock_action)
+        mock_action.assert_called_once()
+```
+
+### 7.4 부수효과 검증 (Side Effect)
+적용 시점: 로그 기록, 이벤트 발행, 메트릭 카운터 증가, 외부 상태 변경
+
+핵심 원칙: 함수의 반환값 외에 외부에 끼치는 영향이 의도대로인지 확인한다.
+```python
+# ✅ 부수효과 테스트 (Behavior)
+class TestApprovalGateSideEffectBehavior:
+    """승인 게이트 부수효과 검증."""
+
+    def test_medium_risk_emits_notification(self, mock_notifier, mock_bus):
+        """MEDIUM 위험도 런북은 알림을 발행한다."""
+        gate = ApprovalGate(notifier=mock_notifier, bus=mock_bus)
+        gate.evaluate(runbook, risk_level=RiskLevel.MEDIUM)
+        mock_notifier.notify.assert_called_once()
+
+    def test_low_risk_does_not_emit_notification(self, mock_notifier, mock_bus):
+        """LOW 위험도 런북은 알림을 발행하지 않는다."""
+        gate = ApprovalGate(notifier=mock_notifier, bus=mock_bus)
+        gate.evaluate(runbook, risk_level=RiskLevel.LOW)
+        mock_notifier.notify.assert_not_called()
+
+    def test_completion_emits_event(self, mock_bus):
+        """완료 시 RUNBOOK_COMPLETED 이벤트 발행."""
+        gate.on_complete(runbook_id="rb1")
+        emitted = mock_bus.emit.call_args[0][0]
+        assert emitted.event_type == EventType.RUNBOOK_COMPLETED
+```
+
+### 7.5 의존성 상호작용 검증 (Dependency Interaction)
+적용 시점: Mock으로 대체한 외부 의존 컴포넌트가 정확한 횟수, 정확한 인자로 호출되었는지
+
+핵심 원칙: 불필요한 호출은 없는가? 필수 호출을 빠뜨리지 않았는가?
+```python
+# ✅ 상호작용 테스트 (Behavior)
+class TestExecutorInteractionBehavior:
+    """Executor의 의존 컴포넌트 호출 검증."""
+
+    def test_acquires_lock_before_execution(self, mock_lock):
+        """실행 전 분산 락을 획득한다."""
+        executor = RunbookExecutor(lock=mock_lock)
+        executor.run(runbook)
+        mock_lock.acquire.assert_called_once_with(
+            "runbook", runbook.id,
+        )
+
+    def test_releases_lock_after_execution(self, mock_lock):
+        """실행 후 분산 락을 해제한다."""
+        executor = RunbookExecutor(lock=mock_lock)
+        executor.run(runbook)
+        mock_lock.release.assert_called_once()
+
+    def test_releases_lock_even_on_failure(self, mock_lock, failing_step):
+        """실행 실패 시에도 분산 락을 해제한다."""
+        executor = RunbookExecutor(lock=mock_lock)
+        with pytest.raises(ExecutionError):
+            executor.run(failing_runbook)
+        mock_lock.release.assert_called_once()
+```
+
+### 7.6 데이터 불변성 검증 (Data Immutability)
+적용 시점: 입력 리스트/딕셔너리를 가공하는 함수, frozen dataclass/model 사용처
+
+핵심 원칙: 함수 호출 전후로 원본 데이터가 훼손되지 않았는지 확인한다.
+```python
+# ✅ 불변성 테스트 (Behavior)
+class TestCellRegistryImmutabilityBehavior:
+    """CellRegistry 입력 데이터 불변성 검증."""
+
+    def test_assign_does_not_mutate_input_services(self):
+        """Cell 할당 시 원본 서비스 리스트가 변경되지 않는다."""
+        original_services = ["svc-a", "svc-b", "svc-c"]
+        services_copy = original_services.copy()
+        registry.assign(services=original_services)
+        assert original_services == services_copy
+
+    def test_frozen_cell_info_prevents_mutation(self):
+        """CellInfo는 frozen이므로 속성 변경 시 에러."""
+        cell = CellInfo(cell_id="cell-0", state=CellState.ACTIVE)
+        with pytest.raises(FrozenInstanceError):
+            cell.state = CellState.EVACUATING
+```
+
+### 7.7 동시성 및 스레드 안전 검증 (Concurrency & Thread Safety)
+적용 시점: threading.Lock 사용, 싱글톤 팩토리, 공유 카운터/레지스트리, asyncio 코루틴
+
+핵심 원칙: N개 스레드가 동시 접근해도 데이터 정합성이 유지되는지 확인한다.
+```python
+# ✅ 동시성 테스트 (Behavior)
+class TestCellRegistryThreadSafetyBehavior:
+    """CellRegistry 멀티스레드 접근 안전성 검증."""
+
+    def test_concurrent_assign_no_data_corruption(self):
+        """10개 스레드가 동시에 assign해도 데이터 손상 없음."""
+        registry = CellRegistry(settings)
+        errors = []
+
+        def worker(thread_id):
+            try:
+                registry.assign(services=[f"svc-{thread_id}"])
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+
+    def test_concurrent_get_singleton_returns_same_instance(self):
+        """멀티스레드에서 get_cell_registry()가 동일 인스턴스 반환."""
+        results = []
+
+        def worker():
+            results.append(get_cell_registry())
+
+        threads = [threading.Thread(target=worker) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert all(r is results[0] for r in results)
+```
+
+### 7.8 상태 전이 검증 (State Transition)
+적용 시점: Circuit Breaker, Saga 상태 머신, Emergency Level, Cell 상태 변경
+
+핵심 원칙: 이벤트 시퀀스에 대해 허용된 전이만 발생하는지, 비허용 전이가 거부되는지 확인한다.
+```python
+# ✅ 상태 전이 테스트 (Behavior)
+class TestCellStateTransitionBehavior:
+    """Cell 상태 전이 규칙 검증."""
+
+    def test_active_to_evacuating_on_health_drop(self):
+        """ACTIVE Cell의 건강도가 임계값 이하로 떨어지면 EVACUATING으로 전이."""
+        cell = registry.get_cell("cell-0")
+        assert cell.state == CellState.ACTIVE
+        policy.on_health_update("cell-0", health_score=0.2)
+        cell = registry.get_cell("cell-0")
+        assert cell.state == CellState.EVACUATING
+
+    def test_evacuating_to_active_on_recovery(self):
+        """EVACUATING Cell의 건강도가 회복되면 ACTIVE로 복귀."""
+        policy.on_health_update("cell-0", health_score=0.2)  # → EVACUATING
+        policy.on_health_update("cell-0", health_score=0.8)  # → ACTIVE
+        cell = registry.get_cell("cell-0")
+        assert cell.state == CellState.ACTIVE
+
+    def test_invalid_transition_rejected(self):
+        """허용되지 않은 상태 전이는 거부."""
+        # ISOLATED → ACTIVE 직접 전이는 불가 (EVACUATING을 거쳐야 함)
+        with pytest.raises(InvalidStateTransition):
+            registry.transition("cell-0", CellState.ISOLATED, CellState.ACTIVE)
+```
+
+### 7.9 직렬화 왕복 검증 (Serialization Round-trip)
+적용 시점: to_dict()/from_dict(), model_dump()/model_validate(), JSON 파일 저장/로드
+
+핵심 원칙: 직렬화 → 역직렬화 시 원본 데이터가 손실 없이 복원되는지 확인한다.
+```python
+# ✅ 직렬화 왕복 테스트 (Behavior)
+class TestEvacuationRecordSerializationBehavior:
+    """EvacuationRecord 직렬화 왕복 검증."""
+
+    def test_round_trip_preserves_all_fields(self):
+        """to_dict → from_dict 왕복 시 모든 필드가 보존된다."""
+        original = EvacuationRecord(
+            cell_id="cell-3",
+            reason="health_below_threshold",
+            timestamp=datetime.now(timezone.utc),
+        )
+        serialized = original.to_dict()
+        restored = EvacuationRecord.from_dict(serialized)
+        assert restored.cell_id == original.cell_id
+        assert restored.reason == original.reason
+        assert restored.timestamp == original.timestamp
+
+    def test_serialized_keys_match_contract(self):
+        """직렬화된 딕셔너리의 키가 계약과 일치한다."""
+        record = EvacuationRecord(cell_id="cell-0", reason="test")
+        data = record.to_dict()
+        assert "cell_id" in data
+        assert "reason" in data
+        assert "timestamp" in data
+```
+### 7.10 싱글톤 및 라이프사이클 검증 (Singleton & Lifecycle)
+적용 시점: get_*() 팩토리 함수, reset_*() 초기화, 컴포넌트 시작/종료 순서
+
+핵심 원칙: 캐싱이 정상 동작하고, 리셋 후 새 인스턴스가 생성되며, 라이프사이클 훅이 올바른 순서로 호출되는지 확인한다.
+```python
+# ✅ 싱글톤 테스트 (Behavior)
+class TestCellRegistrySingletonBehavior:
+    """CellRegistry 싱글톤 캐싱/리셋 동작 검증."""
+
+    def test_get_returns_same_instance(self):
+        """get_cell_registry()는 동일 인스턴스를 반환."""
+        first = get_cell_registry()
+        second = get_cell_registry()
+        assert first is second
+
+    def test_reset_clears_cached_instance(self):
+        """reset 후 새 인스턴스가 생성된다."""
+        first = get_cell_registry()
+        reset_cell_registry()
+        second = get_cell_registry()
+        assert first is not second
+```
+
+### 7.11 참고사항
+회귀 테스트 (Regression)
+회귀 테스트는 기법이 아니라 관행이다. 버그 수정 시 해당 버그를 재현하는 테스트를 먼저 작성하고, 수정 후 통과를 확인한다. 기존 분류(Contract/Behavior) 안에 포함시키되, docstring에 버그 참조를 남긴다.
+```python
+def test_negative_cell_count_rejected(self):
+    """음수 cell_count 입력 시 ValidationError. (BUG-1234 회귀 방지)"""
+    with pytest.raises(ValidationError):
+        CellTopologySettings(cell_count=-1)
+```
+성능 테스트 (Performance)
+타이밍 민감 코드(TTL, 타임아웃, 슬라이딩 윈도우)에 한해 단위 테스트 수준에서 수행할 수 있다. 단, CI 환경의 성능 편차를 고려하여 넉넉한 마진을 둔다.
+
