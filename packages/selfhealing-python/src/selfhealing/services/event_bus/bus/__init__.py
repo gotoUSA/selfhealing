@@ -192,6 +192,31 @@ class EventType(str, Enum):
     SAGA_TIMED_OUT = "saga_timed_out"
     """전체 Saga 타임아웃 초과."""
 
+    # Runbook Executor Events (272_RUNBOOK_ARCHITECTURE_OVERVIEW.md §8)
+    RUNBOOK_TRIGGERED = "runbook_triggered"
+    """런북 트리거 조건 충족, 실행 시작."""
+
+    RUNBOOK_STEP_COMPLETED = "runbook_step_completed"
+    """런북 개별 step 실행 성공."""
+
+    RUNBOOK_STEP_FAILED = "runbook_step_failed"
+    """런북 개별 step 실행 실패."""
+
+    RUNBOOK_COMPLETED = "runbook_completed"
+    """런북 전체 실행 성공 완료."""
+
+    RUNBOOK_FAILED = "runbook_failed"
+    """런북 전체 실행 실패 (보상 포함)."""
+
+    RUNBOOK_APPROVAL_REQUIRED = "runbook_approval_required"
+    """HIGH 위험도 런북, 수동 승인 대기 상태."""
+
+    RUNBOOK_APPROVAL_GRANTED = "runbook_approval_granted"
+    """런북 수동 승인 완료."""
+
+    RUNBOOK_APPROVAL_REJECTED = "runbook_approval_rejected"
+    """런북 수동 승인 거부."""
+
 
 class EventPriority(IntEnum):
     """이벤트 처리 우선순위."""
@@ -411,7 +436,7 @@ class SelfHealingEventBus:
             subscriptions.append(sub)
         logger.info(
             "event_bus.wildcard_subscription_all_event",
-            getattr=getattr(handler, '__name__', str(handler)),
+            getattr=getattr(handler, "__name__", str(handler)),
             count=len(subscriptions),
             priority=priority.name,
         )

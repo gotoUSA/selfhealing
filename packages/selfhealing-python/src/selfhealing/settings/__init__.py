@@ -280,6 +280,11 @@ from selfhealing.settings.rate_limit import (
     get_rate_limit_settings,
     reset_rate_limit_settings,
 )
+from selfhealing.settings.runbook import (
+    RunbookSettings,
+    get_runbook_settings,
+    reset_runbook_settings,
+)
 
 # Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
 from selfhealing.settings.recovery_circuit_breaker import (
@@ -448,6 +453,10 @@ __all__ = [
     "RateLimitSettings",
     "get_rate_limit_settings",
     "reset_rate_limit_settings",
+    # Runbook Executor (272_RUNBOOK_ARCHITECTURE_OVERVIEW.md)
+    "RunbookSettings",
+    "get_runbook_settings",
+    "reset_runbook_settings",
     # Security
     "SecuritySettings",
     "get_security_settings",
