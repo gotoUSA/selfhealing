@@ -10,6 +10,7 @@ Reference:
 
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -104,13 +105,13 @@ class RunbookStepResult:
     """보상 처리 상태: "not_needed" | "compensated" | "compensate_failed"."""
 
     def to_dict(self) -> dict[str, Any]:
-        """직렬화."""
+        """직렬화. result_data는 deep copy하여 외부 수정이 원본에 영향을 미치지 않게 한다."""
         return {
             "step_name": self.step_name,
             "action_name": self.action_name,
             "success": self.success,
             "executed": self.executed,
-            "result_data": self.result_data,
+            "result_data": copy.deepcopy(self.result_data),
             "error": self.error,
             "started_at": self.started_at,
             "completed_at": self.completed_at,

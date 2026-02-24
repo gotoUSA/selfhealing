@@ -208,6 +208,18 @@ class RunbookStepResult:
     타겟 시스템에서는 작업이 성공했을 수 있으므로 보상 필요."""
     compensation_status: str = "not_needed"
     # "not_needed" | "compensated" | "compensate_failed"
+
+    def to_dict(self) -> dict[str, Any]:
+        """직렬화. result_data는 deep copy하여 원본 불변성을 보장한다."""
+        return {
+            "step_name": self.step_name,
+            "action_name": self.action_name,
+            "success": self.success,
+            "executed": self.executed,
+            "result_data": copy.deepcopy(self.result_data),  # 원본 보호
+            "error": self.error,
+            ...
+        }
 ```
 
 ---
@@ -439,7 +451,12 @@ SagaOrchestrator 및 RecoveryCoordinator의 `_execute_with_timeout` 패턴을 **
 양쪽 모두 60초 Polling + 300초 TTL 연장이라는 동일한 값을 사용하며,
 Runbook Executor도 이를 그대로 따른다.
 
+이 상수들은 `RunbookSettings(settings/runbook.py)`에도 동일한 기본값으로 정의되어 있으며,
+런타임에서는 `_get_lock_heartbeat_interval()`, `_get_lock_extend_seconds()` 헬퍼를 통해
+Settings 값을 우선 사용하고, Settings 로드 실패 시 모듈 상수를 폴백으로 사용한다.
+
 ```python
+# 기본 상수 — RunbookSettings 폴백값
 LOCK_HEARTBEAT_INTERVAL = 60    # SagaOrchestrator.HEARTBEAT_INTERVAL과 동일
 LOCK_EXTEND_SECONDS = 300       # SagaOrchestrator.EXTEND_SECONDS와 동일
 
@@ -559,10 +576,13 @@ def _compensate_steps(
             summary.compensated.append(step_name)
             continue
 
-        # 보상 프리미티브 조회
-        compensate_fn = ActionPrimitiveRegistry.get_compensate(step_name)
+        # 보상 프리미티브 조회: on_failure_action → step.action 순서
+        # register_compensate()는 action_name 기준으로 등록하므로
+        # RunbookStep.on_failure_action이 있으면 우선, 없으면 step.action으로 조회
+        compensate_key = self._resolve_compensate_key(step_name, runbook)
+        compensate_fn = ActionPrimitiveRegistry.get_compensate(compensate_key)
         if compensate_fn is None:
-            logger.debug("runbook_executor.no_compensate_fn", step=step_name)
+            logger.debug("runbook_executor.no_compensate_fn", step=step_name, compensate_key=compensate_key)
             summary.skipped.append(step_name)
             continue
 
@@ -570,7 +590,7 @@ def _compensate_steps(
         self._recovery_lock.extend(
             ctx.namespace,
             ctx.execution_id,
-            additional_seconds=300,
+            additional_seconds=self._get_lock_extend_seconds(),  # Settings 기반
         )
 
         try:
@@ -611,6 +631,24 @@ def _compensate_steps(
             )
 
     return summary
+
+    @staticmethod
+    def _resolve_compensate_key(step_name: str, runbook: Runbook) -> str:
+        """보상 프리미티브 조회 키 결정.
+
+        우선순위:
+        1. RunbookStep.on_failure_action (명시적 보상 Action 지정)
+        2. RunbookStep.action (실행 프리미티브 이름 — register_compensate의 action_name과 대응)
+
+        register_compensate(action_name, fn)의 키가 action_name이므로
+        step.action을 기본 조회 키로 사용한다.
+        """
+        for step in runbook.steps:
+            if step.name == step_name:
+                if getattr(step, "on_failure_action", None):
+                    return step.on_failure_action
+                return step.action
+        return step_name
 ```
 
 ### 6.2 CompensationSummary
@@ -1065,7 +1103,7 @@ def _save_context(self, ctx: RunbookExecutionContext) -> None:
     """컨텍스트 영속화. StateBackend 사용."""
     backend = self._get_backend()
     key = self.CONTEXT_KEY.format(execution_id=ctx.execution_id)
-    backend.set(key, ctx.to_dict(), ttl=86400)  # 24시간 TTL
+    backend.set(key, ctx.to_dict(), ttl=self._get_context_ttl_seconds())  # Settings 기반 TTL (기본 24시간)
 
 def _load_context(self, execution_id: str) -> RunbookExecutionContext | None:
     """영속화된 컨텍스트 로드. resume 시 사용."""
@@ -1082,13 +1120,14 @@ def _load_context(self, execution_id: str) -> RunbookExecutionContext | None:
 RecoveryCoordinator의 `resume_recovery()` 패턴을 참조하여,
 FAILED/EXECUTING 상태의 실행을 재개할 수 있도록 한다.
 
-**3가지 방어 장치:**
+**4가지 방어 장치:**
 
 | 방어 | 패턴 근거 | 설명 |
 |------|-----------|------|
 | **Stale Context 거부** | `scan_orphan_sagas()` — `tasks.py` L89-L138, `STALE_THRESHOLD_SECONDS = 300` | 마지막 상태 업데이트 후 N분 초과 시 재개 거부. `force=True`로 오버라이드 가능 |
 | **버전 호환성 검증** | `_validate_version_compatibility()` — `orchestrator.py` L1059-L1073 | `ctx.runbook_version != runbook.version` 시 SUSPENDED 전환 |
-| **무한 재개 방지** | `MAX_RESUME_COUNT = 10` — `orchestrator.py` L76 | resume_count 초과 시 FAILED + DLQ |
+| **무한 재개 방지** | `MAX_RESUME_COUNT = 10` — `orchestrator.py` L76 | resume_count 초과 시 FAILED + DLQ. Settings에서 오버라이드 가능 |
+| **분산 Lock 획득** | `resume_saga()` — `orchestrator.py` L851 | 재개 전 Lock 획득으로 동시 재개 Split-brain 방지 |
 
 ```python
 MAX_RESUME_COUNT = 10  # SagaOrchestrator.MAX_RESUME_COUNT와 동일
@@ -1154,16 +1193,30 @@ def resume_execution(
 
     # 3. 무한 재개 방지
     # 코드 근거: resume_saga() — orchestrator.py L826-L834
+    max_resume = self._get_max_resume_count()  # Settings 기반 (폴백 MAX_RESUME_COUNT)
     resume_count = ctx.variables.get("__resume_count", 0)
-    if resume_count >= MAX_RESUME_COUNT:
+    if resume_count >= max_resume:
         ctx.status = RunbookExecutionStatus.FAILED
-        ctx.abort_reason = f"Max resume count ({MAX_RESUME_COUNT}) exceeded"
+        ctx.abort_reason = f"Max resume count ({max_resume}) exceeded"
         self._save_context(ctx)
         self._store_to_dlq(ctx, ctx.abort_reason, CompensationSummary())
         return ctx
     ctx.variables["__resume_count"] = resume_count + 1
 
-    return self._run_from_step(runbook, ctx, ctx.current_step_index)
+    # 4. 분산 Lock 획득 (SagaOrchestrator.resume_saga GC Pause 방어 패턴)
+    # resume_saga()는 실행 재개 전 반드시 Lock을 획득하여
+    # 다른 워커가 동시에 같은 Execution을 재개하는 Split-brain을 방지한다.
+    lock = self._get_recovery_lock()
+    acquired = lock.acquire(ctx.namespace, ctx.execution_id)
+    if not acquired:
+        raise RunbookLockConflictError(
+            f"Namespace '{ctx.namespace}' is locked by another recovery/runbook"
+        )
+
+    try:
+        return self._run_from_step(runbook, ctx, ctx.current_step_index)
+    finally:
+        lock.release(ctx.namespace, ctx.execution_id)
 ```
 
 ---
@@ -1288,3 +1341,37 @@ SELFHEALING_RUNBOOK_MAX_RESUME_COUNT: int = 10                # 무한 재개 �
 - In-doubt(타임아웃) Step은 실제로는 실행되지 않았을 수 있음
 - 보상 Primitive가 No-op 안전하면, "실행 안 됐는데 보상"해도 `success=True` 반환 → 무해
 - CompensationContract가 이를 등록 시점에 강제 → In-doubt 보상이 안전하게 동작
+
+### 18.3 기술부채 해결 (코드 리뷰 반영)
+
+구현 후 코드 리뷰에서 발견된 기술부채 4건을 해결하였다.
+
+| 심각도 | 문제 | 변경 대상 | 해결 |
+|--------|------|-----------|------|
+| **P0** | `resume_execution()`이 Lock 없이 `_run_from_step()` 호출 — 동시 재개 시 Split-brain 가능 | `executor.py` `resume_execution()` | Lock acquire/try/finally release 패턴 추가 (§13.1의 4번째 방어). `SagaOrchestrator.resume_saga()` L851의 GC Pause 방어 패턴과 동일 |
+| **P1** | 모듈 상수(60/300/10/86400)를 직접 참조 — `RunbookSettings` 환경 변수 오버라이드가 무시됨 | `executor.py` 전역 | Settings 기반 헬퍼 메서드 4개 추가: `_get_lock_heartbeat_interval()`, `_get_lock_extend_seconds()`, `_get_max_resume_count()`, `_get_context_ttl_seconds()`. 모듈 상수는 설계 계약 기본값 + Settings 로드 실패 시 폴백으로 역할 변경 |
+| **P2** | `_compensate_steps()`가 `step_name`으로 보상 프리미티브 조회 — `register_compensate(action_name, fn)`의 `action_name` 키와 불일치 | `executor.py` `_compensate_steps()` | `_resolve_compensate_key()` 헬퍼 추가. `on_failure_action` 우선 → `step.action` 폴백 순서로 조회 키 결정 |
+| **Low** | `RunbookStepResult.to_dict()`가 `result_data` 참조를 공유 — 직렬화 결과 수정 시 원본 훼손 | `execution_models.py` `to_dict()` | `copy.deepcopy(self.result_data)` 적용하여 원본 불변성 보장 |
+
+#### P0 해결 근거 — resume Lock 획득
+
+`SagaOrchestrator.resume_saga()`는 `_run_from_step()` 호출 전 반드시 Lock을 획득한다:
+```python
+# orchestrator.py L851 패턴
+lock = self._get_recovery_lock()
+acquired = lock.acquire(ctx.namespace, ctx.execution_id)
+try:
+    return self._run_from_step(runbook, ctx, ctx.current_step_index)
+finally:
+    lock.release(ctx.namespace, ctx.execution_id)
+```
+`execute_runbook()`은 이미 이 패턴을 사용하고 있었으나 `resume_execution()`에는 누락되어 있었다.
+두 개의 워커가 동시에 같은 `execution_id`를 resume하면 동일 Step이 중복 실행될 수 있는
+**Split-brain** 위험이 있으므로, P0으로 분류하여 즉시 수정하였다.
+
+#### P1 해결 근거 — Settings 일원화
+
+`settings/runbook.py`의 `RunbookSettings`는 `SELFHEALING_RUNBOOK_` 접두사 환경 변수로
+Lock Heartbeat, Lock TTL 연장, Max Resume Count, Context TTL 등을 오버라이드할 수 있다.
+그러나 `executor.py`는 모듈 상수를 직접 참조하여 환경 변수 설정이 무시되는 상태였다.
+`SagaOrchestrator`의 `_get_settings()` 패턴을 참조하여, try/except 폴백 헬퍼로 일원화하였다.

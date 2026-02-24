@@ -58,7 +58,10 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 # =============================================================================
-# 상수 — SagaOrchestrator 패턴 (orchestrator.py HEARTBEAT_INTERVAL=60, EXTEND_SECONDS=300)
+# 기본 상수 — RunbookSettings 폴백값
+# RunbookSettings(settings/runbook.py)가 동일한 기본값을 가진다.
+# 런타임에서는 _get_settings()를 통해 환경 변수 오버라이드 가능.
+# 이 상수들은 설계 계약 기본값이자, Settings 로드 실패 시 폴백으로 사용된다.
 # =============================================================================
 
 LOCK_HEARTBEAT_INTERVAL = 60
@@ -69,6 +72,9 @@ LOCK_EXTEND_SECONDS = 300
 
 MAX_RESUME_COUNT = 10
 """무한 재개 방지 카운터. SagaOrchestrator.MAX_RESUME_COUNT와 동일."""
+
+CONTEXT_TTL_SECONDS = 86400
+"""컨텍스트 영속화 TTL (초). 기본 24시간."""
 
 CONTEXT_KEY_TEMPLATE = "selfhealing:runbook:execution:{execution_id}"
 IDEMPOTENCY_KEY_PREFIX = "idem:runbook"
@@ -140,6 +146,38 @@ class RunbookExecutor:
         from selfhealing.settings.runbook import get_runbook_settings
 
         return get_runbook_settings()
+
+    # =========================================================================
+    # Settings 기반 값 조회 — 모듈 상수를 폴백으로 사용
+    # =========================================================================
+
+    def _get_lock_heartbeat_interval(self) -> int:
+        """Lock Heartbeat Polling 간격 (초). Settings 우선, 폴백 LOCK_HEARTBEAT_INTERVAL."""
+        try:
+            return self._get_settings().lock_heartbeat_interval
+        except Exception:
+            return LOCK_HEARTBEAT_INTERVAL
+
+    def _get_lock_extend_seconds(self) -> int:
+        """Lock TTL 연장값 (초). Settings 우선, 폴백 LOCK_EXTEND_SECONDS."""
+        try:
+            return self._get_settings().lock_extend_seconds
+        except Exception:
+            return LOCK_EXTEND_SECONDS
+
+    def _get_max_resume_count(self) -> int:
+        """무한 재개 방지 카운터. Settings 우선, 폴백 MAX_RESUME_COUNT."""
+        try:
+            return self._get_settings().max_resume_count
+        except Exception:
+            return MAX_RESUME_COUNT
+
+    def _get_context_ttl_seconds(self) -> int:
+        """컨텍스트 영속화 TTL (초). Settings 우선, 폴백 CONTEXT_TTL_SECONDS."""
+        try:
+            return self._get_settings().context_ttl_seconds
+        except Exception:
+            return CONTEXT_TTL_SECONDS
 
     # =========================================================================
     # Public API
@@ -239,16 +277,30 @@ class RunbookExecutor:
             )
 
         # 3. 무한 재개 방지 (SagaOrchestrator.resume_saga MAX_RESUME_COUNT 패턴)
+        max_resume = self._get_max_resume_count()
         resume_count = ctx.variables.get("__resume_count", 0)
-        if resume_count >= MAX_RESUME_COUNT:
+        if resume_count >= max_resume:
             ctx.status = RunbookExecutionStatus.FAILED
-            ctx.abort_reason = f"최대 재개 횟수({MAX_RESUME_COUNT})를 초과했다."
+            ctx.abort_reason = f"최대 재개 횟수({max_resume})를 초과했다."
             self._save_context(ctx)
             self._store_to_dlq(ctx, ctx.abort_reason, CompensationSummary())
             return ctx
         ctx.variables["__resume_count"] = resume_count + 1
 
-        return self._run_from_step(runbook, ctx, ctx.current_step_index)
+        # 4. 분산 Lock 획득 (SagaOrchestrator.resume_saga GC Pause 방어 패턴)
+        # resume_saga()는 실행 재개 전 반드시 Lock을 획득하여
+        # 다른 워커가 동시에 같은 Execution을 재개하는 Split-brain을 방지한다.
+        lock = self._get_recovery_lock()
+        acquired = lock.acquire(ctx.namespace, ctx.execution_id)
+        if not acquired:
+            raise RunbookLockConflictError(
+                f"Namespace '{ctx.namespace}'은 다른 복구/런북 실행이 Lock을 보유 중이다. " f"execution_id={ctx.execution_id}"
+            )
+
+        try:
+            return self._run_from_step(runbook, ctx, ctx.current_step_index)
+        finally:
+            lock.release(ctx.namespace, ctx.execution_id)
 
     # =========================================================================
     # 내부 실행 흐름
@@ -329,7 +381,7 @@ class RunbookExecutor:
                 self._recovery_lock_extend(
                     ctx.namespace,
                     ctx.execution_id,
-                    additional_seconds=wait + LOCK_EXTEND_SECONDS,
+                    additional_seconds=wait + self._get_lock_extend_seconds(),
                 )
                 logger.info(
                     "runbook_executor.stabilization_wait",
@@ -342,7 +394,7 @@ class RunbookExecutor:
             self._recovery_lock_extend(
                 ctx.namespace,
                 ctx.execution_id,
-                additional_seconds=LOCK_EXTEND_SECONDS,
+                additional_seconds=self._get_lock_extend_seconds(),
             )
 
         # 전체 성공
@@ -552,8 +604,8 @@ class RunbookExecutor:
         """SagaOrchestrator._execute_with_timeout 패턴 완전 차용.
 
         1. ThreadPoolExecutor(max_workers=1)로 Step을 별도 스레드에서 실행
-        2. LOCK_HEARTBEAT_INTERVAL(60초)마다 future.result()를 Polling
-        3. 타임아웃이 아니면 Lock TTL을 LOCK_EXTEND_SECONDS(300초) 연장
+        2. Settings.lock_heartbeat_interval(기본 60초)마다 future.result()를 Polling
+        3. 타임아웃이 아니면 Lock TTL을 Settings.lock_extend_seconds(기본 300초) 연장
         4. 전체 timeout_seconds 초과 시 RunbookStepTimeoutError raise
         """
         if timeout_seconds is None or timeout_seconds <= 0:
@@ -564,8 +616,11 @@ class RunbookExecutor:
             future: Future = executor.submit(fn)
             elapsed = 0
 
+            heartbeat_interval = self._get_lock_heartbeat_interval()
+            extend_seconds = self._get_lock_extend_seconds()
+
             while elapsed < timeout_seconds:
-                wait_time = min(LOCK_HEARTBEAT_INTERVAL, timeout_seconds - elapsed)
+                wait_time = min(heartbeat_interval, timeout_seconds - elapsed)
                 try:
                     result = future.result(timeout=wait_time)
                     return result
@@ -577,7 +632,7 @@ class RunbookExecutor:
                     self._recovery_lock_extend(
                         ctx.namespace,
                         ctx.execution_id,
-                        additional_seconds=LOCK_EXTEND_SECONDS,
+                        additional_seconds=extend_seconds,
                     )
 
             # 전체 타임아웃 초과
@@ -630,12 +685,16 @@ class RunbookExecutor:
                 summary.compensated.append(step_name)
                 continue
 
-            # 보상 프리미티브 조회
-            compensate_fn = registry.get_compensate(step_name) if registry else None
+            # 보상 프리미티브 조회: on_failure_action → step.action → step_name 순서
+            # register_compensate()는 action_name 기준으로 등록하므로
+            # RunbookStep.on_failure_action이 있으면 우선, 없으면 step.action으로 조회
+            compensate_key = self._resolve_compensate_key(step_name, runbook)
+            compensate_fn = registry.get_compensate(compensate_key) if registry else None
             if compensate_fn is None:
                 logger.debug(
                     "runbook_executor.no_compensate_fn",
                     step=step_name,
+                    compensate_key=compensate_key,
                 )
                 summary.skipped.append(step_name)
                 continue
@@ -644,7 +703,7 @@ class RunbookExecutor:
             self._recovery_lock_extend(
                 ctx.namespace,
                 ctx.execution_id,
-                additional_seconds=LOCK_EXTEND_SECONDS,
+                additional_seconds=self._get_lock_extend_seconds(),
             )
 
             try:
@@ -713,6 +772,24 @@ class RunbookExecutor:
                 break
 
         return resolve_params(on_failure_params, ctx, DotPathResolver())
+
+    @staticmethod
+    def _resolve_compensate_key(step_name: str, runbook: Runbook) -> str:
+        """보상 프리미티브 조회 키 결정.
+
+        우선순위:
+        1. RunbookStep.on_failure_action (명시적 보상 Action 지정)
+        2. RunbookStep.action (실행 프리미티브 이름 — register_compensate의 action_name과 대응)
+
+        register_compensate(action_name, fn)의 키가 action_name이므로
+        step.action을 기본 조회 키로 사용한다.
+        """
+        for step in runbook.steps:
+            if step.name == step_name:
+                if getattr(step, "on_failure_action", None):
+                    return step.on_failure_action
+                return step.action
+        return step_name
 
     # =========================================================================
     # Condition 평가 (SagaStep.can_execute 패턴)
@@ -934,13 +1011,13 @@ class RunbookExecutor:
     # =========================================================================
 
     def _save_context(self, ctx: RunbookExecutionContext) -> None:
-        """컨텍스트 영속화. StateBackend 사용. 24시간 TTL."""
+        """컨텍스트 영속화. StateBackend 사용. Settings.context_ttl_seconds TTL."""
         backend = self._get_backend()
         if backend is None:
             return
         key = CONTEXT_KEY_TEMPLATE.format(execution_id=ctx.execution_id)
         try:
-            backend.set(key, ctx.to_dict(), ttl=86400)
+            backend.set(key, ctx.to_dict(), ttl=self._get_context_ttl_seconds())
         except Exception as e:
             logger.warning("runbook_executor.save_context_failed", execution_id=ctx.execution_id, error=str(e))
 

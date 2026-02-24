@@ -39,6 +39,7 @@ from selfhealing.services.runbook.execution_models import (
     RunbookStepResult,
 )
 from selfhealing.services.runbook.executor import (
+    CONTEXT_TTL_SECONDS,
     LOCK_EXTEND_SECONDS,
     LOCK_HEARTBEAT_INTERVAL,
     MAX_RESUME_COUNT,
@@ -448,7 +449,7 @@ class TestRunbookExecutorCompensationBehavior:
         # Given
         registry = ActionPrimitiveRegistry()
         registry.register_compensate(
-            "s1",
+            "action.one",
             lambda svc, **kw: None,
             validate=False,
         )
@@ -476,7 +477,7 @@ class TestRunbookExecutorCompensationBehavior:
         registry = ActionPrimitiveRegistry()
         # 보상 프리미티브가 예외를 발생
         registry.register_compensate(
-            "s1",
+            "action.one",
             lambda svc, **kw: None,
             validate=False,
         )
@@ -511,7 +512,7 @@ class TestRunbookExecutorCompensationBehavior:
         """partial_execution=True인 Step도 보상 대상에 포함되어야 한다."""
         # Given
         registry = ActionPrimitiveRegistry()
-        registry.register_compensate("s1", lambda svc, **kw: None, validate=False)
+        registry.register_compensate("action.one", lambda svc, **kw: None, validate=False)
         executor, _, mock_action_executor = _make_executor(registry=registry)
 
         success_result = MagicMock()
@@ -754,3 +755,303 @@ class TestRunbookExecutorIdempotencyBehavior:
         # Then — 핸들러가 실제로 호출되지 않아야 함 (캐시에서 반환)
         # action_executor.execute()가 호출되지 않음
         assert result_ctx.step_results["s1"].idempotent is True
+
+
+# =============================================================================
+# 계약 검증 — CONTEXT_TTL_SECONDS 상수
+# =============================================================================
+
+
+class TestRunbookExecutorContextTtlContract:
+    """CONTEXT_TTL_SECONDS 설계 계약 검증."""
+
+    def test_context_ttl_seconds_matches_design_document(self):
+        """§16 설계 계약: CONTEXT_TTL_SECONDS == 86400 (24시간)."""
+        assert CONTEXT_TTL_SECONDS == 86400
+
+
+# =============================================================================
+# 동작 검증 — resume 시 Lock 획득/해제
+# =============================================================================
+
+
+class TestRunbookExecutorResumeLockBehavior:
+    """resume_execution 시 Lock 획득/해제 동작 검증.
+
+    SagaOrchestrator.resume_saga()는 실행 재개 전 Lock을 획득하여
+    동시 재개에 의한 Split-brain을 방지한다. resume_execution도 동일 패턴.
+    """
+
+    def _make_resumable_context(self, **overrides) -> RunbookExecutionContext:
+        defaults = dict(
+            execution_id="e1",
+            runbook_id="rb1",
+            namespace="ns",
+            trigger_event={},
+            status=RunbookExecutionStatus.FAILED,
+            started_at="2026-02-25T00:00:00+00:00",
+            runbook_version=1,
+        )
+        defaults.update(overrides)
+        return RunbookExecutionContext(**defaults)
+
+    def test_resume_acquires_lock_before_execution(self):
+        """resume_execution이 _run_from_step 호출 전에 Lock을 획득해야 한다."""
+        # Given
+        ctx = self._make_resumable_context()
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = ctx.to_dict()
+
+        executor, mock_lock, _ = _make_executor(backend=mock_backend)
+
+        mock_runbook = MagicMock()
+        mock_runbook.version = 1
+        mock_runbook.steps = []
+
+        with patch(
+            "selfhealing.services.runbook.runbook_registry.RunbookRegistry",
+            autospec=True,
+        ) as MockRegistryCls:
+            MockRegistryCls.return_value.get.return_value = mock_runbook
+
+            # When
+            executor.resume_execution("e1", force=True)
+
+        # Then
+        mock_lock.acquire.assert_called_once_with("ns", "e1")
+
+    def test_resume_releases_lock_after_execution(self):
+        """resume_execution이 완료 후 Lock을 해제해야 한다."""
+        # Given
+        ctx = self._make_resumable_context()
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = ctx.to_dict()
+
+        executor, mock_lock, _ = _make_executor(backend=mock_backend)
+
+        mock_runbook = MagicMock()
+        mock_runbook.version = 1
+        mock_runbook.steps = []
+
+        with patch(
+            "selfhealing.services.runbook.runbook_registry.RunbookRegistry",
+            autospec=True,
+        ) as MockRegistryCls:
+            MockRegistryCls.return_value.get.return_value = mock_runbook
+            executor.resume_execution("e1", force=True)
+
+        # Then
+        mock_lock.release.assert_called_once_with("ns", "e1")
+
+    def test_resume_raises_lock_conflict_when_lock_unavailable(self):
+        """Lock 획득 실패 시 RunbookLockConflictError가 발생해야 한다."""
+        # Given
+        ctx = self._make_resumable_context()
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = ctx.to_dict()
+
+        executor, mock_lock, _ = _make_executor(
+            lock_acquired=False,
+            backend=mock_backend,
+        )
+
+        mock_runbook = MagicMock()
+        mock_runbook.version = 1
+
+        with patch(
+            "selfhealing.services.runbook.runbook_registry.RunbookRegistry",
+            autospec=True,
+        ) as MockRegistryCls:
+            MockRegistryCls.return_value.get.return_value = mock_runbook
+
+            # When / Then
+            with pytest.raises(RunbookLockConflictError, match="Lock"):
+                executor.resume_execution("e1", force=True)
+
+    def test_resume_releases_lock_even_on_step_failure(self):
+        """Step 실행 실패 시에도 Lock이 해제되어야 한다."""
+        # Given
+        ctx = self._make_resumable_context()
+        mock_backend = MagicMock()
+        mock_backend.get.return_value = ctx.to_dict()
+
+        registry = ActionPrimitiveRegistry()
+        registry.register("action.one", lambda ctx: {"success": False})
+
+        executor, mock_lock, mock_ae = _make_executor(
+            backend=mock_backend,
+            registry=registry,
+        )
+        fail_result = MagicMock()
+        fail_result.executed = True
+        fail_result.success = False
+        fail_result.error = "step failed"
+        fail_result.to_dict.return_value = {"executed": True, "success": False}
+        mock_ae.execute.return_value = fail_result
+
+        mock_runbook = MagicMock()
+        mock_runbook.version = 1
+        mock_runbook.steps = [_make_step("s1", "action.one")]
+
+        with patch(
+            "selfhealing.services.runbook.runbook_registry.RunbookRegistry",
+            autospec=True,
+        ) as MockRegistryCls:
+            MockRegistryCls.return_value.get.return_value = mock_runbook
+            executor.resume_execution("e1", force=True)
+
+        # Then — 실패해도 lock.release가 호출된다
+        mock_lock.release.assert_called_once_with("ns", "e1")
+
+
+# =============================================================================
+# 동작 검증 — Settings 기반 값 사용
+# =============================================================================
+
+
+class TestRunbookExecutorSettingsIntegrationBehavior:
+    """Executor가 RunbookSettings에서 값을 읽는지 검증."""
+
+    def test_save_context_uses_settings_ttl(self):
+        """_save_context가 Settings.context_ttl_seconds를 TTL로 사용해야 한다."""
+        # Given
+        from selfhealing.settings.runbook import RunbookSettings
+
+        mock_backend = MagicMock()
+        executor, _, _ = _make_executor(backend=mock_backend)
+
+        ctx = RunbookExecutionContext(
+            execution_id="e1",
+            runbook_id="rb1",
+            namespace="ns",
+            trigger_event={},
+        )
+
+        # When
+        executor._save_context(ctx)
+
+        # Then — backend.set의 ttl 인자가 Settings 기본값과 일치
+        expected_ttl = RunbookSettings().context_ttl_seconds
+        call_args = mock_backend.set.call_args
+        assert call_args is not None
+        assert (
+            call_args[1].get("ttl") == expected_ttl or call_args[0][2] == expected_ttl
+            if len(call_args[0]) > 2
+            else call_args[1].get("ttl") == expected_ttl
+        )
+
+    def test_get_lock_heartbeat_interval_returns_settings_value(self):
+        """_get_lock_heartbeat_interval이 Settings 값을 반환해야 한다."""
+        # Given
+        from selfhealing.settings.runbook import RunbookSettings
+
+        executor, _, _ = _make_executor()
+
+        # When
+        interval = executor._get_lock_heartbeat_interval()
+
+        # Then
+        expected = RunbookSettings().lock_heartbeat_interval
+        assert interval == expected
+
+    def test_get_lock_extend_seconds_returns_settings_value(self):
+        """_get_lock_extend_seconds가 Settings 값을 반환해야 한다."""
+        # Given
+        from selfhealing.settings.runbook import RunbookSettings
+
+        executor, _, _ = _make_executor()
+
+        # When
+        extend = executor._get_lock_extend_seconds()
+
+        # Then
+        expected = RunbookSettings().lock_extend_seconds
+        assert extend == expected
+
+    def test_get_max_resume_count_returns_settings_value(self):
+        """_get_max_resume_count가 Settings 값을 반환해야 한다."""
+        # Given
+        from selfhealing.settings.runbook import RunbookSettings
+
+        executor, _, _ = _make_executor()
+
+        # When
+        count = executor._get_max_resume_count()
+
+        # Then
+        expected = RunbookSettings().max_resume_count
+        assert count == expected
+
+
+# =============================================================================
+# 동작 검증 — 보상 조회 키 해석
+# =============================================================================
+
+
+class TestRunbookExecutorCompensateKeyResolutionBehavior:
+    """_resolve_compensate_key — on_failure_action 우선, step.action 폴백."""
+
+    def test_uses_on_failure_action_when_set(self):
+        """on_failure_action이 설정된 Step은 해당 값을 보상 키로 사용해야 한다."""
+        # Given
+        step = RunbookStep(
+            name="enable_cb",
+            action="circuit_breaker.enable",
+            on_failure_action="circuit_breaker.disable",
+        )
+        runbook = _make_runbook(steps=[step])
+
+        # When
+        key = RunbookExecutor._resolve_compensate_key("enable_cb", runbook)
+
+        # Then
+        assert key == "circuit_breaker.disable"
+
+    def test_falls_back_to_step_action_when_no_on_failure_action(self):
+        """on_failure_action이 없으면 step.action을 보상 키로 사용해야 한다."""
+        # Given
+        step = _make_step("s1", "action.one")
+        runbook = _make_runbook(steps=[step])
+
+        # When
+        key = RunbookExecutor._resolve_compensate_key("s1", runbook)
+
+        # Then
+        assert key == "action.one"
+
+    def test_compensation_uses_action_name_for_lookup(self):
+        """보상 시 register_compensate의 action_name 기반으로 조회해야 한다."""
+        # Given
+        registry = ActionPrimitiveRegistry()
+        registry.register_compensate(
+            "action.one",  # action_name으로 등록
+            lambda svc, **kw: None,
+            validate=False,
+        )
+        executor, _, mock_action_executor = _make_executor(registry=registry)
+
+        success_result = MagicMock()
+        success_result.success = True
+        success_result.error = None
+        mock_action_executor.execute.return_value = success_result
+
+        step_result = RunbookStepResult(
+            step_name="s1",
+            action_name="action.one",
+            success=True,
+            executed=True,
+        )
+        ctx = RunbookExecutionContext(
+            execution_id="e1",
+            runbook_id="rb1",
+            namespace="ns",
+            trigger_event={},
+            step_results={"s1": step_result},
+        )
+        runbook = _make_runbook(steps=[_make_step("s1", "action.one")])
+
+        # When
+        summary = executor._compensate_steps(ctx, runbook)
+
+        # Then — action_name(action.one)으로 등록했으므로 매칭 성공
+        assert "s1" in summary.compensated

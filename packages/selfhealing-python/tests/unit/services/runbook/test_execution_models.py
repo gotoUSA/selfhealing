@@ -205,21 +205,22 @@ class TestRunbookStepResultSerializationBehavior:
         assert restored.error == "timeout"
 
     def test_to_dict_does_not_mutate_original(self):
-        """to_dict 호출이 원본 객체를 변경하지 않아야 한다."""
+        """to_dict 호출 후 직렬화 결과를 수정해도 원본 result_data가 변경되지 않아야 한다."""
         # Given
         r = RunbookStepResult(
             step_name="s",
             action_name="a",
             success=True,
             executed=True,
-            result_data={"key": "value"},
+            result_data={"key": "value", "nested": {"inner": 1}},
         )
         # When
         serialized = r.to_dict()
         serialized["result_data"]["key"] = "mutated"
-        # Then — 원본 결과가 변경되지 않아야 한다 (dict는 참조 복사이므로 변경됨 — shallow copy 주의)
-        # to_dict는 shallow copy이므로 result_data는 공유됨. 독립 테스트로 확인.
-        assert r.step_name == "s"  # 필드 자체는 보존
+        serialized["result_data"]["nested"]["inner"] = 999
+        # Then — deep copy로 원본이 보호되어야 한다
+        assert r.result_data["key"] == "value"
+        assert r.result_data["nested"]["inner"] == 1
 
 
 # =============================================================================
