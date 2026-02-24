@@ -7,7 +7,6 @@ PatternMatcher 클래스의 동작 검증.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from unittest.mock import MagicMock, patch
 
 import pytest
 

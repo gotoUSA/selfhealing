@@ -307,8 +307,9 @@ class PatternMatcher:
 
         RootCauseRanker의 4단계 Tie-breaker 패턴을 적용:
         1차: confidence 높은 순
-        2차: historical_success_rate 높은 순
-        3차: runbook_id 알파벳순 (결정론적)
+        2차: risk_level 낮은 것 우선 (SAFE > MODERATE > DANGEROUS)
+        3차: historical_success_rate 높은 순
+        4차: runbook_id 알파벳순 (결정론적)
         """
         if not candidates:
             return None
@@ -316,6 +317,7 @@ class PatternMatcher:
         candidates.sort(
             key=lambda m: (
                 -m.confidence,
+                getattr(m, "risk_level", 0),
                 -(m.historical_success_rate or 0.0),
                 m.runbook_id,
             )
