@@ -1,6 +1,6 @@
 # 275. Runbook Executor 설계
 
-> **Status**: Design
+> **Status**: Implemented
 > **References**:
 > - [274_RUNBOOK_REGISTRY.md](274_RUNBOOK_REGISTRY.md) — Runbook/RunbookStep 모델 정의
 > - `services/saga/step.py` — SagaStep ABC (execute + compensate 패턴)
@@ -232,12 +232,12 @@ class RunbookExecutor:
         action_executor: ActionExecutor | None = None,
         recovery_lock: DistributedRecoveryLock | None = None,
         state_backend: StateBackend | None = None,
-        notification_manager: UnifiedNotificationManager | None = None,
+        primitive_registry: ActionPrimitiveRegistry | None = None,
     ):
-        self._action_executor = action_executor or get_action_executor()
-        self._recovery_lock = recovery_lock or get_distributed_recovery_lock()
+        self._action_executor = action_executor
+        self._recovery_lock = recovery_lock
         self._backend = state_backend
-        self._notification = notification_manager
+        self._primitive_registry = primitive_registry
 ```
 
 ---
@@ -322,12 +322,12 @@ def _execute_step(
 
     # 1. Condition 평가 (SagaStep.can_execute 패턴)
     if step.condition:
-        can_run, reason = self._evaluate_condition(step.condition, ctx)
+        can_run, reason = self._evaluate_condition(step.condition, step, ctx)
         if not can_run:
             logger.info("runbook_executor.step_skipped", step=step.name, reason=reason)
             return RunbookStepResult(
                 step_name=step.name,
-                action_name=step.action_name,
+                action_name=step.action,
                 success=True,
                 executed=False,
                 result_data={"skipped": True, "reason": reason},
@@ -336,15 +336,15 @@ def _execute_step(
     # 2. 멱등성 체크 (IdempotentStepHandler 패턴)
     idempotency_key = generate_idempotency_key(
         session_id=ctx.execution_id,
-        step_type=step.action_name,
+        step_type=step.action,
         step_order=step.order,
-        params=step.params,
+        params={**step.params, "__runbook_version": runbook.version},
     )
     existing_record = self._get_idempotency_record(idempotency_key)
     if existing_record and not existing_record.is_safe_to_execute():
         return RunbookStepResult(
             step_name=step.name,
-            action_name=step.action_name,
+            action_name=step.action,
             success=existing_record.status == IdempotencyStatus.COMPLETED,
             executed=False,
             idempotent=True,
@@ -352,19 +352,26 @@ def _execute_step(
         )
 
     # 3. Params 변수 치환
-    resolved_params = self._resolve_params(step.params, ctx)
+    resolved_params = resolve_params(step.params, ctx, DotPathResolver())
 
-    # 4. ActionPrimitiveRegistry에서 프리미티브 조회 + Action 생성
-    primitive_fn = ActionPrimitiveRegistry.get(step.action_name)
-    if primitive_fn is None:
+    # 4. ActionPrimitiveRegistry에서 핸들러 조회 + RunbookStepContext + Action 생성
+    action_handler = self._primitive_registry.get(step.action)
+    if action_handler is None:
         raise RunbookExecutionError(
-            f"Action primitive not found: {step.action_name}"
+            f"Action primitive not found: {step.action}"
         )
 
+    step_ctx = RunbookStepContext(
+        runbook_id=runbook.id,
+        step_name=step.name,
+        params=resolved_params,
+        prev_results={k: v.result_data for k, v in ctx.step_results.items()},
+        execution_id=ctx.execution_id,
+    )
     action = Action(
-        name=step.action_name,
+        name=step.action,
         target=step.target or ctx.namespace,
-        execute_fn=lambda: primitive_fn(**resolved_params),
+        execute_fn=lambda: action_handler(step_ctx),
         params=resolved_params,
     )
 
@@ -393,7 +400,7 @@ def _execute_step(
         )
         return RunbookStepResult(
             step_name=step.name,
-            action_name=step.action_name,
+            action_name=step.action,
             success=False,
             executed=True,           # 실행은 시도됨
             partial_execution=True,  # In-doubt → 보상 대상에 포함
@@ -409,12 +416,11 @@ def _execute_step(
     # 8. 결과 반환
     return RunbookStepResult(
         step_name=step.name,
-        action_name=step.action_name,
+        action_name=step.action,
         success=action_result.success if action_result.executed else True,
         executed=action_result.executed,
         result_data={"action_result": action_result.to_dict()},
         error=action_result.error,
-        started_at=action_result.timestamp.isoformat(),
     )
 ```
 
@@ -698,11 +704,10 @@ class CompensationContract:
 
 
 class ActionPrimitiveRegistry:
-    _compensate_registry: ClassVar[dict[str, Callable]] = {}
+    # 인스턴스 속성으로 관리 (기존 register/get 패턴과 동일)
 
-    @classmethod
     def register_compensate(
-        cls,
+        self,
         action_name: str,
         fn: Callable,
         validate: bool = True,
@@ -715,11 +720,10 @@ class ActionPrimitiveRegistry:
         """
         if validate:
             CompensationContract.validate_noop_safety(fn, action_name)
-        cls._compensate_registry[action_name] = fn
+        self._compensate_handlers[action_name] = fn
 
-    @classmethod
-    def get_compensate(cls, action_name: str) -> Callable | None:
-        return cls._compensate_registry.get(action_name)
+    def get_compensate(self, action_name: str) -> Callable | None:
+        return self._compensate_handlers.get(action_name)
 ```
 
 보상 Primitive 구현 Convention:
@@ -1214,7 +1218,7 @@ packages/selfhealing-python/src/selfhealing/
 └── services/
     └── runbook/
         ├── executor.py          ← RunbookExecutor (이 문서)
-        ├── models.py            ← RunbookExecutionContext, RunbookStepResult,
+        ├── execution_models.py  ← RunbookExecutionContext, RunbookStepResult,
         │                           RunbookExecutionStatus, CompensationSummary
         ├── resolvers.py         ← ParamResolver Protocol, DotPathResolver
         ├── contracts.py         ← CompensationContract
@@ -1229,7 +1233,7 @@ packages/selfhealing-python/src/selfhealing/
 ```python
 # settings 패턴: Pydantic BaseSettings + SELFHEALING_ 접두사
 
-SELFHEALING_RUNBOOK_DEFAULT_STEP_TIMEOUT_SECONDS: int = 300   # Step별 기본 타임아웃
+SELFHEALING_RUNBOOK_STEP_DEFAULT_TIMEOUT_SECONDS: int = 120   # Step별 기본 타임아웃
 SELFHEALING_RUNBOOK_GLOBAL_TIMEOUT_SECONDS: int = 1800        # 전체 실행 타임아웃
 SELFHEALING_RUNBOOK_LOCK_EXTEND_SECONDS: int = 300            # Lock 연장 기본값
 SELFHEALING_RUNBOOK_LOCK_HEARTBEAT_INTERVAL: int = 60         # Lock Heartbeat Polling 간격

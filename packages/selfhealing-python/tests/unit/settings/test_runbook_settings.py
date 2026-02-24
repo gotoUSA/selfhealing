@@ -69,10 +69,75 @@ class TestRunbookSettingsContract:
             assert settings.lock_ttl_seconds == 600
 
     def test_field_count(self):
-        """RunbookSettings는 5개 필드로 구성된다."""
+        """RunbookSettings는 12개 필드로 구성된다 (272: 5개 + 275: 7개)."""
         from selfhealing.settings.runbook import RunbookSettings
 
-        assert len(RunbookSettings.model_fields) == 5
+        assert len(RunbookSettings.model_fields) == 12
+
+    # === 275번 Executor 설정 계약값 ===
+
+    def test_global_timeout_seconds_default_is_1800(self):
+        """전체 실행 타임아웃: 1800초 (30분). §16 설계 계약."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.global_timeout_seconds == 1800
+
+    def test_lock_extend_seconds_default_is_300(self):
+        """Lock TTL 연장 기본값: 300초. §16 설계 계약."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.lock_extend_seconds == 300
+
+    def test_lock_heartbeat_interval_default_is_60(self):
+        """Lock Heartbeat Polling 간격: 60초. §16 설계 계약."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.lock_heartbeat_interval == 60
+
+    def test_idempotency_ttl_hours_default_is_24(self):
+        """멱등성 키 TTL: 24시간. §16 설계 계약."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.idempotency_ttl_hours == 24
+
+    def test_context_ttl_seconds_default_is_86400(self):
+        """컨텍스트 영속화 TTL: 86400초 (24시간). §16 설계 계약."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.context_ttl_seconds == 86400
+
+    def test_resume_stale_threshold_seconds_default_is_3600(self):
+        """Resume stale 임계값: 3600초 (1시간). §16 설계 계약."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.resume_stale_threshold_seconds == 3600
+
+    def test_max_resume_count_default_is_10(self):
+        """무한 재개 방지 카운터: 10. §16 설계 계약."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(os.environ, {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.max_resume_count == 10
 
 
 class TestRunbookSettingsBehavior:
@@ -216,6 +281,47 @@ class TestRunbookSettingsBehavior:
         with mock.patch.dict(
             os.environ,
             {"SELFHEALING_RUNBOOK_LOCK_TTL_SECONDS": "30"},
+            clear=True,
+        ):
+            with pytest.raises(ValidationError):
+                RunbookSettings()
+
+    # === 275번 Executor 설정 경계값 ===
+
+    def test_global_timeout_below_minimum_rejected(self):
+        """전체 타임아웃이 최소값(60) 미만이면 ValidationError 발생."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(
+            os.environ,
+            {"SELFHEALING_RUNBOOK_GLOBAL_TIMEOUT_SECONDS": "30"},
+            clear=True,
+        ):
+            with pytest.raises(ValidationError):
+                RunbookSettings()
+
+    def test_lock_heartbeat_interval_below_minimum_rejected(self):
+        """Heartbeat 간격이 최소값(10) 미만이면 ValidationError 발생."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(
+            os.environ,
+            {"SELFHEALING_RUNBOOK_LOCK_HEARTBEAT_INTERVAL": "5"},
+            clear=True,
+        ):
+            with pytest.raises(ValidationError):
+                RunbookSettings()
+
+    def test_max_resume_count_below_minimum_rejected(self):
+        """재개 카운터가 최소값(1) 미만이면 ValidationError 발생."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with mock.patch.dict(
+            os.environ,
+            {"SELFHEALING_RUNBOOK_MAX_RESUME_COUNT": "0"},
             clear=True,
         ):
             with pytest.raises(ValidationError):

@@ -158,6 +158,10 @@ class RunbookStep:
     action: str
     """실행할 Action Primitive 이름 (예: "db.kill_idle")."""
 
+    order: int = 0
+    """실행 순서 인덱스. RunbookExecutor가 오름차순 정렬 후 실행한다.
+    보상(compensation) 시 역순 정렬의 기준이 된다."""
+
     params: dict[str, Any] = field(default_factory=dict)
     """Action에 전달할 파라미터. 템플릿 변수({...}) 지원."""
 
@@ -292,6 +296,9 @@ class Runbook:
     tags: list[str] = field(default_factory=list)
     """분류 태그 목록."""
 
+    global_timeout_seconds: int | None = None
+    """전체 실행 타임아웃 (초). None이면 설정값(SELFHEALING_RUNBOOK_GLOBAL_TIMEOUT_SECONDS) 사용."""
+
     def validate(self) -> tuple[bool, str]:
         """런북 정의 유효성 검증.
 
@@ -342,6 +349,7 @@ class ActionPrimitiveRegistry:
     def __init__(self) -> None:
         self._handlers: dict[str, ActionHandler] = {}
         self._schemas: dict[str, type[BaseModel]] = {}
+        self._compensate_handlers: dict[str, Callable[..., Any]] = {}
         self._register_builtins()
 
     def _register_builtins(self) -> None:
@@ -405,6 +413,48 @@ class ActionPrimitiveRegistry:
             execute_fn=lambda: handler(context),
             params=context.params,
         )
+
+    # =========================================================================
+    # 보상 Primitive 등록/조회 — 275번 Executor 연동
+    # =========================================================================
+
+    def register_compensate(
+        self,
+        action_name: str,
+        fn: Callable[..., Any],
+        validate: bool = True,
+    ) -> None:
+        """보상 Primitive 등록 + No-op 안전성 검증.
+
+        RunbookRegistry.register() Fail-fast 패턴과 동일하게
+        등록 시점에 CompensationContract.validate_noop_safety()를 호출한다.
+
+        Args:
+            action_name: 보상 대상 Action 이름 (예: "enable_circuit_breaker")
+            fn: 보상 함수. **kwargs를 포함해야 한다.
+            validate: False이면 No-op 안전성 검증을 건너뜀 (테스트 전용)
+
+        Raises:
+            ValueError: fn에 **kwargs가 없는 경우
+        """
+        if validate:
+            from selfhealing.services.runbook.contracts import CompensationContract
+
+            CompensationContract.validate_noop_safety(fn, action_name)
+
+        self._compensate_handlers[action_name] = fn
+        logger.debug(
+            "action_primitive_registry.compensate_registered",
+            action_name=action_name,
+        )
+
+    def get_compensate(self, action_name: str) -> Callable[..., Any] | None:
+        """보상 Primitive 조회.
+
+        등록되지 않은 action_name이면 None을 반환한다.
+        Executor는 None이면 보상을 skip하고 로그만 남긴다.
+        """
+        return self._compensate_handlers.get(action_name)
 
 
 # 내장 primitive 카테고리 — 운영자 참고용

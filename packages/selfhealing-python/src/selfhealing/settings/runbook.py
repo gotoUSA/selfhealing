@@ -99,6 +99,58 @@ class RunbookSettings(BaseSettings):
         description="분산 락 TTL (초). 런북 실행 중 동시 복구 방지",
     )
 
+    # ==========================================================================
+    # Executor Settings (275번 Executor)
+    # ==========================================================================
+    global_timeout_seconds: int = Field(
+        default=1800,
+        ge=60,
+        le=86400,
+        description="런북 전체 실행 타임아웃 (초). 기본 30분",
+    )
+
+    lock_extend_seconds: int = Field(
+        default=300,
+        ge=60,
+        le=3600,
+        description="Lock TTL 연장 기본값 (초). Heartbeat 연장량",
+    )
+
+    lock_heartbeat_interval: int = Field(
+        default=60,
+        ge=10,
+        le=600,
+        description="Lock Heartbeat Polling 간격 (초). SagaOrchestrator.HEARTBEAT_INTERVAL과 동일",
+    )
+
+    idempotency_ttl_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="멱등성 키 TTL (시간)",
+    )
+
+    context_ttl_seconds: int = Field(
+        default=86400,
+        ge=3600,
+        le=604800,
+        description="실행 컨텍스트 영속화 TTL (초). 기본 24시간",
+    )
+
+    resume_stale_threshold_seconds: int = Field(
+        default=3600,
+        ge=60,
+        le=86400,
+        description="resume 시 stale 거부 임계값 (초). 기본 1시간",
+    )
+
+    max_resume_count: int = Field(
+        default=10,
+        ge=1,
+        le=100,
+        description="무한 재개 방지 카운터. SagaOrchestrator.MAX_RESUME_COUNT와 동일",
+    )
+
     @field_validator("approval_timeout_seconds")
     @classmethod
     def validate_approval_timeout(cls, v: int) -> int:
