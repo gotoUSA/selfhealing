@@ -9,7 +9,7 @@ Modules:
     metrics_provider   — 범용 메트릭 제공자 Protocol
     duration_tracker   — min_duration_seconds Redis/인메모리 추적
     pattern_matcher    — 현재 증상 → 런북 트리거 조건 매칭
-    runbook_registry   — Step-by-step 조치 등록/조회
+    runbook_registry   — 런북/Step/ActionPrimitive 등록·조회·관리
     executor           — 단계별 실행, 중간 검증, 보상
     approval_gate      — 위험도별 자동/수동 승인
     playback_recorder  — 실행 과정 재생 가능 기록
@@ -31,6 +31,17 @@ from selfhealing.services.runbook.models import (
     PatternCondition,
 )
 from selfhealing.services.runbook.pattern_matcher import PatternMatcher
+from selfhealing.services.runbook.runbook_registry import (
+    BUILTIN_CATEGORIES,
+    ActionHandler,
+    ActionPrimitiveRegistry,
+    RiskLevel,
+    Runbook,
+    RunbookRegistry,
+    RunbookStep,
+    RunbookStepContext,
+    StepCondition,
+)
 
 __all__ = [
     # Data Models
@@ -47,4 +58,14 @@ __all__ = [
     "DurationTracker",
     # Pattern Matcher
     "PatternMatcher",
+    # Runbook Registry
+    "RiskLevel",
+    "StepCondition",
+    "RunbookStep",
+    "RunbookStepContext",
+    "ActionHandler",
+    "Runbook",
+    "ActionPrimitiveRegistry",
+    "BUILTIN_CATEGORIES",
+    "RunbookRegistry",
 ]

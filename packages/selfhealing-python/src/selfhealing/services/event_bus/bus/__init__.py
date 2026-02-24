@@ -221,6 +221,10 @@ class EventType(str, Enum):
     RUNBOOK_SKIPPED_COOLDOWN = "runbook_skipped_cooldown"
     """런북 트리거 조건 충족되었으나 쿨다운 중이라 스킵."""
 
+    # Registry Sync Events (274_RUNBOOK_REGISTRY.md §9)
+    RUNBOOK_REGISTRY_UPDATED = "runbook_registry_updated"
+    """런북 등록/비활성화 등 레지스트리 변경 — 전 노드 동기화용."""
+
 
 class EventPriority(IntEnum):
     """이벤트 처리 우선순위."""
