@@ -43,6 +43,7 @@ from selfhealing.services.runbook.runbook_registry import (
     RunbookStep,
     RunbookStepContext,
     StepCondition,
+    _TEMPLATE_VAR_RE,
 )
 
 # =============================================================================
@@ -79,6 +80,7 @@ def _make_registry(
     event_bus: Any = None,
     state_backend: Any = None,
     primitive_registry: Any = None,
+    cached_enabled_map: dict[str, bool] | None = None,
 ) -> RunbookRegistry:
     """의존성 없는 RunbookRegistry 생성 (지연 로드 방지)."""
     registry = RunbookRegistry.__new__(RunbookRegistry)
@@ -87,6 +89,7 @@ def _make_registry(
     registry._event_bus = event_bus
     registry._state_backend = state_backend
     registry._primitive_registry = primitive_registry
+    registry._cached_enabled_map = cached_enabled_map or {}
     return registry
 
 
@@ -324,12 +327,8 @@ class TestRunbookRegistryUpdatedEventContract:
 
         assert isinstance(EventType.RUNBOOK_REGISTRY_UPDATED, str)
 
-    def test_runbook_event_count_increased_to_ten(self):
-        """RUNBOOK_REGISTRY_UPDATED 추가로 runbook_ 이벤트는 10개이다."""
-        from selfhealing.services.event_bus.bus import EventType
-
-        runbook_events = [e for e in EventType if e.value.startswith("runbook_")]
-        assert len(runbook_events) == 10
+    # NOTE: runbook_ 이벤트 개수 계약(== 10)은 test_runbook_event_types.py에서
+    # 단일 책임으로 검증한다. DRY 원칙에 따라 여기서는 중복하지 않는다.
 
 
 # =============================================================================
@@ -992,3 +991,161 @@ class TestActionPrimitiveRegistrySchemaValidationBehavior:
         rb_invalid = _make_minimal_runbook("rb_invalid_param", steps=invalid_steps)
         with pytest.raises(ValueError):
             registry.register(rb_invalid)
+
+
+# =============================================================================
+# 계약 검증 — _TEMPLATE_VAR_RE 정규식
+# =============================================================================
+
+
+class TestTemplateVarRegexContract:
+    """_TEMPLATE_VAR_RE 정규식 패턴 계약 검증."""
+
+    def test_matches_simple_variable(self):
+        """'{event_source}' 형태의 단순 변수명이 매칭된다."""
+        assert _TEMPLATE_VAR_RE.search("{event_source}") is not None
+
+    def test_matches_single_char_variable(self):
+        """'{x}' 같은 단일 문자 변수명이 매칭된다."""
+        assert _TEMPLATE_VAR_RE.search("{x}") is not None
+
+    def test_matches_underscore_prefix(self):
+        """'{_private}' 같은 밑줄 시작 변수명이 매칭된다."""
+        assert _TEMPLATE_VAR_RE.search("{_private}") is not None
+
+    def test_does_not_match_json_string(self):
+        """'{\"key\": \"value\"}' 같은 JSON 문자열은 매칭되지 않는다."""
+        assert _TEMPLATE_VAR_RE.search('{"key": "value"}') is None
+
+    def test_does_not_match_numeric_start(self):
+        """'{123abc}' 같은 숫자 시작 패턴은 매칭되지 않는다."""
+        assert _TEMPLATE_VAR_RE.search("{123abc}") is None
+
+    def test_does_not_match_empty_braces(self):
+        """'{}'(빈 중괄호)는 매칭되지 않는다."""
+        assert _TEMPLATE_VAR_RE.search("{}") is None
+
+    def test_matches_variable_within_string(self):
+        """문자열 중간에 포함된 변수도 매칭된다."""
+        assert _TEMPLATE_VAR_RE.search("Service {service_name} is down") is not None
+
+
+# =============================================================================
+# 동작 검증 — register() enabled 복원
+# =============================================================================
+
+
+class TestRunbookRegistryEnabledRestorationBehavior:
+    """register() 시점에 StateBackend 캐시에서 enabled 상태를 복원하는 동작 검증."""
+
+    def test_register_restores_disabled_state_from_cache(self):
+        """캐시에 False로 저장된 런북을 register()하면 enabled=False로 복원된다."""
+        # Given: 이전에 set_enabled(False)된 상태가 캐시에 있음
+        registry = _make_registry(cached_enabled_map={"rb_killed": False})
+        rb = _make_minimal_runbook("rb_killed", enabled=True)
+
+        # When
+        registry.register(rb)
+
+        # Then: Kill Switch 상태가 재시작 후에도 유지됨
+        assert registry._runbooks["rb_killed"].enabled is False
+
+    def test_register_restores_enabled_state_from_cache(self):
+        """캐시에 True로 저장된 런북을 register()하면 enabled=True로 유지된다."""
+        registry = _make_registry(cached_enabled_map={"rb_alive": True})
+        rb = _make_minimal_runbook("rb_alive", enabled=False)
+
+        registry.register(rb)
+
+        assert registry._runbooks["rb_alive"].enabled is True
+
+    def test_register_without_cache_entry_keeps_default(self):
+        """캐시에 없는 런북은 Runbook 정의의 enabled 기본값을 유지한다."""
+        registry = _make_registry(cached_enabled_map={})
+        rb = _make_minimal_runbook("rb_new", enabled=True)
+
+        registry.register(rb)
+
+        # 캐시에 없으므로 원래 값 유지
+        assert registry._runbooks["rb_new"].enabled is True
+
+    def test_get_returns_restored_enabled_state(self):
+        """get()으로 조회한 런북은 캐시에서 복원된 enabled 상태를 반영한다."""
+        registry = _make_registry(cached_enabled_map={"rb_check": False})
+        rb = _make_minimal_runbook("rb_check", enabled=True)
+
+        registry.register(rb)
+
+        found = registry.get("rb_check")
+        assert found.enabled is False
+
+    def test_get_enabled_excludes_cache_disabled_runbook(self):
+        """캐시에서 disabled로 복원된 런북은 get_enabled()에 포함되지 않는다."""
+        registry = _make_registry(cached_enabled_map={"rb_off": False})
+        rb_off = _make_minimal_runbook("rb_off", enabled=True)
+        rb_on = _make_minimal_runbook("rb_on", enabled=True)
+
+        registry.register(rb_off)
+        registry.register(rb_on)
+
+        ids = [r.id for r in registry.get_enabled()]
+        assert "rb_off" not in ids
+        assert "rb_on" in ids
+
+
+# =============================================================================
+# 동작 검증 — 템플릿 감지 정밀화
+# =============================================================================
+
+
+class TestTemplateDetectionBehavior:
+    """_validate_all_step_params()의 템플릿 변수 감지 정밀화 동작 검증."""
+
+    def test_json_params_not_treated_as_template(self):
+        """JSON 문자열 params는 템플릿으로 오인되지 않고 스키마 검증 대상이 된다."""
+
+        class ConfigParams(BaseModel):
+            config_json: str
+
+        primitive_reg = ActionPrimitiveRegistry()
+        primitive_reg.register("config.apply", lambda ctx: None, ConfigParams)
+        registry = _make_registry(primitive_registry=primitive_reg)
+
+        # JSON 문자열은 {로 시작하지만 템플릿 변수가 아님 → 정적 검증 대상
+        steps = [
+            RunbookStep(
+                name="apply",
+                action="config.apply",
+                params={"config_json": '{"max_connections": 100}'},
+            )
+        ]
+        rb = _make_minimal_runbook("rb_json", steps=steps)
+
+        # Pydantic 스키마 통과 (config_json은 str 타입 → 유효)
+        registry.register(rb)
+        assert registry.get("rb_json") is not None
+
+    def test_real_template_variable_skips_validation(self):
+        """실제 템플릿 변수 '{event_source}'는 정적 검증에서 제외된다."""
+
+        class StrictParams(BaseModel):
+            target: str
+            threshold: float
+
+        primitive_reg = ActionPrimitiveRegistry()
+        primitive_reg.register("notify.alert", lambda ctx: None, StrictParams)
+        registry = _make_registry(primitive_registry=primitive_reg)
+
+        # target은 템플릿 → 제외, threshold만 정적 검증
+        steps = [
+            RunbookStep(
+                name="alert",
+                action="notify.alert",
+                params={"target": "{event_source}", "threshold": 0.5},
+            )
+        ]
+        rb = _make_minimal_runbook("rb_tpl", steps=steps)
+
+        # threshold=0.5은 유효하므로 등록 성공
+        registry.register(rb)
+        assert registry.get("rb_tpl") is not None

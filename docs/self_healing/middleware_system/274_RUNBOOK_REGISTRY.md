@@ -250,6 +250,18 @@ ActionHandler = Callable[[RunbookStepContext], StepResult]
 
 ## 4. RunbookRegistry 클래스
 
+### 모듈-레벨 상수
+
+```python
+import re
+
+# Python str.format_map() 변수 감지 — SafeFormatDict 패턴과 대응.
+# "{event_source}"는 매칭, '{"key": "value"}'(JSON)는 매칭하지 않는다.
+_TEMPLATE_VAR_RE = re.compile(r"\{[a-zA-Z_]\w*\}")
+```
+
+### RunbookRegistry
+
 ```python
 class RunbookRegistry:
     """런북 등록/조회/관리 — 분산 동기화 + 스키마 검증 + 불변성 보장.
@@ -292,10 +304,15 @@ class RunbookRegistry:
         self._state_backend = state_backend
         self._primitive_registry = primitive_registry
 
+        # StateBackend의 enabled 맵 캐시 — 부팅 직후 1회 로드하여
+        # register() 시점에 개별 런북의 enabled 상태를 복원한다.
+        # 매 register()마다 Redis 호출을 피하기 위한 로컬 캐시.
+        self._cached_enabled_map: dict[str, bool] = {}
+
         # 분산 동기화: 다른 노드의 레지스트리 변경 이벤트 구독 (§9 참조)
         self._register_event_handlers()
-        # StateBackend에서 enabled 상태 복원
-        self._restore_enabled_state()
+        # StateBackend에서 enabled 상태 로드 (앱 재시작 시)
+        self._load_enabled_cache()
 
     # =========================================================================
     # 분산 동기화 — EmergencyMode 이벤트 구독 패턴 (§9 참조)
@@ -310,10 +327,16 @@ class RunbookRegistry:
         """
         bus = self._get_event_bus()
         if bus:
-            bus.subscribe(
-                EventType.RUNBOOK_REGISTRY_UPDATED,
-                self._on_registry_updated,
-            )
+            try:
+                bus.subscribe(
+                    EventType.RUNBOOK_REGISTRY_UPDATED,
+                    self._on_registry_updated,
+                )
+            except Exception as exc:
+                logger.warning(
+                    "runbook_registry.event_subscribe_failed",
+                    error=str(exc),
+                )
 
     def _on_registry_updated(self, event: SelfHealingEvent) -> None:
         """다른 노드에서 발생한 레지스트리 변경 이벤트 수신 시 로컬 상태 동기화.
@@ -338,7 +361,7 @@ class RunbookRegistry:
             with self._lock:
                 self._runbooks.pop(runbook_id, None)
 
-    def _broadcast_change(self, action: str, runbook_id: str, **extra) -> None:
+    def _broadcast_change(self, action: str, runbook_id: str, **extra: Any) -> None:
         """레지스트리 변경을 EventBus로 브로드캐스트.
 
         RedisEventBus가 활성 상태면 Redis Pub/Sub으로 전 노드에 전파.
@@ -348,18 +371,30 @@ class RunbookRegistry:
         """
         bus = self._get_event_bus()
         if bus:
-            bus.emit(
-                event_type=EventType.RUNBOOK_REGISTRY_UPDATED,
-                data={"action": action, "runbook_id": runbook_id, **extra},
-                source="runbook_registry",
-            )
+            try:
+                bus.emit(
+                    event_type=EventType.RUNBOOK_REGISTRY_UPDATED,
+                    data={"action": action, "runbook_id": runbook_id, **extra},
+                    source="runbook_registry",
+                )
+            except Exception as exc:
+                logger.warning(
+                    "runbook_registry.broadcast_failed",
+                    action=action,
+                    runbook_id=runbook_id,
+                    error=str(exc),
+                )
 
     # =========================================================================
     # StateBackend 영속화 — SystemControlManager 패턴 (§9 참조)
     # =========================================================================
 
-    def _restore_enabled_state(self) -> None:
-        """StateBackend에서 enabled 상태 복원 (앱 재시작 시).
+    def _load_enabled_cache(self) -> None:
+        """StateBackend에서 enabled 맵을 로드하여 로컬 캐시에 저장.
+
+        부팅 직후 __init__()에서 1회 호출된다.
+        이 시점에는 _runbooks가 비어 있으므로 직접 적용하지 않고 캐시만 저장한다.
+        이후 register()에서 개별 런북 등록 시 캐시를 참조하여 enabled 상태를 복원한다.
 
         코드 근거: services/system_control.py
             def _load_state(self):
@@ -369,13 +404,17 @@ class RunbookRegistry:
         """
         backend = self._get_state_backend()
         if backend:
-            data = backend.get(self._ENABLED_KEY)
-            if data and isinstance(data, dict):
-                with self._lock:
-                    for runbook_id, enabled in data.items():
-                        rb = self._runbooks.get(runbook_id)
-                        if rb:
-                            rb.enabled = enabled
+            try:
+                data = backend.get(self._ENABLED_KEY)
+                if data and isinstance(data, dict):
+                    self._cached_enabled_map = {
+                        k: bool(v) for k, v in data.items()
+                    }
+            except Exception as exc:
+                logger.warning(
+                    "runbook_registry.load_enabled_cache_failed",
+                    error=str(exc),
+                )
 
     def _persist_enabled_state(self) -> None:
         """enabled 상태를 StateBackend에 영속화.
@@ -386,10 +425,17 @@ class RunbookRegistry:
         """
         backend = self._get_state_backend()
         if backend:
-            enabled_map = {
-                rb_id: rb.enabled for rb_id, rb in self._runbooks.items()
-            }
-            backend.set(self._ENABLED_KEY, enabled_map)
+            try:
+                enabled_map = {
+                    rb_id: rb.enabled for rb_id, rb in self._runbooks.items()
+                }
+                backend.set(self._ENABLED_KEY, enabled_map)
+            except Exception as exc:
+                # 쓰기 실패는 데이터 유실 위험 — exception 레벨로 기록
+                logger.exception(
+                    "runbook_registry.persist_state_failed",
+                    error=str(exc),
+                )
 
     # =========================================================================
     # Public API
@@ -423,6 +469,11 @@ class RunbookRegistry:
         with self._lock:
             self._runbooks[runbook.id] = runbook
 
+            # StateBackend 캐시에 이전 enabled 상태가 있으면 복원한다.
+            # Kill Switch(set_enabled=False)가 앱 재시작 후에도 유지되도록 보장.
+            if runbook.id in self._cached_enabled_map:
+                runbook.enabled = self._cached_enabled_map[runbook.id]
+
     def _validate_all_step_params(self, runbook: Runbook) -> None:
         """모든 Step의 params를 Action Primitive의 Pydantic 스키마로 사전 검증.
 
@@ -444,15 +495,37 @@ class RunbookRegistry:
             if schema is None:
                 continue
 
-            # 템플릿 변수({...}) 포함 문자열은 정적 검증에서 제외 (§11 참조)
+            # 템플릿 변수({var_name}) 포함 값은 정적 검증에서 제외.
+            # _TEMPLATE_VAR_RE 정규식으로 Python format 변수만 감지 — JSON 문자열 오탐 방지.
+            template_keys = {
+                k for k, v in step.params.items()
+                if isinstance(v, str) and _TEMPLATE_VAR_RE.search(v)
+            }
             static_params = {
                 k: v for k, v in step.params.items()
-                if not (isinstance(v, str) and "{" in v and "}" in v)
+                if k not in template_keys
             }
+
+            # 모든 파라미터가 템플릿 변수이면 정적 검증 불가 — 실행 시점에 재검증
+            if not static_params:
+                continue
 
             try:
                 schema(**static_params)
             except ValidationError as e:
+                if template_keys:
+                    # 템플릿 변수로 필터된 필수 필드의 missing 에러는 무시.
+                    # 해당 필드는 실행 시점에 치환 후 재검증된다.
+                    non_template_errors = [
+                        err for err in e.errors()
+                        if not (
+                            err["type"] == "missing"
+                            and len(err["loc"]) == 1
+                            and err["loc"][0] in template_keys
+                        )
+                    ]
+                    if not non_template_errors:
+                        continue
                 raise ValueError(
                     f"Runbook '{runbook.id}' step '{step.name}' "
                     f"action '{step.action}' params 검증 실패: {e}"
@@ -846,14 +919,17 @@ RunbookRegistry.register(runbook)
        └─ for step in runbook.steps:
             schema = primitive_registry.get_schema(step.action)
             if schema:
-                static_params = {k: v for k, v in step.params.items()
-                                 if not (isinstance(v, str) and "{" in v)}
-                schema(**static_params)  ← ValidationError 시 register 실패
+                template_keys = {k: 템플릿 변수 포함 키}
+                static_params = {k: v for non-template keys}
+                if static_params:
+                    schema(**static_params)
+                    └─ ValidationError 중 template_keys의 missing 에러 → 무시
+                    └─ 나머지 에러 → register 실패
 ```
 
 | 검증 시점 | 대상 | 동작 |
 |---|---|---|
-| **등록 시점** (`register()`) | 정적 params만 (템플릿 변수 `{event_source}` 제외) | Pydantic `ValidationError` → `ValueError` 전파 |
+| **등록 시점** (`register()`) | 정적 params만 (템플릿 변수 `{event_source}` 제외). 필수 필드가 템플릿이면 missing 에러 무시 | Pydantic `ValidationError` → `ValueError` 전파 (비-템플릿 에러만) |
 | **실행 시점** (275번 Executor) | 템플릿 치환 후 최종 params 전체 | Pydantic 재검증 → 실패 시 `StepResult.failed()` |
 
 ## 9. 분산 상태 동기화
@@ -935,7 +1011,7 @@ RUNBOOK_REGISTRY_UPDATED = "runbook_registry_updated"
 | 경로 | 메커니즘 | 지연 |
 |---|---|---|
 | **Push (즉시)** | EventBus → Redis Pub/Sub → 각 노드 핸들러 | ~수 ms |
-| **Pull (안전망)** | `_restore_enabled_state()` — 앱 시작 시 StateBackend에서 복원 | 부팅 시 1회 |
+| **Pull (안전망)** | `_load_enabled_cache()` — 앱 시작 시 StateBackend에서 캐시 로드 → register() 시 복원 | 부팅 시 1회 |
 
 Push가 실패해도 Pull이 앱 재시작 시 상태를 복구하므로, 최종 일관성(Eventual Consistency)을 보장한다.
 
@@ -1079,13 +1155,19 @@ def _resolve_params(
 
 ### 11.4 검증과의 관계
 
-§8 파라미터 스키마 검증에서 템플릿 변수 포함 값은 정적 검증에서 제외한다:
+§8 파라미터 스키마 검증에서 템플릿 변수 포함 값은 정적 검증에서 제외한다.
+필수 필드가 템플릿 변수로 제외된 경우, 해당 missing 에러는 무시하고 실행 시점에 재검증한다:
 
 ```python
-# 등록 시점: 템플릿 변수 제외하여 검증
-static_params = {k: v for k, v in params.items()
-                 if not (isinstance(v, str) and "{" in v and "}" in v)}
-schema(**static_params)
+# 등록 시점: 템플릿 변수 제외하여 검증 (정규식으로 Python format 변수만 감지)
+template_keys = {k for k, v in params.items()
+                 if isinstance(v, str) and _TEMPLATE_VAR_RE.search(v)}
+static_params = {k: v for k, v in params.items() if k not in template_keys}
+if static_params:
+    try:
+        schema(**static_params)
+    except ValidationError:
+        # template_keys의 missing 에러만이면 무시 → 실행 시점에 재검증
 
 # 실행 시점: 치환 후 재검증
 resolved_params = _resolve_params(step, event_context)
