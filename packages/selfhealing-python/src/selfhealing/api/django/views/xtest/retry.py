@@ -505,7 +505,7 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
                 "test_mode_rate_limit",
                 domain=domain,
                 state=state.is_in_cooldown,
-                state_2=state.consecutive_429s,
+                consecutive_429s=state.consecutive_429s,
             )
 
             response_data = {

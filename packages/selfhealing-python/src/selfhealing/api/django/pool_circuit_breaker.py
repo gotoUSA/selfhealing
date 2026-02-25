@@ -534,7 +534,7 @@ class PoolCircuitBreaker:
                     logger.error(
                         "pool_circuit_breaker.pool_exhausted",
                         pool_status=pool_status.get('checkedout'),
-                        pool_status_1=pool_status.get('total_capacity'),
+                        total_capacity=pool_status.get('total_capacity'),
                     )
                     self._set_state(self.OPEN)
                     self._stats["rejected_requests"] += 1
@@ -549,7 +549,7 @@ class PoolCircuitBreaker:
                         "pool_circuit_breaker.pool_usage_high_failures",
                         usage=usage,
                         _self=self._failure_count,
-                        self_2=self._failure_threshold,
+                        failure_threshold=self._failure_threshold,
                     )
 
                     # Threshold 도달 시 OPEN
@@ -619,7 +619,7 @@ class PoolCircuitBreaker:
                 logger.info(
                     "pool_circuit_breaker.success",
                     _self=self._success_count,
-                    self_1=self._success_threshold,
+                    success_threshold=self._success_threshold,
                 )
 
                 if self._success_count >= self._success_threshold:
@@ -861,13 +861,9 @@ class PoolCircuitBreakerMiddleware:
                 "pool_circuit_breaker_middleware.pool_status_every_reqs",
                 _self=self._log_interval,
                 pool_status=pool_status.get('checkedout', '?'),
-                pool_status_2=pool_status.get('total_capacity', '?'),
-                pool_status_3=pool_status.get('usage_percent', 0),
-                pool_status_4=pool_status.get('is_exhausted', False),
-                cache_stats=cache_stats.get('cache_hits', 0),
-            )
-
-        # Circuit Breaker 체크
+                    total_capacity=pool_status.get('total_capacity', '?'),
+                    usage_percent=pool_status.get('usage_percent', 0),
+                    is_exhausted=pool_status.get('is_exhausted', False),
         cb = pool_circuit_breaker
         allow, reason = cb.should_allow_request()
 
@@ -962,8 +958,8 @@ class PoolCircuitBreakerMiddleware:
                 logger.error(
                     "pool_circuit_breaker_middleware.pool_status_exhaustion",
                     pool_status=pool_status.get('checkedout', '?'),
-                    pool_status_1=pool_status.get('total_capacity', '?'),
-                    pool_status_2=pool_status.get('overflow', '?'),
+                    total_capacity=pool_status.get('total_capacity', '?'),
+                    overflow=pool_status.get('overflow', '?'),
                 )
 
                 # 503 반환 (재시도 유도)

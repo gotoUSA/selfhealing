@@ -96,7 +96,7 @@ class AdaptiveDRFThrottle:
             logger.info(
                 "adaptive_drf_throttle.request_throttled",
                 result=result.limit,
-                result_1=result.current_count,
+                current_count=result.current_count,
             )
 
         return result.allowed
@@ -111,11 +111,7 @@ class AdaptiveDRFThrottle:
         if xff:
             return xff.split(",")[0].strip()
 
-        return (
-            request.META.get("HTTP_X_REAL_IP")
-            or request.META.get("REMOTE_ADDR")
-            or "unknown"
-        )
+        return request.META.get("HTTP_X_REAL_IP") or request.META.get("REMOTE_ADDR") or "unknown"
 
     def wait(self) -> float | None:
         """

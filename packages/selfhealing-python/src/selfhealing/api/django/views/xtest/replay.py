@@ -143,7 +143,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
         logger.info(
             "test_mode_replay_single",
             dlq_id=dlq_id,
-            result=result['success'],
+            result=result["success"],
             duration_ms=duration_ms,
         )
 
@@ -392,9 +392,9 @@ class ReplayBatchView(XTestModeMixin, APIView):
         logger.info(
             "test_mode_replay_batch",
             domain=domain,
-            result=result['total'],
-            result_2=result['success_count'],
-            result_3=result['failed_count'],
+            result=result["total"],
+            success_count=result["success_count"],
+            failed_count=result["failed_count"],
         )
 
         response_data = {
@@ -601,7 +601,7 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
             "test_mode_trigger_replay",
             service_name=service_name,
             eligible_count=eligible_count,
-            replay_result=replay_result.get('success_count', 0),
+            replay_result=replay_result.get("success_count", 0),
         )
 
         response_data = {

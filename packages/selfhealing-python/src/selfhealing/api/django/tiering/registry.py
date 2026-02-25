@@ -153,8 +153,8 @@ class TierRegistry:
             # 설정 복원 (import_config 사용)
             logger.warning(
                 "tier_registry.rolling_back_snapshot_original",
-                snapshot=snapshot['timestamp'],
-                snapshot_1=snapshot['action'],
+                snapshot=snapshot["timestamp"],
+                action=snapshot["action"],
             )
 
             # 직접 복원 (import_config 호출 시 무한 루프 방지)

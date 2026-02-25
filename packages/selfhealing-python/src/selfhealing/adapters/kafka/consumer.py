@@ -231,8 +231,8 @@ class KafkaAuditConsumer:
                 logger.debug(
                     "kafka_consumer.수신",
                     _event=event.topic,
-                    event_1=event.partition,
-                    event_2=event.offset,
+                    partition=event.partition,
+                    offset=event.offset,
                 )
                 return True
 
@@ -262,8 +262,8 @@ class KafkaAuditConsumer:
             logger.debug(
                 "kafka_consumer.커밋_완료",
                 _event=event.topic,
-                event_1=event.partition,
-                event_2=event.offset,
+                partition=event.partition,
+                offset=event.offset,
             )
         except Exception as e:
             logger.exception(

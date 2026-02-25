@@ -120,7 +120,7 @@ class KafkaAuditProducer:
             logger.info(
                 "kafka_producer.초기화_완료",
                 _self=self._settings.bootstrap_servers,
-                self_1=self._settings.producer_idempotent,
+                producer_idempotent=self._settings.producer_idempotent,
             )
         except ImportError:
             logger.exception("kafka_producer.confluent_kafka_패키지가_설치되지")
@@ -185,8 +185,8 @@ class KafkaAuditProducer:
                 logger.debug(
                     "kafka_producer.전송_완료",
                     report=report.topic,
-                    report_1=report.partition,
-                    report_2=report.offset,
+                    partition=report.partition,
+                    offset=report.offset,
                 )
 
         # 사용자 정의 콜백 호출

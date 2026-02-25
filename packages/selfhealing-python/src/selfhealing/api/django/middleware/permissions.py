@@ -34,16 +34,14 @@ class FailSecureIsAuthenticated:
         try:
             # Standard authentication check
             is_authenticated = bool(
-                request.user
-                and hasattr(request.user, "is_authenticated")
-                and request.user.is_authenticated
+                request.user and hasattr(request.user, "is_authenticated") and request.user.is_authenticated
             )
 
             if not is_authenticated:
                 logger.info(
                     "permission.denied_user_authenticated",
                     request=request.path,
-                    request_1=request.META.get('REMOTE_ADDR'),
+                    remote_addr=request.META.get("REMOTE_ADDR"),
                 )
 
             return is_authenticated
@@ -73,9 +71,7 @@ class FailSecureIsAdminUser:
         try:
             # Must be authenticated first
             is_authenticated = bool(
-                request.user
-                and hasattr(request.user, "is_authenticated")
-                and request.user.is_authenticated
+                request.user and hasattr(request.user, "is_authenticated") and request.user.is_authenticated
             )
 
             if not is_authenticated:
@@ -92,7 +88,7 @@ class FailSecureIsAdminUser:
                 logger.info(
                     "permission.admin_check_denied",
                     request=request.user,
-                    request_1=request.path,
+                    path=request.path,
                 )
 
             return is_admin

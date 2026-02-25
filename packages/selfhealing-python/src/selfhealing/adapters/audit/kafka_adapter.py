@@ -292,7 +292,7 @@ class KafkaAuditAdapter(AuditLogAdapter):
         logger.info(
             "kafka_audit_adapter.closed_sent_errors",
             _self=self._sent_count,
-            self_1=self._error_count,
+            error_count=self._error_count,
         )
 
     def get_stats(self) -> dict[str, Any]:

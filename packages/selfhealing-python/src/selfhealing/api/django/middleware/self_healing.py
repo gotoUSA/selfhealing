@@ -161,8 +161,8 @@ class SelfHealingMiddleware:
         logger.info(
             "self_healing_middleware.loaded_patterns",
             count=len(cls.DLQ_ELIGIBLE_PATHS),
-            count_1=len(cls.INFRASTRUCTURE_FAILURE_PATHS),
-            count_2=len(cls.DOMAIN_MAPPING),
+            infra_paths_count=len(cls.INFRASTRUCTURE_FAILURE_PATHS),
+            domain_mapping_count=len(cls.DOMAIN_MAPPING),
         )
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
@@ -224,9 +224,7 @@ class SelfHealingMiddleware:
         except Exception as e:
             error_type = type(e).__name__
 
-            if error_type in self.MONITORED_DB_ERRORS or self._is_db_connection_error(
-                e
-            ):
+            if error_type in self.MONITORED_DB_ERRORS or self._is_db_connection_error(e):
                 db_error_context = {
                     "error_type": error_type,
                     "error_message": str(e),
@@ -317,11 +315,7 @@ class SelfHealingMiddleware:
                     "x_request_id": request.META.get("HTTP_X_REQUEST_ID", ""),
                     "x_idempotency_key": request.META.get("HTTP_X_IDEMPOTENCY_KEY", ""),
                 },
-                "user_id": (
-                    getattr(request.user, "id", None)
-                    if hasattr(request, "user")
-                    else None
-                ),
+                "user_id": (getattr(request.user, "id", None) if hasattr(request, "user") else None),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as e:
@@ -401,7 +395,7 @@ class SelfHealingMiddleware:
                 logger.info(
                     "self_healing_middleware.cb_failure_recorded",
                     _self=self.CB_SERVICE_NAME,
-                    error_context=error_context.get('error_type'),
+                    error_context=error_context.get("error_type"),
                 )
 
                 self._log_audit_event(
@@ -422,7 +416,7 @@ class SelfHealingMiddleware:
             logger.info(
                 "self_healing_middleware.poolcb_failure_recorded",
                 pool_circuit_breaker=pool_circuit_breaker.state,
-                pool_circuit_breaker_1=pool_circuit_breaker._failure_count,
+                failure_count=pool_circuit_breaker._failure_count,
             )
         except Exception as e:
             logger.warning(
@@ -475,7 +469,7 @@ class SelfHealingMiddleware:
                     "self_healing_middleware.dlq_stored",
                     result=result.dlq_id,
                     domain=domain,
-                    request_data=request_data.get('path'),
+                    request_data=request_data.get("path"),
                 )
 
                 self._log_audit_event(
@@ -531,9 +525,7 @@ class SelfHealingMiddleware:
                     "dlq_auto_stored": AuditEventType.DLQ_STORE,
                     "cb_failure_recorded": AuditEventType.CB_STATE_CHANGE,
                 }
-                audit_event_type = event_type_map.get(
-                    event_type, AuditEventType.ERROR_DETECTED
-                )
+                audit_event_type = event_type_map.get(event_type, AuditEventType.ERROR_DETECTED)
 
                 buffer = RequestAuditBuffer.get_or_create(request)
                 buffer.add(

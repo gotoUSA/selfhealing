@@ -41,8 +41,8 @@ def check_circuit_breaker_recovery(self) -> dict:
         if result.get("count", 0) > 0:
             logger.info(
                 "circuit_check_transitioned_circuit",
-                result=result['count'],
-                result_1=result.get('transitioned', []),
+                result=result["count"],
+                transitioned=result.get("transitioned", []),
             )
 
         return result

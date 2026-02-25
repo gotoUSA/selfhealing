@@ -60,8 +60,8 @@ class DLQReplayView(APIView):
             domain=domain,
             batch_size=batch_size,
             result=result.processed,
-            result_3=result.success,
-            result_4=result.failed,
+            success=result.success,
+            failed=result.failed,
         )
 
         return Response(
@@ -387,7 +387,7 @@ class DLQTestCreateView(APIView):
 
         logger.info(
             "dlq.test_entry_created",
-            result=result['dlq_id'],
+            result=result["dlq_id"],
             domain=domain,
             failure_type=failure_type,
             request=request.user,

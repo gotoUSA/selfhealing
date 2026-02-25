@@ -466,7 +466,7 @@ class ThresholdBasedPermission(BasePermission):
                 "rbac.high_risk_operation_approved",
                 discrepancy=discrepancy,
                 request=request.user,
-                thresholds=thresholds['admin_approve'],
+                thresholds=thresholds["admin_approve"],
             )
             return True
         return False
@@ -510,7 +510,7 @@ class ThresholdBasedPermission(BasePermission):
                 "rbac.dual_approval_required_no",
                 discrepancy=discrepancy,
                 actor=actor,
-                thresholds=thresholds['dual_approval'],
+                thresholds=thresholds["dual_approval"],
             )
             # 알림 발송 (승인 요청이 필요하다는 것을 Admin들에게 알림)
             self._notify_dual_approval_needed(actor, discrepancy, request)
@@ -534,7 +534,7 @@ class ThresholdBasedPermission(BasePermission):
                         logger.warning(
                             "rbac.dual_approval_request_approved",
                             approval_id=approval_id,
-                            approval_request=approval_request['status'],
+                            approval_request=approval_request["status"],
                         )
                         return False
 
@@ -543,8 +543,8 @@ class ThresholdBasedPermission(BasePermission):
                     logger.info(
                         "rbac.dual_approval_verified",
                         approval_id=approval_id,
-                        approval_request=approval_request['requested_by'],
-                        approval_request_2=approval_request['approved_by'],
+                        approval_request=approval_request["requested_by"],
+                        approved_by=approval_request["approved_by"],
                         actor=actor,
                         discrepancy=discrepancy,
                     )
@@ -735,7 +735,7 @@ class HasChaosTestPermission(BasePermission):
             if _is_auth_disabled():
                 logger.debug(
                     "rbac.test_permission_bypassed_auth",
-                    getattr=getattr(request, 'path', 'unknown'),
+                    getattr=getattr(request, "path", "unknown"),
                 )
                 return True
 
@@ -745,7 +745,7 @@ class HasChaosTestPermission(BasePermission):
                 logger.error(
                     "rbac.test_access_denied_production",
                     request=request.user,
-                    getattr=getattr(request, 'path', 'unknown'),
+                    getattr=getattr(request, "path", "unknown"),
                     _self=self._get_client_ip(request),
                 )
                 self.message = (
@@ -757,7 +757,7 @@ class HasChaosTestPermission(BasePermission):
             if not request.user or not request.user.is_authenticated:
                 logger.warning(
                     "rbac.test_permission_denied_authenticated",
-                    getattr=getattr(request, 'path', 'unknown'),
+                    getattr=getattr(request, "path", "unknown"),
                 )
                 self.message = "X-Test/Chaos API 접근에는 인증이 필요합니다."
                 return False
@@ -794,7 +794,7 @@ class HasChaosTestPermission(BasePermission):
             logger.exception(
                 "rbac.test_permission_check_failed",
                 error=e,
-                getattr=getattr(request, 'user', 'unknown'),
+                getattr=getattr(request, "user", "unknown"),
             )
             self.message = "권한 확인 중 오류가 발생했습니다. 접근이 거부되었습니다."
             return False

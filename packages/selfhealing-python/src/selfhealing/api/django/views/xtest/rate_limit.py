@@ -211,8 +211,8 @@ class RateLimitClientView(XTestModeMixin, APIView):
         logger.info(
             "test_mode_rate_limit",
             client_key=client_key,
-            client_status=client_status['current_count'],
-            client_status_2=client_status['blocked'],
+            client_status=client_status["current_count"],
+            blocked=client_status["blocked"],
         )
 
         response_data = {

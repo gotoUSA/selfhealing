@@ -164,9 +164,7 @@ class SyncTaskAdapter(TaskQueueInterface):
 
             # Add delay method for Celery compatibility
             wrapper.delay = lambda *a, **kw: self.enqueue(task_name, args=a, kwargs=kw)
-            wrapper.apply_async = lambda args=(), kwargs=None, **opts: self.enqueue(
-                task_name, args=args, kwargs=kwargs or {}
-            )
+            wrapper.apply_async = lambda args=(), kwargs=None, **opts: self.enqueue(task_name, args=args, kwargs=kwargs or {})
             wrapper.name = task_name
 
             return wrapper
@@ -218,11 +216,7 @@ class SyncTaskAdapter(TaskQueueInterface):
         )
 
         # Handle delayed execution (just mark as pending, don't execute)
-        if (
-            self._delay_execution
-            or options.countdown is not None
-            or options.eta is not None
-        ):
+        if self._delay_execution or options.countdown is not None or options.eta is not None:
             self._results[task_id] = record
             self._pending_queue.append(task_id)
             return task_id
@@ -271,7 +265,7 @@ class SyncTaskAdapter(TaskQueueInterface):
                 logger.debug(
                     "sync_adapter.retrying_task_attempt",
                     record=record.task_id,
-                    record_1=record.retries,
+                    retries=record.retries,
                 )
                 self._execute_task(record, registered)
             else:
@@ -562,6 +556,4 @@ class SyncTaskAdapter(TaskQueueInterface):
 
     def get_call_count(self, task_name: str) -> int:
         """Get number of times a task was called."""
-        return sum(
-            1 for record in self._results.values() if record.task_name == task_name
-        )
+        return sum(1 for record in self._results.values() if record.task_name == task_name)

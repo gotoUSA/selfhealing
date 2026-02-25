@@ -248,8 +248,8 @@ class BaseAuditConsumer(ABC):
         logger.info(
             "consumer.closed_processed_errors_skipped",
             _self=self._processed_count,
-            self_1=self._error_count,
-            self_2=self._skipped_count,
+            error_count=self._error_count,
+            skipped_count=self._skipped_count,
         )
 
     def get_stats(self) -> dict[str, Any]:
@@ -380,7 +380,7 @@ class IdempotentAuditConsumer(BaseAuditConsumer):
             value = json.loads(message.value().decode("utf-8"))
             logger.info(
                 "idempotent_consumer.processed",
-                value=value.get('action'),
+                value=value.get("action"),
             )
             return True
         except Exception as e:
@@ -435,7 +435,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
                     logger.debug(
                         "rebalance_consumer.partition_resuming_offset",
                         p=p.partition,
-                        p_1=p.offset,
+                        offset=p.offset,
                     )
             except Exception as e:
                 logger.warning(
@@ -500,7 +500,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
             value = json.loads(message.value().decode("utf-8"))
             logger.info(
                 "rebalance_consumer.processed",
-                value=value.get('action'),
+                value=value.get("action"),
             )
 
             # pending offset 기록 (리밸런싱 시 커밋용)

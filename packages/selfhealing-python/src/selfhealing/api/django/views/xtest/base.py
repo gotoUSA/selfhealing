@@ -362,7 +362,7 @@ class XTestModeMixin:
             logger.debug(
                 "test_mode_resource_check",
                 result=result.cpu_percent,
-                result_1=result.memory_percent,
+                memory_percent=result.memory_percent,
             )
             return None
 

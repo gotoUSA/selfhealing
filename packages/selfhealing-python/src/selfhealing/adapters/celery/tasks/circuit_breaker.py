@@ -61,7 +61,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
                 logger.warning(
                     "circuit_recovery_blocked_error",
                     gate_result=gate_result.error_budget_percent,
-                    gate_result_1=gate_result.threshold_percent,
+                    threshold_percent=gate_result.threshold_percent,
                 )
                 return {
                     "success": False,

@@ -1107,10 +1107,10 @@ def setup_selfhealing_signals(
     logger.info(
         "self_healing.signal_hooks_configured",
         _config=_config.enabled,
-        _config_1=_config.cb_enabled,
-        _config_2=_config.dlq_enabled,
-        _config_3=_config.metrics_enabled,
-        _config_4=_config.forensics_enabled,
+        cb_enabled=_config.cb_enabled,
+        dlq_enabled=_config.dlq_enabled,
+        metrics_enabled=_config.metrics_enabled,
+        forensics_enabled=_config.forensics_enabled,
     )
 
 

@@ -19,9 +19,7 @@ logger = get_task_logger(__name__)
     soft_time_limit=290,
     acks_late=True,
 )
-def conditional_replay_on_circuit_close(
-    self, service_name: str, max_items: int = 50
-) -> dict:
+def conditional_replay_on_circuit_close(self, service_name: str, max_items: int = 50) -> dict:
     """
     Trigger conditional replay when a circuit breaker closes.
 
@@ -56,8 +54,8 @@ def conditional_replay_on_circuit_close(
             "circuit_recovery_completed",
             service_name=service_name,
             result=result.total,
-            result_2=result.success_count,
-            result_3=result.failed_count,
+            success_count=result.success_count,
+            failed_count=result.failed_count,
         )
 
         return {
@@ -193,8 +191,8 @@ def replay_batch_by_failure_type(
         logger.info(
             "dlq_batch_replay_completed",
             result=result.total,
-            result_1=result.success_count,
-            result_2=result.failed_count,
+            success_count=result.success_count,
+            failed_count=result.failed_count,
         )
 
         return {
@@ -260,8 +258,8 @@ def replay_batch_by_domain(
         logger.info(
             "dlq_batch_replay_completed",
             result=result.total,
-            result_1=result.success_count,
-            result_2=result.failed_count,
+            success_count=result.success_count,
+            failed_count=result.failed_count,
         )
 
         return {
@@ -322,8 +320,8 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
 
         logger.info(
             "dlq_cleanup_completed",
-            result=result.get('expired_count', 0),
-            result_1=result.get('archived_count', 0),
+            result=result.get("expired_count", 0),
+            archived_count=result.get("archived_count", 0),
         )
 
         return {

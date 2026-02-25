@@ -288,7 +288,7 @@ class SelfHealingConfig(AppConfig):
                 if action == "synced_redis_to_file":
                     logger.warning(
                         "self_healing.hash_chain_sync_redis",
-                        result=result.get('file_sequence'),
+                        result=result.get("file_sequence"),
                     )
                 elif action == "fresh_start":
                     logger.info("self_healing.hash_chain_sync_fresh")
@@ -306,7 +306,7 @@ class SelfHealingConfig(AppConfig):
             else:
                 logger.warning(
                     "self_healing.hash_chain_sync_failed",
-                    result=result.get('error', 'unknown'),
+                    result=result.get("error", "unknown"),
                 )
 
         except ImportError:
@@ -524,7 +524,7 @@ class SelfHealingConfig(AppConfig):
             logger.info(
                 "self_healing.gauge_hydration_completed",
                 count=len(result.dlq_pending),
-                count_1=len(result.circuit_breaker_states),
+                cb_states_count=len(result.circuit_breaker_states),
             )
 
         except ImportError:
@@ -629,7 +629,7 @@ class SelfHealingConfig(AppConfig):
             logger.info(
                 "self_healing.system_metrics_cache_started",
                 settings=settings.refresh_interval,
-                settings_1=settings.sample_interval,
+                sample_interval=settings.sample_interval,
             )
 
         except ImportError:
