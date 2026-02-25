@@ -77,15 +77,9 @@ class PoolCircuitBreaker:
         self._state_lock = threading.Lock()
 
         # 설정값 (환경 변수로 오버라이드 가능)
-        self._failure_threshold = int(
-            os.getenv("POOL_CB_FAILURE_THRESHOLD", "3")
-        )  # 3회 실패 시 OPEN
-        self._success_threshold = int(
-            os.getenv("POOL_CB_SUCCESS_THRESHOLD", "2")
-        )  # 2회 성공 시 CLOSED
-        self._recovery_timeout = int(
-            os.getenv("POOL_CB_RECOVERY_TIMEOUT", "10")
-        )  # 10초 후 HALF_OPEN
+        self._failure_threshold = int(os.getenv("POOL_CB_FAILURE_THRESHOLD", "3"))  # 3회 실패 시 OPEN
+        self._success_threshold = int(os.getenv("POOL_CB_SUCCESS_THRESHOLD", "2"))  # 2회 성공 시 CLOSED
+        self._recovery_timeout = int(os.getenv("POOL_CB_RECOVERY_TIMEOUT", "10"))  # 10초 후 HALF_OPEN
         self._half_open_max_requests = int(os.getenv("POOL_CB_HALF_OPEN_MAX", "3"))
 
         # v6.2.0: 캐시 기반 Pool 상태 조회 설정
@@ -101,12 +95,8 @@ class PoolCircuitBreaker:
             )
 
         # v6.2.1: Stale 캐시 임계값 설정
-        self._stale_threshold_multiplier = int(
-            os.getenv("POOL_CB_STALE_MULTIPLIER", "10")
-        )  # 10배 = 1초 (100ms 기준)
-        self._critical_stale_ms = int(
-            os.getenv("POOL_CB_CRITICAL_STALE_MS", "5000")
-        )  # 5초 이상이면 완전 stale
+        self._stale_threshold_multiplier = int(os.getenv("POOL_CB_STALE_MULTIPLIER", "10"))  # 10배 = 1초 (100ms 기준)
+        self._critical_stale_ms = int(os.getenv("POOL_CB_CRITICAL_STALE_MS", "5000"))  # 5초 이상이면 완전 stale
 
         self._cached_pool_status = {
             "available": False,
@@ -277,17 +267,13 @@ class PoolCircuitBreaker:
 
         # v6.2.1: 캐시 유효성 검사 (단계별 처리)
         cache_age_ms = (time.time() - status.get("_cache_time", 0)) * 1000
-        stale_warning_threshold = (
-            self._cache_interval_ms * self._stale_threshold_multiplier
-        )
+        stale_warning_threshold = self._cache_interval_ms * self._stale_threshold_multiplier
 
         # v6.2.2: 캐시 age 히스토그램 기록
         record_pool_cb_cache_age(cache_age_ms)
 
         # v6.2.2: 캐시 히트율 업데이트
-        total_accesses = self._stats.get("cache_hits", 0) + self._stats.get(
-            "cache_misses", 0
-        )
+        total_accesses = self._stats.get("cache_hits", 0) + self._stats.get("cache_misses", 0)
         if total_accesses > 0:
             hit_rate = self._stats.get("cache_hits", 0) / total_accesses
             update_pool_cb_hit_rate(hit_rate)
@@ -377,9 +363,7 @@ class PoolCircuitBreaker:
                     # - checkedout >= 3 이면 완전 고갈
                     # - checkedin == 0 이면 사용 가능한 연결 없음
                     is_at_capacity = checkedout >= total_capacity
-                    is_overflow_maxed = (
-                        overflow >= max_overflow if max_overflow > 0 else True
-                    )
+                    is_overflow_maxed = overflow >= max_overflow if max_overflow > 0 else True
                     is_no_available = checkedin == 0
 
                     # 더 적극적인 고갈 감지: 사용 가능 연결이 0이고 모든 연결이 사용 중
@@ -404,11 +388,7 @@ class PoolCircuitBreaker:
                         "overflow": overflow,
                         "max_overflow": max_overflow,
                         "total_capacity": total_capacity,
-                        "usage_percent": (
-                            (checkedout / total_capacity * 100)
-                            if total_capacity > 0
-                            else 0
-                        ),
+                        "usage_percent": ((checkedout / total_capacity * 100) if total_capacity > 0 else 0),
                         "is_exhausted": is_exhausted,
                         "is_near_exhaustion": is_near_exhaustion,
                         # 디버깅용
@@ -461,11 +441,7 @@ class PoolCircuitBreaker:
                                 "overflow": overflow,
                                 "max_overflow": max_overflow,
                                 "total_capacity": total_capacity,
-                                "usage_percent": (
-                                    (checkedout / total_capacity * 100)
-                                    if total_capacity > 0
-                                    else 0
-                                ),
+                                "usage_percent": ((checkedout / total_capacity * 100) if total_capacity > 0 else 0),
                                 "is_exhausted": is_exhausted,
                                 "is_near_exhaustion": is_near_exhaustion,
                             }
@@ -533,8 +509,8 @@ class PoolCircuitBreaker:
                     # Pool 고갈 감지! 즉시 OPEN으로 전환
                     logger.error(
                         "pool_circuit_breaker.pool_exhausted",
-                        pool_status=pool_status.get('checkedout'),
-                        total_capacity=pool_status.get('total_capacity'),
+                        pool_status=pool_status.get("checkedout"),
+                        total_capacity=pool_status.get("total_capacity"),
                     )
                     self._set_state(self.OPEN)
                     self._stats["rejected_requests"] += 1
@@ -594,9 +570,7 @@ class PoolCircuitBreaker:
 
                 # 여전히 차단
                 self._stats["rejected_requests"] += 1
-                remaining = self._recovery_timeout - (
-                    time.time() - (self._open_time or 0)
-                )
+                remaining = self._recovery_timeout - (time.time() - (self._open_time or 0))
                 return (False, f"Circuit OPEN - retry in {remaining:.1f}s")
 
             elif current_state == self.HALF_OPEN:
@@ -715,7 +689,7 @@ class PoolCircuitBreakerMiddleware:
         logger.info(
             "pool_circuit_breaker_middleware.initialized_audit",
             status=status,
-            value='enabled' if self._audit_enabled else 'disabled',
+            value="enabled" if self._audit_enabled else "disabled",
         )
 
     def _check_enabled(self) -> bool:
@@ -726,9 +700,7 @@ class PoolCircuitBreakerMiddleware:
             return getattr(settings, "SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", True)
         except Exception:
             # settings 접근 불가 시 환경변수 확인
-            return os.getenv(
-                "SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", "true"
-            ).lower() in ("true", "1", "yes")
+            return os.getenv("SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", "true").lower() in ("true", "1", "yes")
 
     def _check_audit_available(self) -> bool:
         """Audit 시스템 사용 가능 여부 확인"""
@@ -856,14 +828,15 @@ class PoolCircuitBreakerMiddleware:
         if self._request_count % self._log_interval == 0:
             # v6.2.0: 캐시된 Pool 상태 사용 (Non-Blocking)
             pool_status = pool_circuit_breaker.get_cached_pool_status()
-            cache_stats = pool_circuit_breaker._stats
             logger.info(
                 "pool_circuit_breaker_middleware.pool_status_every_reqs",
                 _self=self._log_interval,
-                pool_status=pool_status.get('checkedout', '?'),
-                    total_capacity=pool_status.get('total_capacity', '?'),
-                    usage_percent=pool_status.get('usage_percent', 0),
-                    is_exhausted=pool_status.get('is_exhausted', False),
+                pool_status=pool_status.get("checkedout", "?"),
+                total_capacity=pool_status.get("total_capacity", "?"),
+                usage_percent=pool_status.get("usage_percent", 0),
+                is_exhausted=pool_status.get("is_exhausted", False),
+            )
+
         cb = pool_circuit_breaker
         allow, reason = cb.should_allow_request()
 
@@ -957,9 +930,9 @@ class PoolCircuitBreakerMiddleware:
                 pool_status = cb.get_cached_pool_status()
                 logger.error(
                     "pool_circuit_breaker_middleware.pool_status_exhaustion",
-                    pool_status=pool_status.get('checkedout', '?'),
-                    total_capacity=pool_status.get('total_capacity', '?'),
-                    overflow=pool_status.get('overflow', '?'),
+                    pool_status=pool_status.get("checkedout", "?"),
+                    total_capacity=pool_status.get("total_capacity", "?"),
+                    overflow=pool_status.get("overflow", "?"),
                 )
 
                 # 503 반환 (재시도 유도)
@@ -1003,9 +976,7 @@ def circuit_breaker_status(request):
         cb_service = get_circuit_breaker_service()
         if cb_service and cb_service.is_enabled:
             state_data = cb_service.get_or_create_state("database")
-            cb_service_state = (
-                state_data.state if hasattr(state_data, "state") else str(state_data)
-            )
+            cb_service_state = state_data.state if hasattr(state_data, "state") else str(state_data)
             cb_service_failure_count = getattr(state_data, "failure_count", 0)
     except Exception as e:
         logger.debug(
