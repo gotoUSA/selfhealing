@@ -24,9 +24,17 @@ Reference:
     docs/self_healing/middleware_system/275_RUNBOOK_EXECUTOR.md
 """
 
+from selfhealing.services.runbook.approval_gate import (
+    RunbookApprovalGate,
+    get_runbook_approval_gate,
+    reset_runbook_approval_gate,
+)
 from selfhealing.services.runbook.contracts import CompensationContract
 from selfhealing.services.runbook.duration_tracker import DurationTracker
 from selfhealing.services.runbook.exceptions import (
+    ApprovalAlreadyDecidedError,
+    RunbookApprovalDuplicateError,
+    RunbookApprovalError,
     RunbookCompensationError,
     RunbookExecutionError,
     RunbookLockConflictError,
@@ -35,7 +43,10 @@ from selfhealing.services.runbook.exceptions import (
     RunbookVersionMismatchError,
 )
 from selfhealing.services.runbook.execution_models import (
+    ApprovalDecision,
+    ApprovalDecisionType,
     CompensationSummary,
+    RunbookApprovalRequest,
     RunbookExecutionContext,
     RunbookExecutionStatus,
     RunbookStepResult,
@@ -95,6 +106,14 @@ __all__ = [
     "RunbookStepResult",
     "CompensationSummary",
     "RunbookExecutionContext",
+    # Approval Gate Models
+    "ApprovalDecisionType",
+    "ApprovalDecision",
+    "RunbookApprovalRequest",
+    # Approval Gate
+    "RunbookApprovalGate",
+    "get_runbook_approval_gate",
+    "reset_runbook_approval_gate",
     # Exceptions
     "RunbookExecutionError",
     "RunbookLockConflictError",
@@ -102,6 +121,9 @@ __all__ = [
     "RunbookStaleContextError",
     "RunbookVersionMismatchError",
     "RunbookCompensationError",
+    "RunbookApprovalError",
+    "ApprovalAlreadyDecidedError",
+    "RunbookApprovalDuplicateError",
     # Resolvers
     "ParamResolver",
     "DotPathResolver",

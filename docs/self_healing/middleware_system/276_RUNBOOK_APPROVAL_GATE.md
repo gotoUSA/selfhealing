@@ -1,6 +1,6 @@
 # 276. Runbook Approval Gate 설계
 
-> **Status**: Design
+> **Status**: Implemented
 > **References**:
 > - [274_RUNBOOK_REGISTRY.md](274_RUNBOOK_REGISTRY.md) — RiskLevel enum 정의
 > - [275_RUNBOOK_EXECUTOR.md](275_RUNBOOK_EXECUTOR.md) — RunbookExecutionContext, RunbookExecutionStatus
@@ -1100,9 +1100,11 @@ SELFHEALING_RUNBOOK_FORCE_EXECUTE_AUDIT_REQUIRED: bool = True
 packages/selfhealing-python/src/selfhealing/
 └── services/
     └── runbook/
-        ├── approval_gate.py     ← RunbookApprovalGate (이 문서)
-        ├── models.py            ← ApprovalDecision, ApprovalDecisionType,
-        │                           RunbookApprovalRequest 추가
+        ├── approval_gate.py      ← RunbookApprovalGate (이 문서)
+        ├── execution_models.py   ← ApprovalDecision, ApprovalDecisionType,
+        │                            RunbookApprovalRequest 추가
+        ├── exceptions.py         ← ApprovalAlreadyDecidedError,
+        │                            RunbookApprovalDuplicateError 추가
         └── ...
 ```
 

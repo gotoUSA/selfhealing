@@ -38,7 +38,7 @@ _TEMPLATE_VAR_RE = re.compile(r"\{[a-zA-Z_]\w*\}")
 # 위험도 분류
 # =============================================================================
 
-_RISK_PRIORITY: dict[str, int] = {"low": 0, "medium": 1, "high": 2}
+_RISK_PRIORITY: dict[str, int] = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
 
 class RiskLevel(str, Enum):
@@ -57,6 +57,9 @@ class RiskLevel(str, Enum):
 
     HIGH = "high"
     """수동 승인 필수 (우선순위 2)."""
+
+    CRITICAL = "critical"
+    """자동 실행 차단 — 강제 실행(force_execute)만 가능 (우선순위 3)."""
 
     @property
     def order(self) -> int:

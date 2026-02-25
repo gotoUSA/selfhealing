@@ -151,6 +151,40 @@ class RunbookSettings(BaseSettings):
         description="무한 재개 방지 카운터. SagaOrchestrator.MAX_RESUME_COUNT와 동일",
     )
 
+    # ==========================================================================
+    # Approval Gate Settings (276번 ApprovalGate)
+    # ==========================================================================
+    approval_timer_seconds: int = Field(
+        default=300,
+        ge=30,
+        le=7200,
+        description="MEDIUM 위험도 런북의 타이머 자동 승인 대기 시간 (초). 기본 5분",
+    )
+
+    approval_max_wait_seconds: int = Field(
+        default=3600,
+        ge=0,
+        le=86400,
+        description="HIGH 위험도 런북의 최대 대기 시간 (초). 0이면 무기한 대기. 기본 1시간",
+    )
+
+    approval_reminder_intervals_minutes: list[int] = Field(
+        default=[15, 30],
+        description="승인 대기 중 리마인더 발송 간격 (분 단위 목록)",
+    )
+
+    approval_check_interval_seconds: int = Field(
+        default=30,
+        ge=10,
+        le=300,
+        description="Celery Beat에서 타이머/리마인더/타임아웃 폴링 간격 (초)",
+    )
+
+    force_execute_audit_required: bool = Field(
+        default=True,
+        description="CRITICAL 런북 강제 실행 시 감사 로그 필수 여부",
+    )
+
     @field_validator("approval_timeout_seconds")
     @classmethod
     def validate_approval_timeout(cls, v: int) -> int:

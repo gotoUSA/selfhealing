@@ -9,6 +9,11 @@ Reference:
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from selfhealing.services.runbook.execution_models import ApprovalDecisionType
+
 
 class RunbookExecutionError(Exception):
     """Runbook 실행 중 일반 오류."""
@@ -45,4 +50,39 @@ class RunbookCompensationError(RunbookExecutionError):
 
     실제로 raise하지 않고 Fail-Open으로 처리된다.
     로그/DLQ 기록 목적으로 정의한다.
+    """
+
+
+# =============================================================================
+# 승인 게이트 예외
+# =============================================================================
+
+
+class RunbookApprovalError(RunbookExecutionError):
+    """승인 게이트 일반 오류.
+
+    승인 요청을 찾지 못하거나, 강제 실행 시 justification이 비어있는 등
+    승인 프로세스의 일반적인 오류 상황.
+    """
+
+
+class ApprovalAlreadyDecidedError(RunbookApprovalError):
+    """승인 요청이 이미 다른 결정으로 확정된 경우.
+
+    API 레이어에서 HTTP 409 Conflict로 매핑된다.
+    타이머 만료(TIMER_APPROVED)와 수동 승인/거부가 동시에 도달하여
+    CAS가 선착순으로 하나만 성공한 상황에서, 패배 측이 받는 예외.
+    """
+
+    def __init__(self, execution_id: str, current_status: ApprovalDecisionType):
+        self.execution_id = execution_id
+        self.current_status = current_status
+        super().__init__(f"Approval already decided: {execution_id} " f"is in '{current_status.value}' state")
+
+
+class RunbookApprovalDuplicateError(RunbookApprovalError):
+    """동일 runbook_id + namespace에 이미 대기 중인 승인 요청이 존재.
+
+    장애 스톰 중 동일 런북이 반복 트리거될 때 승인 요청/알림 폭주를 방지한다.
+    PendingRecoveryApprovalManager.create_request()의 중복 방지 패턴.
     """

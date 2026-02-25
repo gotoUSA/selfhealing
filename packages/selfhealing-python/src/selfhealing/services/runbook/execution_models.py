@@ -13,7 +13,11 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfhealing.services.governance.checks import BlockReason, GovernanceCheckResult
+    from selfhealing.services.runbook.runbook_registry import RiskLevel
 
 
 # =============================================================================
@@ -264,4 +268,184 @@ class RunbookExecutionContext:
             started_at=data.get("started_at"),
             completed_at=data.get("completed_at"),
             abort_reason=data.get("abort_reason"),
+        )
+
+
+# =============================================================================
+# 승인 결정 유형
+# =============================================================================
+
+
+class ApprovalDecisionType(str, Enum):
+    """승인 결정 유형.
+
+    RiskLevel에 따라 ApprovalGate가 반환하는 결정 값.
+    """
+
+    AUTO_APPROVED = "auto_approved"
+    """LOW: 거버넌스 통과 후 즉시 자동 승인."""
+
+    TIMER_APPROVED = "timer_approved"
+    """MEDIUM: 타이머 만료로 자동 승인 (거부 없이 expires_at 도달)."""
+
+    MANUALLY_APPROVED = "manually_approved"
+    """HIGH: 운영자가 수동 승인."""
+
+    REJECTED = "rejected"
+    """운영자가 수동 거부."""
+
+    BLOCKED = "blocked"
+    """거버넌스 차단 또는 CRITICAL 위험도로 자동 실행 차단."""
+
+    WAITING = "waiting"
+    """승인 대기 중 (MEDIUM/HIGH)."""
+
+
+# =============================================================================
+# 승인 결정 결과
+# =============================================================================
+
+
+@dataclass
+class ApprovalDecision:
+    """승인 결정 결과.
+
+    ApprovalGate.evaluate_approval()이 반환하는 최종 결정.
+    거버넌스 차단, 자동 승인, 대기 중, 수동 승인/거부 등의 상태를 포함한다.
+    """
+
+    decision_type: ApprovalDecisionType
+    """결정 유형."""
+
+    risk_level: RiskLevel
+    """해당 런북의 위험도."""
+
+    approved_by: str | None = None
+    """수동 승인자 ID. 자동 승인 시 'system:auto' 또는 'system:timer'."""
+
+    block_reason: BlockReason | None = None
+    """거버넌스 차단 사유 (차단 시에만 설정)."""
+
+    block_message: str = ""
+    """차단 메시지."""
+
+    decided_at: str | None = None
+    """ISO 8601 결정 시각."""
+
+    governance_result: GovernanceCheckResult | None = None
+    """거버넌스 체크 결과 (차단 시 상세 정보 포함)."""
+
+    @property
+    def is_approved(self) -> bool:
+        """승인된 상태인지 여부."""
+        return self.decision_type in (
+            ApprovalDecisionType.AUTO_APPROVED,
+            ApprovalDecisionType.TIMER_APPROVED,
+            ApprovalDecisionType.MANUALLY_APPROVED,
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """직렬화."""
+        result: dict[str, Any] = {
+            "decision_type": self.decision_type.value,
+            "risk_level": self.risk_level.value if self.risk_level else None,
+            "approved_by": self.approved_by,
+            "block_reason": self.block_reason.value if self.block_reason else None,
+            "block_message": self.block_message,
+            "decided_at": self.decided_at,
+            "is_approved": self.is_approved,
+        }
+        return result
+
+
+# =============================================================================
+# 승인 요청 레코드
+# =============================================================================
+
+
+@dataclass
+class RunbookApprovalRequest:
+    """승인 요청 레코드.
+
+    PendingRecoveryApprovalManager.create_request() 패턴을 따른다.
+    StateBackend(Redis/InMemory)에 영속화되며, CAS 기반 원자적 상태 전환으로
+    타이머 만료와 수동 승인/거부의 동시성을 관리한다.
+    """
+
+    request_id: str
+    """승인 요청 고유 ID."""
+
+    execution_id: str
+    """RunbookExecutionContext.execution_id와 1:1 매핑."""
+
+    runbook_id: str
+    """대상 Runbook ID."""
+
+    namespace: str
+    """대상 네임스페이스."""
+
+    risk_level: RiskLevel
+    """런북의 위험도."""
+
+    status: ApprovalDecisionType = ApprovalDecisionType.WAITING
+    """현재 승인 상태."""
+
+    created_at: str | None = None
+    """ISO 8601 생성 시각."""
+
+    expires_at: str | None = None
+    """ISO 8601 만료 시각 (MEDIUM 타이머 전용)."""
+
+    decided_at: str | None = None
+    """ISO 8601 결정 시각."""
+
+    decided_by: str | None = None
+    """결정자 ID."""
+
+    runbook_summary: dict[str, Any] = field(default_factory=dict)
+    """런북 요약 정보 (이름, step 수, 위험도 등)."""
+
+    reminder_count: int = 0
+    """리마인더 발송 횟수."""
+
+    last_reminder_at: str | None = None
+    """마지막 리마인더 시각."""
+
+    def to_dict(self) -> dict[str, Any]:
+        """직렬화."""
+        return {
+            "request_id": self.request_id,
+            "execution_id": self.execution_id,
+            "runbook_id": self.runbook_id,
+            "namespace": self.namespace,
+            "risk_level": self.risk_level.value if isinstance(self.risk_level, Enum) else self.risk_level,
+            "status": self.status.value if isinstance(self.status, Enum) else self.status,
+            "created_at": self.created_at,
+            "expires_at": self.expires_at,
+            "decided_at": self.decided_at,
+            "decided_by": self.decided_by,
+            "runbook_summary": self.runbook_summary,
+            "reminder_count": self.reminder_count,
+            "last_reminder_at": self.last_reminder_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RunbookApprovalRequest:
+        """역직렬화."""
+        from selfhealing.services.runbook.runbook_registry import RiskLevel
+
+        return cls(
+            request_id=data["request_id"],
+            execution_id=data["execution_id"],
+            runbook_id=data["runbook_id"],
+            namespace=data["namespace"],
+            risk_level=RiskLevel(data["risk_level"]),
+            status=ApprovalDecisionType(data.get("status", "waiting")),
+            created_at=data.get("created_at"),
+            expires_at=data.get("expires_at"),
+            decided_at=data.get("decided_at"),
+            decided_by=data.get("decided_by"),
+            runbook_summary=data.get("runbook_summary", {}),
+            reminder_count=data.get("reminder_count", 0),
+            last_reminder_at=data.get("last_reminder_at"),
         )
