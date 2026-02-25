@@ -12,7 +12,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "myproject.settings")
 django.setup()
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from rest_framework.test import APIRequestFactory
 from rest_framework import status
 
@@ -411,6 +411,80 @@ class TestLoggingConfigView:
         view = LoggingConfigView.as_view()
         response = view(request)
 
+        assert response.status_code == status.HTTP_200_OK
+
+    # -------------------------------------------------------------------------
+    # 283_DYNAMIC_LOG_LEVEL_API: 런타임 적용 부수효과 검증
+    # -------------------------------------------------------------------------
+
+    def test_put_success_applies_log_levels_to_stdlib_loggers(self):
+        """PUT 200 성공 시 _apply_component_log_levels()가 호출되어야 한다."""
+        # Given
+        data = {"dlq_log_level": "DEBUG"}
+        request = self.factory.put(
+            "/api/self-healing/config/logging/",
+            data=data,
+            format="json",
+        )
+        request.user = self.admin_user
+
+        with (
+            patch("selfhealing.settings.structlog_config._apply_component_log_levels") as mock_apply,
+            patch("selfhealing.settings.logging_config.reset_logging_settings") as mock_reset,
+        ):
+            # When
+            view = LoggingConfigView.as_view()
+            response = view(request)
+
+        # Then: 200 성공이면 apply 호출
+        assert response.status_code == status.HTTP_200_OK
+        mock_reset.assert_called_once()
+        mock_apply.assert_called_once()
+
+    def test_put_invalid_level_does_not_apply_log_levels(self):
+        """PUT 400 실패 시 _apply_component_log_levels()가 호출되지 않아야 한다."""
+        # Given
+        data = {"dlq_log_level": "VERBOSE"}  # 잘못된 레벨
+        request = self.factory.put(
+            "/api/self-healing/config/logging/",
+            data=data,
+            format="json",
+        )
+        request.user = self.admin_user
+
+        with (
+            patch("selfhealing.settings.structlog_config._apply_component_log_levels") as mock_apply,
+            patch("selfhealing.settings.logging_config.reset_logging_settings") as mock_reset,
+        ):
+            # When
+            view = LoggingConfigView.as_view()
+            response = view(request)
+
+        # Then: 400 실패이면 apply 미호출
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        mock_reset.assert_not_called()
+        mock_apply.assert_not_called()
+
+    def test_put_apply_failure_does_not_affect_response(self):
+        """_apply_component_log_levels() 예외 발생 시에도 200 응답이 반환되어야 한다."""
+        # Given: apply 로직이 예외를 던지도록 설정
+        data = {"dlq_log_level": "WARNING"}
+        request = self.factory.put(
+            "/api/self-healing/config/logging/",
+            data=data,
+            format="json",
+        )
+        request.user = self.admin_user
+
+        with patch(
+            "selfhealing.settings.structlog_config._apply_component_log_levels",
+            side_effect=RuntimeError("stdlib logging 적용 실패"),
+        ):
+            # When
+            view = LoggingConfigView.as_view()
+            response = view(request)
+
+        # Then: apply 실패에도 API 응답은 정상
         assert response.status_code == status.HTTP_200_OK
 
 
