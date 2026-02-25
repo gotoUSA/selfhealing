@@ -241,8 +241,8 @@ class StopConditionsChecker:
                     setattr(self._config, key, value)
                     logger.info(
                         "stop_conditions.updated",
-                        key=key,
-                        value=value,
+                        config_key=key,
+                        config_value=value,
                     )
             return self._config
 
@@ -357,7 +357,7 @@ class StopConditionsChecker:
             logger.warning(
                 "stop_conditions.experiment_stopped_violations",
                 experiment_id=experiment_id,
-                value=[v.message for v in violations],
+                violation_messages=[v.message for v in violations],
             )
 
         return StopConditionCheckResult(

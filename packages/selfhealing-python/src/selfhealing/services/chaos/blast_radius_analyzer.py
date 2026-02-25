@@ -281,8 +281,8 @@ class BlastRadiusAnalyzer:
 
         logger.info(
             "blast_radius_analyzer.analysis_complete",
-            level=level.value,
-            count=len(affected_services),
+            blast_radius_level=level.value,
+            affected_services_count=len(affected_services),
             risk_score=risk_score,
         )
 

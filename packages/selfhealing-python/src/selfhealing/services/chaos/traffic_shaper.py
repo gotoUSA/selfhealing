@@ -297,9 +297,9 @@ class TrafficShaper:
 
         logger.info(
             "traffic_shaper.configured",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
             mode=config.mode.value,
-            config=config.target_rps,
+            target_rps=config.target_rps,
         )
 
     def should_allow(self, endpoint: str | None = None) -> bool:
@@ -496,7 +496,7 @@ class TrafficShaper:
         logger.debug(
             "traffic_shaper.adapted_rate_rps_multiplier",
             new_rate=new_rate,
-            _self=self._current_rate_multiplier,
+            current_rate_multiplier=self._current_rate_multiplier,
             avg_latency=avg_latency,
         )
 

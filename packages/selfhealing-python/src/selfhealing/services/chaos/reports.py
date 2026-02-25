@@ -379,7 +379,7 @@ class ResilienceReportGenerator:
                 report_id=report_id,
                 grade=grade,
                 stats=stats["passed"],
-                total=stats["total"],
+                total_experiments_count=stats["total"],
             )
 
             return report
@@ -708,7 +708,7 @@ class ResilienceReportGenerator:
         # grade_value = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}.get(report.grade, 0)
         logger.debug(
             "report_generator.metrics_recording_skipped",
-            report=report.grade,
+            report_grade=report.grade,
             total_experiments=report.total_experiments,
         )
 
@@ -716,7 +716,7 @@ class ResilienceReportGenerator:
         """Record report to audit trail."""
         logger.info(
             "resilience_report_audit.event",
-            report=report.report_id,
+            report_id=report.report_id,
             report_date=report.report_date,
             grade=report.grade,
             total_experiments=report.total_experiments,

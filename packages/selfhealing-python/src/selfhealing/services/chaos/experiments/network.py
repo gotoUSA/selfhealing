@@ -46,7 +46,7 @@ class PacketLossExperiment(ChaosExperiment):
         """Inject packet loss with TTL."""
         logger.info(
             "packet_loss.injecting_packet_loss_ttl",
-            _self=self.loss_rate * 100,
+            loss_rate_pct=self.loss_rate * 100,
             target_service=self.config.target_service,
             effective_ttl=self._effective_ttl,
         )
@@ -79,13 +79,13 @@ class PacketLossExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "packet_loss.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "packet_loss.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -133,7 +133,7 @@ class ConnectionResetExperiment(ChaosExperiment):
         """Inject connection reset behavior with TTL."""
         logger.info(
             "connection_reset.injecting_connection_resets_probability",
-            _self=self.config.target_service,
+            target_service=self.config.target_service,
             reset_probability_pct=self.reset_probability * 100,
             effective_ttl=self._effective_ttl,
         )
@@ -167,13 +167,13 @@ class ConnectionResetExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "connection_reset.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "connection_reset.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -237,8 +237,8 @@ class NetworkBlackholeExperiment(ChaosExperiment):
         """네트워크 블랙홀 시뮬레이션 주입."""
         logger.warning(
             "network_blackhole.blackholing_endpoints_ttl",
-            count=len(self.affected_endpoints),
-            _self=self.duration_seconds,
+            affected_endpoints_count=len(self.affected_endpoints),
+            duration_seconds=self.duration_seconds,
             effective_ttl=self._effective_ttl,
         )
 
@@ -271,7 +271,7 @@ class NetworkBlackholeExperiment(ChaosExperiment):
 
             logger.info(
                 "network_blackhole.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
             _apply_chaos_config(
                 {
@@ -352,7 +352,7 @@ class ConnectionPartitionExperiment(ChaosExperiment):
 
         logger.info(
             "connection_partition.injecting_simulated_partition_ttl",
-            _self=self.partition_type,
+            partition_type=self.partition_type,
             db_available=self.db_available,
             cache_available=self.cache_available,
             effective_ttl=self._effective_ttl,
@@ -407,13 +407,13 @@ class ConnectionPartitionExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "connection_partition.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "connection_partition.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:

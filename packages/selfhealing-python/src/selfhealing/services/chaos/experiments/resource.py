@@ -82,9 +82,9 @@ class ResourceExhaustionExperiment(ChaosExperiment):
             if not is_safe:
                 logger.warning(
                     "resource_exhaustion.capping_memory_mb_cgroup",
-                    value=actual_bytes / 1024 / 1024,
+                    memory_usage_mb=actual_bytes / 1024 / 1024,
                     max_mb=max_bytes / 1024 / 1024,
-                    _self=self.SAFETY_MARGIN_PERCENT * 100,
+                    SAFETY_MARGIN_PERCENT_pct=self.SAFETY_MARGIN_PERCENT * 100,
                 )
 
             return actual_bytes
@@ -109,11 +109,11 @@ class ResourceExhaustionExperiment(ChaosExperiment):
 
         logger.info(
             "resource_exhaustion.exhausting_ttl_mb_else",
-            _self=self.resource_type,
+            resource_type=self.resource_type,
             exhaustion_pct=self.exhaustion_percent * 100,
             target_service=self.config.target_service,
             effective_ttl=self._effective_ttl,
-            value=f", capped to {safe_bytes / 1024 / 1024:.0f}MB" if safe_bytes else "",
+            cap_message=f", capped to {safe_bytes / 1024 / 1024:.0f}MB" if safe_bytes else "",
         )
 
         try:
@@ -144,13 +144,13 @@ class ResourceExhaustionExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "resource_exhaustion.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "resource_exhaustion.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -230,7 +230,7 @@ class PoolExhaustionExperiment(ChaosExperiment):
 
         logger.info(
             "pool_exhaustion.injecting_simulated_status_pool",
-            _self=self.simulated_status,
+            simulated_status=self.simulated_status,
             target_pool=self.target_pool,
             effective_ttl=self._effective_ttl,
         )
@@ -285,13 +285,13 @@ class PoolExhaustionExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "pool_exhaustion.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "pool_exhaustion.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:

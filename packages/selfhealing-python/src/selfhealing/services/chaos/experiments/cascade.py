@@ -53,7 +53,7 @@ class PartialFailureExperiment(ChaosExperiment):
         """Inject partial failures."""
         logger.info(
             "partial_failure.injecting_failures_ttl",
-            _self=self.failure_rate * 100,
+            failure_rate_pct=self.failure_rate * 100,
             target_service=self.config.target_service,
             effective_ttl=self._effective_ttl,
         )
@@ -87,13 +87,13 @@ class PartialFailureExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "partial_failure.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "partial_failure.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -220,7 +220,7 @@ class PartialFailureExperiment(ChaosExperiment):
                 )
                 logger.info(
                     "partial_failure.load_shedding_deactivated",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
         except ImportError:
             pass
@@ -271,8 +271,8 @@ class CascadingFailureExperiment(ChaosExperiment):
         """Inject cascading failures across services."""
         logger.warning(
             "cascading_failure.critical_injecting_cascading_failures",
-            count=len(self.affected_services),
-            _self=self._effective_ttl,
+            affected_services_count=len(self.affected_services),
+            effective_ttl=self._effective_ttl,
         )
 
         if not self.affected_services:
@@ -303,13 +303,13 @@ class CascadingFailureExperiment(ChaosExperiment):
                     opened_services.append(service)
                     logger.info(
                         "cascading_failure.opened_cb",
-                        service=service,
+                        service_name=service,
                     )
                 else:
                     logger.warning(
                         "cascading_failure.failed_open_cb",
-                        service=service,
-                        result=result.message,
+                        service_name=service,
+                        result_message=result.message,
                     )
 
                 # 연쇄 효과 시뮬레이션을 위한 지연
@@ -330,7 +330,7 @@ class CascadingFailureExperiment(ChaosExperiment):
 
             logger.warning(
                 "cascading_failure.cascade_injection_complete_services",
-                count=len(opened_services),
+                opened_services_count=len(opened_services),
                 affected_services_count=len(self.affected_services),
             )
             return True
@@ -347,13 +347,13 @@ class CascadingFailureExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "cascading_failure.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "cascading_failure.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -383,7 +383,7 @@ class CascadingFailureExperiment(ChaosExperiment):
                 self._rollback_completed = True
                 logger.info(
                     "cascading_failure.rollback_complete_services",
-                    count=len(self.affected_services),
+                    affected_services_count=len(self.affected_services),
                 )
             except Exception as e:
                 logger.exception(

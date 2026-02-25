@@ -98,8 +98,8 @@ class ChaosSchedulerService:
                     setattr(self._config, key, value)
                     logger.info(
                         "chaos_scheduler.updated_config",
-                        key=key,
-                        value=value,
+                        config_key=key,
+                        config_value=value,
                     )
 
             self._persist_config()
@@ -765,7 +765,7 @@ class ChaosSchedulerService:
                 config.dry_run = True
                 logger.info(
                     "chaos_scheduler.running_dry_run_mode",
-                    _self=self._config.dry_run_reason,
+                    dry_run_reason=self._config.dry_run_reason,
                 )
 
             experiment = create_experiment(

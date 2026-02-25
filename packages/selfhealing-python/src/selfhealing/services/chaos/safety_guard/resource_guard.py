@@ -239,7 +239,7 @@ class ResourceGuard:
             result.block_reason = f"CPU usage {status.cpu_percent:.1f}% exceeds threshold " f"{settings.cpu_threshold}%"
             logger.warning(
                 "resource_guard.test_blocked",
-                result=result.block_reason,
+                block_reason=result.block_reason,
             )
             return result
 
@@ -251,13 +251,13 @@ class ResourceGuard:
             )
             logger.warning(
                 "resource_guard.test_blocked",
-                result=result.block_reason,
+                block_reason=result.block_reason,
             )
             return result
 
         logger.debug(
             "resource_guard.resource_check_passed",
-            status=status.cpu_percent,
+            cpu_percent=status.cpu_percent,
             memory_percent=status.memory_percent,
         )
         return result

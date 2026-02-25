@@ -59,7 +59,7 @@ class MonotonicTTLHelper:
         self._started = True
         logger.debug(
             "monotonic_ttl.timer_started",
-            _self=self.ttl_seconds,
+            ttl_seconds=self.ttl_seconds,
             start_time=self._start_time,
         )
 
@@ -110,7 +110,7 @@ class MonotonicTTLHelper:
         self._start_time = time.monotonic()
         logger.debug(
             "monotonic_ttl.timer_reset",
-            _self=self._start_time,
+            start_time=self._start_time,
         )
 
     def to_dict(self) -> dict[str, Any]:

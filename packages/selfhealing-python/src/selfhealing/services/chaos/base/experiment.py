@@ -137,7 +137,7 @@ class ChaosExperiment(abc.ABC):
 
         logger.debug(
             "chaos_experiment.monotonic_timer_started",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
             effective_ttl=self._effective_ttl,
         )
 
@@ -211,8 +211,8 @@ class ChaosExperiment(abc.ABC):
         if self.status != ExperimentStatus.RECOVERY_MONITORING:
             logger.warning(
                 "chaos_experiment.cannot_complete_recovery_monitoring",
-                _self=self.experiment_id,
-                status=self.status,
+                experiment_id=self.experiment_id,
+                experiment_status=self.status,
             )
             return
 
@@ -229,7 +229,7 @@ class ChaosExperiment(abc.ABC):
 
         logger.info(
             "chaos_experiment.recovery_monitoring_completed_status",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
         )
 
     def force_complete(self, reason: str = "hard_ttl_expired") -> None:
@@ -256,7 +256,7 @@ class ChaosExperiment(abc.ABC):
 
         logger.warning(
             "chaos_experiment.force_completed_due",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
             reason=reason,
         )
 
@@ -269,8 +269,8 @@ class ChaosExperiment(abc.ABC):
         if self.status != ExperimentStatus.RUNNING:
             logger.warning(
                 "chaos_experiment.cannot_transition_status",
-                _self=self.experiment_id,
-                status=self.status,
+                experiment_id=self.experiment_id,
+                experiment_status=self.status,
             )
             return
 
@@ -290,7 +290,7 @@ class ChaosExperiment(abc.ABC):
 
         logger.info(
             "chaos_experiment.transitioned_grace_period",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
             grace_period_seconds=self.config.grace_period_seconds,
         )
 
@@ -439,7 +439,7 @@ class ChaosExperiment(abc.ABC):
         """Execute experiment in dry run mode."""
         logger.info(
             "dry_run.starting_dry_run",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
         )
 
         self._calculate_expires_at()
@@ -465,7 +465,7 @@ class ChaosExperiment(abc.ABC):
 
         logger.info(
             "dry_run.inject_chaos_ttl_expires",
-            _self=self.config.target_service,
+            target_service=self.config.target_service,
             effective_ttl=self._effective_ttl,
             expires_at=self._expires_at,
         )
@@ -497,7 +497,7 @@ class ChaosExperiment(abc.ABC):
         self._audit("experiment_completed", {"result": self.result.to_dict(), "dry_run": True})
         logger.info(
             "dry_run.completed_dry_run_no",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
         )
 
         return self.result
@@ -611,7 +611,7 @@ class ChaosExperiment(abc.ABC):
         except Exception as e:
             logger.exception(
                 "chaos_experiment.error",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
                 error=e,
             )
             self.rollback()
@@ -640,7 +640,7 @@ class ChaosExperiment(abc.ABC):
         if self._kill_requested:
             logger.warning(
                 "chaos_experiment.kill_requested_before_start",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
             return False
         return True
@@ -958,7 +958,7 @@ class ChaosExperiment(abc.ABC):
         if not hasattr(self, "failure_hypothesis") or self.failure_hypothesis is None:
             logger.debug(
                 "chaos.no_defined",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
             return
 
@@ -1029,7 +1029,7 @@ class ChaosExperiment(abc.ABC):
             if not passed and violations:
                 logger.warning(
                     "chaos.hypothesis_validation_failed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                     violations=violations,
                 )
 
@@ -1043,7 +1043,7 @@ class ChaosExperiment(abc.ABC):
             else:
                 logger.info(
                     "chaos.hypothesis_validation_passed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
 
         except ImportError as e:
@@ -1088,7 +1088,7 @@ class ChaosExperiment(abc.ABC):
         self._audit("kill_requested", {"reason": reason})
         logger.warning(
             "chaos_experiment.kill_requested",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
             reason=reason,
         )
 
@@ -1107,7 +1107,7 @@ class ChaosExperiment(abc.ABC):
 
         logger.warning(
             "chaos_experiment.ttl_expired_auto_stopping",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
         )
         self._kill_requested = True
         self._stop_condition_violation = "TTL expired"
@@ -1132,7 +1132,7 @@ class ChaosExperiment(abc.ABC):
         violation_messages = [v.message for v in stop_result.violations]
         logger.error(
             "chaos_experiment.stop_condition_violated",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
             violation_messages=violation_messages,
         )
         self._kill_requested = True

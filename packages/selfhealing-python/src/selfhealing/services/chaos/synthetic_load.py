@@ -248,7 +248,7 @@ class SyntheticTrafficGenerator:
         logger.debug(
             "synthetic_traffic.created_synthetic_request_experiment",
             target_service=target_service,
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
         )
 
         return SyntheticRequest(
@@ -370,7 +370,7 @@ class SyntheticLoadGenerator:
         if self._state == GeneratorState.RUNNING:
             logger.warning(
                 "synthetic_load.generator_already_running",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
             return False
 
@@ -391,10 +391,10 @@ class SyntheticLoadGenerator:
 
         logger.info(
             "synthetic_load.started_generator_experiment_pattern",
-            _self=self.target_service,
+            target_service=self.target_service,
             experiment_id=self.experiment_id,
             pattern=config.pattern.value,
-            config=config.target_rps,
+            target_rps=config.target_rps,
         )
 
         return True
@@ -422,7 +422,7 @@ class SyntheticLoadGenerator:
 
         logger.info(
             "synthetic_load.stopped_generator_stats",
-            _self=self.experiment_id,
+            experiment_id=self.experiment_id,
             stats=self._stats.to_dict(),
         )
 

@@ -58,7 +58,7 @@ class CertificateExpiryExperiment(ChaosExperiment):
         """Inject certificate expiry simulation."""
         logger.warning(
             "certificate_expiry.simulating_expiry_days_mtls",
-            _self=self.days_until_expiry,
+            days_until_expiry=self.days_until_expiry,
             check_mtls=self.check_mtls,
         )
 
@@ -93,7 +93,7 @@ class CertificateExpiryExperiment(ChaosExperiment):
 
             logger.info(
                 "certificate_expiry.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -149,7 +149,7 @@ class ClockSkewExperiment(ChaosExperiment):
         """Inject clock skew."""
         logger.info(
             "clock_skew.injecting_skew_jwt_cache",
-            _self=self.skew_seconds,
+            skew_seconds=self.skew_seconds,
             affect_jwt=self.affect_jwt,
             affect_cache=self.affect_cache,
         )
@@ -186,7 +186,7 @@ class ClockSkewExperiment(ChaosExperiment):
 
             logger.info(
                 "clock_skew.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -241,7 +241,7 @@ class DNSFailureExperiment(ChaosExperiment):
         """Inject DNS failure simulation."""
         logger.warning(
             "dns_failure.injecting_dns_failure",
-            _self=self.failure_rate * 100,
+            failure_rate_pct=self.failure_rate * 100,
             target_service=self.config.target_service,
         )
 
@@ -277,7 +277,7 @@ class DNSFailureExperiment(ChaosExperiment):
 
             logger.info(
                 "dns_failure.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -332,7 +332,7 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
         """Inject disk I/O latency."""
         logger.info(
             "simulated_disk_io.injecting_ms_latency_errors",
-            _self=self.latency_ms,
+            latency_ms=self.latency_ms,
             error_rate_pct=self.error_rate * 100,
             target_service=self.config.target_service,
         )
@@ -369,7 +369,7 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
 
             logger.info(
                 "simulated_disk_io.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -424,7 +424,7 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
         """Inject TLS failure simulation."""
         logger.warning(
             "simulated_tls.injecting_failures_rate",
-            _self=self.failure_type,
+            failure_type=self.failure_type,
             failure_rate_pct=self.failure_rate * 100,
             target_service=self.config.target_service,
         )
@@ -461,7 +461,7 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
 
             logger.info(
                 "simulated_tls.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:

@@ -2,7 +2,7 @@
 
 > **문서 번호**: 291
 > **작성일**: 2026-02-25
-> **상태**: 구현 대기
+> **상태**: 구현 완료
 > **대상**: `packages/selfhealing-python/src/selfhealing/services/chaos/`
 > **선행 문서**: 290_AMBIGUOUS_LOG_FIELD_OVERVIEW.md (명명 규칙 및 전체 개요)
 > **구현 우선순위**: ★★★★★ (1순위 — 자동 변환율 77%, `_self` 밀집도 최고)
@@ -218,7 +218,7 @@
 
 ## 6. 완료 기준
 
-- [ ] 122건 전체 변환 완료 (자동 94건 + 수동 28건)
-- [ ] `pytest tests/ -k chaos` 통과
+- [x] 122건 전체 변환 완료 (자동 94건 + 수동 28건)
+- [x] `pytest tests/ -k chaos` 통과
 - [ ] 변환 전후 필드명 매핑 기록 (이 문서의 테이블)
 - [ ] Loki/Grafana 대시보드 쿼리 업데이트 확인

@@ -83,7 +83,7 @@ class ChaosActionableAlertUrlBuilder:
 
         logger.debug(
             "chaos_alert_url_builder.initialized",
-            value=bool(self._admin_base_url),
+            admin_url_configured=bool(self._admin_base_url),
             dashboard_configured=bool(self._dashboard_base_url),
         )
 

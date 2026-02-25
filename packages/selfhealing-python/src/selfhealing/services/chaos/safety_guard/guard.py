@@ -90,8 +90,8 @@ class SafetyGuard:
                     setattr(self._config, key, value)
                     logger.info(
                         "safety_guard.updated_config",
-                        key=key,
-                        value=value,
+                        config_key=key,
+                        config_value=value,
                     )
 
             self._persist_config()
@@ -270,7 +270,7 @@ class SafetyGuard:
                 result.checks_failed.append("freeze_mode")
                 logger.warning(
                     "safety_guard.cb_freeze_mode_active",
-                    state=state.reason,
+                    state_reason=state.reason,
                 )
                 return True
 
@@ -376,7 +376,7 @@ class SafetyGuard:
             logger.warning(
                 "safety_guard.checks_passed_warnings",
                 experiment_id=experiment_id,
-                result=result.warnings,
+                result_warnings=result.warnings,
             )
 
     def _handle_check_error(self, e: Exception) -> SafetyCheckResult:

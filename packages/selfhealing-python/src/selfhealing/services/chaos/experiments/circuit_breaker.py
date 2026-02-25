@@ -65,7 +65,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
         """Force CB to OPEN state."""
         logger.info(
             "cb_open_injection.forcing_cb_open_ttl",
-            _self=self.config.target_service,
+            target_service=self.config.target_service,
             effective_ttl=self._effective_ttl,
         )
 
@@ -85,7 +85,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
             if not result.success:
                 logger.error(
                     "cb_open_injection.failed_open_cb",
-                    result=result.message,
+                    result_message=result.message,
                 )
                 return False
 
@@ -116,13 +116,13 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "cb_open_injection.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "cb_open_injection.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:
@@ -228,7 +228,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
             if status.get("in_canary", False):
                 logger.info(
                     "cb_open_experiment.canary_recovery_started",
-                    status=status.get("canary_state"),
+                    canary_state=status.get("canary_state"),
                     traffic_percent=status.get("traffic_percent"),
                 )
                 return True

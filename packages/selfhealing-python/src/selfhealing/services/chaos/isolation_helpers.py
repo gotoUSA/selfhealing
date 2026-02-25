@@ -299,7 +299,7 @@ def cleanup_all_chaos_domains(max_entries_per_domain: int = 10000) -> dict[str, 
         logger.info(
             "chaos_isolation.total_cleanup_entries_across",
             total_deleted=total_deleted,
-            count=len(results),
+            results_count=len(results),
         )
         return results
 

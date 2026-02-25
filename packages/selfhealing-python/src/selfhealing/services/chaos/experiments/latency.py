@@ -67,7 +67,7 @@ class LatencyInjectionExperiment(ChaosExperiment):
         """Inject latency into target service with TTL."""
         logger.info(
             "latency_injection.injecting_ms_latency_rate",
-            _self=self.latency_ms,
+            latency_ms=self.latency_ms,
             latency_jitter_ms=self.latency_jitter_ms,
             target_service=self.config.target_service,
             injection_rate_pct=self.config.injection_rate * 100,
@@ -109,13 +109,13 @@ class LatencyInjectionExperiment(ChaosExperiment):
             if self._rollback_completed:
                 logger.info(
                     "latency_injection.rollback_already_completed",
-                    _self=self.experiment_id,
+                    experiment_id=self.experiment_id,
                 )
                 return
 
             logger.info(
                 "latency_injection.rolling_back",
-                _self=self.experiment_id,
+                experiment_id=self.experiment_id,
             )
 
             try:

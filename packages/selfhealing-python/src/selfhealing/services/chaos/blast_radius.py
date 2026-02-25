@@ -238,7 +238,7 @@ class ChaosBlastRadiusPolicy:
                 logger.warning(
                     "blast_radius.service_matches_excluded_domain",
                     service_name=service_name,
-                    domain=domain,
+                    healing_domain=domain,
                 )
                 return False
 
@@ -423,8 +423,8 @@ class BlastRadiusManager:
                     setattr(self._policy, key, value)
                     logger.info(
                         "blast_radius.updated_policy",
-                        key=key,
-                        value=value,
+                        config_key=key,
+                        config_value=value,
                     )
 
             self._persist_policy()
@@ -899,8 +899,8 @@ class BlastRadiusManager:
         try:
             logger.info(
                 "blast_radius.approval_decision_recorded",
-                request=request.experiment_id,
-                status=request.status,
+                request_experiment_id=request.experiment_id,
+                request_status=request.status,
                 approved_by=request.approved_by,
             )
         except Exception as e:
