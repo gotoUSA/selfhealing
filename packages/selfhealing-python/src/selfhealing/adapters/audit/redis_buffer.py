@@ -300,7 +300,7 @@ class RedisAuditBuffer:
 
             logger.debug(
                 "redis_audit_buffer.batch_chunk_logged_entries",
-                count=len(entries),
+                entries_count=len(entries),
             )
             return True
 
@@ -794,7 +794,7 @@ class RedisAuditBuffer:
                 logger.info(
                     "redis_audit_buffer.recovered_items",
                     restored=restored,
-                    domain=domain,
+                    healing_domain=domain,
                 )
             except Exception as e:
                 logger.exception(

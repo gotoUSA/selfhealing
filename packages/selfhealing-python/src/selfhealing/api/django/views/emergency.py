@@ -177,7 +177,7 @@ class EmergencyTriggerView(APIView):
         logger.warning(
             "emergency_api.emergency_mode_activated",
             level=level.name,
-            actor=actor,
+            actor_id=actor,
             reason=reason,
         )
 
@@ -258,7 +258,7 @@ class EmergencyReleaseView(APIView):
         logger.info(
             "emergency_api.emergency_mode_deactivated",
             previous_level=previous_level,
-            actor=actor,
+            actor_id=actor,
         )
 
         return Response(

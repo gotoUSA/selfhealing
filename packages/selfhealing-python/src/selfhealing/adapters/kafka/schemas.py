@@ -196,7 +196,7 @@ class AuditEventSchemaRegistry:
             self._client = SchemaRegistryClient({"url": self._settings.schema_registry_url})
             logger.info(
                 "schema_registry.연결됨",
-                _self=self._settings.schema_registry_url,
+                schema_registry_url=self._settings.schema_registry_url,
             )
         except ImportError:
             logger.warning(

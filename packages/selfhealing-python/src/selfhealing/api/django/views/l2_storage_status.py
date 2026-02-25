@@ -119,7 +119,7 @@ class L2StorageHealthResetView(APIView):
 
         logger.info(
             "l2_storage_api.health_reset",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -157,7 +157,7 @@ class L2StorageSyncFromL2View(APIView):
 
         logger.info(
             "l2_storage_api.force_sync",
-            request=request.user,
+            request_user=request.user,
         )
         return Response(
             {
@@ -191,7 +191,7 @@ class L2StorageSyncToL2View(APIView):
 
         logger.info(
             "l2_storage_api.force_sync",
-            request=request.user,
+            request_user=request.user,
             result=result,
         )
 

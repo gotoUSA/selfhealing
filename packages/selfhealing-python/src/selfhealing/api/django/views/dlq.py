@@ -57,9 +57,9 @@ class DLQReplayView(APIView):
 
         logger.info(
             "dlq.replay_triggered_via_api",
-            domain=domain,
+            healing_domain=domain,
             batch_size=batch_size,
-            result=result.processed,
+            processed_count=result.processed,
             success=result.success,
             failed=result.failed,
         )
@@ -132,7 +132,7 @@ class DLQArchiveView(APIView):
             "dlq.archived_entries_via_api",
             count=count,
             older_than_days=older_than_days,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -182,7 +182,7 @@ class DLQPurgeView(APIView):
         logger.warning(
             "dlq.purged_archived_entries_via",
             count=count,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -290,7 +290,7 @@ class DLQRetryView(APIView):
         logger.info(
             "dlq.retry_triggered_entry_user",
             pk=pk,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -330,7 +330,7 @@ class DLQResolveView(APIView):
         logger.info(
             "dlq.entry_manually_resolved_user",
             pk=pk,
-            request=request.user,
+            request_user=request.user,
             notes=notes,
         )
 
@@ -372,7 +372,7 @@ class DLQTestCreateView(APIView):
 
         service = get_dlq_service()
         result = service.create_test_entry(
-            domain=domain,
+            healing_domain=domain,
             failure_type=failure_type,
             user_id=request.user.id if request.user else None,
             entity_type=request.data.get("entity_type", "test"),
@@ -388,9 +388,9 @@ class DLQTestCreateView(APIView):
         logger.info(
             "dlq.test_entry_created",
             result=result["dlq_id"],
-            domain=domain,
+            healing_domain=domain,
             failure_type=failure_type,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(result, status=status.HTTP_201_CREATED)

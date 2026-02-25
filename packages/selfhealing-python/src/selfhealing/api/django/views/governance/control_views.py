@@ -76,7 +76,7 @@ class GovernanceReconcileView(APIView):
         result = service.reconcile(
             domains=domains,
             dry_run=dry_run,
-            actor=actor,
+            actor_id=actor,
             reason=reason,
         )
 
@@ -137,7 +137,7 @@ class GovernanceModeView(APIView):
         service = get_governance_api_service()
         result = service.set_mode(
             mode=mode,
-            actor=actor,
+            actor_id=actor,
             reason=reason,
         )
 

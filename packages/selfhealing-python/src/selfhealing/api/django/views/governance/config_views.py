@@ -103,7 +103,7 @@ class GovernanceConfigView(APIView):
 
         logger.info(
             "governance.config_updated",
-            actor=actor,
+            actor_id=actor,
             value=list(update_fields.keys()),
         )
 
@@ -178,7 +178,7 @@ class L2StorageConfigManagedView(APIView):
 
         logger.info(
             "governance.storage_config_updated",
-            actor=actor,
+            actor_id=actor,
             value=list(update_fields.keys()),
         )
 

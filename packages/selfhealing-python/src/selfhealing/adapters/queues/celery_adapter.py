@@ -248,7 +248,7 @@ class CeleryTaskAdapter(TaskQueueInterface):
 
         logger.debug(
             "celery_adapter.enqueued_tasks",
-            count=len(task_ids),
+            task_ids_count=len(task_ids),
         )
         return task_ids
 

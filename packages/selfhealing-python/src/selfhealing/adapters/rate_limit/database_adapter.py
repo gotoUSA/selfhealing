@@ -145,7 +145,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
                 now = time.time()
 
                 repo.upsert(
-                    key=key,
+                    rate_limit_key=key,
                     data={
                         "cooldown_until": cooldown_until,
                         "last_updated": now,
@@ -154,7 +154,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
 
                 logger.debug(
                     "database_rate_limit_storage.set_cooldown",
-                    key=key,
+                    rate_limit_key=key,
                     cooldown_until=cooldown_until,
                 )
 
@@ -174,7 +174,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
 
                 logger.debug(
                     "database_rate_limit_storage.incremented_counter",
-                    key=key,
+                    rate_limit_key=key,
                     new_value=new_value,
                 )
                 return new_value
@@ -195,7 +195,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
 
                 logger.debug(
                     "database_rate_limit_storage.reset_counter",
-                    key=key,
+                    rate_limit_key=key,
                 )
 
         except Exception as e:
@@ -213,7 +213,7 @@ class DatabaseRateLimitStorage(RateLimitStorageInterface):
 
                 logger.debug(
                     "database_rate_limit_storage.cleared_state",
-                    key=key,
+                    rate_limit_key=key,
                 )
 
         except Exception as e:

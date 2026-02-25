@@ -108,7 +108,7 @@ class TTLCacheStrategy(HealthCheckStrategy):
         except Exception as e:
             logger.debug(
                 "ttl_cache_strategy.health_check_failed",
-                target=target,
+                target_service=target,
                 error=e,
             )
             healthy = False
@@ -163,7 +163,7 @@ class LinuxTCPInfoStrategy(HealthCheckStrategy):
         except Exception as e:
             logger.debug(
                 "linux_tcp_info_strategy.health_check_failed",
-                target=target,
+                target_service=target,
                 error=e,
             )
             return False
@@ -203,7 +203,7 @@ class SimpleSocketStrategy(HealthCheckStrategy):
         except Exception as e:
             logger.debug(
                 "simple_socket_strategy.health_check_failed",
-                target=target,
+                target_service=target,
                 error=e,
             )
             return False

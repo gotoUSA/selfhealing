@@ -90,7 +90,7 @@ class InjectErrorBudgetView(XTestModeMixin, APIView):
             count=count,
             initial_budget=initial_budget,
             current_budget=current_budget,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(

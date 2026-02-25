@@ -83,7 +83,7 @@ def configure_adapter(adapter: MetricSourceAdapter) -> None:
     _adapter_configured = True
     logger.info(
         "metric_adapter.configured",
-        value=type(adapter).__name__,
+        adapter_type=type(adapter).__name__,
     )
 
 

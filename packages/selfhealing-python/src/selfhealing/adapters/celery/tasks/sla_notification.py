@@ -60,7 +60,7 @@ def send_sla_notification(
         logger.info(
             "send_sla_notification.sent_notification_attempt",
             notification_type=notification_type,
-            _self=self.request.retries + 1,
+            retry_attempt=self.request.retries + 1,
         )
     else:
         logger.warning(

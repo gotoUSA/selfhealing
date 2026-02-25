@@ -303,7 +303,7 @@ class RateLimitHistoryView(XTestModeMixin, APIView):
 
         logger.info(
             "test_mode_rate_limit",
-            count=len(events),
+            events_count=len(events),
             total_events=total_events,
             total_exceeded=total_exceeded,
         )

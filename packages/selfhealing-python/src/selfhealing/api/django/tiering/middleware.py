@@ -205,7 +205,7 @@ class TieringMiddleware:
 
         logger.warning(
             "tiering_middleware.load_shedding",
-            request=request.path,
+            request_path=request.path,
             tier_id=tier_id,
             multiplier=multiplier,
             emergency_level=emergency_level.name,

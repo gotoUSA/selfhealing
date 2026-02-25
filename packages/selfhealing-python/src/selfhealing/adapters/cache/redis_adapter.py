@@ -109,7 +109,7 @@ class RedisDistributedLock(DistributedLock):
                 self._acquired = True
                 logger.debug(
                     "redis_lock.acquired_lock",
-                    _self=self._name,
+                    name=self._name,
                 )
                 return True
 
@@ -119,7 +119,7 @@ class RedisDistributedLock(DistributedLock):
             if stop_time is not None and time.time() >= stop_time:
                 logger.debug(
                     "redis_lock.timeout_acquiring_lock",
-                    _self=self._name,
+                    name=self._name,
                 )
                 return False
 
@@ -137,7 +137,7 @@ class RedisDistributedLock(DistributedLock):
         if not self._acquired:
             logger.warning(
                 "redis_lock.attempting_release_non_acquired",
-                _self=self._name,
+                name=self._name,
             )
             return
 
@@ -157,12 +157,12 @@ class RedisDistributedLock(DistributedLock):
                 self._acquired = False
                 logger.debug(
                     "redis_lock.released_lock",
-                    _self=self._name,
+                    name=self._name,
                 )
             else:
                 logger.warning(
                     "redis_lock.lock_owned_expired",
-                    _self=self._name,
+                    name=self._name,
                 )
                 self._acquired = False
         except Exception as e:
@@ -321,7 +321,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.get_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return None
@@ -350,7 +350,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.set_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -362,7 +362,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.delete_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -374,7 +374,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.exists_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -390,7 +390,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.incr_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return 0
@@ -402,7 +402,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.decr_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return 0
@@ -419,7 +419,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.expire_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -436,7 +436,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.ttl_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return -2
@@ -459,7 +459,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.setnx_error",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -566,8 +566,8 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.hget_error",
-                name=name,
-                key=key,
+                hash_name=name,
+                cache_key=key,
                 error=e,
             )
             return None
@@ -581,8 +581,8 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.hset_error",
-                name=name,
-                key=key,
+                hash_name=name,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -600,7 +600,7 @@ class RedisCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "redis_cache.hgetall_error",
-                name=name,
+                hash_name=name,
                 error=e,
             )
             return {}

@@ -132,7 +132,7 @@ def replay_batch_by_domain(
     """
     logger.info(
         "dlq_batch_replay_task",
-        domain=domain,
+        healing_domain=domain,
         max_items=max_items,
     )
 

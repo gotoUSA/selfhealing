@@ -114,7 +114,7 @@ class MockDeploymentAdapter:
 
         logger.debug(
             "mock_deployment_adapter.found_deployments_range",
-            count=len(result),
+            result_count=len(result),
             service_name=service_name,
         )
         return result
@@ -247,7 +247,7 @@ class MockDeploymentAdapter:
 
         logger.debug(
             "mock_deployment_adapter.found_config_changes_range",
-            count=len(result),
+            result_count=len(result),
             service_name=service_name,
         )
         return result

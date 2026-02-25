@@ -193,7 +193,7 @@ class KubernetesDeploymentAdapter:
 
             logger.debug(
                 "kubernetes_adapter.found_deployments",
-                count=len(deployments),
+                deployments_count=len(deployments),
                 service_name=service_name,
                 namespace=namespace,
             )

@@ -185,7 +185,7 @@ class GenerateKeyView(XTestModeMixin, APIView):
                     entity_type=entity_type,
                     entity_id=entity_id_int,
                     operation=action,
-                    domain=domain,
+                    healing_domain=domain,
                 )
 
             # TTL 조회

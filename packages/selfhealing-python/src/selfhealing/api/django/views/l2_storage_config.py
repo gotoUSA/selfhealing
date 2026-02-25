@@ -69,7 +69,7 @@ class L2StorageConfigView(APIView):
 
         logger.info(
             "l2_storage_api.config_updated",
-            request=request.user,
+            request_user=request.user,
             changes=changes,
         )
 
@@ -102,7 +102,7 @@ class L2StorageConfigResetView(APIView):
 
         logger.info(
             "l2_storage_api.config_reset_defaults",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(

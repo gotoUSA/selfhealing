@@ -141,7 +141,7 @@ class IPBanMiddleware:
             logger.warning(
                 "ip_ban_middleware.blocked_banned_ip",
                 ban_type=ban_type,
-                request=request.path,
+                request_path=request.path,
             )
 
             # 보안: ban_type을 응답에 포함하지 않음 (공격자 정보 노출 방지)

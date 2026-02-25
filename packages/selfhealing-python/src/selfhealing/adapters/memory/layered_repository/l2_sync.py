@@ -56,7 +56,7 @@ class L2SyncMixin:
             logger.warning(
                 "layered_repo.sync_timeout_ms_isolated",
                 service_name=service_name,
-                value=timeout*1000,
+                timeout_ms=timeout * 1000,
             )
             return False
 
@@ -64,9 +64,7 @@ class L2SyncMixin:
             self._handle_l2_error("sync", service_name, e, state.state)
             return False
 
-    def _sync_to_l2_async(
-        self, service_name: str, state: CircuitBreakerStateData
-    ) -> None:
+    def _sync_to_l2_async(self, service_name: str, state: CircuitBreakerStateData) -> None:
         """L2로 비동기 동기화 (백그라운드, 타임아웃 적용)."""
         if not self._l2:
             return

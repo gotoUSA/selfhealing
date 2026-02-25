@@ -140,7 +140,7 @@ def check_and_report_sla_breaches(self) -> dict:
         if total_breaches > 0:
             logger.warning(
                 "sla_check.breaches_found",
-                total=total_breaches,
+                total_sla_breaches=total_breaches,
                 by_domain=breaches_by_domain,
             )
         else:
@@ -199,7 +199,7 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
         if not config.get("heartbeat_enabled", True):
             logger.debug(
                 "heartbeat.disabled",
-                component=component,
+                monitored_component=component,
             )
             return {
                 "success": True,
@@ -215,7 +215,7 @@ def emit_selfhealing_heartbeat(self, component: str = "error_budget") -> dict:
         current_time = time.time()
         logger.debug(
             "heartbeat.emitted",
-            component=component,
+            monitored_component=component,
             current_time=current_time,
         )
 
@@ -285,7 +285,7 @@ def notify_failsafe_recovery(
         if not config.get("recovery_alert_enabled", True):
             logger.info(
                 "recovery.recovery_alert_disabled_skipping",
-                component=component,
+                monitored_component=component,
             )
             return {
                 "success": True,
@@ -314,7 +314,7 @@ def notify_failsafe_recovery(
                 )
                 logger.info(
                     "recovery.sent_recovery_alert",
-                    component=component,
+                    monitored_component=component,
                     downtime_seconds=downtime_seconds,
                 )
             else:

@@ -91,7 +91,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         self.default_ttl = default_ttl if default_ttl is not None else _get_airgap_redis_ttl()
         logger.info(
             "air_gap.redisairgapadapter_initialized",
-            _self=self.prefix,
+            prefix=self.prefix,
         )
 
     def _make_key(self, key: str) -> str:
@@ -145,14 +145,14 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             logger.debug(
                 "air_gap.written",
                 redis_key=redis_key,
-                value=value,
+                written_value=value,
             )
             return True
 
         except Exception as e:
             logger.warning(
                 "air_gap.write_failed",
-                key=key,
+                redis_key=key,
                 error=e,
             )
             return False
@@ -174,14 +174,14 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
             logger.debug(
                 "air_gap.read",
                 redis_key=redis_key,
-                result=result,
+                read_result=result,
             )
             return result
 
         except Exception as e:
             logger.warning(
                 "air_gap.read_failed",
-                key=key,
+                redis_key=key,
                 error=e,
             )
             return None
@@ -208,7 +208,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         except Exception as e:
             logger.warning(
                 "air_gap.delete_failed",
-                key=key,
+                redis_key=key,
                 error=e,
             )
             return False
@@ -273,7 +273,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         except Exception as e:
             logger.warning(
                 "air_gap.increment_failed",
-                key=key,
+                redis_key=key,
                 error=e,
             )
             return 0
@@ -322,7 +322,7 @@ class RedisAirGapAdapter(BaseAirGapAdapter):
         except Exception as e:
             logger.warning(
                 "air_gap.decrement_failed",
-                key=key,
+                redis_key=key,
                 error=e,
             )
             return 0

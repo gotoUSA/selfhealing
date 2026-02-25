@@ -206,7 +206,7 @@ class EventStreamProxy:
         logger.info(
             "event_stream_proxy.new_subscription_events",
             stream_id=stream_id,
-            value=event_types or 'all',
+            subscribed_event_types=event_types or "all",
         )
         return event_queue
 
@@ -354,7 +354,7 @@ class EventStreamProxy:
         if to_remove:
             logger.info(
                 "event_stream_proxy.cleaned_up_idle_subscriptions",
-                count=len(to_remove),
+                to_remove_count=len(to_remove),
             )
 
         return len(to_remove)

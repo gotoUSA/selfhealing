@@ -103,7 +103,7 @@ class KillSwitchView(APIView):
         logger.warning(
             "chaos_api.kill_switch",
             action=action,
-            request=request.user,
+            request_user=request.user,
             reason=reason,
         )
 
@@ -233,7 +233,7 @@ class StopConditionsConfigView(APIView):
 
         logger.info(
             "chaos_api.stop_conditions_config_updated",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -289,7 +289,7 @@ class TTLConfigView(APIView):
 
         logger.info(
             "chaos_api.ttl_config_updated",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -347,7 +347,7 @@ class DryRunConfigView(APIView):
 
         logger.info(
             "chaos_api.dry_run_config_updated",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(

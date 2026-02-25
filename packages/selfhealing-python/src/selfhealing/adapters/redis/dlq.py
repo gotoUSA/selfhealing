@@ -206,7 +206,7 @@ class RedisDLQRepository(FailedOperationRepository):
         logger.info(
             "redis_dlq.created_entry",
             entry_id=entry_id,
-            domain=domain,
+            healing_domain=domain,
             failure_type=failure_type,
         )
 

@@ -238,7 +238,7 @@ class CBStateSnapshot:
 
             logger.info(
                 "cb_state_snapshot.started_mode",
-                value='writer' if self.is_writer else 'reader',
+                access_mode="writer" if self.is_writer else "reader",
             )
 
         except Exception as e:

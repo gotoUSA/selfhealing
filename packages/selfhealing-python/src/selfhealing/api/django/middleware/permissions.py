@@ -40,7 +40,7 @@ class FailSecureIsAuthenticated:
             if not is_authenticated:
                 logger.info(
                     "permission.denied_user_authenticated",
-                    request=request.path,
+                    request_path=request.path,
                     remote_addr=request.META.get("REMOTE_ADDR"),
                 )
 
@@ -51,7 +51,7 @@ class FailSecureIsAuthenticated:
             logger.warning(
                 "permission.fail_secure_denial_due",
                 error=e,
-                request=request.path,
+                request_path=request.path,
             )
             return False
 
@@ -77,7 +77,7 @@ class FailSecureIsAdminUser:
             if not is_authenticated:
                 logger.info(
                     "permission.admin_check_denied_authenticated",
-                    request=request.path,
+                    request_path=request.path,
                 )
                 return False
 
@@ -87,7 +87,7 @@ class FailSecureIsAdminUser:
             if not is_admin:
                 logger.info(
                     "permission.admin_check_denied",
-                    request=request.user,
+                    request_user=request.user,
                     path=request.path,
                 )
 
@@ -98,6 +98,6 @@ class FailSecureIsAdminUser:
             logger.warning(
                 "permission.fail_secure_admin_denial",
                 error=e,
-                request=request.path,
+                request_path=request.path,
             )
             return False

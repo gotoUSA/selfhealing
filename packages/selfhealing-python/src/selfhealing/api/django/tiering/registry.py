@@ -107,7 +107,7 @@ class TierRegistry:
 
         logger.debug(
             "tier_registry.saved_pre_mutation_snapshot",
-            action=action,
+            mutation_action=action,
         )
 
     def get_previous_configs(self) -> list[dict[str, Any]]:

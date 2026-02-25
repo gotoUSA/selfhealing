@@ -113,7 +113,7 @@ def async_persist_batch(self, entries: list[dict[str, Any]]) -> dict:
     """
     logger.info(
         "async_persist.batch_persisting_entries",
-        count=len(entries),
+        entries_count=len(entries),
     )
 
     try:
@@ -133,7 +133,7 @@ def async_persist_batch(self, entries: list[dict[str, Any]]) -> dict:
         logger.info(
             "async_persist.batch_persisted_entries",
             synced=synced,
-            count=len(entries),
+            entries_count=len(entries),
         )
         return {
             "success": True,

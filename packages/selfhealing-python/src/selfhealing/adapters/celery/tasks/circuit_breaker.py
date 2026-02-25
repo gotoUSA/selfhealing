@@ -106,7 +106,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
         logger.info(
             "circuit_recovery_completed",
             service_name=service_name,
-            count=len(pending),
+            pending_count=len(pending),
             success_count=success_count,
             failed_count=failed_count,
         )
@@ -422,7 +422,7 @@ def send_cb_open_notification(
     logger.info(
         "send_cb_open_notification.sending_notification_attempt",
         service_name=service_name,
-        _self=self.request.retries + 1,
+        retry_attempt=self.request.retries + 1,
     )
 
     try:

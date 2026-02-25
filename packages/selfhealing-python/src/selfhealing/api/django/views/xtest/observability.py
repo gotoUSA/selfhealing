@@ -213,7 +213,7 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
             "stage_blast_radius_test",
             affected_service=affected_service,
             results=results['isolation_verified'],
-            count=len(results['unaffected_services']),
+            items_count=len(results['unaffected_services']),
         )
 
         # WAL Audit 기록

@@ -430,7 +430,7 @@ class RedisHealthChecker:
                 self._state = RedisHealthState.UNHEALTHY
                 logger.critical(
                     "redis_health.unhealthy_consecutive_failures_error",
-                    _self=self._consecutive_failures,
+                    consecutive_failures=self._consecutive_failures,
                     error=error,
                 )
                 self._record_degraded_mode(True)
@@ -747,7 +747,7 @@ class HybridRateLimitMiddleware:
             if current_count > rate_limit:
                 logger.warning(
                     "rate_limit.exceeded",
-                    key=key,
+                    rate_limit_key=key,
                     current_count=current_count,
                     rate_limit=rate_limit,
                 )

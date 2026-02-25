@@ -277,7 +277,7 @@ class ResilientStorageBackend:
                 except Exception as e:
                     logger.exception(
                         "resilient_storage.wal_replay_failed_seq",
-                        entry=entry.sequence,
+                        wal_sequence=entry.sequence,
                         _safe_error_message=_safe_error_message(e),
                     )
                     # Continue with next entry
@@ -846,7 +846,7 @@ class ResilientStorageBackend:
             except Exception as e:
                 logger.exception(
                     "resilient_storage.sync_error_key",
-                    key=key,
+                    redis_key=key,
                     _safe_error_message=_safe_error_message(e),
                 )
 

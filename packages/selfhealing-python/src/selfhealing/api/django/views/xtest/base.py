@@ -278,7 +278,7 @@ class XTestModeMixin:
             logger.warning(
                 "test_mode_missing_region",
                 current_region=current_region,
-                request=request.path,
+                request_path=request.path,
             )
             self._record_regional_scope_metrics(request, current_region, None, "denied_no_header")
             return False, Response(
@@ -298,7 +298,7 @@ class XTestModeMixin:
                 "test_mode_cross_region",
                 current_region=current_region,
                 target_region=target_region,
-                request=request.path,
+                request_path=request.path,
             )
             self._record_regional_scope_metrics(request, current_region, target_region, "denied_mismatch")
             return False, Response(
@@ -320,7 +320,7 @@ class XTestModeMixin:
         logger.debug(
             "test_mode_regional_scope",
             current_region=current_region,
-            request=request.path,
+            request_path=request.path,
         )
         return True, None
 
@@ -345,8 +345,8 @@ class XTestModeMixin:
             if not result.is_safe:
                 logger.warning(
                     "test_mode_resource_constraint",
-                    result=result.block_reason,
-                    request=request.user,
+                    block_reason=result.block_reason,
+                    request_user=request.user,
                 )
 
                 response = Response(
@@ -361,7 +361,7 @@ class XTestModeMixin:
 
             logger.debug(
                 "test_mode_resource_check",
-                result=result.cpu_percent,
+                cpu_percent=result.cpu_percent,
                 memory_percent=result.memory_percent,
             )
             return None
@@ -400,7 +400,7 @@ class XTestModeMixin:
             logger.warning(
                 "test_mode_denied_user",
                 reason=reason,
-                request=request.user,
+                request_user=request.user,
             )
             return Response(
                 {

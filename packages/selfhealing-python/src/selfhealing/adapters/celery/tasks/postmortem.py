@@ -102,7 +102,7 @@ def close_incident_group(
             logger.info(
                 "close_incident_group.group_already",
                 group_id=group_id,
-                status=group.status.value,
+                group_status=group.status.value,
             )
             return {
                 "success": True,
@@ -311,7 +311,7 @@ def _create_group_postmortem(group) -> dict[str, Any]:
             "close_incident_group.group_postmortem_created",
             group=group.group_id,
             cascading_pattern=cascading_pattern,
-            count=len(affected_services),
+            affected_services_count=len(affected_services),
         )
 
         return {
@@ -511,7 +511,7 @@ def _send_aggregated_notification(summary, settings) -> None:
         else:
             logger.warning(
                 "flush_notifications.notification_failed",
-                result=result.error,
+                result_error=result.error,
             )
 
     except ImportError as e:
@@ -659,7 +659,7 @@ def process_individual_postmortem(
         "process_individual_postmortem.starting_attempt",
         service_name=service_name,
         event_type=event_type,
-        _self=self.request.retries + 1,
+        retry_attempt=self.request.retries + 1,
     )
 
     if event_bus_history is None:
@@ -1045,7 +1045,7 @@ def _send_postmortem_notification_from_task(
             logger.debug(
                 "process_individual_postmortem.notification_suppressed",
                 incident_id=incident_id,
-                result=result.suppression_reason,
+                suppression_reason=result.suppression_reason,
             )
 
     except Exception as e:

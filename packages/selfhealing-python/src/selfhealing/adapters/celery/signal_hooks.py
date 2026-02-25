@@ -300,7 +300,7 @@ def on_task_failure(
         "selfhealing_signal_task_failed",
         task_name=task_name,
         task_id=task_id,
-        value=type(exception).__name__,
+        exception_type=type(exception).__name__,
         error=exception,
     )
 
@@ -619,7 +619,7 @@ def on_task_postrun(
             "selfhealing_signal_task_postrun",
             task_name=task_name,
             task_id=task_id,
-            state=state,
+            task_state=state,
         )
 
     except Exception as e:
@@ -781,9 +781,9 @@ def _store_to_dlq(
 
         logger.info(
             "selfhealing_dlq_stored_failed",
-            domain=domain,
+            healing_domain=domain,
             failure_type=failure_type,
-            result=result.dlq_id,
+            dlq_id=result.dlq_id,
         )
 
         # Record DLQ metric

@@ -56,9 +56,7 @@ def get_airgap_adapter() -> AirGapStorageAdapter:
     if enabled:
         _adapter_instance = _create_redis_adapter()
         if _adapter_instance is None:
-            logger.warning(
-                "[AirGap] Redis adapter creation failed, falling back to NullAdapter"
-            )
+            logger.warning("[AirGap] Redis adapter creation failed, falling back to NullAdapter")
             _adapter_instance = NullAirGapAdapter()
     else:
         _adapter_instance = NullAirGapAdapter()
@@ -92,7 +90,7 @@ def configure_airgap_adapter(adapter: AirGapStorageAdapter) -> None:
     _adapter_configured = True
     logger.info(
         "air_gap.configured",
-        value=type(adapter).__name__,
+        adapter_type=type(adapter).__name__,
     )
 
 
@@ -115,9 +113,7 @@ def _create_redis_adapter() -> AirGapStorageAdapter | None:
         redis_url = _get_redis_url_from_django()
 
     if not redis_url:
-        logger.error(
-            "[AirGap] SELFHEALING_AIRGAP_REDIS_URL not set and Django REDIS_URL not found"
-        )
+        logger.error("[AirGap] SELFHEALING_AIRGAP_REDIS_URL not set and Django REDIS_URL not found")
         return None
 
     try:

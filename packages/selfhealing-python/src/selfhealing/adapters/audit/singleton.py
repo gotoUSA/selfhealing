@@ -106,7 +106,7 @@ def set_audit_adapter(adapter: AuditLogAdapter) -> None:
     _default_adapter = adapter
     logger.debug(
         "audit_adapter.set_adapter",
-        value=type(adapter).__name__,
+        adapter_type=type(adapter).__name__,
     )
 
 

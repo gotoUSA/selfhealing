@@ -108,7 +108,7 @@ class ErrorHandlingMixin:
             self._l2_was_unhealthy = False
             logger.info(
                 "layered_repo.recovery_detected_after_failures",
-                _self=self._metrics.get('l2_sync_failure_count', 0),
+                l2_sync_failure_count=self._metrics.get("l2_sync_failure_count", 0),
             )
 
             # Audit 기록: L2 복구

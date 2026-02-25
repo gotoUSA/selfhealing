@@ -391,7 +391,7 @@ class ReplayBatchView(XTestModeMixin, APIView):
 
         logger.info(
             "test_mode_replay_batch",
-            domain=domain,
+            healing_domain=domain,
             result=result["total"],
             success_count=result["success_count"],
             failed_count=result["failed_count"],
@@ -433,7 +433,7 @@ class ReplayBatchView(XTestModeMixin, APIView):
             max_replays = service.config.get("max_replay_attempts", 5)
 
             entries = service.repository.get_pending_entries(
-                domain=domain,
+                healing_domain=domain,
                 failure_type=None,
                 max_retry_count=max_replays,
                 limit=limit,
@@ -488,7 +488,7 @@ class ReplayBatchView(XTestModeMixin, APIView):
 
             service = get_replay_service()
             result = service.replay_batch(
-                domain=domain,
+                healing_domain=domain,
                 failure_type=None,
                 max_items=batch_size,
             )

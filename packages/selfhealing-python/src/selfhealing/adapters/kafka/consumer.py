@@ -230,7 +230,7 @@ class KafkaAuditConsumer:
                 # 핸들러 없으면 로깅만
                 logger.debug(
                     "kafka_consumer.수신",
-                    _event=event.topic,
+                    event_topic=event.topic,
                     partition=event.partition,
                     offset=event.offset,
                 )
@@ -261,7 +261,7 @@ class KafkaAuditConsumer:
 
             logger.debug(
                 "kafka_consumer.커밋_완료",
-                _event=event.topic,
+                event_topic=event.topic,
                 partition=event.partition,
                 offset=event.offset,
             )
@@ -297,7 +297,7 @@ class KafkaAuditConsumer:
             else:
                 logger.error(
                     "kafka_consumer.폴링_오류",
-                    msg=msg.error(),
+                    kafka_error=msg.error(),
                 )
                 return None
 

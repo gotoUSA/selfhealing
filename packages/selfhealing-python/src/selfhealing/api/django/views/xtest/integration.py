@@ -131,7 +131,7 @@ class RunScenarioView(XTestModeMixin, APIView):
                 "test_integration_scenario_completed",
                 scenario_name=scenario_name,
                 status=result.status.value,
-                count=len(result.steps),
+                steps_count=len(result.steps),
             )
 
             # WAL Audit 기록 (scenario_audit 사용)

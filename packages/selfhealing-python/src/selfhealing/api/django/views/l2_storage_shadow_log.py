@@ -134,7 +134,7 @@ class ShadowLogClearView(APIView):
 
         logger.warning(
             "l2_storage_api.shadow_log_cleared_cleared",
-            request=request.user,
+            request_user=request.user,
             stats_before=stats_before["total_records"],
         )
 
@@ -255,8 +255,8 @@ class ShadowLogReplayView(APIView):
 
         logger.info(
             "l2_storage_api.shadow_log_replay",
-            request=request.user,
-            result=result.get("synced", 0),
+            request_user=request.user,
+            synced_count=result.get("synced", 0),
             failed=result.get("failed", 0),
             marked_count=marked_count,
         )

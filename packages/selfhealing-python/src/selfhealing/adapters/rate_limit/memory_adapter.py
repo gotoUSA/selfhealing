@@ -111,7 +111,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
         if expired_keys:
             logger.debug(
                 "in_memory_rate_limit_storage.cleaned_up_expired_entries",
-                count=len(expired_keys),
+                expired_keys_count=len(expired_keys),
             )
 
     def get_state(self, key: str) -> RateLimitState:
@@ -120,7 +120,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
             data = self._data.get(key, {})
 
             return RateLimitState(
-                key=key,
+                rate_limit_key=key,
                 cooldown_until=data.get("cooldown_until", 0.0),
                 consecutive_429s=data.get("consecutive_429s", 0),
                 last_updated=data.get("last_updated", 0.0),
@@ -146,7 +146,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
 
             logger.debug(
                 "in_memory_rate_limit_storage.set_cooldown",
-                key=key,
+                rate_limit_key=key,
                 cooldown_until=cooldown_until,
             )
 
@@ -169,7 +169,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
 
             logger.debug(
                 "in_memory_rate_limit_storage.incremented_counter",
-                key=key,
+                rate_limit_key=key,
                 new_value=new_value,
             )
             return new_value
@@ -183,7 +183,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
 
             logger.debug(
                 "in_memory_rate_limit_storage.reset_counter",
-                key=key,
+                rate_limit_key=key,
             )
 
     def clear(self, key: str) -> None:
@@ -194,7 +194,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
 
             logger.debug(
                 "in_memory_rate_limit_storage.cleared_state",
-                key=key,
+                rate_limit_key=key,
             )
 
     def clear_all(self) -> None:

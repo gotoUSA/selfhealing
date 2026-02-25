@@ -188,7 +188,7 @@ class ErrorBudgetRecordView(APIView):
         logger.info(
             "error_budget_api.recorded_errors",
             effective_errors=effective_errors,
-            domain=domain,
+            healing_domain=domain,
             severity=severity,
             multiplier=multiplier,
         )

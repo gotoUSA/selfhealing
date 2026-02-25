@@ -40,12 +40,8 @@ class ScheduleListView(APIView):
         scheduler = get_chaos_scheduler()
 
         # Query params
-        enabled_only = (
-            request.query_params.get("enabled_only", "false").lower() == "true"
-        )
-        pending_only = (
-            request.query_params.get("pending_approval_only", "false").lower() == "true"
-        )
+        enabled_only = request.query_params.get("enabled_only", "false").lower() == "true"
+        pending_only = request.query_params.get("pending_approval_only", "false").lower() == "true"
         target_service = request.query_params.get("target_service")
 
         schedules = scheduler.list_schedules(
@@ -88,7 +84,7 @@ class ScheduleListView(APIView):
         logger.info(
             "chaos_api.schedule_created",
             schedule=schedule.id,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -150,7 +146,7 @@ class ScheduleDetailView(APIView):
         logger.info(
             "chaos_api.schedule_updated",
             schedule_id=schedule_id,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -176,7 +172,7 @@ class ScheduleDetailView(APIView):
         logger.info(
             "chaos_api.schedule_deleted",
             schedule_id=schedule_id,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -210,13 +206,9 @@ class ScheduleApprovalView(APIView):
         reason = serializer.validated_data.get("reason", "")
 
         if action == "approve":
-            schedule = scheduler.approve_schedule(
-                schedule_id, approved_by=str(request.user)
-            )
+            schedule = scheduler.approve_schedule(schedule_id, approved_by=str(request.user))
         else:
-            schedule = scheduler.deny_schedule(
-                schedule_id, denied_by=str(request.user), reason=reason
-            )
+            schedule = scheduler.deny_schedule(schedule_id, denied_by=str(request.user), reason=reason)
 
         if not schedule:
             return Response(
@@ -228,7 +220,7 @@ class ScheduleApprovalView(APIView):
             "chaos_api.schedule",
             action=action,
             schedule_id=schedule_id,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -260,8 +252,8 @@ class ScheduleExecuteView(APIView):
         logger.info(
             "chaos_api.schedule_executed",
             schedule_id=schedule_id,
-            request=request.user,
-            result=result.status,
+            request_user=request.user,
+            execution_status=result.status,
         )
 
         return Response(
@@ -297,9 +289,7 @@ class PendingApprovalsView(APIView):
             {
                 "status": "success",
                 "data": {
-                    "blast_radius_approvals": [
-                        a.to_dict() for a in blast_radius_pending
-                    ],
+                    "blast_radius_approvals": [a.to_dict() for a in blast_radius_pending],
                     "schedule_approvals": [s.to_dict() for s in schedule_pending],
                 },
                 "total_pending": len(blast_radius_pending) + len(schedule_pending),

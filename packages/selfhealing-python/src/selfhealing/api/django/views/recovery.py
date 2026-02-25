@@ -219,7 +219,7 @@ class RecoveryStartView(APIView):
             "recovery_start_view.recovery_started",
             session=session.session_id,
             namespace=namespace,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -285,7 +285,7 @@ class RecoveryAbortView(APIView):
         logger.info(
             "recovery_abort_view.recovery_aborted",
             session_id=session_id,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -379,7 +379,7 @@ class RecoveryApproveView(APIView):
         logger.info(
             "recovery_approve_view.approved",
             request_id=request_id,
-            request=request.user,
+            request_user=request.user,
         )
 
         response_data = {
@@ -455,7 +455,7 @@ class RecoveryRejectView(APIView):
             "recovery_reject_view.rejected",
             request_id=request_id,
             reason=reason,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(

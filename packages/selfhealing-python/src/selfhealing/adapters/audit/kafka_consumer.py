@@ -190,7 +190,7 @@ class BaseAuditConsumer(ABC):
 
         logger.info(
             "consumer.starting_consumer_topic",
-            _self=self._config.topic,
+            topic=self._config.topic,
         )
 
         try:
@@ -203,7 +203,7 @@ class BaseAuditConsumer(ABC):
                 if msg.error():
                     logger.error(
                         "consumer.message_error",
-                        msg=msg.error(),
+                        kafka_error=msg.error(),
                     )
                     self._error_count += 1
                     continue
@@ -247,7 +247,7 @@ class BaseAuditConsumer(ABC):
 
         logger.info(
             "consumer.closed_processed_errors_skipped",
-            _self=self._processed_count,
+            processed_count=self._processed_count,
             error_count=self._error_count,
             skipped_count=self._skipped_count,
         )
@@ -353,7 +353,7 @@ class IdempotentAuditConsumer(BaseAuditConsumer):
         if self._is_processed(key):
             logger.debug(
                 "idempotent_consumer.skipping_duplicate",
-                key=key,
+                idempotency_key=key,
             )
             self._skipped_count += 1
             return True  # 스킵해도 성공으로 간주 (커밋 진행)
@@ -380,7 +380,7 @@ class IdempotentAuditConsumer(BaseAuditConsumer):
             value = json.loads(message.value().decode("utf-8"))
             logger.info(
                 "idempotent_consumer.processed",
-                value=value.get("action"),
+                message_action=value.get("action"),
             )
             return True
         except Exception as e:
@@ -434,7 +434,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
                     p.offset = committed[0].offset
                     logger.debug(
                         "rebalance_consumer.partition_resuming_offset",
-                        p=p.partition,
+                        partition_index=p.partition,
                         offset=p.offset,
                     )
             except Exception as e:
@@ -446,7 +446,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
         consumer.assign(partitions)
         logger.info(
             "rebalance_consumer.assigned_partitions",
-            count=len(partitions),
+            partitions_count=len(partitions),
         )
 
         if self._on_rebalance_callback:
@@ -466,7 +466,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
                 consumer.commit(offsets=offsets_to_commit, asynchronous=False)
                 logger.info(
                     "rebalance_consumer.committed_pending_offsets_before",
-                    count=len(offsets_to_commit),
+                    offsets_to_commit_count=len(offsets_to_commit),
                 )
             except Exception as e:
                 logger.exception(
@@ -478,7 +478,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
 
         logger.info(
             "rebalance_consumer.revoked_partitions",
-            count=len(partitions),
+            partitions_count=len(partitions),
         )
 
         if self._on_rebalance_callback:
@@ -500,7 +500,7 @@ class RebalanceAwareConsumer(BaseAuditConsumer):
             value = json.loads(message.value().decode("utf-8"))
             logger.info(
                 "rebalance_consumer.processed",
-                value=value.get("action"),
+                message_action=value.get("action"),
             )
 
             # pending offset 기록 (리밸런싱 시 커밋용)
@@ -643,7 +643,7 @@ class PostgreSQLSinkConsumer(IdempotentAuditConsumer):
 
             logger.info(
                 "postgre_sql_sink.flushed_records_db",
-                count=len(self._batch),
+                batch_count=len(self._batch),
             )
             self._batch.clear()
             return True

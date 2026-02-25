@@ -90,7 +90,7 @@ class MetricSyncView(APIView):
         result = service.sync_metrics(
             domains=domains,
             dry_run=dry_run,
-            actor=actor,
+            actor_id=actor,
             reason=reason,
         )
 

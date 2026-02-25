@@ -112,7 +112,7 @@ class ReportGenerateView(APIView):
         logger.info(
             "chaos_api.report_generated",
             report=report.report_id,
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -252,7 +252,7 @@ class DryRunAnalysisView(APIView):
 
         logger.info(
             "chaos_api.dry_run_analysis_completed",
-            request=request.user,
+            request_user=request.user,
             target_service=target_service,
             experiment_type=experiment_type,
             overall_risk_level=overall_risk_level,

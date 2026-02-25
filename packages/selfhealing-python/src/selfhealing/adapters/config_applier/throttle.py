@@ -63,7 +63,7 @@ class ThrottleConfigApplier:
         if parameter in self.LEGACY_NOOP_PARAMS:
             logger.info(
                 "throttle_config_applier.deprecated_no_op_use",
-                parameter=parameter,
+                config_parameter=parameter,
             )
             return True
 
@@ -80,7 +80,7 @@ class ThrottleConfigApplier:
 
         logger.info(
             "throttle_config_applier.applied_config_swap",
-            parameter=parameter,
+            config_parameter=parameter,
             getattr=getattr(old_config, config_attr),
             int=int(value),
         )

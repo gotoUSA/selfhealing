@@ -281,7 +281,7 @@ class EmergencyEscalationPermission(BasePermission):
                 self.message = "STRICT 모드 전환 시 reason(사유)은 필수입니다. 사후 감사를 위해 전환 사유를 입력해주세요."
                 logger.warning(
                     "rbac.strict_escalation_denied_reason",
-                    request=request.user,
+                    request_user=request.user,
                 )
                 return False
 
@@ -289,9 +289,9 @@ class EmergencyEscalationPermission(BasePermission):
             if has_perm:
                 logger.warning(
                     "rbac.emergency_escalation_strict_operator",
-                    request=request.user,
+                    request_user=request.user,
                     reason=reason[:50],
-                    _self=self.emergency_expiry_hours,
+                    emergency_expiry_hours=self.emergency_expiry_hours,
                 )
             return has_perm
 
@@ -465,7 +465,7 @@ class ThresholdBasedPermission(BasePermission):
             logger.warning(
                 "rbac.high_risk_operation_approved",
                 discrepancy=discrepancy,
-                request=request.user,
+                request_user=request.user,
                 thresholds=thresholds["admin_approve"],
             )
             return True
@@ -509,7 +509,7 @@ class ThresholdBasedPermission(BasePermission):
             logger.warning(
                 "rbac.dual_approval_required_no",
                 discrepancy=discrepancy,
-                actor=actor,
+                actor_id=actor,
                 thresholds=thresholds["dual_approval"],
             )
             # 알림 발송 (승인 요청이 필요하다는 것을 Admin들에게 알림)
@@ -545,7 +545,7 @@ class ThresholdBasedPermission(BasePermission):
                         approval_id=approval_id,
                         approval_request=approval_request["requested_by"],
                         approved_by=approval_request["approved_by"],
-                        actor=actor,
+                        actor_id=actor,
                         discrepancy=discrepancy,
                     )
                     return True
@@ -601,7 +601,7 @@ class ThresholdBasedPermission(BasePermission):
             )
             logger.info(
                 "rbac.dual_approval_notification_sent",
-                actor=actor,
+                actor_id=actor,
             )
 
         except Exception as e:
@@ -664,7 +664,7 @@ class IsPanicRollbackAuthorized(BasePermission):
             self.message = "긴급 롤백 시 reason(사유)은 필수입니다. " "사후 감사를 위해 롤백 사유를 입력해주세요."
             logger.warning(
                 "rbac.panic_rollback_denied_reason",
-                request=request.user,
+                request_user=request.user,
             )
             return False
 
@@ -672,7 +672,7 @@ class IsPanicRollbackAuthorized(BasePermission):
         if IsSelfHealingAdmin().has_permission(request, view):
             logger.warning(
                 "rbac.panic_rollback_authorized_admin",
-                request=request.user,
+                request_user=request.user,
                 reason=reason[:50],
             )
             return True
@@ -681,7 +681,7 @@ class IsPanicRollbackAuthorized(BasePermission):
         if IsOperator().has_permission(request, view):
             logger.warning(
                 "rbac.panic_rollback_authorized_emergency",
-                request=request.user,
+                request_user=request.user,
                 reason=reason[:50],
             )
             return True
@@ -744,9 +744,9 @@ class HasChaosTestPermission(BasePermission):
             if environment == "production":
                 logger.error(
                     "rbac.test_access_denied_production",
-                    request=request.user,
+                    request_user=request.user,
                     getattr=getattr(request, "path", "unknown"),
-                    _self=self._get_client_ip(request),
+                    client_ip=self._get_client_ip(request),
                 )
                 self.message = (
                     "X-Test/Chaos API는 프로덕션 환경에서 사용할 수 없습니다. " "보안 정책에 따라 접근이 차단되었습니다."
@@ -766,7 +766,7 @@ class HasChaosTestPermission(BasePermission):
             if request.user.is_superuser:
                 logger.debug(
                     "rbac.test_permission_granted_superuser",
-                    request=request.user,
+                    request_user=request.user,
                 )
                 return True
 
@@ -776,7 +776,7 @@ class HasChaosTestPermission(BasePermission):
                 user_groups = list(request.user.groups.filter(name__in=allowed_groups).values_list("name", flat=True))
                 logger.debug(
                     "rbac.test_permission_granted_group",
-                    request=request.user,
+                    request_user=request.user,
                     user_groups=user_groups,
                 )
                 return True
@@ -784,7 +784,7 @@ class HasChaosTestPermission(BasePermission):
             # 6. 권한 없음 - 거부
             logger.warning(
                 "rbac.test_permission_denied_no",
-                request=request.user,
+                request_user=request.user,
                 allowed_groups=allowed_groups,
             )
             return False

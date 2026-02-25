@@ -91,7 +91,7 @@ class PoolCircuitBreaker:
             logger.warning(
                 "pool_circuit_breaker.cache_interval_clamped_ms",
                 raw_cache_interval=raw_cache_interval,
-                _self=self._cache_interval_ms,
+                cache_interval_ms=self._cache_interval_ms,
             )
 
         # v6.2.1: Stale 캐시 임계값 설정
@@ -137,7 +137,7 @@ class PoolCircuitBreaker:
 
         logger.info(
             "pool_circuit_breaker.initialized_fail_fast_enabled",
-            _self=self._cache_interval_ms,
+            cache_interval_ms=self._cache_interval_ms,
         )
 
     @property
@@ -283,7 +283,7 @@ class PoolCircuitBreaker:
             logger.error(
                 "pool_circuit_breaker.critical_stale_cache_ms",
                 cache_age_ms=cache_age_ms,
-                _self=self._critical_stale_ms,
+                critical_stale_ms=self._critical_stale_ms,
             )
             self._stats["stale_cache_fallbacks"] += 1
             # v6.2.2: Prometheus 메트릭 기록
@@ -524,7 +524,7 @@ class PoolCircuitBreaker:
                     logger.warning(
                         "pool_circuit_breaker.pool_usage_high_failures",
                         usage=usage,
-                        _self=self._failure_count,
+                        failure_count=self._failure_count,
                         failure_threshold=self._failure_threshold,
                     )
 
@@ -592,7 +592,7 @@ class PoolCircuitBreaker:
                 self._success_count += 1
                 logger.info(
                     "pool_circuit_breaker.success",
-                    _self=self._success_count,
+                    success_count=self._success_count,
                     success_threshold=self._success_threshold,
                 )
 
@@ -688,8 +688,8 @@ class PoolCircuitBreakerMiddleware:
         status = "enabled" if self._enabled else "DISABLED"
         logger.info(
             "pool_circuit_breaker_middleware.initialized_audit",
-            status=status,
-            value="enabled" if self._audit_enabled else "disabled",
+            cb_status=status,
+            audit_enabled="enabled" if self._audit_enabled else "disabled",
         )
 
     def _check_enabled(self) -> bool:
@@ -831,7 +831,7 @@ class PoolCircuitBreakerMiddleware:
             cache_stats = pool_circuit_breaker._stats
             logger.info(
                 "pool_circuit_breaker_middleware.pool_status_every_reqs",
-                _self=self._log_interval,
+                log_interval=self._log_interval,
                 pool_status=pool_status.get("checkedout", "?"),
                 total_capacity=pool_status.get("total_capacity", "?"),
                 usage_percent=pool_status.get("usage_percent", 0),

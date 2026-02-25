@@ -115,7 +115,7 @@ class InjectCBFailureView(XTestModeMixin, APIView):
             failure_count=failure_count,
             previous_state=previous_state,
             current_state=current_state,
-            request=request.user,
+            request_user=request.user,
         )
 
         response_data = {
@@ -185,7 +185,7 @@ class ResetCBView(XTestModeMixin, APIView):
             service_name=service_name,
             previous_state=previous_state,
             current_state=current_state,
-            request=request.user,
+            request_user=request.user,
         )
 
         response_data = {

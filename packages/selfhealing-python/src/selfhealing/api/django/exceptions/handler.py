@@ -197,7 +197,7 @@ def selfhealing_exception_handler(
     if _is_pool_timeout(exc):
         logger.error(
             "exception_handler.pool_timeout_detected",
-            value=type(exc).__name__,
+            adapter_type=type(exc).__name__,
             error=exc,
         )
 

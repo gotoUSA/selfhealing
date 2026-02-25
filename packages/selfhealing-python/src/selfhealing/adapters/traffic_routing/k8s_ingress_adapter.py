@@ -174,7 +174,7 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
                 "k8s_ingress_traffic_router.switched_backends",
                 from_region=from_region,
                 to_region=to_region,
-                _self=self._ingress_name,
+                ingress_name=self._ingress_name,
                 replaced_count=replaced_count,
             )
 

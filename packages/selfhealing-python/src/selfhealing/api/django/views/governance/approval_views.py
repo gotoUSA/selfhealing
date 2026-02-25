@@ -107,7 +107,7 @@ class ApprovalRequestListView(APIView):
         logger.info(
             "governance.approval_request_created",
             approval_request=approval_request['id'],
-            actor=actor,
+            actor_id=actor,
         )
 
         return Response(
@@ -147,7 +147,7 @@ class ApprovalRequestApproveView(APIView):
         logger.info(
             "governance.request_approved",
             request_id=request_id,
-            actor=actor,
+            actor_id=actor,
         )
 
         return Response(
@@ -186,7 +186,7 @@ class ApprovalRequestRejectView(APIView):
         logger.info(
             "governance.request_rejected",
             request_id=request_id,
-            actor=actor,
+            actor_id=actor,
         )
 
         return Response(

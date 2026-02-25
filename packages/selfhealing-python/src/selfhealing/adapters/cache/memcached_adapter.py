@@ -281,7 +281,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "memcached_cache.get_failed_key",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return None
@@ -299,7 +299,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "memcached_cache.set_failed_key",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -311,7 +311,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "memcached_cache.delete_failed_key",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -323,7 +323,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "memcached_cache.exists_check_failed_key",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -357,7 +357,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "memcached_cache.incr_failed_key",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return 0
@@ -384,7 +384,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "memcached_cache.decr_failed_key",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return 0
@@ -405,7 +405,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "memcached_cache.expire_failed_key",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False
@@ -562,7 +562,7 @@ class MemcachedCacheAdapter(CacheProviderInterface):
         except Exception as e:
             logger.exception(
                 "memcached_cache.touch_failed_key",
-                key=key,
+                cache_key=key,
                 error=e,
             )
             return False

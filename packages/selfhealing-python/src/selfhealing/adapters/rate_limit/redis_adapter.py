@@ -150,7 +150,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
                         record_ratelimit_drift(key)
                         logger.info(
                             "redis_rate_limit_storage.drift_detected_syncing_local",
-                            key=key,
+                            redis_key=key,
                         )
                         # 더 보수적인 값 선택 (안전 우선)
                         merged = self._merge_conservative(local_state, redis_state)
@@ -159,7 +159,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             except Exception as e:
                 logger.warning(
                     "redis_rate_limit_storage.reconciliation_failed",
-                    key=key,
+                    redis_key=key,
                     error=e,
                 )
                 record_ratelimit_reconciliation(success=False)
@@ -176,7 +176,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             results = pipeline.execute()
 
             return RateLimitState(
-                key=key,
+                redis_key=key,
                 cooldown_until=float(results[0]) if results[0] else 0.0,
                 consecutive_429s=int(results[1]) if results[1] else 0,
                 last_updated=float(results[2]) if results[2] else 0.0,
@@ -235,7 +235,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             last_updated = float(results[2]) if results[2] else 0.0
 
             return RateLimitState(
-                key=key,
+                redis_key=key,
                 cooldown_until=cooldown_until,
                 consecutive_429s=consecutive_429s,
                 last_updated=last_updated,
@@ -274,7 +274,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
 
             logger.debug(
                 "redis_rate_limit_storage.set_cooldown",
-                key=key,
+                redis_key=key,
                 cooldown_until=cooldown_until,
                 ttl=ttl,
             )
@@ -300,7 +300,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             new_value = results[0]
             logger.debug(
                 "redis_rate_limit_storage.incremented_counter",
-                key=key,
+                redis_key=key,
                 new_value=new_value,
             )
             return new_value
@@ -318,7 +318,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
             self._redis.delete(self._make_key(key, "consecutive_429s"))
             logger.debug(
                 "redis_rate_limit_storage.reset_counter",
-                key=key,
+                redis_key=key,
             )
 
         except Exception as e:
@@ -338,7 +338,7 @@ class RedisRateLimitStorage(RateLimitStorageInterface):
 
             logger.debug(
                 "redis_rate_limit_storage.cleared_state",
-                key=key,
+                redis_key=key,
             )
 
         except Exception as e:

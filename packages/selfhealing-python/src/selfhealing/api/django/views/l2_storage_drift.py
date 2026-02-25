@@ -133,8 +133,8 @@ class DriftReconciliationTriggerView(APIView):
 
         logger.info(
             "l2_storage_api.manual_drift_reconciliation",
-            request=request.user,
-            result=result.get("reconciled", 0),
+            request_user=request.user,
+            reconciled_count=result.get("reconciled", 0),
             l1_wins=result.get("l1_wins", 0),
             l2_wins=result.get("l2_wins", 0),
         )
@@ -182,15 +182,15 @@ class DriftReconciliationServiceView(APIView):
             logger.warning(
                 "l2_storage_api.drift_reconciliation_failed",
                 service_name=service_name,
-                result=result.get("reason", "unknown"),
+                reconcile_failure_reason=result.get("reason", "unknown"),
             )
             raise ValueError(result.get("reason", "Reconciliation failed"))
 
         logger.info(
             "l2_storage_api.drift_reconciliation",
             service_name=service_name,
-            request=request.user,
-            result=result.get("action", "none"),
+            request_user=request.user,
+            reconcile_action=result.get("action", "none"),
             winner=result.get("winner", "n/a"),
         )
 

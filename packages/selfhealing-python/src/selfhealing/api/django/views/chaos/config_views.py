@@ -65,7 +65,7 @@ class SafetyGuardConfigView(APIView):
 
         logger.info(
             "chaos_api.safetyguard_config_updated",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -122,7 +122,7 @@ class ChaosBlastRadiusPolicyView(APIView):
 
         logger.info(
             "chaos_api.blastradius_policy_updated",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -176,7 +176,7 @@ class SchedulerConfigView(APIView):
 
         logger.info(
             "chaos_api.scheduler_config_updated",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(
@@ -230,7 +230,7 @@ class ReportConfigView(APIView):
 
         logger.info(
             "chaos_api.report_config_updated",
-            request=request.user,
+            request_user=request.user,
         )
 
         return Response(

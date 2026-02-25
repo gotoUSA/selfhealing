@@ -152,7 +152,7 @@ class ReauthenticationProvider(ABC):
         logger.info(
             "reauth.reauthentication_required",
             user_id=user_id,
-            request=request.path,
+            request_path=request.path,
         )
 
 
@@ -240,7 +240,7 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
                     logger.info(
                         "reauth.idle_timeout_exceeded",
                         idle_minutes=idle_minutes,
-                        config=config.max_idle_minutes,
+                        max_idle_minutes=config.max_idle_minutes,
                     )
                     return True
             except (ValueError, TypeError):
@@ -256,7 +256,7 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
                     logger.info(
                         "reauth.session_timeout_exceeded",
                         session_minutes=session_minutes,
-                        config=config.max_session_minutes,
+                        max_session_minutes=config.max_session_minutes,
                     )
                     return True
             except (ValueError, TypeError):
@@ -387,9 +387,7 @@ def requires_reauthentication(
 
     def decorator(func: F) -> F:
         @wraps(func)
-        def wrapper(
-            request: HttpRequest, *args: Any, **kwargs: Any
-        ) -> HttpResponse:
+        def wrapper(request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
             # Skip if disabled
             if not config.enabled:
                 return func(request, *args, **kwargs)
@@ -450,12 +448,8 @@ class RequiresReauthenticationPermission:
             from django.conf import settings
 
             config = ReauthenticationConfig(
-                max_idle_minutes=getattr(
-                    settings, "SELFHEALING_REAUTH_MAX_IDLE_MINUTES", 15
-                ),
-                max_session_minutes=getattr(
-                    settings, "SELFHEALING_REAUTH_MAX_SESSION_MINUTES", 60
-                ),
+                max_idle_minutes=getattr(settings, "SELFHEALING_REAUTH_MAX_IDLE_MINUTES", 15),
+                max_session_minutes=getattr(settings, "SELFHEALING_REAUTH_MAX_SESSION_MINUTES", 60),
                 enabled=getattr(settings, "SELFHEALING_REAUTH_ENABLED", True),
             )
 

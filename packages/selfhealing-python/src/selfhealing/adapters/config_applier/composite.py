@@ -53,8 +53,8 @@ class CompositeConfigApplier:
                 return True
         logger.warning(
             "composite_config_applier.no_applier_handled",
-            parameter=parameter,
-            value=value,
+            config_parameter=parameter,
+            config_value=value,
         )
         return False
 

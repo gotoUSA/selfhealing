@@ -119,7 +119,7 @@ class KafkaAuditProducer:
 
             logger.info(
                 "kafka_producer.초기화_완료",
-                _self=self._settings.bootstrap_servers,
+                bootstrap_servers=self._settings.bootstrap_servers,
                 producer_idempotent=self._settings.producer_idempotent,
             )
         except ImportError:
@@ -184,7 +184,7 @@ class KafkaAuditProducer:
                 self._stats["messages_delivered"] += 1
                 logger.debug(
                     "kafka_producer.전송_완료",
-                    report=report.topic,
+                    delivered_topic=report.topic,
                     partition=report.partition,
                     offset=report.offset,
                 )

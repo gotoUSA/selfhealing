@@ -134,7 +134,7 @@ class LayeredRepositoryBase:
             self._bulkhead = registry.get(conn_type)
             logger.debug(
                 "layered_repository_base.bulkhead_initialized",
-                _self=self._adapter_type,
+                adapter_type=self._adapter_type,
                 _bulkhead=self._bulkhead.name,
             )
         except Exception as e:

@@ -121,7 +121,7 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
             }
 
             result = dlq_service.store_failure(
-                domain=domain,
+                healing_domain=domain,
                 failure_type=failure_type,
                 entity_type=entity_type,
                 entity_id=(f"{entity_id}-{i + 1}" if entity_id else f"xtest-{xtest_session}-{i + 1}"),
@@ -140,9 +140,9 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
 
         logger.info(
             "test_mode_dlq_injection",
-            domain=domain,
+            healing_domain=domain,
             failure_type=failure_type,
-            count=len(created_ids),
+            created_ids_count=len(created_ids),
             xtest_session=xtest_session,
             user_str=user_str,
         )
@@ -163,7 +163,7 @@ class InjectDLQEntryView(XTestModeMixin, APIView):
             request=request,
             component="dlq",
             injection_type="create",
-            count=len(created_ids),
+            created_ids_count=len(created_ids),
             target_ids=[str(id) for id in created_ids],
         )
 
@@ -253,7 +253,7 @@ class DLQXTestStatusView(XTestModeMixin, APIView):
             domain_filter=domain_filter,
             status_filter=status_filter,
             stats=stats.get('total', 0),
-            request=request.user,
+            request_user=request.user,
         )
 
         response_data = {

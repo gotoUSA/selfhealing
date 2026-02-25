@@ -464,7 +464,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             logger.info(
                 "django_statistics_adapter.archived_entries",
-                count=count,
+                archived_count=count,
             )
             return count
         except Exception as e:
@@ -500,7 +500,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
 
             logger.info(
                 "django_statistics_adapter.purged_entries",
-                count=count,
+                purged_count=count,
             )
             return count
         except Exception as e:
@@ -669,7 +669,7 @@ class DjangoStatisticsAdapter(StatisticsRepositoryInterface):
         logger.info(
             "django_statistics_adapter.synced_entries",
             synced=synced,
-            count=len(entries),
+            entries_count=len(entries),
         )
         return synced
 

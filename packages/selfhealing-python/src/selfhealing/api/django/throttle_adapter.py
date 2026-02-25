@@ -95,7 +95,8 @@ class AdaptiveDRFThrottle:
         if not result.allowed:
             logger.info(
                 "adaptive_drf_throttle.request_throttled",
-                result=result.limit,
+                result=result.allowed,
+                throttle_limit=result.limit,
                 current_count=result.current_count,
             )
 

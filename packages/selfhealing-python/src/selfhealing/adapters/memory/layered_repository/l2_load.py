@@ -52,7 +52,7 @@ class L2LoadMixin:
 
             logger.info(
                 "layered_repo.initial_load_completed_states",
-                count=len(all_states),
+                all_states_count=len(all_states),
                 elapsed_ms=elapsed_ms,
             )
 
@@ -60,7 +60,7 @@ class L2LoadMixin:
             self._handle_l2_timeout("initial_load", None)
             logger.warning(
                 "layered_repo.initial_load_timeout_ms",
-                value=timeout*1000,
+                timeout_ms=timeout * 1000,
             )
         except Exception as e:
             self._handle_l2_error("initial_load", None, e)

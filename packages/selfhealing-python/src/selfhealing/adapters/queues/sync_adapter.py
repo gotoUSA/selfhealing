@@ -254,7 +254,7 @@ class SyncTaskAdapter(TaskQueueInterface):
 
             logger.debug(
                 "sync_adapter.task_succeeded",
-                record=record.task_id,
+                task_id=record.task_id,
             )
 
         except registered.autoretry_for as e:
@@ -264,7 +264,7 @@ class SyncTaskAdapter(TaskQueueInterface):
                 record.status = TaskStatus.RETRY
                 logger.debug(
                     "sync_adapter.retrying_task_attempt",
-                    record=record.task_id,
+                    task_id=record.task_id,
                     retries=record.retries,
                 )
                 self._execute_task(record, registered)
@@ -282,7 +282,7 @@ class SyncTaskAdapter(TaskQueueInterface):
 
             logger.error(
                 "sync_adapter.task_failed",
-                record=record.task_id,
+                task_id=record.task_id,
                 error=e,
             )
 

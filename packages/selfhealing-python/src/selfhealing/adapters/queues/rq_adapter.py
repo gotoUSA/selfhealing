@@ -85,10 +85,7 @@ class RQTaskAdapter(TaskQueueInterface):
 
                 self._rq = rq
             except ImportError:
-                raise ImportError(
-                    "rq is required for RQTaskAdapter. "
-                    "Install it with: pip install rq"
-                )
+                raise ImportError("rq is required for RQTaskAdapter. " "Install it with: pip install rq")
         return self._rq
 
     @property
@@ -100,10 +97,7 @@ class RQTaskAdapter(TaskQueueInterface):
 
                 self._redis = redis
             except ImportError:
-                raise ImportError(
-                    "redis is required for RQTaskAdapter. "
-                    "Install it with: pip install redis"
-                )
+                raise ImportError("redis is required for RQTaskAdapter. " "Install it with: pip install redis")
         return self._redis
 
     @property
@@ -250,9 +244,7 @@ class RQTaskAdapter(TaskQueueInterface):
             "retry": (
                 self.rq.Retry(
                     max=task_info.get("max_retries", options.max_retries),
-                    interval=(
-                        self._get_retry_intervals(options) if options.retry else None
-                    ),
+                    interval=(self._get_retry_intervals(options) if options.retry else None),
                 )
                 if options.retry
                 else None
@@ -518,10 +510,7 @@ class RQTaskAdapter(TaskQueueInterface):
             return job.id
 
         except ImportError:
-            raise ImportError(
-                "rq-scheduler is required for periodic tasks. "
-                "Install it with: pip install rq-scheduler"
-            )
+            raise ImportError("rq-scheduler is required for periodic tasks. " "Install it with: pip install rq-scheduler")
 
     def unschedule(self, schedule_id: str) -> bool:
         """
@@ -571,7 +560,7 @@ class RQTaskAdapter(TaskQueueInterface):
 
             logger.info(
                 "rq.purged_tasks_queue",
-                count=count,
+                purged_count=count,
                 queue_name=queue_name,
             )
             return count

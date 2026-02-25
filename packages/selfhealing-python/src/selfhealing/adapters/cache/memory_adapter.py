@@ -135,7 +135,7 @@ class InMemoryLock(DistributedLock):
                     InMemoryLock._locks[self._name] = self
                     logger.debug(
                         "in_memory_lock.acquired_lock",
-                        _self=self._name,
+                        name=self._name,
                     )
                     return True
 
@@ -145,7 +145,7 @@ class InMemoryLock(DistributedLock):
             if stop_time is not None and time.time() >= stop_time:
                 logger.debug(
                     "in_memory_lock.timeout_acquiring_lock",
-                    _self=self._name,
+                    name=self._name,
                 )
                 return False
 
@@ -167,12 +167,12 @@ class InMemoryLock(DistributedLock):
                     self._acquired = False
                     logger.debug(
                         "in_memory_lock.released_lock",
-                        _self=self._name,
+                        name=self._name,
                     )
                 else:
                     logger.warning(
                         "in_memory_lock.lock_owned",
-                        _self=self._name,
+                        name=self._name,
                     )
             else:
                 self._acquired = False
@@ -509,7 +509,7 @@ class InMemoryCacheAdapter(CacheProviderInterface):
                 del self._store[key]
             logger.info(
                 "in_memory_cache.flushed_keys",
-                count=len(keys_to_delete),
+                keys_to_delete_count=len(keys_to_delete),
             )
 
         # Also clear locks

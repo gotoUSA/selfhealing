@@ -403,7 +403,7 @@ class RetrySimulateView(XTestModeMixin, APIView):
             from selfhealing.services.dlq_service import store_to_dlq
 
             result = store_to_dlq(
-                domain=domain,
+                healing_domain=domain,
                 failure_type="XTEST_RETRY_SIMULATION",
                 error_code="SimulatedRetryExhaustion",
                 error_message=f"Simulated {failure_count} consecutive failures (max: {max_attempts})",
@@ -503,7 +503,7 @@ class RetryRateLimitStatusView(XTestModeMixin, APIView):
 
             logger.info(
                 "test_mode_rate_limit",
-                domain=domain,
+                healing_domain=domain,
                 state=state.is_in_cooldown,
                 consecutive_429s=state.consecutive_429s,
             )
@@ -641,7 +641,7 @@ class XTestRetryConfigView(XTestModeMixin, APIView):
 
         logger.info(
             "test_mode_retry_config",
-            domain=domain,
+            healing_domain=domain,
             source=source,
             config=config.max_attempts,
         )

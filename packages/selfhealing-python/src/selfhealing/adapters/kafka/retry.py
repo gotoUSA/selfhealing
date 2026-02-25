@@ -197,7 +197,7 @@ class NonBlockingRetryHandler:
                 logger.info(
                     "retry_handler.retry_토픽으로_전송",
                     retry_topic=retry_topic,
-                    value=retry_count + 1,
+                    retry_attempt=retry_count + 1,
                 )
             else:
                 self._stats["errors"] += 1
@@ -252,7 +252,7 @@ class NonBlockingRetryHandler:
                 self._stats["dlq_sent"] += 1
                 logger.warning(
                     "retry_handler.dlq로_이동",
-                    _self=self._config.final_dlq_topic,
+                    final_dlq_topic=self._config.final_dlq_topic,
                     retry_count=retry_count,
                     error=error,
                 )
@@ -260,7 +260,7 @@ class NonBlockingRetryHandler:
                 self._stats["errors"] += 1
                 logger.error(
                     "retry_handler.dlq_전송_실패",
-                    _self=self._config.final_dlq_topic,
+                    final_dlq_topic=self._config.final_dlq_topic,
                 )
 
             return success

@@ -196,7 +196,7 @@ class ShadowLogger:
             )
             logger.info(
                 "shadow_log.marked_records_synced",
-                count=count,
+                synced_count=count,
                 service_name=service_name,
             )
         return count
@@ -217,7 +217,7 @@ class ShadowLogger:
         if count > 0:
             logger.info(
                 "shadow_log.marked_all_records_synced",
-                count=count,
+                synced_count=count,
             )
         return count
 

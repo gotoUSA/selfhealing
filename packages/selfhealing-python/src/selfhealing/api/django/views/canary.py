@@ -489,7 +489,7 @@ class CanaryPanicRollbackView(APIView):
             reason=reason,
             emergency_code=emergency_code,
             success_count=success_count,
-            count=len(results),
+            results_count=len(results),
         )
 
         return Response(

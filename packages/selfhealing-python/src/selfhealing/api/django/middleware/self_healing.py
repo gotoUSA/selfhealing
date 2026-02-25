@@ -160,7 +160,7 @@ class SelfHealingMiddleware:
 
         logger.info(
             "self_healing_middleware.loaded_patterns",
-            count=len(cls.DLQ_ELIGIBLE_PATHS),
+            dlq_eligible_paths_count=len(cls.DLQ_ELIGIBLE_PATHS),
             infra_paths_count=len(cls.INFRASTRUCTURE_FAILURE_PATHS),
             domain_mapping_count=len(cls.DOMAIN_MAPPING),
         )
@@ -190,7 +190,7 @@ class SelfHealingMiddleware:
             logger.info(
                 "self_healing_middleware.preemptive_dlq_cb_open",
                 dlq_id=dlq_id,
-                request=request.path,
+                request_path=request.path,
             )
 
             self._log_audit_event(
@@ -266,7 +266,7 @@ class SelfHealingMiddleware:
             if is_infra_failure_path:
                 logger.warning(
                     "self_healing_middleware.infra_failure_detected",
-                    request=request.path,
+                    request_path=request.path,
                     response=response.status_code,
                 )
 
@@ -352,7 +352,7 @@ class SelfHealingMiddleware:
                     logger.debug(
                         "self_healing_middleware.cb_service",
                         state=state.upper(),
-                        _self=self.CB_SERVICE_NAME,
+                        cb_service_name=self.CB_SERVICE_NAME,
                     )
                     return True
 
@@ -394,7 +394,7 @@ class SelfHealingMiddleware:
                 )
                 logger.info(
                     "self_healing_middleware.cb_failure_recorded",
-                    _self=self.CB_SERVICE_NAME,
+                    cb_service_name=self.CB_SERVICE_NAME,
                     error_context=error_context.get("error_type"),
                 )
 
@@ -467,8 +467,8 @@ class SelfHealingMiddleware:
             if result.success:
                 logger.info(
                     "self_healing_middleware.dlq_stored",
-                    result=result.dlq_id,
-                    domain=domain,
+                    dlq_id=result.dlq_id,
+                    healing_domain=domain,
                     request_data=request_data.get("path"),
                 )
 
@@ -487,7 +487,7 @@ class SelfHealingMiddleware:
             else:
                 logger.warning(
                     "self_healing_middleware.dlq_storage_failed",
-                    result=result.error,
+                    result_error=result.error,
                 )
                 return None
 
