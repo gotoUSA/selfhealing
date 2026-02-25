@@ -629,8 +629,8 @@ class ProviderRegistry:
         logger.info(
             "registry.defaults_updated",
             cls=cls._default_cache,
-            cls_1=cls._default_queue,
-            cls_2=cls._default_repo,
+            default_queue=cls._default_queue,
+            default_repo=cls._default_repo,
         )
 
     @classmethod

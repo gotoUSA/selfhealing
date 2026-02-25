@@ -186,7 +186,7 @@ class EscalationManager:
             logger.info(
                 "escalation.dry_run_escalation",
                 _event=event.component,
-                event_1=event.title,
+                title=event.title,
             )
             return EscalationResult(
                 success=True,
@@ -249,7 +249,7 @@ class EscalationManager:
             logger.warning(
                 "escalation.escalated",
                 _event=event.component,
-                event_1=event.title,
+                title=event.title,
                 channels_sent=channels_sent,
             )
 

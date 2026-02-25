@@ -284,7 +284,7 @@ class LastWriteWinsResolver(ConflictResolver):
                 "lww.accepted",
                 key=key,
                 incoming_conflict_key=incoming_conflict_key.timestamp,
-                incoming_conflict_key_2=incoming_conflict_key.region_priority,
+                region_priority=incoming_conflict_key.region_priority,
                 resolution=resolution,
             )
             return incoming

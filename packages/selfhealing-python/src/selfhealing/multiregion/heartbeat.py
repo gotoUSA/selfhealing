@@ -107,8 +107,8 @@ class RegionHeartbeat:
         logger.info(
             "heartbeat.started",
             _self=self._settings.current_region,
-            self_1=self.HEARTBEAT_INTERVAL,
-            self_2=self.HEARTBEAT_TTL,
+            heartbeat_interval=self.HEARTBEAT_INTERVAL,
+            heartbeat_ttl=self.HEARTBEAT_TTL,
         )
 
     def _run(self) -> None:

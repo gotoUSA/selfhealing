@@ -391,7 +391,7 @@ class TestSafeGaugeLRUEvictionLogging:
         log_output = captured_logs.getvalue()
         assert "safe_gauge.lru_eviction" in log_output
         assert "domain" in log_output
-        assert "max_label_combinations" in log_output or "self_3" in log_output
+        assert "max_label_combinations" in log_output
 
     def test_eviction_log_includes_shadow_value(self, mock_gauge, captured_logs):
         """Eviction 로그에 shadow_value가 포함되어야 함."""

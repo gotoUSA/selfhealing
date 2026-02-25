@@ -145,13 +145,13 @@ class CascadeRetentionSettings(BaseSettings):
             logger.warning(
                 "cascade_retention.hot_tier가_warm보다_짧아야",
                 _self=self.hot_retention_days,
-                self_1=self.warm_retention_days,
+                warm_retention_days=self.warm_retention_days,
             )
         if self.warm_retention_days >= self.cold_retention_days:
             logger.warning(
                 "cascade_retention.warm_tier가_cold보다_짧아야",
                 _self=self.warm_retention_days,
-                self_1=self.cold_retention_days,
+                cold_retention_days=self.cold_retention_days,
             )
         return self
 

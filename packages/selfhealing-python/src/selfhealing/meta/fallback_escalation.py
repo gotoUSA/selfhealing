@@ -160,8 +160,8 @@ class FallbackEscalationHandler:
 
             logger.warning(
                 "emergency_escalation_log.recorded",
-                entry=entry['component'],
-                entry_1=entry['title'],
+                entry=entry["component"],
+                title=entry["title"],
             )
             return True
         except Exception as e:
@@ -189,7 +189,7 @@ class FallbackEscalationHandler:
 
         logger.warning(
             "fallback_escalation.stored_memory_buffer_size",
-            entry=entry['component'],
+            entry=entry["component"],
             count=len(self._memory_buffer),
         )
         return True

@@ -383,7 +383,7 @@ class SafeGauge:
             _self=self._eviction_count,
             dict=dict(oldest_key),
             oldest_child=oldest_child.get_shadow_value(),
-            self_3=self._max_label_combinations,
+            max_label_combinations=self._max_label_combinations,
         )
 
         # Eviction 메트릭 기록 (prometheus가 있는 경우)

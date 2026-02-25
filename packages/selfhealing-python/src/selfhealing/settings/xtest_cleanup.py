@@ -156,7 +156,7 @@ def get_xtest_cleanup_settings() -> XTestCleanupSettings:
         logger.debug(
             "x_test_cleanup.settings_loaded",
             _xtest_cleanup_settings=_xtest_cleanup_settings.session_ttl_hours,
-            _xtest_cleanup_settings_1=_xtest_cleanup_settings.cleanup_interval_minutes,
+            cleanup_interval_minutes=_xtest_cleanup_settings.cleanup_interval_minutes,
         )
     return _xtest_cleanup_settings
 
