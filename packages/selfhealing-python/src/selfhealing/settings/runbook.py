@@ -5,17 +5,19 @@ Runbook Executor Settings - Pydantic v2.
 
 설정 항목:
 - 런북 시스템 활성화 여부
-- 승인 대기 시간 (MEDIUM 위험도)
 - 동시 실행 런북 수 제한
 - step 기본 타임아웃
 - 분산 락 TTL
+- MEDIUM 위험도 타이머 자동 승인 시간
+- HIGH 위험도 최대 대기 시간
 
 Environment Variables:
     SELFHEALING_RUNBOOK_ENABLED=true
-    SELFHEALING_RUNBOOK_APPROVAL_TIMEOUT_SECONDS=300
     SELFHEALING_RUNBOOK_MAX_CONCURRENT_RUNBOOKS=3
     SELFHEALING_RUNBOOK_STEP_DEFAULT_TIMEOUT_SECONDS=120
     SELFHEALING_RUNBOOK_LOCK_TTL_SECONDS=600
+    SELFHEALING_RUNBOOK_APPROVAL_TIMER_SECONDS=300
+    SELFHEALING_RUNBOOK_APPROVAL_MAX_WAIT_SECONDS=3600
 
 Reference:
 - docs/self_healing/middleware_system/272_RUNBOOK_ARCHITECTURE_OVERVIEW.md §7
@@ -57,16 +59,6 @@ class RunbookSettings(BaseSettings):
     enabled: bool = Field(
         default=True,
         description="런북 시스템 활성화 여부",
-    )
-
-    # ==========================================================================
-    # Approval Settings
-    # ==========================================================================
-    approval_timeout_seconds: int = Field(
-        default=300,
-        ge=30,
-        le=3600,
-        description="MEDIUM 위험도 런북의 자동 승인 대기 시간 (초)",
     )
 
     # ==========================================================================
@@ -185,19 +177,19 @@ class RunbookSettings(BaseSettings):
         description="CRITICAL 런북 강제 실행 시 감사 로그 필수 여부",
     )
 
-    @field_validator("approval_timeout_seconds")
+    @field_validator("approval_timer_seconds")
     @classmethod
-    def validate_approval_timeout(cls, v: int) -> int:
-        """승인 대기 시간 경고."""
+    def validate_approval_timer(cls, v: int) -> int:
+        """MEDIUM 위험도 타이머 자동 승인 대기 시간 경고."""
         if v < 60:
             logger.warning(
-                "runbook.approval_timeout_too_short",
+                "runbook.approval_timer_too_short",
                 seconds=v,
                 msg="승인 대기 시간이 짧으면 검토 없이 자동 승인될 수 있음",
             )
         if v > 1800:
             logger.warning(
-                "runbook.approval_timeout_too_long",
+                "runbook.approval_timer_too_long",
                 seconds=v,
                 msg="승인 대기 시간이 길면 장애 복구가 지연될 수 있음",
             )

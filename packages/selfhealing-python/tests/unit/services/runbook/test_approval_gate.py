@@ -1307,3 +1307,233 @@ class TestApprovalGatePersistenceBehavior:
 
         # Then — expected_status("blocked")와 실제("waiting")가 불일치하므로 실패
         assert success is False
+
+
+# =============================================================================
+# 계약 검증 — Lua CAS 스크립트 KEEPTTL
+# =============================================================================
+
+
+class TestApprovalCasScriptContract:
+    """CAS Lua 스크립트가 TTL을 보존하는지 계약 검증."""
+
+    def test_cas_script_uses_keepttl(self):
+        """APPROVAL_CAS_SCRIPT는 SET 시 KEEPTTL을 사용하여 기존 TTL을 보존해야 한다."""
+        assert "KEEPTTL" in APPROVAL_CAS_SCRIPT
+
+    def test_cas_script_does_not_use_plain_set(self):
+        """SET 명령이 KEEPTTL 없이 단독으로 사용되면 안 된다.
+
+        redis.call("SET", ...) 다음에 반드시 "KEEPTTL"이 인자로 포함되어야 한다.
+        """
+        import re
+
+        # SET 호출이 KEEPTTL을 포함하는지 확인
+        set_calls = re.findall(r'redis\.call\("SET"[^)]+\)', APPROVAL_CAS_SCRIPT)
+        for call in set_calls:
+            assert "KEEPTTL" in call, f"SET call without KEEPTTL: {call}"
+
+    def test_cas_script_returns_zero_on_missing_key(self):
+        """키가 없으면 0을 반환해야 한다 (스크립트 첫 분기)."""
+        assert "return 0" in APPROVAL_CAS_SCRIPT
+
+    def test_cas_script_returns_one_on_status_match(self):
+        """상태가 일치하면 1을 반환해야 한다."""
+        assert "return 1" in APPROVAL_CAS_SCRIPT
+
+
+# =============================================================================
+# 동작 검증 — 타임아웃 CAS 실패 시 건너뜀
+# =============================================================================
+
+
+class TestApprovalGateTimeoutCasConflictBehavior:
+    """타임아웃 CAS 실패 시 알림/DLQ를 건너뛰는 동작 검증."""
+
+    def test_timeout_skips_notification_on_cas_failure(self):
+        """CAS 실패 시 타임아웃 알림을 발송하지 않아야 한다."""
+        # Given
+        backend = _make_memory_backend()
+        gate = _make_gate(backend=backend)
+        gate._get_max_wait_seconds = lambda: 600  # type: ignore[method-assign]
+
+        past_time = (datetime.now(timezone.utc) - timedelta(seconds=700)).isoformat()
+        request = RunbookApprovalRequest(
+            request_id="req-cas-timeout",
+            execution_id="exec-cas-timeout",
+            runbook_id="rb-high",
+            namespace="default",
+            risk_level=RiskLevel.HIGH,
+            status=ApprovalDecisionType.WAITING,
+            created_at=past_time,
+        )
+        key = APPROVAL_REQUEST_KEY.format(execution_id="exec-cas-timeout")
+        backend._store[key] = request.to_dict()
+
+        # CAS가 항상 실패하도록 설정 (다른 운영자/타이머가 먼저 결정)
+        gate._cas_save_approval_request = MagicMock(return_value=False)  # type: ignore[method-assign]
+
+        # When
+        with (
+            patch.object(gate, "_send_timeout_notification") as mock_notify,
+            patch.object(gate, "_store_timeout_to_dlq") as mock_dlq,
+        ):
+            timed_out = gate.check_approval_timeouts()
+
+        # Then — CAS 실패이므로 알림/DLQ가 호출되지 않아야 함
+        assert len(timed_out) == 0
+        mock_notify.assert_not_called()
+        mock_dlq.assert_not_called()
+
+    def test_timeout_proceeds_on_cas_success(self):
+        """CAS 성공 시 타임아웃 알림 + DLQ 저장이 정상 수행되어야 한다."""
+        # Given
+        backend = _make_memory_backend()
+        gate = _make_gate(backend=backend)
+        gate._get_max_wait_seconds = lambda: 600  # type: ignore[method-assign]
+
+        past_time = (datetime.now(timezone.utc) - timedelta(seconds=700)).isoformat()
+        request = RunbookApprovalRequest(
+            request_id="req-cas-ok",
+            execution_id="exec-cas-ok",
+            runbook_id="rb-high",
+            namespace="default",
+            risk_level=RiskLevel.HIGH,
+            status=ApprovalDecisionType.WAITING,
+            created_at=past_time,
+        )
+        key = APPROVAL_REQUEST_KEY.format(execution_id="exec-cas-ok")
+        backend._store[key] = request.to_dict()
+
+        # When
+        with (
+            patch.object(gate, "_send_timeout_notification") as mock_notify,
+            patch.object(gate, "_store_timeout_to_dlq") as mock_dlq,
+        ):
+            timed_out = gate.check_approval_timeouts()
+
+        # Then — CAS 성공이므로 알림 + DLQ 모두 호출
+        assert len(timed_out) == 1
+        mock_notify.assert_called_once()
+        mock_dlq.assert_called_once()
+
+
+# =============================================================================
+# 동작 검증 — force_execute_audit_required 설정 연동
+# =============================================================================
+
+
+class TestApprovalGateForceExecuteAuditBehavior:
+    """force_execute_audit_required 설정에 따른 감사 로그 동작 검증."""
+
+    def test_force_execute_logs_warning_when_audit_required(self):
+        """audit_required=True일 때 warning 레벨로 로그를 남겨야 한다."""
+        # Given
+        gate = _make_gate(governance_allowed=True)
+        runbook = _make_runbook(risk_level=RiskLevel.CRITICAL)
+        ctx = _make_ctx()
+
+        mock_settings = MagicMock()
+        mock_settings.force_execute_audit_required = True
+        gate._get_settings = MagicMock(return_value=mock_settings)  # type: ignore[method-assign]
+
+        # When / Then — warning 로그 확인
+        with patch("selfhealing.services.runbook.approval_gate.logger") as mock_logger:
+            decision = gate.force_execute_runbook(
+                runbook,
+                ctx,
+                "admin",
+                "P0 incident",
+            )
+
+        assert decision.decision_type == ApprovalDecisionType.MANUALLY_APPROVED
+        mock_logger.warning.assert_called_once()
+        call_kwargs = mock_logger.warning.call_args
+        assert call_kwargs[1]["audit_required"] is True
+
+    def test_force_execute_logs_info_when_audit_not_required(self):
+        """audit_required=False일 때 info 레벨로 로그를 남겨야 한다."""
+        # Given
+        gate = _make_gate(governance_allowed=True)
+        runbook = _make_runbook(risk_level=RiskLevel.CRITICAL)
+        ctx = _make_ctx()
+
+        mock_settings = MagicMock()
+        mock_settings.force_execute_audit_required = False
+        gate._get_settings = MagicMock(return_value=mock_settings)  # type: ignore[method-assign]
+
+        # When
+        with patch("selfhealing.services.runbook.approval_gate.logger") as mock_logger:
+            decision = gate.force_execute_runbook(
+                runbook,
+                ctx,
+                "admin",
+                "P0 incident",
+            )
+
+        # Then
+        assert decision.decision_type == ApprovalDecisionType.MANUALLY_APPROVED
+        mock_logger.info.assert_called_once()
+        call_kwargs = mock_logger.info.call_args
+        assert call_kwargs[1]["audit_required"] is False
+        mock_logger.warning.assert_not_called()
+
+
+# =============================================================================
+# 계약 검증 — 276 Approval Gate 설정 계약
+# =============================================================================
+
+
+class TestApprovalGateSettingsContract:
+    """276 Approval Gate 설정 필드 설계 계약값 검증."""
+
+    def test_approval_timer_seconds_default_is_300(self):
+        """§10 설계 계약: MEDIUM 타이머 기본값 300초."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with patch.dict("os.environ", {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.approval_timer_seconds == 300
+
+    def test_approval_max_wait_seconds_default_is_3600(self):
+        """§10 설계 계약: HIGH 최대 대기 기본값 3600초."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with patch.dict("os.environ", {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.approval_max_wait_seconds == 3600
+
+    def test_approval_reminder_intervals_default(self):
+        """§10 설계 계약: 리마인더 간격 기본값 [15, 30]."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with patch.dict("os.environ", {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.approval_reminder_intervals_minutes == [15, 30]
+
+    def test_approval_check_interval_seconds_default_is_30(self):
+        """§10 설계 계약: Celery Beat 폴링 간격 기본값 30초."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with patch.dict("os.environ", {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.approval_check_interval_seconds == 30
+
+    def test_force_execute_audit_required_default_is_true(self):
+        """§10 설계 계약: 강제 실행 감사 필수 기본값 True."""
+        from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
+
+        reset_runbook_settings()
+        with patch.dict("os.environ", {}, clear=True):
+            settings = RunbookSettings()
+            assert settings.force_execute_audit_required is True
+
+    def test_duplicate_approval_timeout_field_removed(self):
+        """중복 설정 필드 approval_timeout_seconds가 제거되어야 한다."""
+        from selfhealing.settings.runbook import RunbookSettings
+
+        assert "approval_timeout_seconds" not in RunbookSettings.model_fields

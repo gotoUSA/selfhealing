@@ -32,14 +32,14 @@ class TestRunbookSettingsContract:
             settings = RunbookSettings()
             assert settings.enabled is True
 
-    def test_approval_timeout_seconds_default_is_300(self):
-        """MEDIUM 위험도 자동 승인 대기 시간: 300초 (5분)."""
+    def test_approval_timer_seconds_default_is_300(self):
+        """MEDIUM 위험도 타이머 자동 승인 대기 시간: 300초 (5분). §10 설계 계약."""
         from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
 
         reset_runbook_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
             settings = RunbookSettings()
-            assert settings.approval_timeout_seconds == 300
+            assert settings.approval_timer_seconds == 300
 
     def test_max_concurrent_runbooks_default_is_3(self):
         """동시 실행 런북 수 제한: 3."""
@@ -69,10 +69,10 @@ class TestRunbookSettingsContract:
             assert settings.lock_ttl_seconds == 600
 
     def test_field_count(self):
-        """RunbookSettings는 12개 필드로 구성된다 (272: 5개 + 275: 7개)."""
+        """RunbookSettings는 16개 필드로 구성된다 (272: 4개 + 275: 7개 + 276: 5개)."""
         from selfhealing.settings.runbook import RunbookSettings
 
-        assert len(RunbookSettings.model_fields) == 12
+        assert len(RunbookSettings.model_fields) == 16
 
     # === 275번 Executor 설정 계약값 ===
 
@@ -156,18 +156,18 @@ class TestRunbookSettingsBehavior:
             settings = RunbookSettings()
             assert settings.enabled is False
 
-    def test_env_override_approval_timeout(self):
-        """환경 변수로 승인 대기 시간을 변경할 수 있다."""
+    def test_env_override_approval_timer(self):
+        """환경 변수로 타이머 승인 대기 시간을 변경할 수 있다."""
         from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
 
         reset_runbook_settings()
         with mock.patch.dict(
             os.environ,
-            {"SELFHEALING_RUNBOOK_APPROVAL_TIMEOUT_SECONDS": "600"},
+            {"SELFHEALING_RUNBOOK_APPROVAL_TIMER_SECONDS": "600"},
             clear=True,
         ):
             settings = RunbookSettings()
-            assert settings.approval_timeout_seconds == 600
+            assert settings.approval_timer_seconds == 600
 
     def test_env_override_max_concurrent_runbooks(self):
         """환경 변수로 동시 실행 런북 수를 변경할 수 있다."""
@@ -208,27 +208,27 @@ class TestRunbookSettingsBehavior:
             settings = RunbookSettings()
             assert settings.lock_ttl_seconds == 1200
 
-    def test_approval_timeout_below_minimum_rejected(self):
-        """승인 대기 시간이 최소값(30) 미만이면 ValidationError 발생."""
+    def test_approval_timer_below_minimum_rejected(self):
+        """타이머 승인 대기 시간이 최소값(30) 미만이면 ValidationError 발생."""
         from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
 
         reset_runbook_settings()
         with mock.patch.dict(
             os.environ,
-            {"SELFHEALING_RUNBOOK_APPROVAL_TIMEOUT_SECONDS": "10"},
+            {"SELFHEALING_RUNBOOK_APPROVAL_TIMER_SECONDS": "10"},
             clear=True,
         ):
             with pytest.raises(ValidationError):
                 RunbookSettings()
 
-    def test_approval_timeout_above_maximum_rejected(self):
-        """승인 대기 시간이 최대값(3600) 초과이면 ValidationError 발생."""
+    def test_approval_timer_above_maximum_rejected(self):
+        """타이머 승인 대기 시간이 최대값(7200) 초과이면 ValidationError 발생."""
         from selfhealing.settings.runbook import RunbookSettings, reset_runbook_settings
 
         reset_runbook_settings()
         with mock.patch.dict(
             os.environ,
-            {"SELFHEALING_RUNBOOK_APPROVAL_TIMEOUT_SECONDS": "7200"},
+            {"SELFHEALING_RUNBOOK_APPROVAL_TIMER_SECONDS": "7201"},
             clear=True,
         ):
             with pytest.raises(ValidationError):

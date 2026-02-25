@@ -1156,6 +1156,7 @@ version 카운터의 복잡성이 불필요하다. `atomic_transition.py`의
 ```python
 # Redis Lua: 승인 요청 상태 기반 CAS
 # 코드 근거: atomic_transition.py L28-50 ATOMIC_TRANSITION_SCRIPT
+# KEEPTTL로 기존 TTL을 보존하여 상태 전환 시 키가 영구화되는 것을 방지 (Redis 6.0+)
 APPROVAL_CAS_SCRIPT = """
 local current = redis.call("GET", KEYS[1])
 if current == false then
@@ -1163,7 +1164,7 @@ if current == false then
 end
 local data = cjson.decode(current)
 if data["status"] == ARGV[2] then
-    redis.call("SET", KEYS[1], ARGV[1])
+    redis.call("SET", KEYS[1], ARGV[1], "KEEPTTL")
     return 1
 else
     return 0
@@ -1173,6 +1174,7 @@ end
 -- ARGV[1]: 새 데이터 (JSON)
 -- ARGV[2]: expected status (예: "waiting")
 -- return 1: CAS 성공, 0: 상태 불일치 (이미 다른 결정)
+-- KEEPTTL: 기존 TTL 보존 — SET으로 TTL이 제거되는 것을 방지
 ```
 
 ### 13.3 CAS Fail-Open 정책
@@ -1482,13 +1484,15 @@ def check_approval_timeouts(self) -> list[RunbookApprovalRequest]:
         elapsed = (now - created).total_seconds()
 
         if elapsed > max_wait:
-            # 1. 상태 전환
+            # 1. CAS 상태 전환 — 실패 시 이미 다른 결정이 확정된 것이므로 건너뜀
             request.status = ApprovalDecisionType.BLOCKED
             request.decided_by = "system:timeout"
             request.decided_at = now.isoformat()
-            self._cas_save_approval_request(
+            success = self._cas_save_approval_request(
                 request, expected_status="waiting",
             )
+            if not success:
+                continue
 
             # 2. CRITICAL 알림
             self._send_timeout_notification(request, elapsed)

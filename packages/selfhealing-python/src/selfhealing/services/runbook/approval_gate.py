@@ -63,6 +63,7 @@ DEFAULT_APPROVAL_REMINDER_INTERVALS_MINUTES = [15, 30]
 
 # Redis Lua: 승인 요청 상태 기반 CAS
 # atomic_transition.py ATOMIC_TRANSITION_SCRIPT 패턴 — "현재 상태가 expected와 같을 때만 갱신"
+# KEEPTTL로 기존 TTL을 보존하여 상태 전환 시 키가 영구화되는 것을 방지 (Redis 6.0+)
 APPROVAL_CAS_SCRIPT = """
 local current = redis.call("GET", KEYS[1])
 if current == false then
@@ -70,7 +71,7 @@ if current == false then
 end
 local data = cjson.decode(current)
 if data["status"] == ARGV[2] then
-    redis.call("SET", KEYS[1], ARGV[1])
+    redis.call("SET", KEYS[1], ARGV[1], "KEEPTTL")
     return 1
 else
     return 0
@@ -402,15 +403,33 @@ class RunbookApprovalGate(GovernanceCheckMixin):
                 governance_result=gov_result,
             )
 
-        # 2. CRITICAL 차단 우회 + 감사 기록
-        logger.warning(
-            "runbook_approval.force_execute",
-            runbook_id=runbook.id,
-            risk_level=runbook.risk_level.value,
-            force_executed_by=force_executed_by,
-            justification=justification,
-            namespace=ctx.namespace,
-        )
+        # 2. 감사 로그 필수 여부 확인
+        audit_required = True
+        try:
+            audit_required = self._get_settings().force_execute_audit_required
+        except Exception:
+            pass  # 기본값(True) 폴백
+
+        if audit_required:
+            logger.warning(
+                "runbook_approval.force_execute",
+                runbook_id=runbook.id,
+                risk_level=runbook.risk_level.value,
+                force_executed_by=force_executed_by,
+                justification=justification,
+                namespace=ctx.namespace,
+                audit_required=True,
+            )
+        else:
+            logger.info(
+                "runbook_approval.force_execute",
+                runbook_id=runbook.id,
+                risk_level=runbook.risk_level.value,
+                force_executed_by=force_executed_by,
+                justification=justification,
+                namespace=ctx.namespace,
+                audit_required=False,
+            )
 
         return ApprovalDecision(
             decision_type=ApprovalDecisionType.MANUALLY_APPROVED,
@@ -564,14 +583,20 @@ class RunbookApprovalGate(GovernanceCheckMixin):
             elapsed = (now - created).total_seconds()
 
             if elapsed > max_wait:
-                # 1. 상태 전환
+                # 1. CAS 상태 전환 — 실패 시 이미 다른 결정이 확정된 것이므로 건너뜀
                 request.status = ApprovalDecisionType.BLOCKED
                 request.decided_by = "system:timeout"
                 request.decided_at = now.isoformat()
-                self._cas_save_approval_request(
+                success = self._cas_save_approval_request(
                     request,
                     expected_status="waiting",
                 )
+                if not success:
+                    logger.info(
+                        "runbook_approval.timeout_cas_conflict",
+                        execution_id=request.execution_id,
+                    )
+                    continue
 
                 # 2. CRITICAL 알림
                 self._send_timeout_notification(request, elapsed)
