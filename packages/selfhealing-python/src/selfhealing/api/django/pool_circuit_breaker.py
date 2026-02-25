@@ -828,6 +828,7 @@ class PoolCircuitBreakerMiddleware:
         if self._request_count % self._log_interval == 0:
             # v6.2.0: 캐시된 Pool 상태 사용 (Non-Blocking)
             pool_status = pool_circuit_breaker.get_cached_pool_status()
+            cache_stats = pool_circuit_breaker._stats
             logger.info(
                 "pool_circuit_breaker_middleware.pool_status_every_reqs",
                 _self=self._log_interval,
@@ -835,6 +836,7 @@ class PoolCircuitBreakerMiddleware:
                 total_capacity=pool_status.get("total_capacity", "?"),
                 usage_percent=pool_status.get("usage_percent", 0),
                 is_exhausted=pool_status.get("is_exhausted", False),
+                cache_stats=cache_stats.get("cache_hits", 0),
             )
 
         cb = pool_circuit_breaker
