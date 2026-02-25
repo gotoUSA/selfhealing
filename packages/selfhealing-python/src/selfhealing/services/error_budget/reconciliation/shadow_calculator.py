@@ -156,11 +156,7 @@ class ShadowBudgetCalculator:
         # Shadow Budget 계산
         shadow_consumed = primary_consumed_minutes + additional_consumed
         shadow_remaining = budget_total_minutes - shadow_consumed
-        shadow_remaining_percent = (
-            (shadow_remaining / budget_total_minutes) * 100
-            if budget_total_minutes > 0
-            else 0
-        )
+        shadow_remaining_percent = (shadow_remaining / budget_total_minutes) * 100 if budget_total_minutes > 0 else 0
 
         # 차이 계산
         adjustment_percent = primary_remaining_percent - shadow_remaining_percent
@@ -267,9 +263,7 @@ class ShadowBudgetCalculator:
             from selfhealing.settings import get_config
 
             sla_config = get_config().sla
-            domain_hours = sla_config.thresholds_by_domain.get(
-                domain.lower(), DEFAULT_SLA_HOURS
-            )
+            domain_hours = sla_config.thresholds_by_domain.get(domain.lower(), DEFAULT_SLA_HOURS)
 
             # SLA가 짧을수록 더 중요 → 역수 가중치
             # 0으로 나누기 방지
@@ -280,7 +274,7 @@ class ShadowBudgetCalculator:
 
             logger.debug(
                 "shadow_budget.domain_weight",
-                domain=domain,
+                healing_domain=domain,
                 domain_hours=domain_hours,
                 weight=weight,
             )
@@ -505,11 +499,7 @@ class ShadowBudgetCalculator:
             )
 
             # 대규모 조정 시 우선순위 상향
-            priority = (
-                NotificationPriority.HIGH
-                if shadow.adjustment_percent > 5.0
-                else NotificationPriority.MEDIUM
-            )
+            priority = NotificationPriority.HIGH if shadow.adjustment_percent > 5.0 else NotificationPriority.MEDIUM
 
             payload = NotificationPayload(
                 title="Shadow Budget 승인 대기",
@@ -560,9 +550,7 @@ class ShadowBudgetCalculator:
             from selfhealing.audit.event_buffer import AuditEvent, AuditEventType
 
             # 문자열을 enum으로 변환
-            audit_type = getattr(
-                AuditEventType, event_type.upper(), AuditEventType.GENERIC
-            )
+            audit_type = getattr(AuditEventType, event_type.upper(), AuditEventType.GENERIC)
 
             event = AuditEvent(
                 event_type=audit_type,

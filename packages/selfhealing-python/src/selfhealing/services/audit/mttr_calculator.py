@@ -158,9 +158,7 @@ class MTTRCalculator:
         recovery_events = self._collect_recovery_events(sorted_events)
 
         # 리포트 생성
-        return self._build_report(
-            sorted_events, recovery_events, period_start, period_end
-        )
+        return self._build_report(sorted_events, recovery_events, period_start, period_end)
 
     def _create_empty_report(
         self,
@@ -188,11 +186,7 @@ class MTTRCalculator:
         events: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
         """유효한 타임스탬프를 가진 이벤트 필터링 및 정렬."""
-        valid_events = [
-            e
-            for e in events
-            if self._parse_timestamp(e.get("timestamp", "")) is not None
-        ]
+        valid_events = [e for e in events if self._parse_timestamp(e.get("timestamp", "")) is not None]
         return sorted(
             valid_events,
             key=lambda e: self._parse_timestamp(e.get("timestamp", "")),  # type: ignore
@@ -214,9 +208,7 @@ class MTTRCalculator:
             if new_state == "open":
                 self._record_open_event(open_times, service, event, timestamp)
             elif new_state == "closed" and service in open_times:
-                recovery_event = self._create_recovery_event(
-                    service, open_times[service], timestamp
-                )
+                recovery_event = self._create_recovery_event(service, open_times[service], timestamp)
                 recovery_events.append(recovery_event)
                 del open_times[service]
 
@@ -317,8 +309,7 @@ class MTTRCalculator:
         # 타임스탬프로 정렬
         sorted_events = sorted(
             events,
-            key=lambda e: self._parse_timestamp(e.get("timestamp", ""))
-            or datetime.min.replace(tzinfo=timezone.utc),
+            key=lambda e: self._parse_timestamp(e.get("timestamp", "")) or datetime.min.replace(tzinfo=timezone.utc),
         )
 
         # 첫/마지막 타임스탬프 확인
@@ -340,10 +331,7 @@ class MTTRCalculator:
                 e
                 for e in sorted_events
                 if current_start
-                <= (
-                    self._parse_timestamp(e.get("timestamp", ""))
-                    or datetime.min.replace(tzinfo=timezone.utc)
-                )
+                <= (self._parse_timestamp(e.get("timestamp", "")) or datetime.min.replace(tzinfo=timezone.utc))
                 < current_end
             ]
 
@@ -397,7 +385,7 @@ class MTTRCalculator:
         except (ValueError, TypeError) as e:
             logger.debug(
                 "mttr_calculator.timestamp_parse_error",
-                ts=ts,
+                raw_timestamp=ts,
                 error=e,
             )
             return None
@@ -425,10 +413,7 @@ class MTTRCalculator:
                 by_service[e.service_name] = []
             by_service[e.service_name].append(e.duration_seconds)
 
-        return {
-            service: statistics.mean(durations)
-            for service, durations in by_service.items()
-        }
+        return {service: statistics.mean(durations) for service, durations in by_service.items()}
 
 
 # 싱글톤 인스턴스

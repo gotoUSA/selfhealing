@@ -198,7 +198,7 @@ class MetricSyncService:
             except Exception as e:
                 logger.warning(
                     "failed_get_dlq_pending",
-                    domain=domain,
+                    healing_domain=domain,
                     error=e,
                 )
                 result["dlq_pending"][domain] = 0
@@ -208,7 +208,7 @@ class MetricSyncService:
             except Exception as e:
                 logger.warning(
                     "failed_get_retry_rate",
-                    domain=domain,
+                    healing_domain=domain,
                     error=e,
                 )
                 result["retry_rate"][domain] = 0.0
@@ -376,7 +376,7 @@ class MetricSyncService:
             audit_logger.log(event)
             logger.info(
                 "metric_sync.audit_logged",
-                actor=actor,
+                actor_id=actor,
                 summary=summary,
             )
         except Exception as e:

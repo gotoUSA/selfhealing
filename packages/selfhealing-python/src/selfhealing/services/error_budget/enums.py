@@ -138,9 +138,7 @@ BURN_RATE_THRESHOLDS = {
 _failsafe_counter = 0
 
 
-def _send_failsafe_alert(
-    component: str, error_message: str, fallback_action: str
-) -> None:
+def _send_failsafe_alert(component: str, error_message: str, fallback_action: str) -> None:
     """
     Fail-Safe 발동 시 알림 발송.
 
@@ -153,7 +151,7 @@ def _send_failsafe_alert(
     # 1. 로그 (항상 남김)
     logger.critical(
         "fail_safe_시스템_장애로",
-        component=component,
+        error_budget_component=component,
         error_message=error_message,
         fallback_action=fallback_action,
         _failsafe_counter=_failsafe_counter,

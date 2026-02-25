@@ -539,7 +539,7 @@ class IncidentGroupManager:
             logger.info(
                 "incident_group_manager.group_timeout",
                 group_id=group_id,
-                value=now - created_ts,
+                incident_age_seconds=now - created_ts,
             )
             return True
 
@@ -553,7 +553,7 @@ class IncidentGroupManager:
                     logger.info(
                         "incident_group_manager.group_inactivity_ago",
                         group_id=group_id,
-                        value=now - last_ts,
+                        time_since_last_event=now - last_ts,
                     )
                     return True
             except (ValueError, AttributeError):

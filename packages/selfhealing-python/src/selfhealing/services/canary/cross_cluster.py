@@ -323,7 +323,7 @@ class LoggingNotificationBackend(NotificationBackend):
         logger.info(
             "cross_cluster_notification.event",
             channel=channel,
-            message=message[:100],
+            notification_message=message[:100],
             metadata=metadata,
         )
         return True
@@ -679,7 +679,7 @@ class CrossClusterPropagationRequest:
 
             logger.info(
                 "cross_cluster_propagation.request_created",
-                request=request.request_id,
+                cross_cluster_request_id=request.request_id,
                 source_cluster=source_cluster,
                 cluster=cluster,
             )
@@ -1000,7 +1000,7 @@ class GovernancePolicySync:
         logger.info(
             "governance_policy_sync.synced_policy_clusters",
             policy=policy.policy_id,
-            count=len(self.clusters),
+            clusters_count=len(self.clusters),
         )
 
         return results

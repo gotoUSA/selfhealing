@@ -174,9 +174,7 @@ class EmergencyStateRefresher:
 
                 # 레벨 상승 시 활성 롤아웃 일시 중지
                 if new_level > old_level and self._canary_service:
-                    self._pause_all_active_rollouts(
-                        reason=f"Emergency level increased to {result.emergency_level_name}"
-                    )
+                    self._pause_all_active_rollouts(reason=f"Emergency level increased to {result.emergency_level_name}")
 
                 return {
                     "namespace": namespace,
@@ -205,7 +203,7 @@ class EmergencyStateRefresher:
                 self._consecutive_failures += 1
                 logger.exception(
                     "emergency_state_refresher.refresh_error_failures",
-                    _self=self._consecutive_failures,
+                    consecutive_failures=self._consecutive_failures,
                     error=e,
                 )
 
@@ -237,12 +235,12 @@ class EmergencyStateRefresher:
                     count += 1
                     logger.warning(
                         "emergency_state_refresher.paused_rollout",
-                        rollout=rollout.id,
+                        rollout_id=rollout.id,
                     )
                 except Exception as e:
                     logger.exception(
                         "emergency_state_refresher.failed_pause",
-                        rollout=rollout.id,
+                        rollout_id=rollout.id,
                         error=e,
                     )
 

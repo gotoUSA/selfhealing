@@ -201,7 +201,7 @@ class FinOpsService:
         self._alerts.append(alert)
         logger.warning(
             "cost_alert",
-            message=message,
+            detail_message=message,
         )
 
         # Audit 로깅
@@ -442,7 +442,7 @@ class FinOpsService:
         self._domain_weights[domain.lower()] = capped_weight
         logger.info(
             "fin_ops.domain_weight_set",
-            domain=domain,
+            healing_domain=domain,
             capped_weight=capped_weight,
         )
 

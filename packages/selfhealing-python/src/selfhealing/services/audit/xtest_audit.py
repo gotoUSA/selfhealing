@@ -75,10 +75,10 @@ def log_xtest_operation_audit(
     if wal_seq:
         logger.debug(
             "test_audit",
-            action=action,
-            component=component,
+            test_action=action,
+            test_component=component,
             session_id=session_id,
-            result=result,
+            test_result=result,
             wal_seq=wal_seq,
         )
 
@@ -146,7 +146,7 @@ def log_xtest_scenario_audit(
             "test_audit_scenario_completed",
             scenario_name=scenario_name,
             service_name=service_name,
-            status=status,
+            scenario_status=status,
             steps_completed=steps_completed,
             steps_total=steps_total,
             duration_ms=duration_ms,

@@ -133,7 +133,7 @@ class LoadSheddingManager:
         self._service_configs[config.service_id] = config
         logger.debug(
             "load_shedding_manager.service_registered",
-            config=config.service_id,
+            target_service_id=config.service_id,
             criticality=config.criticality,
         )
         return True
@@ -368,7 +368,7 @@ class LoadSheddingManager:
             event_type=event_type,
             previous_level_index=previous_level_index,
             new_level_index=new_level_index,
-            count=len(affected_services),
+            affected_services_count=len(affected_services),
         )
 
         return audit_entry

@@ -45,7 +45,7 @@ class ApprovalMixin:
 
             logger.info(
                 "recovery.waiting_approval",
-                session=session.id,
+                recovery_session_id=session.id,
                 namespace=session.namespace,
             )
         else:
@@ -103,7 +103,7 @@ class ApprovalMixin:
             if session.status != RecoveryStatus.READY_TO_RESTORE:
                 logger.warning(
                     "recovery.cannot_approve_session_state",
-                    session=session.status,
+                    recovery_session_status=session.status,
                 )
                 return None
 
@@ -138,7 +138,7 @@ class ApprovalMixin:
 
             logger.info(
                 "recovery.approved",
-                session=session.id,
+                recovery_session_id=session.id,
                 approved_by=approved_by,
             )
 

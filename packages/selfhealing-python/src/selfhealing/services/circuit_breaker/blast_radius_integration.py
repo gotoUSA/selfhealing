@@ -436,9 +436,9 @@ class BlastRadiusIntegration:
         logger.info(
             "blast_radius_integration.impact_assessed",
             trigger_service=trigger_service,
-            level=level.value,
+            blast_radius_level=level.value,
             affected_count=affected_count,
-            count=len(critical_affected),
+            critical_affected_count=len(critical_affected),
         )
 
         return assessment

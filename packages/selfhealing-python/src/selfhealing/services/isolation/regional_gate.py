@@ -198,7 +198,7 @@ class RegionalIsolationGate:
 
             logger.warning(
                 "cell_evacuation.cell_isolated",
-                region=region,
+                target_region=region,
                 reason=reason,
                 duration_seconds=duration_seconds,
                 operator=operator,
@@ -219,7 +219,7 @@ class RegionalIsolationGate:
         except Exception as e:
             logger.exception(
                 "regional_isolation_gate.failed_isolate_region",
-                region=region,
+                target_region=region,
                 error=e,
             )
 
@@ -342,7 +342,7 @@ class RegionalIsolationGate:
 
                 logger.info(
                     "regional_isolation_gate.region_restored",
-                    region=region,
+                    target_region=region,
                 )
 
                 # === Audit 기록: 리전 복원 (85_AUDIT_INTEGRATION Phase 1) ===
@@ -365,7 +365,7 @@ class RegionalIsolationGate:
         except Exception as e:
             logger.exception(
                 "regional_isolation_gate.failed_restore_region",
-                region=region,
+                target_region=region,
                 error=e,
             )
 

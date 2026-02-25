@@ -45,7 +45,7 @@ def _on_emergency_level_changed_throttle(event: SelfHealingEvent) -> None:
         logger.info(
             "throttle.emergency_level_limit",
             previous_level=previous_level,
-            level=level,
+            throttle_level=level,
             previous_limit=previous_limit,
             throttle=throttle.current_limit,
         )

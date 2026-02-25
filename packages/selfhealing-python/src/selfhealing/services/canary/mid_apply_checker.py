@@ -154,7 +154,7 @@ class MidApplyInterlockChecker:
                 if not interlock_result.allowed:
                     logger.warning(
                         "mid_apply_interlock_checker.interlock_triggered_cluster",
-                        i=i,
+                        cluster_index=i,
                         interlock_result=interlock_result.action,
                         reason=interlock_result.reason,
                     )

@@ -74,7 +74,7 @@ def on_circuit_breaker_closed_integrity_gate(event: Any) -> None:
             logger.critical(
                 "integrity_gate.integrity_violation_replay_blocked",
                 service_name=service_name,
-                result=result.get('errors', []),
+                errors=result.get("errors", []),
             )
             _send_integrity_violation_alert(service_name, result, duration_ms)
         else:
@@ -82,7 +82,7 @@ def on_circuit_breaker_closed_integrity_gate(event: Any) -> None:
             logger.info(
                 "integrity_gate.integrity_ok_entries_ms",
                 service_name=service_name,
-                result=result.get('checked', 0),
+                checked=result.get("checked", 0),
                 duration_ms=duration_ms,
             )
 

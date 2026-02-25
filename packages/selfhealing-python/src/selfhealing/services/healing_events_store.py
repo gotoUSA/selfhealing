@@ -135,7 +135,7 @@ def add_healing_event_redis(event: dict[str, Any]) -> bool:
 
             logger.debug(
                 "healing_events.event_saved_redis",
-                key=key,
+                event_store_key=key,
             )
             return True
 

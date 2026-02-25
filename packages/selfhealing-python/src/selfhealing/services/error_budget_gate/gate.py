@@ -203,8 +203,8 @@ class ErrorBudgetGate:
                     setattr(self._config, key, value)
                     logger.info(
                         "error_budget_gate.updated_config",
-                        key=key,
-                        value=value,
+                        config_key=key,
+                        config_value=value,
                     )
 
             # 캐시 무효화
@@ -298,13 +298,13 @@ class ErrorBudgetGate:
                 logger.warning(
                     "error_budget_gate.automation_blocked_error_budget",
                     budget_percent=budget_percent,
-                    _self=self._config.critical_threshold_percent,
+                    critical_threshold_percent=self._config.critical_threshold_percent,
                 )
             elif result.status == GateStatus.WARNING:
                 logger.info(
                     "error_budget_gate.warning_error_budget",
                     budget_percent=budget_percent,
-                    _self=self._config.warning_threshold_percent,
+                    warning_threshold_percent=self._config.warning_threshold_percent,
                 )
 
             return result
@@ -574,8 +574,8 @@ class ErrorBudgetGate:
         if not result.allowed:
             logger.warning(
                 "error_budget_gate.action_blocked_error_budget",
-                value=action or 'unknown',
-                result=result.error_budget_percent,
+                gate_action=action or "unknown",
+                result_error_budget_percent=result.error_budget_percent,
             )
 
             # 감사 로깅

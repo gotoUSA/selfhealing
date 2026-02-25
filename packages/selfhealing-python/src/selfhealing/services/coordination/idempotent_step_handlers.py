@@ -294,7 +294,7 @@ class IdempotentStepHandler(ABC):
             logger.info(
                 "idempotent_step_handler.returning_cached_result",
                 idempotency_key=idempotency_key,
-                status=record.status.value,
+                step_status=record.status.value,
             )
             return {
                 "success": record.status == IdempotencyStatus.COMPLETED,

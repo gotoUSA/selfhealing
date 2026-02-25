@@ -97,9 +97,7 @@ class RegionalRecoveryConfig:
     approval_timeout_minutes: int = 60
     """수동 승인 타임아웃 (분). 초과 시 알림 재발송."""
 
-    approval_escalation_intervals: list[int] = field(
-        default_factory=lambda: [15, 30, 60]  # 15분, 30분, 60분에 알림
-    )
+    approval_escalation_intervals: list[int] = field(default_factory=lambda: [15, 30, 60])  # 15분, 30분, 60분에 알림
     """승인 대기 시 알림 발송 간격 (분)."""
 
     # 우선순위
@@ -141,9 +139,7 @@ class RegionalRecoveryConfig:
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
     @classmethod
-    def from_settings(
-        cls, namespace: str = "global", **overrides
-    ) -> RegionalRecoveryConfig:
+    def from_settings(cls, namespace: str = "global", **overrides) -> RegionalRecoveryConfig:
         """
         RegionalRecoveryPolicySettings에서 기본값을 가져와 생성.
 
@@ -161,15 +157,9 @@ class RegionalRecoveryConfig:
                 "stability_check_duration_minutes",
                 settings.stability_check_duration_minutes,
             ),
-            error_rate_threshold=overrides.get(
-                "error_rate_threshold", settings.error_rate_threshold
-            ),
-            success_rate_threshold=overrides.get(
-                "success_rate_threshold", settings.success_rate_threshold
-            ),
-            approval_timeout_minutes=overrides.get(
-                "approval_timeout_minutes", settings.approval_timeout_minutes
-            ),
+            error_rate_threshold=overrides.get("error_rate_threshold", settings.error_rate_threshold),
+            success_rate_threshold=overrides.get("success_rate_threshold", settings.success_rate_threshold),
+            approval_timeout_minutes=overrides.get("approval_timeout_minutes", settings.approval_timeout_minutes),
             approval_escalation_intervals=overrides.get(
                 "approval_escalation_intervals",
                 [
@@ -354,9 +344,7 @@ class RegionalRecoveryPolicyEngine:
             default_configs: 초기 리전별 설정 (없으면 settings 기반 기본값 사용)
         """
         self._configs: dict[str, RegionalRecoveryConfig] = dict(
-            default_configs
-            if default_configs is not None
-            else get_default_regional_configs()
+            default_configs if default_configs is not None else get_default_regional_configs()
         )
         self._lock = threading.RLock()
 
@@ -398,7 +386,7 @@ class RegionalRecoveryPolicyEngine:
             self._configs[config.namespace] = config
             logger.info(
                 "cell_registry.bulkheads_registered",
-                config=config.namespace,
+                recovery_policy_namespace=config.namespace,
             )
 
     def remove_config(self, namespace: str) -> bool:

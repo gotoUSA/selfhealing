@@ -109,7 +109,7 @@ class AdaptiveReplayManager:
 
             logger.info(
                 "adaptive_replay.initialized",
-                _self=self._config.initial_items,
+                initial_items=self._config.initial_items,
                 min_items=self._config.min_items,
                 max_items=self._config.max_items,
             )
@@ -133,11 +133,11 @@ class AdaptiveReplayManager:
 
             logger.info(
                 "adaptive_replay.config_updated",
-                config=config.min_items,
+                new_min_items=config.min_items,
                 old_config=old_config.min_items,
                 new_max_items=config.max_items,
                 old_max_items=old_config.max_items,
-                _self=self._current_items,
+                current_items=self._current_items,
             )
 
     def get_current_max_items(self) -> int:
@@ -206,7 +206,7 @@ class AdaptiveReplayManager:
                 "adaptive_replay.high_failure_rate_reduced",
                 failure_rate=failure_rate,
                 old_items=old_items,
-                _self=self._current_items,
+                current_items=self._current_items,
             )
 
         elif failures == 0:
@@ -220,14 +220,14 @@ class AdaptiveReplayManager:
 
                 logger.info(
                     "adaptive_replay.consecutive_successes_increased",
-                    _self=self._config.success_streak_required,
+                    success_streak_required=self._config.success_streak_required,
                     old_items=old_items,
                     current_items=self._current_items,
                 )
             else:
                 logger.debug(
                     "adaptive_replay.perfect_batch_streak",
-                    _self=self._success_streak,
+                    success_streak=self._success_streak,
                 )
         else:
             # Some failures but below threshold
@@ -235,7 +235,7 @@ class AdaptiveReplayManager:
             logger.debug(
                 "adaptive_replay.partial_success_streak_reset",
                 failure_rate=failure_rate,
-                _self=self._current_items,
+                current_items=self._current_items,
             )
 
     def get_stats(self) -> dict:
@@ -282,7 +282,7 @@ class AdaptiveReplayManager:
 
             logger.info(
                 "adaptive_replay.reset_initial_state",
-                _self=self._current_items,
+                current_items=self._current_items,
             )
 
 

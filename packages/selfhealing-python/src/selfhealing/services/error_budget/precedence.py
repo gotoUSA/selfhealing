@@ -184,7 +184,7 @@ class MultiplierPrecedenceResolver:
         if result != final:
             logger.warning(
                 "precedence_resolver.multiplier_capped",
-                result=result,
+                precedence_result=result,
                 final=final,
                 strategy=strategy.value,
             )
@@ -209,10 +209,7 @@ class MultiplierPrecedenceResolver:
         final = self.resolve(level_multiplier, domain_multiplier)
         strategy = self.config.combine_strategy
 
-        return (
-            f"Level={level_multiplier}x, Domain={domain_multiplier}x, "
-            f"Strategy={strategy.value}, Final={final}x"
-        )
+        return f"Level={level_multiplier}x, Domain={domain_multiplier}x, " f"Strategy={strategy.value}, Final={final}x"
 
     def set_strategy(self, strategy: MultiplierCombineStrategy) -> None:
         """

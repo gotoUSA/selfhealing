@@ -41,7 +41,7 @@ if current_level and current_level ~= ARGV[1] then
 end
 
 -- 원자적 상태 업데이트
-redis.call("HMSET", KEYS[1], 
+redis.call("HMSET", KEYS[1],
     "level", ARGV[2],
     "governance_mode", ARGV[3],
     "causation_id", ARGV[4],
@@ -221,12 +221,8 @@ class AtomicLevelTransition:
             )
 
             success = result[0] == 1
-            message = (
-                result[1] if isinstance(result[1], str) else result[1].decode("utf-8")
-            )
-            level = (
-                result[2] if isinstance(result[2], str) else result[2].decode("utf-8")
-            )
+            message = result[1] if isinstance(result[1], str) else result[1].decode("utf-8")
+            level = result[2] if isinstance(result[2], str) else result[2].decode("utf-8")
 
             if success:
                 logger.info(
@@ -238,8 +234,8 @@ class AtomicLevelTransition:
             else:
                 logger.warning(
                     "atomic_transition.failed",
-                    message=message,
-                    level=level,
+                    detail_message=message,
+                    transition_level=level,
                     expected_level=expected_level,
                 )
 
@@ -295,12 +291,8 @@ class AtomicLevelTransition:
             )
 
             success = result[0] == 1
-            message = (
-                result[1] if isinstance(result[1], str) else result[1].decode("utf-8")
-            )
-            level = (
-                result[2] if isinstance(result[2], str) else result[2].decode("utf-8")
-            )
+            message = result[1] if isinstance(result[1], str) else result[1].decode("utf-8")
+            level = result[2] if isinstance(result[2], str) else result[2].decode("utf-8")
 
             return (success, message, level)
 
@@ -350,12 +342,8 @@ class AtomicLevelTransition:
             )
 
             success = result[0] == 1
-            message = (
-                result[1] if isinstance(result[1], str) else result[1].decode("utf-8")
-            )
-            level = (
-                result[2] if isinstance(result[2], str) else result[2].decode("utf-8")
-            )
+            message = result[1] if isinstance(result[1], str) else result[1].decode("utf-8")
+            level = result[2] if isinstance(result[2], str) else result[2].decode("utf-8")
 
             return (success, message, level)
 

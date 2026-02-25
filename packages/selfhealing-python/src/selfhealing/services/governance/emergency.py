@@ -468,7 +468,7 @@ class EmergencyModeTracker:
                 "governance.notification",
                 event_type=event_type,
                 channels=channels,
-                message=message[:100],
+                emergency_notification_message=message[:100],
             )
 
             # Call registered notification handlers

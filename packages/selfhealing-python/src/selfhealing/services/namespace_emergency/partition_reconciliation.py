@@ -479,8 +479,8 @@ class PartitionReconciliationService:
 
         logger.warning(
             "partition_reconciliation.action",
-            action=action.action_type,
-            message=action.message,
+            reconciliation_action_type=action.action_type,
+            reconciliation_message=action.message,
         )
 
     # =========================================================================
@@ -507,7 +507,7 @@ class PartitionReconciliationService:
 
         logger.info(
             "partition_reconciliation.heartbeat_loop_started",
-            _self=self._heartbeat_interval,
+            heartbeat_interval=self._heartbeat_interval,
             partition_threshold=self._partition_threshold,
         )
 
@@ -532,7 +532,7 @@ class PartitionReconciliationService:
                 if status.is_partitioned and not was_partitioned:
                     logger.warning(
                         "partition_reconciliation.partition_detected",
-                        status=status.partition_duration_seconds,
+                        partition_duration_seconds=status.partition_duration_seconds,
                     )
                 elif not status.is_partitioned and was_partitioned:
                     logger.info("partition_reconciliation.partition_recovered_triggering_reconciliation")

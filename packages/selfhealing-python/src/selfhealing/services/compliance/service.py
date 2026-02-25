@@ -366,7 +366,7 @@ class ComplianceService:
         logger.info(
             "standards_set",
             stage_name=stage_name,
-            value=[s.value for s in standards],
+            compliance_standard_names=[s.value for s in standards],
         )
 
     def run_check(
@@ -501,7 +501,7 @@ class ComplianceService:
             "compliance_report_generated",
             stage_name=stage_name,
             score=score,
-            count=len(violations),
+            violations_count=len(violations),
         )
 
         return report

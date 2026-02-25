@@ -84,11 +84,7 @@ def log_retry_audit(
         try:
             from selfhealing.audit.event_buffer import AuditEventType
 
-            audit_event_type = (
-                AuditEventType.RETRY_EXHAUSTED
-                if is_exhausted
-                else AuditEventType.RETRY_ATTEMPTED
-            )
+            audit_event_type = AuditEventType.RETRY_EXHAUSTED if is_exhausted else AuditEventType.RETRY_ATTEMPTED
 
             added = _try_add_to_buffer(
                 request=request,
@@ -108,11 +104,11 @@ def log_retry_audit(
     status = "SUCCESS" if success else ("EXHAUSTED" if is_exhausted else "RETRY")
     logger.info(
         "retry_audit.event",
-        status=status,
-        domain=domain,
+        retry_status=status,
+        healing_domain=domain,
         attempt=attempt,
         max_attempts=max_attempts,
-        value=error_type or 'none',
+        error_type_name=error_type or "none",
     )
     return wal_seq
 
@@ -178,9 +174,9 @@ def log_system_control_audit(
     # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
     logger.info(
         "system_control_audit.event",
-        action=action.upper(),
-        actor=actor,
-        value=reason or 'N/A',
+        control_action=action.upper(),
+        actor_id=actor,
+        control_reason=reason or "N/A",
     )
     return wal_seq
 
@@ -268,10 +264,10 @@ def log_rollback_audit(
     # === Step 3: request 없거나 버퍼 실패 시 직접 기록 ===
     logger.info(
         "rollback_audit.event",
-        state=state.upper(),
+        rollback_state=state.upper(),
         request_id=request_id,
         stage_name=stage_name,
         triggered_by=triggered_by,
-        value=duration_seconds or 0,
+        duration_seconds=duration_seconds or 0,
     )
     return wal_seq

@@ -86,9 +86,9 @@ class DryRunAuditLogger:
 
         logger.info(
             "dry_run.execute",
-            type=action.type.value,
+            action_type=action.type.value,
             namespace=namespace,
-            action=action.params,
+            action_params=action.params,
         )
 
         # 실제 audit 시스템 연동 시 여기서 기록
@@ -236,7 +236,7 @@ class EmergencyCoordinator:
                 if action.immediate:
                     logger.error(
                         "coordinator.immediate_action_failed_aborting",
-                        type=action.type.value,
+                        action_type=action.type.value,
                     )
                     break
 
@@ -403,7 +403,7 @@ class EmergencyCoordinator:
                 "coordinator.cascade_event_recorded",
                 old_level=old_level.name,
                 new_level=new_level.name,
-                count=len(effects),
+                effects_count=len(effects),
             )
         except Exception as e:
             # Cascade 기록 실패는 Emergency 처리를 중단시키면 안 됨
@@ -484,7 +484,7 @@ class EmergencyCoordinator:
 
             logger.info(
                 "coordinator.action_executed_min",
-                type=action.type.value,
+                action_type=action.type.value,
                 namespace=namespace,
                 effective_ttl=effective_ttl,
             )
@@ -500,7 +500,7 @@ class EmergencyCoordinator:
         except Exception as e:
             logger.exception(
                 "coordinator.action_failed",
-                type=action.type.value,
+                action_type=action.type.value,
                 namespace=namespace,
                 error=e,
             )
@@ -527,9 +527,9 @@ class EmergencyCoordinator:
         # Phase 1: 로깅만 수행
         logger.info(
             "coordinator.executing_min",
-            type=action.type.value,
+            action_type=action.type.value,
             namespace=namespace,
-            action=action.params,
+            action_params=action.params,
             effective_ttl=effective_ttl,
         )
 

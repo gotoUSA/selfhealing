@@ -150,13 +150,13 @@ class DistributedRateLimitChannel:
             if success:
                 logger.info(
                     "distributed_rate_limit_channel.broadcasted",
-                    key=key,
+                    rate_limit_key=key,
                     consecutive_429s=consecutive_429s,
                 )
             else:
                 logger.warning(
                     "distributed_rate_limit_channel.failed_broadcast",
-                    key=key,
+                    rate_limit_key=key,
                 )
 
             return success
@@ -182,7 +182,7 @@ class DistributedRateLimitChannel:
             self._handlers.append(handler)
             logger.info(
                 "distributed_rate_limit_channel.handler_registered_total",
-                count=len(self._handlers),
+                handlers_count=len(self._handlers),
             )
 
         # 아직 구독 설정 안 됐으면 Kafka 구독 설정

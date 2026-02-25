@@ -295,7 +295,7 @@ class CorrelationEngineService:
             if isinstance(strategy, StrategyLifecycle):
                 logger.info(
                     "correlation_engine.tearing_down_ml_strategy",
-                    name=name,
+                    strategy_name=name,
                 )
                 strategy.teardown()
 
@@ -491,8 +491,8 @@ class CorrelationEngineService:
             if result:
                 logger.info(
                     "correlation_engine.auto_analysis_complete",
-                    result=result["incident_id"],
-                    value=result["root_cause"].primary_cause.event_node.service_name,
+                    created_incident_id=result["incident_id"],
+                    root_cause_service=result["root_cause"].primary_cause.event_node.service_name,
                     primary_cause_score=result["root_cause"].primary_cause.score,
                 )
         except Exception as e:
@@ -737,7 +737,7 @@ class CorrelationEngineService:
 
             logger.info(
                 "correlation_engine.config_reloaded",
-                _self=self._settings.zscore_threshold,
+                zscore_threshold=self._settings.zscore_threshold,
                 window_seconds=self._settings.window_seconds,
             )
 
@@ -983,14 +983,14 @@ class CorrelationEngineService:
             if isinstance(strategy, StrategyLifecycle):
                 logger.info(
                     "correlation_engine.initializing_ml_strategy",
-                    name=name,
+                    strategy_name=name,
                 )
                 strategy.initialize()
                 strategy.warmup()
                 if not strategy.is_ready():
                     logger.error(
                         "correlation_engine.strategy_failed_readiness_check",
-                        name=name,
+                        strategy_name=name,
                     )
 
     def get_ml_strategies(self) -> list[tuple[str, Any]]:

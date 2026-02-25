@@ -323,7 +323,7 @@ class CoOccurrenceTracker:
             self._pair_detectors[key] = ZScoreDetector(window=100, threshold=self._zscore_threshold)
             logger.debug(
                 "first_co_occurrence_detected",
-                key=key,
+                co_occurrence_pair_key=key,
             )
 
     # ─── 주기적 분석 (Cold Path) ───
@@ -542,7 +542,7 @@ class CoOccurrenceTracker:
             self._last_report_times.pop(key, None)
             logger.debug(
                 "cell_registry.services_evicted",
-                key=key,
+                co_occurrence_pair_key=key,
             )
 
     # ─── 유틸리티 ───

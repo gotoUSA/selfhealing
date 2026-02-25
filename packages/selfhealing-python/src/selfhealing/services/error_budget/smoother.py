@@ -137,7 +137,7 @@ class MultiplierSmoother:
 
             logger.debug(
                 "smoother.target_changed",
-                _self=self._current_value,
+                current_value=self._current_value,
                 target_multiplier=target_multiplier,
             )
 
@@ -167,9 +167,7 @@ class MultiplierSmoother:
 
         # Exponential smoothing 적용
         alpha = self.config.smoothing_factor
-        self._current_value = (
-            alpha * self._target_value + (1 - alpha) * self._current_value
-        )
+        self._current_value = alpha * self._target_value + (1 - alpha) * self._current_value
 
         # 수렴 확인
         if self._has_converged():
@@ -206,10 +204,7 @@ class MultiplierSmoother:
 
     def _has_converged(self) -> bool:
         """수렴 여부 확인."""
-        return (
-            abs(self._current_value - self._target_value)
-            < self.config.convergence_threshold
-        )
+        return abs(self._current_value - self._target_value) < self.config.convergence_threshold
 
     def get_transition_progress(self) -> float:
         """
@@ -253,7 +248,7 @@ class MultiplierSmoother:
         self._current_value = self._target_value
         logger.debug(
             "smoother.forced_convergence",
-            _self=self._target_value,
+            target_value=self._target_value,
         )
 
     def reset(self) -> None:

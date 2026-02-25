@@ -356,7 +356,7 @@ class PendingConfigService:
                 self._save_state()
                 logger.info(
                     "pending_config.cleaned_up_expired_changes",
-                    count=len(expired),
+                    expired_count=len(expired),
                 )
 
             return len(expired)

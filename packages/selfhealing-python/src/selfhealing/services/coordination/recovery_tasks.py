@@ -230,7 +230,7 @@ def check_recovery_trigger_task(
 
             logger.info(
                 "check_recovery_trigger.recovery_started",
-                session=session.session_id,
+                recovery_session_id=session.session_id,
                 namespace=namespace,
             )
 
@@ -503,7 +503,7 @@ def monitor_recovery_health_task(
             logger.warning(
                 "monitor_recovery_health.circuitbreaker_tripped",
                 namespace=namespace,
-                result=result['reason'],
+                recovery_skip_reason=result["reason"],
             )
 
             # 재에스컬레이션 필요 시 Emergency 재진입

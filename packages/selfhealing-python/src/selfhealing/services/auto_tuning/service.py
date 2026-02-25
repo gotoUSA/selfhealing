@@ -729,8 +729,8 @@ class AutoTuningService:
 
             logger.info(
                 "auto_tuning_service.override",
-                parameter=parameter,
-                value=value,
+                tuning_parameter=parameter,
+                tuned_value=value,
                 overridden_by=overridden_by,
             )
 
@@ -939,7 +939,7 @@ class AutoTuningService:
                 logger.info(
                     "notification.event",
                     title=title,
-                    message=message,
+                    detail_message=message,
                 )
         except Exception as e:
             logger.warning(
@@ -1012,7 +1012,7 @@ class AutoTuningService:
                 logger.info(
                     "notification.event",
                     title=title,
-                    message=message,
+                    detail_message=message,
                 )
 
         return DefaultAlertManager()
@@ -1026,7 +1026,7 @@ class AutoTuningService:
         logger.warning(
             "auto_tuning_service.guard_alert",
             alert_type=alert_type,
-            message=message,
+            detail_message=message,
         )
 
 

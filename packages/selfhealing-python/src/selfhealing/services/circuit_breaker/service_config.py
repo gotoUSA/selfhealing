@@ -125,9 +125,9 @@ class ServiceConfigManager:
         action = "updated" if is_update else "registered"
         logger.info(
             "service_config_manager.service",
-            action=action,
+            config_action=action,
             service_id=service_id,
-            config=config.criticality,
+            service_criticality=config.criticality,
             shed_priority=config.shed_priority,
         )
 
@@ -184,7 +184,7 @@ class ServiceConfigManager:
         self._services.clear()
         logger.info(
             "service_config_manager.all_services_cleared_services",
-            count=count,
+            cleared_services_count=count,
         )
         return count
 
@@ -438,7 +438,7 @@ class ServiceConfigManager:
 
         logger.info(
             "service_config_manager.configured_advanced_config_services",
-            count=count,
+            registered_services_count=count,
         )
 
         return count

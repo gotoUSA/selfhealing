@@ -167,7 +167,7 @@ class GracefulDegradationManager:
                 record_emergency_cache_drift()
                 logger.warning(
                     "emergency_mode.drift_detected",
-                    level=self._state.level.name,
+                    current_level=self._state.level.name,
                     backend_level=backend_state.level.name,
                 )
                 # 자동 동기화: 백엔드 상태로 업데이트
@@ -179,7 +179,7 @@ class GracefulDegradationManager:
                 record_emergency_cache_drift()
                 logger.warning(
                     "emergency_mode.drift_detected_cached_backend",
-                    _self=self._state.is_active,
+                    state_is_active=self._state.is_active,
                     backend_state=backend_state.is_active,
                 )
                 self._state = backend_state
@@ -205,8 +205,8 @@ class GracefulDegradationManager:
                 self._state = EmergencyState.from_dict(data)
                 logger.info(
                     "emergency_mode.loaded_state",
-                    level=self._state.level.name,
-                    _self=self._state.is_active,
+                    current_level=self._state.level.name,
+                    state_is_active=self._state.is_active,
                 )
             # 로드 시간 기록 (TTL 캐시용)
             self._last_load_time = datetime.now(timezone.utc)
@@ -303,7 +303,7 @@ class GracefulDegradationManager:
 
         logger.debug(
             "emergency_mode.saved_pre_mutation_snapshot",
-            action=action,
+            emergency_action=action,
         )
 
     def get_previous_states(self) -> list[dict[str, Any]]:
@@ -353,7 +353,7 @@ class GracefulDegradationManager:
             logger.warning(
                 "emergency_mode.rolled_back_snapshot_original",
                 snapshot=snapshot["timestamp"],
-                action=snapshot["action"],
+                applied_action=snapshot["action"],
             )
 
             return self.get_state()
@@ -463,10 +463,10 @@ class GracefulDegradationManager:
             logger.warning(
                 "emergency_mode.activated",
                 activated_by=activated_by,
-                level=level.name,
+                emergency_level_name=level.name,
                 reason=reason,
-                _self=self._state.expires_at or "manual",
-                value=", chaos_experiment=True" if is_chaos_experiment else "",
+                state_expires_at=self._state.expires_at or "manual",
+                chaos_experiment_note=", chaos_experiment=True" if is_chaos_experiment else "",
             )
 
             # Event Bus 발행: 다른 컴포넌트에 알림
@@ -502,7 +502,7 @@ class GracefulDegradationManager:
             if self._state.is_active and self._state.level.value >= level.value:
                 logger.info(
                     "emergency_mode.auto_trigger_ignored_current",
-                    level=self._state.level.name,
+                    current_level=self._state.level.name,
                     requested_level=level.name,
                 )
                 return self.get_state()
@@ -534,7 +534,7 @@ class GracefulDegradationManager:
 
             logger.warning(
                 "emergency_mode.auto_activated_min",
-                level=level.name,
+                emergency_level_name=level.name,
                 reason=reason,
                 duration_minutes=duration_minutes,
             )
@@ -666,7 +666,7 @@ class GracefulDegradationManager:
             logger.info(
                 "emergency_mode.gradual_recovery_started",
                 initiated_by=initiated_by,
-                level=self._state.level.name,
+                current_level=self._state.level.name,
                 target_level=target_level.name,
             )
 
@@ -695,7 +695,7 @@ class GracefulDegradationManager:
                 logger.info(
                     "emergency_mode.gradual_recovery_stopped",
                     stopped_by=stopped_by,
-                    value=reason or "Manual stop",
+                    stop_reason=reason or "Manual stop",
                 )
 
         return self.get_state()
@@ -725,7 +725,7 @@ class GracefulDegradationManager:
             # 안정화 대기
             logger.info(
                 "emergency_mode.waiting_stabilization_before_next",
-                config=config.stabilization_period_seconds,
+                stabilization_period_seconds=config.stabilization_period_seconds,
             )
             if self._stop_recovery.wait(config.stabilization_period_seconds):
                 break  # 중지 요청됨
@@ -747,7 +747,7 @@ class GracefulDegradationManager:
                     logger.warning(
                         "emergency_mode.recovery_check_failed_retrying",
                         reason=reason,
-                        config=config.health_check_interval_seconds,
+                        health_check_interval_seconds=config.health_check_interval_seconds,
                     )
                     if self._stop_recovery.wait(config.health_check_interval_seconds):
                         break
@@ -918,7 +918,7 @@ class GracefulDegradationManager:
             )
             logger.debug(
                 "emergency_mode.saved_confighistory",
-                action=action,
+                emergency_action=action,
             )
         except Exception as e:
             # Graceful degradation - 히스토리 저장 실패해도 상태 변경은 성공

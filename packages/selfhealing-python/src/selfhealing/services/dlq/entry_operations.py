@@ -63,8 +63,8 @@ class EntryOperationsMixin:
 
         logger.info(
             "dlq_service.retry_triggered_entry",
-            pk=pk,
-            entry=entry.domain,
+            record_pk=pk,
+            entry_domain=entry.domain,
             failure_type=entry.failure_type,
         )
 
@@ -123,7 +123,7 @@ class EntryOperationsMixin:
 
         logger.info(
             "dlq_service.entry_manually_resolved",
-            pk=pk,
+            record_pk=pk,
             notes=notes,
         )
 

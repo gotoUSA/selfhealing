@@ -101,7 +101,7 @@ class StoreOperationsMixin:
             logger.info(
                 "dlq_service.created_dlq_entry",
                 failed_op=failed_op.id,
-                domain=domain,
+                healing_domain=domain,
                 failure_type=failure_type,
             )
 
@@ -200,7 +200,7 @@ class StoreOperationsMixin:
             )
             logger.info(
                 "dlq_service.fallback_saved_diskpersistentbuffer",
-                entry_data=entry_data.get('domain'),
+                entry_data=entry_data.get("domain"),
             )
             # Fallback 채널 메트릭 기록 (Fail-Open)
             try:
@@ -237,7 +237,7 @@ class StoreOperationsMixin:
 
                 logger.info(
                     "dlq_service.fallback_entry_saved_jsonl",
-                    entry_data=entry_data.get('domain'),
+                    entry_data=entry_data.get("domain"),
                 )
                 # Fallback 채널 메트릭 기록 (Fail-Open)
                 try:

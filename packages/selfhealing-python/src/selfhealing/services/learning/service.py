@@ -126,7 +126,7 @@ class ParameterBlacklist:
 
         logger.warning(
             "cell_registry.bulkheads_registered",
-            key=key,
+            learning_pattern_key=key,
             blocked_values=blocked_values,
             reason=reason.value,
         )
@@ -190,7 +190,7 @@ class ParameterBlacklist:
                 self._save_to_storage()
                 logger.info(
                     "parameter_blacklist.unregistered",
-                    key=key,
+                    learning_pattern_key=key,
                 )
                 return True
         return False
@@ -218,7 +218,7 @@ class ParameterBlacklist:
                         self._blacklist[key] = BlacklistedParameter.from_dict(entry_dict)
                 logger.info(
                     "parameter_blacklist.loaded_entries_storage",
-                    count=len(self._blacklist),
+                    blacklist_count=len(self._blacklist),
                 )
         except Exception as e:
             logger.warning(
@@ -242,7 +242,7 @@ class ParameterBlacklist:
             self._backend.set(self.STORAGE_KEY, serialized)
             logger.debug(
                 "parameter_blacklist.saved_entries_storage",
-                count=len(serialized),
+                serialized_count=len(serialized),
             )
         except Exception as e:
             logger.exception(
@@ -327,7 +327,7 @@ class LearningService:
             logger.info(
                 "learning_session_completed_patterns",
                 session_id=session_id,
-                session=session.patterns_learned,
+                patterns_learned_count=session.patterns_learned,
                 suggestions_generated=session.suggestions_generated,
             )
         return session
@@ -390,7 +390,7 @@ class LearningService:
 
         logger.debug(
             "pattern_learned",
-            name=name,
+            learning_rule_name=name,
             pattern_type=pattern_type.value,
         )
 

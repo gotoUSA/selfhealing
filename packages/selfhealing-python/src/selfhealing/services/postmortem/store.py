@@ -121,7 +121,7 @@ def _save_incident_to_db(incident: dict[str, Any]) -> bool:
         record.save()
         logger.debug(
             "postmortem.saved_db",
-            record=record.incident_id,
+            incident_id=record.incident_id,
         )
         return True
     except Exception as e:

@@ -19,7 +19,7 @@ logger = structlog.get_logger()
 class AuditRecordingMixin:
     """감사 기록 Mixin (Phase 5.3).
 
-복구 프로세스의 감사 이벤트를 기록합니다."""
+    복구 프로세스의 감사 이벤트를 기록합니다."""
 
     def _record_recovery_started(self, session: RecoverySession) -> None:
         """
@@ -258,7 +258,7 @@ class AuditRecordingMixin:
 
             logger.info(
                 "adaptive_throttle.event_published",
-                session=session.id,
+                recovery_session_id=session.id,
             )
 
         except Exception as e:

@@ -60,7 +60,7 @@ class AuditPolicyHook:
             logger.debug(
                 "audit_policy_hook.execution_failed",
                 policy_name=policy_name,
-                value=type(error).__name__,
+                adapter_type=type(error).__name__,
                 error=error,
             )
         except Exception:

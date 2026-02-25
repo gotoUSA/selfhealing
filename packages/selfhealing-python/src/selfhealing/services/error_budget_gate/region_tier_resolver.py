@@ -57,7 +57,7 @@ def resolve_tier_from_region(region: str) -> str:
     except Exception as e:
         logger.warning(
             "region_tier_resolver.failed_resolve_tier_region",
-            region=region,
+            target_region=region,
             error=e,
         )
         return _DEFAULT_TIER

@@ -118,7 +118,6 @@ end
 """
 
 
-
 from ._approval import ApprovalMixin
 from ._audit_recording import AuditRecordingMixin
 from ._session_persistence import SessionPersistenceMixin
@@ -244,7 +243,6 @@ class RecoveryCoordinator(
         ],
     }
 
-
     def __init__(
         self,
         backend: StateBackend | None = None,
@@ -277,6 +275,7 @@ class RecoveryCoordinator(
         self._cascade_auditor = cascade_auditor
         self._audit_recorder = audit_recorder
         self._register_default_handlers()
+
     def _get_regional_policy_engine(self) -> RegionalRecoveryPolicyEngine | None:
         """리전별 정책 엔진 획득 (Phase 3.5)."""
         if not self._use_regional_policy:
@@ -293,6 +292,7 @@ class RecoveryCoordinator(
         except ImportError:
             logger.warning("recovery")
             return None
+
     def _get_idempotent_registry(self) -> IdempotentStepHandlerRegistry | None:
         """멱등성 핸들러 레지스트리 획득 (Phase 2.7)."""
         if not self._use_idempotent_handlers:
@@ -309,6 +309,7 @@ class RecoveryCoordinator(
         except ImportError:
             logger.warning("recovery")
             return None
+
     def _get_audit_recorder(self) -> RecoveryAuditRecorder:
         """
         RecoveryAuditRecorder 획득 (Phase 5.3).
@@ -320,6 +321,7 @@ class RecoveryCoordinator(
             return self._audit_recorder
 
         return get_recovery_audit_recorder()
+
     def _get_cascade_auditor(self) -> CascadeEventAuditor | None:
         """
         CascadeEventAuditor 획득 (Phase 5.3).
@@ -337,6 +339,7 @@ class RecoveryCoordinator(
         except ImportError:
             logger.debug("recovery")
             return None
+
     def _record_cascade_event(
         self,
         session: RecoverySession,
@@ -365,7 +368,7 @@ class RecoveryCoordinator(
             logger.debug(
                 "recovery.cascadeevent_skipped_no_auditor",
                 trigger_type=trigger_type,
-                session=session.id,
+                recovery_session_id=session.id,
             )
             return None
 
@@ -391,7 +394,7 @@ class RecoveryCoordinator(
                 "recovery.cascadeevent_recorded",
                 cascade_event=cascade_event.id,
                 trigger_type=trigger_type,
-                session=session.id,
+                recovery_session_id=session.id,
             )
 
             return cascade_event.id
@@ -401,9 +404,10 @@ class RecoveryCoordinator(
                 "recovery.cascadeevent_recording_failed",
                 error=e,
                 trigger_type=trigger_type,
-                session=session.id,
+                recovery_session_id=session.id,
             )
             return None
+
     def _get_backend(self) -> StateBackend:
         """StateBackend 인스턴스 획득."""
         if self._backend is not None:
@@ -412,6 +416,7 @@ class RecoveryCoordinator(
         from selfhealing.core.state_backend import get_state_backend
 
         return get_state_backend()
+
     def _register_default_handlers(self) -> None:
         """기본 단계 핸들러 등록."""
         self._step_handlers = {
@@ -422,6 +427,7 @@ class RecoveryCoordinator(
         }
         # 보상 핸들러: 현재는 빈 dict (필요 시 등록)
         self._compensate_handlers = {}
+
     def register_step_handler(
         self,
         step_type: RecoveryStepType,
@@ -547,11 +553,12 @@ class RecoveryCoordinator(
                 session_id=session_id,
                 namespace=namespace,
                 trigger_level=trigger_level,
-                count=len(steps),
+                steps_count=len(steps),
                 requires_approval=requires_approval,
             )
 
             return session
+
     def execute_next_step(
         self,
         namespace: str,
@@ -630,7 +637,7 @@ class RecoveryCoordinator(
                     logger.info(
                         "recovery.step_completed",
                         step_type=step.step_type.value,
-                        session=session.id,
+                        recovery_session_id=session.id,
                         idempotent_info=idempotent_info,
                     )
                 else:
@@ -650,7 +657,7 @@ class RecoveryCoordinator(
                     logger.error(
                         "recovery.step_failed",
                         step_type=step.step_type.value,
-                        session=session.id,
+                        recovery_session_id=session.id,
                         step=step.error_message,
                     )
 
@@ -674,7 +681,7 @@ class RecoveryCoordinator(
                 logger.error(
                     "recovery.step_timeout",
                     step_type=step.step_type.value,
-                    session=session.id,
+                    recovery_session_id=session.id,
                     timeout=timeout,
                 )
 
@@ -689,11 +696,12 @@ class RecoveryCoordinator(
                 logger.exception(
                     "recovery.step_exception",
                     step_type=step.step_type.value,
-                    session=session.id,
+                    recovery_session_id=session.id,
                 )
 
             self._save_session(session)
             return step
+
     def resume_recovery(
         self,
         namespace: str,
@@ -749,7 +757,7 @@ class RecoveryCoordinator(
                 failed_step_index=failed_step_index,
                 last_session=last_session.id,
                 trigger_level=trigger_level,
-                value=resume_count + 1,
+                resume_attempt_number=resume_count + 1,
                 settings=settings.max_resume_count,
             )
 
@@ -779,6 +787,7 @@ class RecoveryCoordinator(
             )
 
             return new_session
+
     def abort_recovery(
         self,
         namespace: str,
@@ -822,11 +831,12 @@ class RecoveryCoordinator(
 
             logger.warning(
                 "recovery.aborted",
-                session=session.id,
+                recovery_session_id=session.id,
                 reason=reason,
             )
 
             return session
+
     def get_active_session(
         self,
         namespace: str,
@@ -848,6 +858,7 @@ class RecoveryCoordinator(
             return None
 
         return self.get_session(namespace, session_id)
+
     def get_session(
         self,
         namespace: str,
@@ -873,6 +884,7 @@ class RecoveryCoordinator(
         if data:
             return RecoverySession.from_dict(data)
         return None
+
     def check_recovery_trigger(
         self,
         namespace: str,
@@ -949,6 +961,7 @@ class RecoveryCoordinator(
                 pass
 
         return RecoveryStatus.NORMAL
+
     def get_session_history(
         self,
         namespace: str | None = None,
@@ -984,8 +997,6 @@ class RecoveryCoordinator(
     # =========================================================================
     # Audit Recording Methods (Phase 5.3)
     # =========================================================================
-
-
 
 
 # =============================================================================

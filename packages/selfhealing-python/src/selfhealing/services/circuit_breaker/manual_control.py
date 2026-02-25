@@ -55,16 +55,12 @@ class ManualControlMixin:
     # Manual Control Operations
     # =========================================================================
 
-    def _resolve_controlled_by_id(
-        self, controlled_by: Any, controlled_by_id: int | None
-    ) -> int | None:
+    def _resolve_controlled_by_id(self, controlled_by: Any, controlled_by_id: int | None) -> int | None:
         """Resolve controlled_by_id from User object or direct ID."""
         if controlled_by_id is not None:
             return controlled_by_id
         if controlled_by is not None:
-            return getattr(controlled_by, "id", None) or getattr(
-                controlled_by, "pk", None
-            )
+            return getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
         return None
 
     def force_open(
@@ -94,9 +90,7 @@ class ManualControlMixin:
         Returns:
             CircuitBreakerResult with operation outcome
         """
-        controlled_by_id = self._resolve_controlled_by_id(
-            controlled_by, controlled_by_id
-        )
+        controlled_by_id = self._resolve_controlled_by_id(controlled_by, controlled_by_id)
 
         # Kill Switch 체크
         kill_switch_result = self._check_kill_switch(
@@ -158,11 +152,7 @@ class ManualControlMixin:
                             cb_name=service_name,
                             old_state=previous_state,
                             new_state=new_state,
-                            reason=(
-                                f"force_open: {reason}"
-                                if reason
-                                else "force_open: manual"
-                            ),
+                            reason=(f"force_open: {reason}" if reason else "force_open: manual"),
                         )
                     except Exception as e:
                         logger.debug(
@@ -241,9 +231,7 @@ class ManualControlMixin:
 
         # Handle both controlled_by (User object) and controlled_by_id
         if controlled_by_id is None and controlled_by is not None:
-            controlled_by_id = getattr(controlled_by, "id", None) or getattr(
-                controlled_by, "pk", None
-            )
+            controlled_by_id = getattr(controlled_by, "id", None) or getattr(controlled_by, "pk", None)
 
         decision_logger = DecisionLogger(service_name=service_name)
         decision_logger.intervention_evaluated(
@@ -267,9 +255,7 @@ class ManualControlMixin:
             )
 
             if success:
-                return self._handle_force_close_success(
-                    service_name, previous_state, new_state, reason, trigger_replay
-                )
+                return self._handle_force_close_success(service_name, previous_state, new_state, reason, trigger_replay)
             else:
                 return CircuitBreakerResult.failed(
                     service_name=service_name,
@@ -300,7 +286,7 @@ class ManualControlMixin:
         if not override_kill_switch:
             logger.warning(
                 "circuit_breaker.blocked_kill_switch_active",
-                action=action,
+                manual_control_action=action,
                 service_name=service_name,
             )
             return CircuitBreakerResult.failed(
@@ -311,7 +297,7 @@ class ManualControlMixin:
         # Kill Switch override 시 Audit 기록
         logger.warning(
             "circuit_breaker.kill_switch_override",
-            action=action,
+            manual_control_action=action,
             service_name=service_name,
             controlled_by_id=controlled_by_id,
         )
@@ -363,9 +349,7 @@ class ManualControlMixin:
             reason=reason,
         )
 
-        self._log_state_change_audit(
-            service_name, previous_state, new_state, reason, "force_close"
-        )
+        self._log_state_change_audit(service_name, previous_state, new_state, reason, "force_close")
         self._emit_state_change_metric(service_name, previous_state, new_state)
 
         result = CircuitBreakerResult.succeeded(
@@ -555,14 +539,12 @@ class ManualControlMixin:
                     # Note: If you need to update control_reason,
                     # implement it in your repository adapter
 
-                    self.repository.clear_manual_control(
-                        state.service_name, preserve_reason=True
-                    )
+                    self.repository.clear_manual_control(state.service_name, preserve_reason=True)
 
                     expired_services.append(state.service_name)
                     logger.warning(
                         "circuit_breaker.manual_override_expired",
-                        state=state.service_name,
+                        target_service_name=state.service_name,
                         previous_state=previous_state,
                     )
         except Exception as e:
@@ -611,17 +593,11 @@ class ManualControlMixin:
             # Extend TTL
             current_time = now()
             if state.manual_override_expires_at:
-                new_expires_at = state.manual_override_expires_at + timedelta(
-                    minutes=additional_minutes
-                )
+                new_expires_at = state.manual_override_expires_at + timedelta(minutes=additional_minutes)
             else:
                 new_expires_at = current_time + timedelta(minutes=additional_minutes)
 
-            new_reason = (
-                f"{state.control_reason} | Extended: {reason}"
-                if reason
-                else state.control_reason
-            )
+            new_reason = f"{state.control_reason} | Extended: {reason}" if reason else state.control_reason
 
             self.repository.set_manual_control(
                 service_name=service_name,

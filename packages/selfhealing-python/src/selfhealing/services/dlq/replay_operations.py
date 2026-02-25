@@ -41,7 +41,7 @@ class ReplayOperationsMixin:
         if not can_replay:
             logger.warning(
                 "dlq_service.replay_allowed_entry",
-                entry=entry.id,
+                dlq_entry_id=entry.id,
                 reason=reason,
             )
             return False
@@ -89,8 +89,8 @@ class ReplayOperationsMixin:
                         result.success += 1
                         logger.info(
                             "dlq_service.successfully_replayed_entry",
-                            entry=entry.id,
-                            domain=entry.domain,
+                            dlq_entry_id=entry.id,
+                            healing_domain=entry.domain,
                             failure_type=entry.failure_type,
                         )
                         # Audit 로깅: Replay 성공 (버퍼 패턴 지원)
@@ -118,7 +118,7 @@ class ReplayOperationsMixin:
                     result.errors.append(f"Entry {entry.id}: {str(e)}")
                     logger.warning(
                         "dlq_service.replay_failed_entry",
-                        entry=entry.id,
+                        dlq_entry_id=entry.id,
                         error=e,
                     )
                     # Audit 로깅: Replay 예외 (버퍼 패턴 지원)
@@ -133,8 +133,8 @@ class ReplayOperationsMixin:
 
             logger.info(
                 "dlq_service.replay_completed",
-                domain=domain,
-                result=result.processed,
+                healing_domain=domain,
+                is_processed=result.processed,
                 success=result.success,
                 failed=result.failed,
             )
@@ -189,7 +189,7 @@ class ReplayOperationsMixin:
                 logger.info(
                     "dlq_service.entry_expired_skipping_replay",
                     entry_id=entry_id,
-                    entry=entry.expires_at,
+                    entry_expires_at=entry.expires_at,
                 )
                 self.repository.update_status(
                     entry.id,
@@ -218,7 +218,7 @@ class ReplayOperationsMixin:
             logger.warning(
                 "dlq_service.entry_exhausted_retries",
                 entry_id=entry_id,
-                entry=entry.retry_count,
+                entry_retry_count=entry.retry_count,
                 max_retries=entry.max_retries,
             )
             self.repository.update_status(

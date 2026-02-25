@@ -514,7 +514,7 @@ class CircuitBreakerTracingManager:
         logger.debug(
             "cb_tracing.recorded_failure_trace",
             service_id=service_id,
-            info=info.trace_id,
+            trace_id=info.trace_id,
         )
 
         return info

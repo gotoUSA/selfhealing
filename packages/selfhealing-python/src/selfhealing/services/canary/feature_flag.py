@@ -320,7 +320,7 @@ class CanaryFeatureFlag:
         self._flags[config.config_type] = config
         logger.info(
             "cell_registry.bulkheads_registered",
-            config=config.config_type,
+            feature_flag_config_type=config.config_type,
             percentage=config.percentage,
             strategy=config.strategy.value,
         )

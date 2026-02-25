@@ -52,9 +52,7 @@ class GateAlertManager:
         with self._lock:
             self._last_alert_times[alert_type] = datetime.now(timezone.utc)
 
-    def send_fail_open_alert(
-        self, reason: str, rate_limit_remaining: int | None = None
-    ) -> bool:
+    def send_fail_open_alert(self, reason: str, rate_limit_remaining: int | None = None) -> bool:
         """
         Fail-Open 발동 알림.
 
@@ -159,7 +157,7 @@ class GateAlertManager:
             logger.warning(
                 "gate_alert.event",
                 title=title,
-                message=message,
+                detail_message=message,
             )
         except Exception as e:
             logger.warning(
@@ -172,9 +170,7 @@ class GateAlertManager:
         with self._lock:
             return {
                 "cooldown_seconds": self._cooldown_seconds,
-                "last_alerts": {
-                    k: v.isoformat() for k, v in self._last_alert_times.items()
-                },
+                "last_alerts": {k: v.isoformat() for k, v in self._last_alert_times.items()},
             }
 
     def reset(self) -> None:

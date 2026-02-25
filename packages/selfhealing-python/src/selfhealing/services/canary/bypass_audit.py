@@ -207,7 +207,7 @@ class InterlockBypassAuditor:
         # 로깅
         logger.warning(
             "audit.interlock_bypass",
-            entry=entry.audit_id,
+            bypass_audit_id=entry.audit_id,
             bypassed_by=entry.bypassed_by,
             bypass_reason=entry.bypass_reason[:50],
             emergency_level_name=entry.emergency_level_name,

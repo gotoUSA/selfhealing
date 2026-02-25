@@ -236,7 +236,7 @@ class DeploymentCorrelator:
         logger.info(
             "deployment_correlator.analyzed_deployments_config_changes",
             service_name=service_name,
-            count=len(deployments),
+            deployments_count=len(deployments),
             config_changes_count=len(config_changes),
             correlation_type=result.correlation_type.value,
         )

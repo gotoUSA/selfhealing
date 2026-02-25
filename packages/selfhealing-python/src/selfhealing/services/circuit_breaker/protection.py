@@ -70,7 +70,7 @@ class ProtectionMixin:
                 "circuit_breaker.rate_limit_cascade_detected",
                 service_name=service_name,
                 rate_limit_count=rate_limit_count,
-                _self=self.config.rate_limit_cascade_window_seconds,
+                rate_limit_cascade_window_seconds=self.config.rate_limit_cascade_window_seconds,
             )
 
             # Auto-open circuit breaker
@@ -146,7 +146,7 @@ class ProtectionMixin:
                 "circuit_breaker.self_ddos_protection_triggered",
                 service_name=service_name,
                 request_count=request_count,
-                _self=self.config.self_ddos_window_seconds,
+                self_ddos_window_seconds=self.config.self_ddos_window_seconds,
                 backoff=backoff,
             )
             return True, backoff  # Allow but suggest delay

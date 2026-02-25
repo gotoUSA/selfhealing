@@ -85,7 +85,7 @@ def log_cb_state_change_audit(
         cb_name=cb_name,
         old_state=old_state,
         new_state=new_state,
-        value=reason or 'auto',
+        transition_reason=reason or "auto",
     )
     return wal_seq
 
@@ -146,7 +146,7 @@ def log_governance_blocked_audit(
     # Fallback: 직접 로깅
     logger.warning(
         "governance_audit.blocked",
-        action=action,
+        blocked_action=action,
         block_reason=block_reason,
     )
     return wal_seq
@@ -309,11 +309,7 @@ def log_cb_state_change_with_trace_audit(
         "reason": reason,
         "trace_id": trace_id,
         "triggering_request": triggering_request_info,
-        "debug_hint": (
-            "위 trace_id로 Jaeger/Zipkin에서 전체 호출 흐름 확인 가능"
-            if trace_id
-            else None
-        ),
+        "debug_hint": ("위 trace_id로 Jaeger/Zipkin에서 전체 호출 흐름 확인 가능" if trace_id else None),
     }
     # None 값 제거
     details = {k: v for k, v in details.items() if v is not None}
@@ -390,10 +386,7 @@ def log_governance_blocked_cb_audit(
         "assessment_id": assessment_id,
         "trace_id": trace_id,
         "message": (
-            (
-                f"CB가 열려야 했으나, 연쇄 장애 위험(Blast Radius: {blast_radius_level})으로 "
-                f"인해 시스템이 차단을 보류함"
-            )
+            (f"CB가 열려야 했으나, 연쇄 장애 위험(Blast Radius: {blast_radius_level})으로 " f"인해 시스템이 차단을 보류함")
             if blast_radius_level
             else None
         ),
@@ -434,7 +427,7 @@ def log_governance_blocked_cb_audit(
     logger.warning(
         "cb_audit.event",
         service_id=service_id,
-        action=action,
+        control_action=action,
         blast_radius_level=blast_radius_level,
         affected_count=affected_count,
         requires_manual_approval=requires_manual_approval,

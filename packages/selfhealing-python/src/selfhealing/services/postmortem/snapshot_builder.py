@@ -105,7 +105,7 @@ class SnapshotBuilder:
             if not data:
                 logger.debug(
                     "snapshot_builder.no_open_snapshot_found",
-                    _self=self._service_name,
+                    service_name=self._service_name,
                 )
                 return {}
 
@@ -125,7 +125,7 @@ class SnapshotBuilder:
 
             logger.debug(
                 "snapshot_builder.retrieved_open_snapshot",
-                _self=self._service_name,
+                service_name=self._service_name,
             )
             return snapshot
 
@@ -308,10 +308,10 @@ class SnapshotBuilder:
 
         logger.info(
             "snapshot_builder.snapshot_built",
-            _self=self._service_name,
-            value=bool(self._snapshot.metrics_at_open),
+            service_name=self._service_name,
+            has_metrics_at_open=bool(self._snapshot.metrics_at_open),
             has_peak_metrics=bool(self._snapshot.peak_metrics),
-            count=len(self._snapshot.captured_logs),
+            captured_logs_count=len(self._snapshot.captured_logs),
         )
 
         return self._snapshot

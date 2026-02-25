@@ -158,9 +158,9 @@ def log_canary_error(
 
     logger.error(
         "canary_audit.error",
-        action=action,
+        canary_action=action,
         rollout_id=rollout_id,
-        value=type(error).__name__,
+        adapter_type=type(error).__name__,
         error=error,
     )
 

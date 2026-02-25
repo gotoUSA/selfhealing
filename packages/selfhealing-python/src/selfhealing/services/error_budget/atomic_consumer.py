@@ -221,7 +221,7 @@ class AtomicBudgetConsumer:
             except Exception as e:
                 logger.warning(
                     "atomic_consumer.lock_attempt_failed",
-                    value=attempt + 1,
+                    attempt_number=attempt + 1,
                     error=e,
                 )
 

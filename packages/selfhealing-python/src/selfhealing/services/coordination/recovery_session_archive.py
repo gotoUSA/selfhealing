@@ -235,12 +235,8 @@ class RecoverySessionArchiveData:
         total_duration = None
         if session.started_at and session.completed_at:
             try:
-                start = datetime.fromisoformat(
-                    session.started_at.replace("Z", "+00:00")
-                )
-                end = datetime.fromisoformat(
-                    session.completed_at.replace("Z", "+00:00")
-                )
+                start = datetime.fromisoformat(session.started_at.replace("Z", "+00:00"))
+                end = datetime.fromisoformat(session.completed_at.replace("Z", "+00:00"))
                 total_duration = int((end - start).total_seconds())
             except (ValueError, TypeError):
                 pass
@@ -365,8 +361,8 @@ class RecoverySessionArchiveService:
 
         logger.info(
             "recovery_session_archive.archived",
-            session=session.id,
-            status=session.status.value,
+            recovery_session_id=session.id,
+            session_completion_status=session.status.value,
         )
 
         return archive_data
@@ -377,9 +373,7 @@ class RecoverySessionArchiveService:
             from selfhealing.api.django.tiering.models import RecoverySessionArchive
 
             # 기존 레코드 확인
-            existing = RecoverySessionArchive.objects.filter(
-                session_id=data.session_id
-            ).first()
+            existing = RecoverySessionArchive.objects.filter(session_id=data.session_id).first()
 
             if existing:
                 # 업데이트
@@ -387,9 +381,7 @@ class RecoverySessionArchiveService:
                 existing.steps_json = json.dumps([s.to_dict() for s in data.steps])
                 existing.current_step_index = data.current_step_index
                 existing.completed_at = (
-                    datetime.fromisoformat(data.completed_at.replace("Z", "+00:00"))
-                    if data.completed_at
-                    else None
+                    datetime.fromisoformat(data.completed_at.replace("Z", "+00:00")) if data.completed_at else None
                 )
                 existing.abort_reason = data.abort_reason
                 existing.total_duration_seconds = data.total_duration_seconds
@@ -404,15 +396,9 @@ class RecoverySessionArchiveService:
                     status=data.status,
                     steps_json=json.dumps([s.to_dict() for s in data.steps]),
                     current_step_index=data.current_step_index,
-                    started_at=(
-                        datetime.fromisoformat(data.started_at.replace("Z", "+00:00"))
-                        if data.started_at
-                        else None
-                    ),
+                    started_at=(datetime.fromisoformat(data.started_at.replace("Z", "+00:00")) if data.started_at else None),
                     completed_at=(
-                        datetime.fromisoformat(data.completed_at.replace("Z", "+00:00"))
-                        if data.completed_at
-                        else None
+                        datetime.fromisoformat(data.completed_at.replace("Z", "+00:00")) if data.completed_at else None
                     ),
                     initiated_by=data.initiated_by,
                     abort_reason=data.abort_reason,
@@ -449,16 +435,12 @@ class RecoverySessionArchiveService:
         with self._lock:
             return self._memory_storage.get(session_id)
 
-    def _load_from_django(
-        self, session_id: str
-    ) -> RecoverySessionArchiveData | None:
+    def _load_from_django(self, session_id: str) -> RecoverySessionArchiveData | None:
         """Django ORM에서 로드."""
         try:
             from selfhealing.api.django.tiering.models import RecoverySessionArchive
 
-            record = RecoverySessionArchive.objects.filter(
-                session_id=session_id
-            ).first()
+            record = RecoverySessionArchive.objects.filter(session_id=session_id).first()
 
             if not record:
                 return None
@@ -489,19 +471,13 @@ class RecoverySessionArchiveService:
             steps=steps,
             current_step_index=record.current_step_index,
             started_at=record.started_at.isoformat() if record.started_at else None,
-            completed_at=(
-                record.completed_at.isoformat() if record.completed_at else None
-            ),
+            completed_at=(record.completed_at.isoformat() if record.completed_at else None),
             initiated_by=record.initiated_by,
             abort_reason=record.abort_reason,
             cascade_event_id=record.cascade_event_id,
             total_duration_seconds=record.total_duration_seconds,
             metadata=metadata,
-            archived_at=(
-                record.archived_at.isoformat()
-                if hasattr(record, "archived_at") and record.archived_at
-                else None
-            ),
+            archived_at=(record.archived_at.isoformat() if hasattr(record, "archived_at") and record.archived_at else None),
         )
 
     def get_history(
@@ -601,11 +577,7 @@ class RecoverySessionArchiveService:
     ) -> list[RecoverySessionArchiveData]:
         """시작 날짜 이후 세션 필터링."""
         return [
-            s
-            for s in sessions
-            if s.started_at
-            and datetime.fromisoformat(s.started_at.replace("Z", "+00:00"))
-            >= start_date
+            s for s in sessions if s.started_at and datetime.fromisoformat(s.started_at.replace("Z", "+00:00")) >= start_date
         ]
 
     def _filter_by_end_date(
@@ -615,10 +587,7 @@ class RecoverySessionArchiveService:
     ) -> list[RecoverySessionArchiveData]:
         """종료 날짜 이전 세션 필터링."""
         return [
-            s
-            for s in sessions
-            if s.started_at
-            and datetime.fromisoformat(s.started_at.replace("Z", "+00:00")) <= end_date
+            s for s in sessions if s.started_at and datetime.fromisoformat(s.started_at.replace("Z", "+00:00")) <= end_date
         ]
 
     def _get_history_from_django(
@@ -715,9 +684,7 @@ class RecoverySessionArchiveService:
 
         sessions = []
         for status in resumable_statuses:
-            sessions.extend(
-                self.get_history(namespace=namespace, status=status, limit=100)
-            )
+            sessions.extend(self.get_history(namespace=namespace, status=status, limit=100))
 
         return sessions
 
@@ -756,9 +723,7 @@ class RecoverySessionArchiveService:
             "completed": status_counts["completed"],
             "failed": status_counts["failed"],
             "aborted": status_counts["aborted"],
-            "success_rate": (
-                (status_counts["completed"] / total * 100) if total > 0 else 0
-            ),
+            "success_rate": ((status_counts["completed"] / total * 100) if total > 0 else 0),
             "average_duration_seconds": avg_duration,
             "step_failure_rates": step_failure_rates,
         }
@@ -780,9 +745,7 @@ class RecoverySessionArchiveService:
     ) -> float:
         """완료된 세션들의 평균 소요 시간 계산."""
         durations = [
-            s.total_duration_seconds
-            for s in sessions
-            if s.total_duration_seconds is not None and s.status == "completed"
+            s.total_duration_seconds for s in sessions if s.total_duration_seconds is not None and s.status == "completed"
         ]
         return sum(durations) / len(durations) if durations else 0
 
@@ -798,14 +761,10 @@ class RecoverySessionArchiveService:
             for step in session.steps:
                 step_totals[step.step_type] = step_totals.get(step.step_type, 0) + 1
                 if step.status == "failed":
-                    step_failures[step.step_type] = (
-                        step_failures.get(step.step_type, 0) + 1
-                    )
+                    step_failures[step.step_type] = step_failures.get(step.step_type, 0) + 1
 
         return {
-            step_type: step_failures.get(step_type, 0) / count * 100
-            for step_type, count in step_totals.items()
-            if count > 0
+            step_type: step_failures.get(step_type, 0) / count * 100 for step_type, count in step_totals.items() if count > 0
         }
 
     def cleanup_old_archives(
@@ -827,9 +786,7 @@ class RecoverySessionArchiveService:
             try:
                 from selfhealing.api.django.tiering.models import RecoverySessionArchive
 
-                deleted, _ = RecoverySessionArchive.objects.filter(
-                    started_at__lt=cutoff
-                ).delete()
+                deleted, _ = RecoverySessionArchive.objects.filter(started_at__lt=cutoff).delete()
 
                 logger.info(
                     "recovery_session_archive.cleaned_up_old_archives",
@@ -849,9 +806,7 @@ class RecoverySessionArchiveService:
             old_ids = [
                 sid
                 for sid, data in self._memory_storage.items()
-                if data.started_at
-                and datetime.fromisoformat(data.started_at.replace("Z", "+00:00"))
-                < cutoff
+                if data.started_at and datetime.fromisoformat(data.started_at.replace("Z", "+00:00")) < cutoff
             ]
             for sid in old_ids:
                 del self._memory_storage[sid]

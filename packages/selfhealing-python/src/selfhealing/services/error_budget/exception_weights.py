@@ -365,7 +365,7 @@ def combine_weights(
         emergency_weight=emergency_weight,
         error_weight=error_weight,
         policy=policy.value,
-        result=result,
+        combined_weight=result,
     )
 
     return result

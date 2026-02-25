@@ -129,7 +129,7 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
             except Exception as e:
                 logger.debug(
                     "circuit_breaker_policy.hook_failed",
-                    value=type(hook).__name__,
+                    adapter_type=type(hook).__name__,
                     method=method,
                     error=e,
                 )

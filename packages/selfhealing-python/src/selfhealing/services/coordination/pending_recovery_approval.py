@@ -284,7 +284,7 @@ class PendingRecoveryApprovalManager:
 
             logger.info(
                 "pending_recovery_approval.created_request",
-                request=request.request_id,
+                approval_request_id=request.request_id,
                 session_id=session_id,
                 namespace=namespace,
             )
@@ -324,7 +324,7 @@ class PendingRecoveryApprovalManager:
                 logger.warning(
                     "pending_recovery_approval.request_pending",
                     request_id=request_id,
-                    status=request.status.value,
+                    approval_status=request.status.value,
                 )
                 return request
 
@@ -530,7 +530,7 @@ class PendingRecoveryApprovalManager:
 
                     logger.warning(
                         "pending_recovery_approval.expired",
-                        request=request.request_id,
+                        approval_request_id=request.request_id,
                     )
 
             return expired
@@ -575,7 +575,7 @@ class PendingRecoveryApprovalManager:
             if to_remove:
                 logger.info(
                     "pending_recovery_approval.cleaned_up_old_requests",
-                    count=len(to_remove),
+                    to_remove_count=len(to_remove),
                 )
 
             return len(to_remove)
@@ -644,7 +644,7 @@ class PendingRecoveryApprovalManager:
             logger.info(
                 "pending_recovery_approval.notification",
                 message_type=message_type,
-                request=request.request_id,
+                approval_request_id=request.request_id,
                 namespace=request.namespace,
             )
 

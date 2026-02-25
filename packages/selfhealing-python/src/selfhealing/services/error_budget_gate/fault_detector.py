@@ -105,7 +105,7 @@ class GateFaultDetector:
                 self._state = GateFaultState.DEGRADED
                 logger.warning(
                     "gate_fault_detector.state_healthy_degraded_failures",
-                    _self=self._failure_count,
+                    failure_count=self._failure_count,
                     failure_threshold=self._failure_threshold,
                 )
 

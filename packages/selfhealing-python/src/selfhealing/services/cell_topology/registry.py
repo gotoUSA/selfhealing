@@ -76,7 +76,7 @@ class CellRegistry:
 
         logger.info(
             "cellregistry_initialized_cells",
-            _self=self._settings.cell_count,
+            cell_count=self._settings.cell_count,
             bulkhead_isolation_enabled=self._settings.bulkhead_isolation_enabled,
         )
 
@@ -295,7 +295,7 @@ class CellRegistry:
 
                 logger.info(
                     "cell_registry.services_evicted",
-                    count=len(evicted),
+                    evicted_count=len(evicted),
                     cell_id=cell_id,
                     evicted=evicted,
                 )
@@ -330,8 +330,8 @@ class CellRegistry:
 
             logger.info(
                 "cell_registry.bulkheads_registered",
-                count=len(self._cells),
-                _self=self._settings.bulkhead_max_concurrent_per_cell,
+                cells_count=len(self._cells),
+                bulkhead_max_concurrent_per_cell=self._settings.bulkhead_max_concurrent_per_cell,
             )
         except ImportError:
             logger.warning("cell_registry.bulkhead_registry_unavailable")
@@ -517,7 +517,7 @@ class CellRegistry:
 
             logger.info(
                 "added_cells_warmup_total",
-                count=count,
+                added_count=count,
                 added=added,
                 total_cells=len(self._cells),
             )

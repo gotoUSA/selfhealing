@@ -77,10 +77,10 @@ def log_kill_switch_override_audit(
 
     logger.warning(
         "kill_switch_override.event",
-        action=action.upper(),
+        kill_switch_action=action.upper(),
         service_name=service_name,
         controlled_by_id=controlled_by_id,
-        value=reason or "N/A",
+        override_reason=reason or "N/A",
     )
     return wal_seq
 
@@ -201,9 +201,9 @@ def log_freeze_mode_audit(
 
     logger.warning(
         "freeze_mode.event",
-        action=action.upper(),
+        freeze_action=action.upper(),
         activated_by=activated_by,
-        value=emergency_level or "N/A",
+        emergency_level_name=emergency_level or "N/A",
         reason=reason or "N/A",
     )
     return wal_seq
@@ -372,10 +372,10 @@ def log_emergency_mode_audit(
 
     logger.info(
         "emergency_mode_audit.event",
-        action=action.upper(),
-        level=level,
+        emergency_action=action.upper(),
+        emergency_level=level,
         user=user,
-        value=reason or "N/A",
+        emergency_reason=reason or "N/A",
     )
 
     # 기존 log_config_change 호환 호출
@@ -509,7 +509,7 @@ def log_error_budget_blocked_audit(
     trace_str = trace_id[:8] if trace_id else "N/A"
     logger.warning(
         "error_budget_audit.blocked",
-        action=action,
+        blocked_action=action,
         budget_str=budget_str,
         gate_status=gate_status,
         trace_str=trace_str,

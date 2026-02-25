@@ -84,7 +84,7 @@ class EscalationTriggeredInvalidation:
             self._invalidation_targets.append(invalidate_fn)
             logger.debug(
                 "escalation_invalidation.target_registered",
-                count=len(self._invalidation_targets),
+                invalidation_targets_count=len(self._invalidation_targets),
             )
 
     def unregister_target(self, invalidate_fn: Callable[[], None]) -> bool:
@@ -213,7 +213,7 @@ class EscalationTriggeredInvalidation:
             "escalation_invalidation.invalidating_all_caches",
             reason=reason,
             namespace=namespace,
-            count=len(self._invalidation_targets),
+            invalidation_targets_count=len(self._invalidation_targets),
         )
 
         success_count = 0

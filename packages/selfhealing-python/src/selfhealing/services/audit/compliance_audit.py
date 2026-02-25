@@ -61,9 +61,7 @@ def _log_security_event(
 ):
     """Log security event with appropriate level based on severity."""
     log_msg = f"[SecurityAudit] {event_type} | type={violation_type} | action={action} | target={target} | result={result}"
-    severity_logger = {"critical": logger.critical, "high": logger.warning}.get(
-        severity, logger.info
-    )
+    severity_logger = {"critical": logger.critical, "high": logger.warning}.get(severity, logger.info)
     severity_logger(log_msg)
 
 
@@ -207,11 +205,7 @@ def log_region_isolation_audit(
         try:
             from selfhealing.audit.event_buffer import AuditEventType
 
-            buffer_event_type = (
-                AuditEventType.REGION_ISOLATED
-                if action == "isolate"
-                else AuditEventType.REGION_RESTORED
-            )
+            buffer_event_type = AuditEventType.REGION_ISOLATED if action == "isolate" else AuditEventType.REGION_RESTORED
 
             added = _try_add_to_buffer(
                 request=request,
@@ -230,7 +224,7 @@ def log_region_isolation_audit(
     if action == "isolate":
         logger.warning(
             "cell_evacuation.cell_isolated",
-            region=region,
+            target_region=region,
             reason=reason,
             duration_seconds=duration_seconds,
             operator=operator,
@@ -238,7 +232,7 @@ def log_region_isolation_audit(
     else:
         logger.info(
             "region_isolation_audit.restored",
-            region=region,
+            target_region=region,
             operator=operator,
         )
 
@@ -292,11 +286,7 @@ def log_compliance_audit(
         try:
             from selfhealing.audit.event_buffer import AuditEventType
 
-            buffer_event_type = (
-                AuditEventType.COMPLIANCE_CHECK_PASSED
-                if passed
-                else AuditEventType.COMPLIANCE_VIOLATION
-            )
+            buffer_event_type = AuditEventType.COMPLIANCE_CHECK_PASSED if passed else AuditEventType.COMPLIANCE_VIOLATION
             added = _try_add_to_buffer(
                 request=request,
                 event_type=buffer_event_type,
@@ -325,7 +315,7 @@ def log_compliance_audit(
             standard=standard,
             check_id=check_id,
             severity=severity,
-            message=message,
+            detail_message=message,
         )
     return wal_seq
 
@@ -378,11 +368,7 @@ def log_blast_radius_audit(
         try:
             from selfhealing.audit.event_buffer import AuditEventType
 
-            buffer_event_type = (
-                AuditEventType.BLAST_RADIUS_ISOLATION
-                if allowed
-                else AuditEventType.BLAST_RADIUS_VIOLATION
-            )
+            buffer_event_type = AuditEventType.BLAST_RADIUS_ISOLATION if allowed else AuditEventType.BLAST_RADIUS_VIOLATION
             added = _try_add_to_buffer(
                 request=request,
                 event_type=buffer_event_type,
@@ -400,7 +386,7 @@ def log_blast_radius_audit(
     if allowed:
         logger.info(
             "blast_radius_audit.event",
-            action=action.upper(),
+            blast_radius_action=action.upper(),
             experiment_id=experiment_id,
             blast_radius=blast_radius,
             target_service=target_service,
@@ -445,11 +431,7 @@ def log_finops_audit(
     }
     details = {k: v for k, v in details.items() if v is not None}
 
-    event_type = (
-        "FINOPS_BUDGET_EXCEEDED"
-        if alert_type == "over_budget"
-        else "FINOPS_THRESHOLD_EXCEEDED"
-    )
+    event_type = "FINOPS_BUDGET_EXCEEDED" if alert_type == "over_budget" else "FINOPS_THRESHOLD_EXCEEDED"
     is_critical = alert_type == "over_budget"
 
     wal_seq = _write_to_wal(
@@ -466,9 +448,7 @@ def log_finops_audit(
             from selfhealing.audit.event_buffer import AuditEventType
 
             buffer_event_type = (
-                AuditEventType.FINOPS_BUDGET_EXCEEDED
-                if is_critical
-                else AuditEventType.FINOPS_THRESHOLD_EXCEEDED
+                AuditEventType.FINOPS_BUDGET_EXCEEDED if is_critical else AuditEventType.FINOPS_THRESHOLD_EXCEEDED
             )
             added = _try_add_to_buffer(
                 request=request,

@@ -184,7 +184,7 @@ class AdaptiveThresholdManager:
 
         logger.debug(
             "adaptive_threshold.event",
-            level=level,
+            threshold_level=level,
             adjusted_failure=adjusted_failure,
             adjusted_window=adjusted_window,
             is_lockdown=is_lockdown,

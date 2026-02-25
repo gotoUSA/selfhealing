@@ -132,7 +132,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
 
             logger.info(
                 "chaos_execution_service.found_due_experiments",
-                count=len(due_experiments),
+                due_experiments_count=len(due_experiments),
             )
 
             # 3. 각 실험 처리
@@ -156,7 +156,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
 
             logger.info(
                 "chaos_execution_service.completed_executed_skipped_blocked",
-                result=result.executed,
+                executed_count=result.executed,
                 skipped=result.skipped,
                 blocked=result.blocked,
             )
@@ -276,7 +276,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
 
             logger.info(
                 "chaos_execution_service.daily_report_generated",
-                report=report.report_id,
+                chaos_report_id=report.report_id,
                 grade=report.grade,
             )
 
@@ -324,7 +324,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
             if total > 0:
                 logger.info(
                     "chaos_execution_service.expired_pending_approvals",
-                    total=total,
+                    total_expired_approvals_count=total,
                 )
 
         except Exception as e:

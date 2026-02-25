@@ -112,7 +112,7 @@ class AdjustmentRecorder:
 
             logger.info(
                 "adjustment_recorder.recorded",
-                parameter=parameter,
+                tuning_parameter=parameter,
                 old_value=old_value,
                 new_value=new_value,
                 record_id=record_id,
@@ -213,9 +213,7 @@ class AdjustmentRecorder:
             )
             return session
 
-    def end_session(
-        self, state: TuningState = TuningState.COMPLETED
-    ) -> TuningSession | None:
+    def end_session(self, state: TuningState = TuningState.COMPLETED) -> TuningSession | None:
         """현재 세션 종료"""
         with self._lock:
             if not self._current_session_id:
@@ -233,7 +231,7 @@ class AdjustmentRecorder:
 
             logger.info(
                 "adjustment_recorder.ended_session",
-                session=session.session_id if session else 'unknown',
+                tuning_session_id=session.session_id if session else "unknown",
             )
             return session
 
@@ -293,7 +291,7 @@ class AdjustmentRecorder:
 
             logger.info(
                 "adjustment_recorder.cleared_records",
-                count=count,
+                cleared_records_count=count,
             )
             return count
 
@@ -359,7 +357,7 @@ class AdjustmentRecorder:
 
             logger.info(
                 "adjustment_recorder.loaded_records_file",
-                count=len(self._records),
+                records_count=len(self._records),
             )
         except Exception as e:
             logger.warning(

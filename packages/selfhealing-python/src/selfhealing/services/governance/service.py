@@ -171,7 +171,7 @@ class GovernanceService(GovernanceCheckMixin):
 
         logger.info(
             "governance_service.emergency_mode_expiry_check",
-            result=result.hours_elapsed,
+            hours_elapsed=result.hours_elapsed,
             hours_remaining=result.hours_remaining,
         )
 
@@ -214,7 +214,7 @@ class GovernanceService(GovernanceCheckMixin):
         if status.get("should_warn", False):
             logger.warning(
                 "governance_service.warning_hours_emergency_mode",
-                result=result.hours_elapsed,
+                hours_elapsed=result.hours_elapsed,
             )
             tracker.mark_warning_sent()
             result.actions_taken.append(
@@ -268,9 +268,9 @@ class GovernanceService(GovernanceCheckMixin):
 
             logger.warning(
                 "governance_service.emergency_mode_activated",
-                level=level,
+                governance_level=level,
                 reason=reason,
-                actor=actor,
+                actor_id=actor,
             )
 
             # 알림 발송
@@ -323,7 +323,7 @@ class GovernanceService(GovernanceCheckMixin):
 
             logger.info(
                 "governance_service.emergency_mode_deactivated",
-                actor=actor,
+                actor_id=actor,
                 reason=reason,
             )
 

@@ -284,8 +284,8 @@ class ControlAPIService:
             logger.info(
                 "control_api.triggered_failures",
                 trigger_cb_failures=trigger_cb_failures,
-                request=request.service_name,
-                state=state.state,
+                request_service_name=request.service_name,
+                circuit_breaker_state=state.state,
                 failure_count=state.failure_count,
             )
 
@@ -317,7 +317,7 @@ class ControlAPIService:
 
         logger.info(
             "control_api.failure_injection_enabled",
-            request=request.service_name,
+            request_service_name=request.service_name,
             failure_config=failure_config["failure_rate"],
             failure_type=failure_config["failure_type"],
         )
@@ -359,8 +359,8 @@ class ControlAPIService:
         logger.info(
             "control_api.recorded_successes",
             success_count=success_count,
-            request=request.service_name,
-            state=state.state,
+            request_service_name=request.service_name,
+            circuit_breaker_state=state.state,
             state_success_count=state.success_count,
         )
 
@@ -455,11 +455,11 @@ class ControlAPIService:
         try:
             logger.info(
                 "control_api.audit",
-                request=request.action,
+                request_action=request.action,
                 service_name=request.service_name,
                 environment=request.environment,
-                response=response.status,
-                actor=request.actor,
+                response_status=response.status,
+                actor_id=request.actor,
                 risk_level=response.risk_level,
                 reason=request.reason,
             )

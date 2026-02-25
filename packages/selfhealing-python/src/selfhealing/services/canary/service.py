@@ -262,9 +262,9 @@ class CanaryRolloutService:
 
         logger.info(
             "canary_rollout.created",
-            rollout=rollout.id,
+            rollout_id=rollout.id,
             config_type=config_type,
-            count=len(stages),
+            stages_count=len(stages),
         )
 
         return rollout
@@ -295,7 +295,7 @@ class CanaryRolloutService:
         if rollout.state != CanaryState.CREATED:
             logger.warning(
                 "canary_rollout.cannot_start",
-                rollout=rollout.state,
+                rollout_state=rollout.state,
             )
             return False
 
@@ -369,7 +369,7 @@ class CanaryRolloutService:
         if rollout.state not in (CanaryState.CANARY, CanaryState.PAUSED):
             logger.warning(
                 "canary_rollout.cannot_promote",
-                rollout=rollout.state,
+                rollout_state=rollout.state,
             )
             return False
 
@@ -472,7 +472,7 @@ class CanaryRolloutService:
         logger.info(
             "canary_rollout.promoted",
             rollout_id=rollout_id,
-            rollout=rollout.current_stage_index,
+            rollout_stage_index=rollout.current_stage_index,
         )
 
         return True
@@ -501,7 +501,7 @@ class CanaryRolloutService:
         if rollout.is_terminal:
             logger.warning(
                 "canary_rollout.cannot_rollback_terminal_state",
-                rollout=rollout.state,
+                rollout_state=rollout.state,
             )
             return False
 
@@ -670,7 +670,7 @@ class CanaryRolloutService:
                 if triggered_by not in triggered_by_whitelist:
                     logger.debug(
                         "canary_rollout.skipping_resume_whitelist",
-                        rollout=rollout.id,
+                        rollout_id=rollout.id,
                         triggered_by=triggered_by,
                     )
                     continue
@@ -678,7 +678,7 @@ class CanaryRolloutService:
                 # Whitelist=None: 기존 동작 (모든 PAUSED 재개) + 경고
                 logger.warning(
                     "canary_rollout.resuming_without_whitelist_filter",
-                    rollout=rollout.id,
+                    rollout_id=rollout.id,
                 )
 
             if self.resume(rollout.id):
@@ -737,14 +737,14 @@ class CanaryRolloutService:
             if i + max_batch_size < len(candidates):
                 logger.info(
                     "canary_rollout.resumed_batch_waiting_before",
-                    value=i // max_batch_size + 1,
+                    batch_number=i // max_batch_size + 1,
                     interval_seconds=interval_seconds,
                 )
                 time.sleep(interval_seconds)
 
         logger.info(
             "canary_rollout.staggered_resume_complete_rollouts",
-            count=len(resumed),
+            resumed_count=len(resumed),
             candidates_count=len(candidates),
         )
 
@@ -768,7 +768,7 @@ class CanaryRolloutService:
         if rollout.state != CanaryState.CREATED:
             logger.warning(
                 "canary_rollout.cannot_cancel_after_start",
-                rollout=rollout.state,
+                rollout_state=rollout.state,
             )
             return False
 

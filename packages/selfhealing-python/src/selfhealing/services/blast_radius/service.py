@@ -92,7 +92,7 @@ class BlastRadiusService:
         logger.info(
             "blast_radius_policy_set",
             stage_name=stage_name,
-            level=level.value,
+            blast_radius_level=level.value,
         )
 
         # === Audit 기록: 정책 설정 (85_AUDIT_INTEGRATION Phase 1) ===
@@ -224,8 +224,8 @@ class BlastRadiusService:
         logger.info(
             "impact_assessed_services",
             assessment_id=assessment_id,
-            level=level.value,
-            count=len(all_affected),
+            blast_radius_level=level.value,
+            all_affected_count=len(all_affected),
         )
 
         # 자동 격리 체크
@@ -392,7 +392,7 @@ class BlastRadiusService:
                 self._isolated_services.add(service)
                 logger.warning(
                     "service_auto_isolated",
-                    service=service,
+                    target_service=service,
                 )
 
                 # === Audit 기록: 자동 격리 (85_AUDIT_INTEGRATION Phase 1) ===
@@ -411,7 +411,7 @@ class BlastRadiusService:
             self._isolated_services.add(service)
             logger.info(
                 "service_isolated",
-                service=service,
+                target_service=service,
             )
 
             # === Audit 기록: 수동 격리 (85_AUDIT_INTEGRATION Phase 1) ===
@@ -433,7 +433,7 @@ class BlastRadiusService:
             self._isolated_services.discard(service)
             logger.info(
                 "service_isolation_released",
-                service=service,
+                target_service=service,
             )
 
             # === Audit 기록: 격리 해제 (85_AUDIT_INTEGRATION Phase 1) ===

@@ -73,7 +73,7 @@ def record_dlq_item_created(domain: str, failure_type: str) -> None:
         dlq_created_total.labels(domain=domain).inc()
         logger.debug(
             "metrics.dlq_item_created",
-            domain=domain,
+            healing_domain=domain,
             failure_type=failure_type,
             is_synthetic=is_synthetic,
         )
@@ -95,7 +95,7 @@ def record_sla_breach(domain: str) -> None:
         sla_breach_total.labels(domain=domain).inc()
         logger.info(
             "metrics.sla_breach_recorded",
-            domain=domain,
+            healing_domain=domain,
         )
     except Exception as e:
         logger.warning(
@@ -131,7 +131,7 @@ def record_retry_attempt(domain: str, attempt_count: int, outcome: str) -> None:
         ).inc()
         logger.debug(
             "metrics.retry_recorded",
-            domain=domain,
+            healing_domain=domain,
             attempt_count=attempt_count,
             outcome=outcome,
             is_synthetic=is_synthetic,
@@ -168,7 +168,7 @@ def record_recovery_time(
         recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
         logger.debug(
             "metrics.recovery_time_recorded",
-            domain=domain,
+            healing_domain=domain,
             resolution_type=resolution_type,
             duration=duration,
         )
@@ -215,7 +215,7 @@ def record_circuit_breaker_state_change(
         ).inc()
         logger.info(
             "metrics.circuit_breaker_transition",
-            service=service,
+            target_service=service,
             from_state=from_state,
             to_state=to_state,
             is_synthetic=is_synthetic,
@@ -239,7 +239,7 @@ def record_circuit_breaker_open_duration(service: str, duration_seconds: float) 
         circuit_breaker_open_duration.labels(service=service).observe(duration_seconds)
         logger.debug(
             "metrics.cb_open_duration_recorded",
-            service=service,
+            target_service=service,
             duration_seconds=duration_seconds,
         )
     except Exception as e:
@@ -318,7 +318,7 @@ def record_replay_attempt(domain: str, replay_type: str, success: bool) -> None:
         ).inc()
         logger.debug(
             "metrics.replay_recorded",
-            domain=domain,
+            healing_domain=domain,
             replay_type=replay_type,
             success=success,
             is_synthetic=is_synthetic,
@@ -378,7 +378,7 @@ def record_error_budget_status(
             remaining_percent=remaining_percent,
             burn_rate_1h_value=burn_rate_1h_value,
             is_synthetic=is_synthetic,
-            region=region,
+            target_region=region,
             tier=tier,
         )
     except Exception as e:
@@ -406,7 +406,7 @@ def record_deployment_freeze_status(status: str) -> None:
         deployment_freeze_status.set(status_value)
         logger.debug(
             "metrics.deployment_freeze_status",
-            status=status,
+            metric_status=status,
             status_value=status_value,
         )
     except Exception as e:
@@ -476,7 +476,7 @@ def record_failsafe_triggered(component: str) -> None:
         failsafe_mode_active.labels(component=component).set(1)
         logger.critical(
             "metrics.fail_safe_triggered_alerting",
-            component=component,
+            monitored_component=component,
         )
     except Exception as e:
         logger.exception(
@@ -496,7 +496,7 @@ def record_failsafe_recovered(component: str) -> None:
         failsafe_mode_active.labels(component=component).set(0)
         logger.info(
             "metrics.fail_safe_recovered",
-            component=component,
+            monitored_component=component,
         )
     except Exception as e:
         logger.warning(
@@ -539,7 +539,7 @@ def emit_heartbeat(component: str = "error_budget") -> None:
         selfhealing_heartbeat_count.labels(component=component).inc()
         logger.debug(
             "metrics.heartbeat_emitted",
-            component=component,
+            monitored_component=component,
             current_time=current_time,
         )
     except Exception as e:
@@ -580,7 +580,7 @@ def record_recovery_alert(component: str) -> None:
         recovery_alert_total.labels(component=component).inc()
         logger.info(
             "metrics.recovery_alert_recorded",
-            component=component,
+            monitored_component=component,
         )
     except Exception as e:
         logger.warning(
@@ -650,8 +650,8 @@ def record_xtest_global_scope_request(
         logger.debug(
             "metrics.global_scope_request",
             endpoint_pattern=endpoint_pattern,
-            region=region,
-            result=result,
+            target_region=region,
+            xtest_result=result,
         )
     except Exception as e:
         logger.warning(

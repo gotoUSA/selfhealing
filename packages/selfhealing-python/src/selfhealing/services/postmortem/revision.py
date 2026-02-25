@@ -915,7 +915,7 @@ def migrate_existing_postmortems(
 
     logger.info(
         "migration.complete",
-        result=result["total"],
+        total_revisions_count=result["total"],
         migrated=result["migrated"],
         skipped=result["skipped"],
         failed=result["failed"],

@@ -64,24 +64,16 @@ class PropagationConfig:
         enabled: 전파 활성화 여부
     """
 
-    base_multiplier: float = field(
-        default_factory=lambda: get_error_budget_propagation_settings().base_multiplier
-    )
+    base_multiplier: float = field(default_factory=lambda: get_error_budget_propagation_settings().base_multiplier)
     """장애 도메인 기본 가중치."""
 
-    decay_per_hop: float = field(
-        default_factory=lambda: get_error_budget_propagation_settings().decay_per_hop
-    )
+    decay_per_hop: float = field(default_factory=lambda: get_error_budget_propagation_settings().decay_per_hop)
     """홉당 감쇠율 (1-hop: 50% 감쇠)."""
 
-    min_multiplier: float = field(
-        default_factory=lambda: get_error_budget_propagation_settings().min_multiplier
-    )
+    min_multiplier: float = field(default_factory=lambda: get_error_budget_propagation_settings().min_multiplier)
     """최소 가중치 (감쇠 하한)."""
 
-    max_hops: int = field(
-        default_factory=lambda: get_error_budget_propagation_settings().max_hops
-    )
+    max_hops: int = field(default_factory=lambda: get_error_budget_propagation_settings().max_hops)
     """
     최대 전파 홉 수.
 
@@ -89,9 +81,7 @@ class PropagationConfig:
     리뷰 §3.2.3 반영.
     """
 
-    enabled: bool = field(
-        default_factory=lambda: get_error_budget_propagation_settings().enabled
-    )
+    enabled: bool = field(default_factory=lambda: get_error_budget_propagation_settings().enabled)
     """전파 활성화 여부."""
 
     @classmethod
@@ -332,9 +322,7 @@ class DomainPropagationMultiplier:
             적용할 가중치
         """
         if not self.config.enabled:
-            return self._level_multipliers.get(
-                crisis_level, self.config.base_multiplier
-            )
+            return self._level_multipliers.get(crisis_level, self.config.base_multiplier)
 
         hop_distance = self.get_hop_distance(crisis_domain, error_domain)
 
@@ -344,9 +332,7 @@ class DomainPropagationMultiplier:
 
         if hop_distance == 0:
             # 동일 도메인: 전체 가중치
-            base = self._level_multipliers.get(
-                crisis_level, self.config.base_multiplier
-            )
+            base = self._level_multipliers.get(crisis_level, self.config.base_multiplier)
             return base
 
         # 감쇠 적용: base * (decay ^ hop)
@@ -383,9 +369,7 @@ class DomainPropagationMultiplier:
         Returns:
             PropagationResult
         """
-        hop_distance, path = self.get_hop_distance_with_path(
-            crisis_domain, error_domain
-        )
+        hop_distance, path = self.get_hop_distance_with_path(crisis_domain, error_domain)
         multiplier = self.get_multiplier(crisis_domain, error_domain, crisis_level)
 
         return PropagationResult(
@@ -415,9 +399,7 @@ class DomainPropagationMultiplier:
             if domain != crisis_domain.lower():
                 hop = self.get_hop_distance(crisis_domain, domain)
                 if hop >= 0:
-                    result[domain] = self.get_multiplier(
-                        crisis_domain, domain, EmergencyLevel.LEVEL_3
-                    )
+                    result[domain] = self.get_multiplier(crisis_domain, domain, EmergencyLevel.LEVEL_3)
 
         return result
 
@@ -446,7 +428,7 @@ class DomainPropagationMultiplier:
                 "domain_propagation.depth_limit_reached",
                 crisis_domain=crisis_domain,
                 error_domain=error_domain,
-                _self=self.config.max_hops,
+                max_hops=self.config.max_hops,
             )
         except Exception:
             pass  # 메트릭 실패는 무시
@@ -470,7 +452,7 @@ class DomainPropagationMultiplier:
 
             logger.warning(
                 "domain_propagation.cycle_detected_domain",
-                domain=domain,
+                healing_domain=domain,
             )
         except Exception:
             pass

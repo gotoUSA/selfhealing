@@ -236,8 +236,8 @@ class GovernanceApiService:
                 )
                 logger.info(
                     "governance.emergency_tracker_activated",
-                    actor=actor,
-                    result=result.get('expiry_hours', 8),
+                    actor_id=actor,
+                    expiry_hours=result.get("expiry_hours", 8),
                 )
 
                 # 만료 시각 계산
@@ -255,7 +255,7 @@ class GovernanceApiService:
                 )
                 logger.info(
                     "governance.emergency_tracker_deactivated",
-                    actor=actor,
+                    actor_id=actor,
                 )
                 return result
 

@@ -104,7 +104,7 @@ class SessionPersistenceMixin:
 
         logger.info(
             "recovery.completed",
-            session=session.id,
+            recovery_session_id=session.id,
             namespace=session.namespace,
         )
 
@@ -145,8 +145,8 @@ class SessionPersistenceMixin:
         if not comp_result.all_compensated:
             logger.warning(
                 "recovery.compensation_incomplete",
-                session=session.id,
-                count=len(comp_result.failed_steps),
+                recovery_session_id=session.id,
+                failed_steps_count=len(comp_result.failed_steps),
                 skipped_steps_count=len(comp_result.skipped_steps),
             )
 
@@ -163,7 +163,7 @@ class SessionPersistenceMixin:
         # 최소한 로그 시스템에 흔적이 남음
         logger.error(
             "recovery.failed",
-            session=session.id,
+            recovery_session_id=session.id,
             error=error,
         )
 
@@ -314,15 +314,15 @@ class SessionPersistenceMixin:
 
             logger.info(
                 "recovery.failure_stored_dlq",
-                session=session.id,
-                count=len(compensation_failures or []),
+                recovery_session_id=session.id,
+                compensation_failures_count=len(compensation_failures or []),
             )
 
         except Exception as e:
             # Fail-Open: DLQ 저장 실패가 복구 실패 처리를 중단시키지 않음
             logger.warning(
                 "recovery.dlq_store_failed_ignored",
-                session=session.id,
+                recovery_session_id=session.id,
                 error=e,
             )
 
@@ -402,7 +402,7 @@ class SessionPersistenceMixin:
                     logger.info(
                         "recovery.compensated",
                         step_type=step.step_type.value,
-                        session=session.id,
+                        recovery_session_id=session.id,
                     )
                 else:
                     error_msg = handler_result.get("error", "Unknown error")

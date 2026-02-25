@@ -120,7 +120,7 @@ class ConfigApplyService(GovernanceCheckMixin):
                         logger.error(
                             "config_apply_service.failed_apply",
                             change=change.id,
-                            result=result.get('error'),
+                            error=result.get("error"),
                         )
 
                     results.append(

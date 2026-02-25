@@ -23,7 +23,7 @@ Usage:
     if not result.allowed:
         logger.warning(
             "automation_blocked",
-            result=result.reason,
+            gate_skip_reason=result.reason,
         )
         return  # 자동화 중단
 

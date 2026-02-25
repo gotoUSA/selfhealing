@@ -291,8 +291,8 @@ class CorruptionShield:
             # _write_to_wal 미사용 환경: 로거로 폴백
             logger.warning(
                 "violations_detected",
-                count=len(result.violations),
-                result=result.blocked,
+                violations_count=len(result.violations),
+                is_blocked=result.blocked,
             )
 
     def _log_violations(self, data: dict, result: ValidationResult) -> None:

@@ -445,7 +445,7 @@ class SelfHealingEventBus:
         logger.info(
             "event_bus.wildcard_subscription_all_event",
             getattr=getattr(handler, "__name__", str(handler)),
-            count=len(subscriptions),
+            subscriptions_count=len(subscriptions),
             priority=priority.name,
         )
         return subscriptions
@@ -530,7 +530,7 @@ class SelfHealingEventBus:
         logger.info(
             "adaptive_throttle.event_published",
             event_type=event.event_type.value,
-            _event=event.source,
+            event_source=event.source,
             handlers_called=handlers_called,
         )
 
@@ -708,7 +708,7 @@ def _on_emergency_level_changed(event: SelfHealingEvent):
     logger.info(
         "event_handler.emergency_level_changed",
         previous_level=previous_level,
-        level=level,
+        event_log_level=level,
         is_escalation=is_escalation,
     )
 

@@ -261,7 +261,7 @@ class RecoveryMetricsRecorder:
         logger.debug(
             "recovery_metrics.session_completed",
             namespace=namespace,
-            status=status,
+            recovery_status=status,
             duration_seconds=duration_seconds,
         )
 

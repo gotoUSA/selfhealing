@@ -118,7 +118,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         if state not in self._state_change_callbacks:
             logger.warning(
                 "circuit_breaker.invalid_callback_state",
-                state=state,
+                circuit_state=state,
             )
             return
 
@@ -126,8 +126,8 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             self._state_change_callbacks[state].append(callback)
             logger.debug(
                 "cell_registry.bulkheads_registered",
-                state=state,
-                getattr=getattr(callback, '__name__', str(callback)),
+                circuit_state=state,
+                getattr=getattr(callback, "__name__", str(callback)),
             )
 
     def unregister_state_change_callback(
@@ -539,7 +539,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 "circuit_breaker.circuit_auto_opened_failures",
                 service_name=service_name,
                 updated_state=updated_state.failure_count,
-                _self=self.get_total_calls(service_name),
+                total_calls=self.get_total_calls(service_name),
             )
 
             # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
@@ -593,7 +593,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         if window_size > 0 and total_calls > window_size:
             logger.debug(
                 "circuit_breaker.capping",
-                state=state.service_name,
+                target_service_name=state.service_name,
                 total_calls=total_calls,
                 window_size=window_size,
             )
@@ -605,9 +605,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         if total_calls < self.config.minimum_calls:
             logger.debug(
                 "circuit_breaker.opening",
-                state=state.service_name,
+                target_service_name=state.service_name,
                 total_calls=total_calls,
-                _self=self.config.minimum_calls,
+                minimum_calls=self.config.minimum_calls,
             )
             return False
 
@@ -617,9 +617,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             if failure_rate >= self.config.failure_rate_threshold:
                 logger.info(
                     "circuit_breaker.rate_threshold_exceeded",
-                    state=state.service_name,
+                    target_service_name=state.service_name,
                     failure_rate=failure_rate,
-                    _self=self.config.failure_rate_threshold,
+                    failure_rate_threshold=self.config.failure_rate_threshold,
                     window_size=window_size,
                 )
                 return True
@@ -852,7 +852,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             logger.info(
                 "circuit_breaker.circuit_auto_closed_successes",
                 service_name=service_name,
-                _self=self.config.success_threshold,
+                success_threshold=self.config.success_threshold,
             )
 
             # 동기 콜백 즉시 호출 (이벤트 버스보다 먼저 실행)
@@ -934,7 +934,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                     transitioned.append(state.service_name)
                     logger.info(
                         "circuit_breaker.transitioned_open_after",
-                        state=state.service_name,
+                        target_service_name=state.service_name,
                         elapsed=elapsed,
                     )
 
@@ -1076,6 +1076,6 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         except Exception as e:
             logger.debug(
                 "cb_reconciliation_history_recording",
-                state=state.service_name,
+                target_service_name=state.service_name,
                 error=e,
             )

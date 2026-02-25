@@ -89,7 +89,7 @@ class CanaryChaosGuard:
         if result.has_conflict:
             logger.warning(
                 "chaos_clusters_excluded",
-                result=result.chaos_clusters,
+                chaos_clusters=result.chaos_clusters,
             )
 
         if not result.can_proceed:
@@ -159,9 +159,7 @@ class CanaryChaosGuard:
                 safe_clusters=target_clusters,  # 전체 진행
                 policy_applied=ChaosConflictPolicy.LOOSE,
                 can_proceed=True,
-                warning_message=(
-                    f"FORCE: Proceeding despite active chaos on {list(conflict_set)}"
-                ),
+                warning_message=(f"FORCE: Proceeding despite active chaos on {list(conflict_set)}"),
             )
 
         # 정책별 처리
@@ -221,8 +219,7 @@ class CanaryChaosGuard:
                 policy_applied=self._policy,
                 can_proceed=True,
                 warning_message=(
-                    f"SMART: Excluding chaos clusters {list(conflict_set)}, "
-                    f"proceeding with {list(safe_set)}"
+                    f"SMART: Excluding chaos clusters {list(conflict_set)}, " f"proceeding with {list(safe_set)}"
                 ),
             )
 
@@ -341,5 +338,5 @@ class CanaryChaosGuard:
         self._policy = value
         logger.info(
             "chaos_guard.policy_changed",
-            value=value,
+            new_policy=value,
         )

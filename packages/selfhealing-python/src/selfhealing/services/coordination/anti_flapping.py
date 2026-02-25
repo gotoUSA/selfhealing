@@ -54,9 +54,7 @@ class AntiFlappingGuard:
     """
 
     # 레벨 전환 간 최소 대기 시간 (초) - Settings에서 로드
-    level_cooldown_seconds: int = field(
-        default_factory=lambda: get_anti_flapping_settings().level_cooldown_seconds
-    )
+    level_cooldown_seconds: int = field(default_factory=lambda: get_anti_flapping_settings().level_cooldown_seconds)
     """레벨 전환 후 다음 전환까지의 최소 대기 시간."""
 
     # 복구 후 대기 시간 (재활성화 제한)
@@ -78,15 +76,11 @@ class AntiFlappingGuard:
     """플래핑 감지 임계값: 시간당 3회 초과 시 경고."""
 
     # 플래핑 감지 시 강제 쿨다운
-    flapping_lockout_minutes: int = field(
-        default_factory=lambda: get_anti_flapping_settings().flapping_lockout_minutes
-    )
+    flapping_lockout_minutes: int = field(default_factory=lambda: get_anti_flapping_settings().flapping_lockout_minutes)
     """플래핑 감지 시 30분간 레벨 변경 잠금."""
 
     # Recovery Hysteresis Factor (72번 문서 §5.1.1)
-    recovery_hysteresis_factor: float = field(
-        default_factory=lambda: get_anti_flapping_settings().recovery_hysteresis_factor
-    )
+    recovery_hysteresis_factor: float = field(default_factory=lambda: get_anti_flapping_settings().recovery_hysteresis_factor)
     """
     복구 윈도우 히스테리시스 팩터.
 
@@ -136,11 +130,7 @@ class AntiFlappingGuard:
             (is_allowed, reason): 전환 가능 여부와 사유
         """
         now = now or datetime.now(timezone.utc)
-        history = (
-            transition_history
-            if transition_history is not None
-            else self._transition_history
-        )
+        history = transition_history if transition_history is not None else self._transition_history
 
         # 플래핑 잠금 상태 확인
         if self._flapping_lockout_until and now < self._flapping_lockout_until:
@@ -153,13 +143,11 @@ class AntiFlappingGuard:
 
         if len(recent_transitions) >= self.max_level_transitions_per_hour:
             # 플래핑 감지 - 잠금 활성화
-            self._flapping_lockout_until = now + timedelta(
-                minutes=self.flapping_lockout_minutes
-            )
+            self._flapping_lockout_until = now + timedelta(minutes=self.flapping_lockout_minutes)
             logger.warning(
                 "anti_flapping_guard.flapping_detected_transitions_last",
-                count=len(recent_transitions),
-                _self=self.flapping_lockout_minutes,
+                recent_transitions_count=len(recent_transitions),
+                flapping_lockout_minutes=self.flapping_lockout_minutes,
             )
             return (
                 False,
@@ -195,8 +183,7 @@ class AntiFlappingGuard:
             remaining = self.level_cooldown_seconds - elapsed
             return (
                 False,
-                f"Cooldown active. {remaining:.0f}s remaining "
-                f"(required: {self.level_cooldown_seconds}s).",
+                f"Cooldown active. {remaining:.0f}s remaining " f"(required: {self.level_cooldown_seconds}s).",
             )
 
         return (
@@ -249,7 +236,7 @@ class AntiFlappingGuard:
         logger.debug(
             "anti_flapping_guard.transition_recorded_history_size",
             transition_time=transition_time.isoformat(),
-            count=len(self._transition_history),
+            transition_history_count=len(self._transition_history),
         )
 
     def record_recovery_complete(self, at: datetime | None = None) -> None:
@@ -262,7 +249,7 @@ class AntiFlappingGuard:
         self._last_recovery_at = at or datetime.now(timezone.utc)
         logger.info(
             "anti_flapping_guard.recovery_completed",
-            _self=self._last_recovery_at.isoformat(),
+            last_recovery_at=self._last_recovery_at.isoformat(),
         )
 
     def clear_lockout(self) -> None:
@@ -282,18 +269,9 @@ class AntiFlappingGuard:
             "max_level_transitions_per_hour": self.max_level_transitions_per_hour,
             "flapping_lockout_minutes": self.flapping_lockout_minutes,
             "recent_transitions_count": len(recent_transitions),
-            "is_locked_out": (
-                self._flapping_lockout_until is not None
-                and now < self._flapping_lockout_until
-            ),
-            "lockout_until": (
-                self._flapping_lockout_until.isoformat()
-                if self._flapping_lockout_until
-                else None
-            ),
-            "last_recovery_at": (
-                self._last_recovery_at.isoformat() if self._last_recovery_at else None
-            ),
+            "is_locked_out": (self._flapping_lockout_until is not None and now < self._flapping_lockout_until),
+            "lockout_until": (self._flapping_lockout_until.isoformat() if self._flapping_lockout_until else None),
+            "last_recovery_at": (self._last_recovery_at.isoformat() if self._last_recovery_at else None),
             "recovery_hysteresis_factor": self.recovery_hysteresis_factor,
         }
 
@@ -331,7 +309,7 @@ class AntiFlappingGuard:
             logger.debug(
                 "anti_flapping_guard.recovery_stability_duration",
                 base_duration=base_duration,
-                _self=self.recovery_hysteresis_factor,
+                recovery_hysteresis_factor=self.recovery_hysteresis_factor,
                 effective_duration=effective_duration,
             )
             return effective_duration

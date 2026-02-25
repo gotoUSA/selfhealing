@@ -330,7 +330,7 @@ class HealthCheckService:
         logger.info(
             "health_check.event",
             cluster_id=cluster_id,
-            region=region,
+            target_region=region,
             environment=environment,
             health_status=health_status,
             services_count=services_count,

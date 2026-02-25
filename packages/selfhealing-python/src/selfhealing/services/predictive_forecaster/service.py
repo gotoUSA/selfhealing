@@ -475,7 +475,7 @@ class PredictiveForecasterService:
             )
             logger.warning(
                 "predictive_forecaster_service.blacklisted_consecutive_mispredictions",
-                parameter=parameter,
+                forecast_parameter=parameter,
                 metric_name=metric_name,
                 misprediction_count=misprediction_count,
             )

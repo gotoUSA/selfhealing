@@ -150,8 +150,8 @@ class RateLimitCoordinator:
             if now - last_time < self._config.debounce_window_seconds:
                 logger.debug(
                     "rate_limit_coordinator.debounced_event_last_emit",
-                    key=key,
-                    value=now - last_time,
+                    rate_limit_key=key,
+                    time_since_last_request=now - last_time,
                 )
                 return False
 
@@ -187,7 +187,7 @@ class RateLimitCoordinator:
             )
             logger.info(
                 "rate_limit_coordinator.cooldown_ended",
-                key=key,
+                rate_limit_key=key,
             )
 
             # 타이머 정리
@@ -228,7 +228,7 @@ class RateLimitCoordinator:
                 self._canary_in_progress[key] = True
                 logger.info(
                     "rate_limit_coordinator.canary_request_mode",
-                    key=key,
+                    rate_limit_key=key,
                 )
                 return True
 
@@ -241,7 +241,7 @@ class RateLimitCoordinator:
                 del self._canary_in_progress[key]
                 logger.debug(
                     "rate_limit_coordinator.canary_state_cleared",
-                    key=key,
+                    rate_limit_key=key,
                 )
 
     def get_state(self, key: str) -> RateLimitState:

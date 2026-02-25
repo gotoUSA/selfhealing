@@ -451,7 +451,7 @@ class ThrottleAwareBackoffCalculator(BackoffCalculator):
         if adjusted_delay > SYSTEM_TIMEOUT_SECONDS:
             logger.warning(
                 "throttle_aware_backoff.delay_capped",
-                value=base_delay * multiplier,
+                computed_delay=base_delay * multiplier,
                 SYSTEM_TIMEOUT_SECONDS=SYSTEM_TIMEOUT_SECONDS,
             )
             adjusted_delay = SYSTEM_TIMEOUT_SECONDS

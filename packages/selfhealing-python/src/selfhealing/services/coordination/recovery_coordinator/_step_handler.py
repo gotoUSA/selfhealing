@@ -300,7 +300,7 @@ class StepHandlerMixin:
                 "recovery.step_timeout",
                 step_type=step.step_type.value,
                 timeout_seconds=timeout_seconds,
-                session=session.id,
+                recovery_session_id=session.id,
             )
 
             # 좀비 스레드에 종료 신호 (협력적 취소)

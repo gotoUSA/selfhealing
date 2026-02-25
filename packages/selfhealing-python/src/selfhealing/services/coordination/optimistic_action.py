@@ -170,11 +170,7 @@ class OptimisticLocalActionExecutor:
 
                 self._local_cache[namespace].update(
                     {
-                        "last_action": (
-                            action.type.value
-                            if hasattr(action.type, "value")
-                            else str(action.type)
-                        ),
+                        "last_action": (action.type.value if hasattr(action.type, "value") else str(action.type)),
                         "last_action_at": now.isoformat(),
                         "action_id": action_id,
                         "params": action.params if hasattr(action, "params") else {},
@@ -182,9 +178,7 @@ class OptimisticLocalActionExecutor:
                 )
 
             # 2. 액션 핸들러 실행 (있는 경우)
-            action_type = (
-                action.type.value if hasattr(action.type, "value") else str(action.type)
-            )
+            action_type = action.type.value if hasattr(action.type, "value") else str(action.type)
             handler = self._action_handlers.get(action_type)
 
             if handler:
@@ -229,7 +223,7 @@ class OptimisticLocalActionExecutor:
         except Exception as e:
             logger.exception(
                 "optimistic_action.failed",
-                action=action,
+                optimistic_action_type=action,
                 namespace=namespace,
             )
             return OptimisticActionResult(
@@ -257,7 +251,7 @@ class OptimisticLocalActionExecutor:
 
         logger.debug(
             "optimistic_action.sync_scheduled",
-            result=result.action_id,
+            dispatched_action_id=result.action_id,
         )
 
     def sync_pending(self) -> dict[str, bool]:

@@ -212,7 +212,7 @@ class CheckOnUseMultiplierProvider:
             "provider.context",
             current_level=current_level.name,
             level_multiplier=level_multiplier,
-            domain=domain,
+            healing_domain=domain,
             domain_multiplier=domain_multiplier,
             final_multiplier=final_multiplier,
         )
@@ -293,7 +293,7 @@ class CheckOnUseMultiplierProvider:
         if sensitivity < 1.0:
             logger.warning(
                 "provider.sensitivity_recommended",
-                domain=domain,
+                healing_domain=domain,
                 sensitivity=sensitivity,
             )
         self._domain_sensitivity[domain.lower()] = sensitivity

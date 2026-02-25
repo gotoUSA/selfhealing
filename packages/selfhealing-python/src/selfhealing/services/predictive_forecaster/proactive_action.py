@@ -307,8 +307,8 @@ class ProactiveActionTrigger:
                 logger.warning(
                     "proactive_action_trigger.blocked_blacklist",
                     module=module,
-                    parameter=parameter,
-                    value=value,
+                    forecast_parameter=parameter,
+                    forecast_value=value,
                 )
                 return False
 
@@ -351,8 +351,8 @@ class ProactiveActionTrigger:
             logger.debug(
                 "proactive_action_trigger.low_confidence",
                 confidence=confidence,
-                parameter=parameter,
-                _self=self._min_confidence,
+                forecast_parameter=parameter,
+                min_confidence=self._min_confidence,
             )
             return None
 
@@ -387,7 +387,7 @@ class ProactiveActionTrigger:
         if self._dry_run:
             logger.info(
                 "proactive_action_trigger.event",
-                parameter=parameter,
+                forecast_parameter=parameter,
                 current_value=current_value,
                 suggested_value=suggested_value,
                 spike_type=spike_type.value,
@@ -397,7 +397,7 @@ class ProactiveActionTrigger:
         else:
             logger.info(
                 "proactive_action_trigger.action",
-                parameter=parameter,
+                forecast_parameter=parameter,
                 current_value=current_value,
                 suggested_value=suggested_value,
                 spike_type=spike_type.value,

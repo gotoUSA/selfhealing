@@ -251,7 +251,7 @@ class WeightedAuditRecorder:
 
         logger.debug(
             "weighted_audit.recorded",
-            entry=entry.audit_id,
+            audit_entry_id=entry.audit_id,
             raw_consumption_minutes=entry.raw_consumption_minutes,
             weighted_consumption_minutes=entry.weighted_consumption_minutes,
             final_multiplier=entry.final_multiplier,
@@ -271,7 +271,7 @@ class WeightedAuditRecorder:
 
                 logger.debug(
                     "weighted_audit.added_hash_chain",
-                    entry=entry.audit_id,
+                    audit_entry_id=entry.audit_id,
                 )
             except Exception as e:
                 logger.warning(

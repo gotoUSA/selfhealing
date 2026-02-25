@@ -175,7 +175,7 @@ def _send_postmortem_notification(
             logger.debug(
                 "notification.postmortem_notification_suppressed",
                 incident_id=incident_id,
-                result=result.suppression_reason,
+                suppression_reason=result.suppression_reason,
             )
 
     except Exception as e:
@@ -208,7 +208,7 @@ def _on_circuit_breaker_closed(event: SelfHealingEvent):
             logger.critical(
                 "event_handler.replay_blocked_integrity_gate",
                 service_name=service_name,
-                _event=event.data.get('integrity_gate_result', {}),
+                integrity_gate_result=event.data.get("integrity_gate_result", {}),
             )
             return  # 리플레이 중단
     except ImportError:

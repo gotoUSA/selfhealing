@@ -183,7 +183,7 @@ class DomainAwareCrisisMultiplier:
         if sensitivity < 1.0:
             logger.warning(
                 "crisis_multiplier.sensitivity_recommended",
-                domain=domain,
+                healing_domain=domain,
                 sensitivity=sensitivity,
             )
         self.domain_sensitivity[domain.lower()] = sensitivity

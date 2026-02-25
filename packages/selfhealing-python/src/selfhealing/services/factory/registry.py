@@ -89,7 +89,7 @@ class ServiceProviderRegistry:
         cls._cache_providers[name] = provider_class
         logger.info(
             "cell_registry.bulkheads_registered",
-            name=name,
+            adapter_name=name,
         )
 
     @classmethod
@@ -141,7 +141,7 @@ class ServiceProviderRegistry:
         cls._task_queues[name] = provider_class
         logger.info(
             "cell_registry.bulkheads_registered",
-            name=name,
+            adapter_name=name,
         )
 
     @classmethod
@@ -483,7 +483,7 @@ class ServiceProviderRegistry:
         logger.debug(
             "service_provider_registry.override",
             provider_type=provider_type,
-            value=type(mock_instance).__name__,
+            adapter_type=type(mock_instance).__name__,
         )
 
         try:

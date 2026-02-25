@@ -89,7 +89,7 @@ def log_dlq_store_audit(
         logger.info(
             "dlq_audit.store",
             dlq_id=dlq_id,
-            domain=domain,
+            healing_domain=domain,
             failure_type=failure_type,
         )
         return wal_seq
@@ -182,10 +182,10 @@ def log_dlq_replay_audit(
         status = "SUCCESS" if success else "FAILED"
         logger.info(
             "dlq_audit.event",
-            status=status,
+            replay_status=status,
             dlq_id=dlq_id,
-            domain=domain,
-            value=error_message or 'none',
+            healing_domain=domain,
+            error_detail=error_message or "none",
         )
         return wal_seq
 

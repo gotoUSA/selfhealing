@@ -137,7 +137,7 @@ class DashboardService:
             if cached:
                 logger.debug(
                     "dashboard.cache_hit",
-                    key=key,
+                    cache_key=key,
                 )
                 return cached
         except Exception as e:
@@ -157,7 +157,7 @@ class DashboardService:
             self.cache.set(full_key, value, ttl=timedelta(seconds=ttl))
             logger.debug(
                 "dashboard.cache_set",
-                key=key,
+                cache_key=key,
                 ttl=ttl,
             )
         except Exception as e:

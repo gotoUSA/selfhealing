@@ -267,7 +267,7 @@ class PanicThresholdMonitor:
 
         logger.critical(
             "panic_threshold_triggered_circuits",
-            count=len(open_circuits),
+            open_circuits_count=len(open_circuits),
             total_circuits_count=len(total_circuits),
             open_rate=open_rate,
         )
@@ -360,7 +360,7 @@ class PanicThresholdMonitor:
             logger.warning(
                 "panic_threshold.escalated_emergency_level",
                 open_rate=open_rate,
-                count=len(open_circuits),
+                open_circuits_count=len(open_circuits),
             )
         except Exception as e:
             logger.exception(
@@ -402,7 +402,7 @@ class PanicThresholdMonitor:
             open_count=open_count,
             total_count=total_count,
             open_rate=open_rate,
-            value=", ".join(halted_systems),
+            halted_systems_list=", ".join(halted_systems),
             open_circuits=", ".join(open_circuits),
         )
 

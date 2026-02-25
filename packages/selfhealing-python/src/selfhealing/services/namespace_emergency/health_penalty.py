@@ -86,9 +86,7 @@ class PenaltyBreakdown:
     namespace: str | None = None
     """대상 네임스페이스."""
 
-    calculated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    calculated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     """계산 시각."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -229,9 +227,9 @@ class EmergencyHealthPenalty:
 
         logger.debug(
             "emergency_health_penalty.event",
-            ns=ns,
+            namespace_id=ns,
             penalty=penalty,
-            state=state.governance_mode,
+            governance_mode=state.governance_mode,
         )
 
         return penalty
@@ -262,7 +260,7 @@ class EmergencyHealthPenalty:
                 "emergency_health_penalty.applied_penalty",
                 base_score=base_score,
                 penalty=penalty,
-                result=result,
+                health_result=result,
             )
 
         return result
@@ -297,15 +295,10 @@ class EmergencyHealthPenalty:
             )
 
         # 상세 사유 생성
-        scope_str = (
-            state.scope.value if hasattr(state.scope, "value") else str(state.scope)
-        )
+        scope_str = state.scope.value if hasattr(state.scope, "value") else str(state.scope)
         level_name = getattr(state.emergency_level, "name", str(state.emergency_level))
 
-        reason = (
-            f"Emergency {scope_str.upper()} {state.governance_mode} active "
-            f"(Level: {level_name})"
-        )
+        reason = f"Emergency {scope_str.upper()} {state.governance_mode} active " f"(Level: {level_name})"
         if state.activated_at:
             reason += f" since {state.activated_at}"
 
@@ -340,7 +333,7 @@ class EmergencyHealthPenalty:
 
         logger.debug(
             "emergency_health_penalty.cache_invalidated",
-            value=namespace or 'all',
+            target_namespace=namespace or "all",
         )
 
 

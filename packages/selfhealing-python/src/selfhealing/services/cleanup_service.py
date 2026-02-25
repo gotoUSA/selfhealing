@@ -95,7 +95,7 @@ class CleanupService:
 
             logger.info(
                 "cleanup_service.archived_dlq_entries",
-                count=count,
+                dlq_archived_count=count,
             )
 
             # === Audit 기록: DLQ 아카이브 ===
@@ -157,7 +157,7 @@ class CleanupService:
 
             logger.info(
                 "cleanup_service.cleaned_up_expired_configs",
-                count=count,
+                expired_cleaned_count=count,
             )
 
             # === Audit 기록: 만료된 Pending Config 정리 ===
@@ -219,7 +219,7 @@ class CleanupService:
 
             logger.info(
                 "cleanup_service.expired_approval_requests",
-                count=count,
+                expired_requests_count=count,
             )
 
             return CleanupResult(
@@ -276,12 +276,10 @@ class CleanupService:
 
             if dry_run:
                 # dry_run 모드: 대상 수만 확인
-                count = dlq_service.count_archived_older_than(
-                    older_than_days=older_than_days
-                )
+                count = dlq_service.count_archived_older_than(older_than_days=older_than_days)
                 logger.info(
                     "cleanup_service.dry_run_purge_archived",
-                    count=count,
+                    dry_run_purge_count=count,
                 )
 
                 # === Audit 기록: DRY RUN 모드 (실제 삭제 없음) ===
@@ -296,7 +294,7 @@ class CleanupService:
                 count = dlq_service.purge_archived(older_than_days=older_than_days)
                 logger.warning(
                     "cleanup_service.permanently_deleted_entries",
-                    count=count,
+                    dlq_purged_count=count,
                 )
 
                 # === Audit 기록: 영구 삭제 (고위험, 복구 불가) ===
@@ -319,11 +317,7 @@ class CleanupService:
                 details={
                     "older_than_days": older_than_days,
                     "dry_run": dry_run,
-                    "warning": (
-                        "PERMANENT DELETION - UNRECOVERABLE"
-                        if not dry_run
-                        else "DRY RUN - No actual deletion"
-                    ),
+                    "warning": ("PERMANENT DELETION - UNRECOVERABLE" if not dry_run else "DRY RUN - No actual deletion"),
                 },
             )
 

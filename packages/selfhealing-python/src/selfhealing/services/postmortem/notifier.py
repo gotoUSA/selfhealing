@@ -328,7 +328,7 @@ class PostmortemNotifier:
 
         logger.debug(
             "postmortem_notifier.initialized",
-            _self=self._config.enabled,
+            enabled=self._config.enabled,
             channels=self._config.channels,
         )
 
@@ -426,7 +426,7 @@ class PostmortemNotifier:
                 else:
                     logger.warning(
                         "postmortem_notifier.slack_response",
-                        response=response.status,
+                        notification_response_status=response.status,
                     )
                     return False
 

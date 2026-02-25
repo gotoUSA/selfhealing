@@ -127,7 +127,7 @@ class DailyReportService:
 
             logger.info(
                 "daily_report_service.report_sent_entries_channels",
-                count=len(report.entries),
+                entries_count=len(report.entries),
                 sent_channels=sent_channels,
             )
 

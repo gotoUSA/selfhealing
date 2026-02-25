@@ -46,9 +46,7 @@ class PropagationHealthMetrics:
     propagation_health_score: float = 100.0
 
     # Timestamps
-    calculated_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    calculated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     last_propagation_at: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -174,7 +172,7 @@ class PropagationHealthMonitor:
                         "propagation_health.tier_sla_violation_propagation",
                         config_type=config_type,
                         latency_ms=latency_ms,
-                        _self=self.TIER1_SLA_THRESHOLD_MS,
+                        TIER1_SLA_THRESHOLD_MS=self.TIER1_SLA_THRESHOLD_MS,
                         source_cluster=source_cluster,
                         target_cluster=target_cluster,
                     )
@@ -185,7 +183,7 @@ class PropagationHealthMonitor:
                         "propagation_health.tier_sla_violation_propagation",
                         config_type=config_type,
                         latency_ms=latency_ms,
-                        _self=self.TIER2_SLA_THRESHOLD_MS,
+                        TIER2_SLA_THRESHOLD_MS=self.TIER2_SLA_THRESHOLD_MS,
                     )
 
             logger.debug(
@@ -221,11 +219,7 @@ class PropagationHealthMonitor:
                 tier2_sla_violations=self._tier2_violations,
                 total_propagations=self._total_propagations,
                 propagation_health_score=health_score,
-                last_propagation_at=(
-                    self._last_propagation_at.isoformat()
-                    if self._last_propagation_at
-                    else None
-                ),
+                last_propagation_at=(self._last_propagation_at.isoformat() if self._last_propagation_at else None),
             )
 
     def _calculate_health_score(self) -> float:
@@ -262,9 +256,7 @@ class PropagationHealthMonitor:
         propagation_score = self._calculate_health_score()
         integrity_weight = 1.0 - propagation_weight
 
-        return (integrity_score * integrity_weight) + (
-            propagation_score * propagation_weight
-        )
+        return (integrity_score * integrity_weight) + (propagation_score * propagation_weight)
 
     def get_recent_records(self, count: int = 10) -> list[dict[str, Any]]:
         """

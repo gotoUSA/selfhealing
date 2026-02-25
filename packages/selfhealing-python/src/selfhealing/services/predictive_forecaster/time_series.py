@@ -269,8 +269,8 @@ class HoltLinearForecaster:
             logger.info(
                 "holt_linear_forecaster.saved_state_points",
                 metric_name=metric_name,
-                _self=self._count,
-                level=self._level,
+                count=self._count,
+                time_series_level=self._level,
             )
             return True
         except Exception as e:
@@ -328,8 +328,8 @@ class HoltLinearForecaster:
             logger.info(
                 "holt_linear_forecaster.restored_state_points",
                 metric_name=metric_name,
-                _self=self._count,
-                level=self._level,
+                count=self._count,
+                time_series_level=self._level,
             )
             return True
         except Exception as e:

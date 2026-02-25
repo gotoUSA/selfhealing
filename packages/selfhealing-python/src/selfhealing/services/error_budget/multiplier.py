@@ -319,7 +319,7 @@ class CrisisMultiplierProvider:
 
         logger.debug(
             "crisis_multiplier.event",
-            level=level.name,
+            multiplier_level_name=level.name,
             multiplier=multiplier,
             namespace=namespace,
         )
@@ -357,7 +357,7 @@ class CrisisMultiplierProvider:
 
         logger.info(
             "crisis_multiplier.override_set",
-            level=level.name,
+            multiplier_level_name=level.name,
             capped_multiplier=capped_multiplier,
         )
 

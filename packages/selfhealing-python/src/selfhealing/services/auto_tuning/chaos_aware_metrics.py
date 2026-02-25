@@ -70,7 +70,7 @@ class ChaosAwareMetricsAdapter:
         if self._skip_during_chaos and self._is_chaos_experiment_running():
             logger.info(
                 "chaos_aware_metrics.skipping_metrics_chaos_experiment",
-                service=service,
+                target_service=service,
             )
             return {}  # 빈 메트릭 반환 → 조정 없음
 

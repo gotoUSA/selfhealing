@@ -315,13 +315,8 @@ class NamespacedEmergencyTracker:
                 return regional_state
 
             # Safety-Max: 둘 중 더 엄격한 상태
-            global_is_strict = (
-                global_state.is_active() and global_state.governance_mode == "STRICT"
-            )
-            regional_is_strict = (
-                regional_state.is_active()
-                and regional_state.governance_mode == "STRICT"
-            )
+            global_is_strict = global_state.is_active() and global_state.governance_mode == "STRICT"
+            regional_is_strict = regional_state.is_active() and regional_state.governance_mode == "STRICT"
 
             if global_is_strict:
                 # Global STRICT가 Regional을 오버라이드
@@ -375,9 +370,7 @@ class NamespacedEmergencyTracker:
         expires_at = datetime.now(timezone.utc) + timedelta(hours=hours)
 
         # Governance 모드 결정 (LEVEL_2 이상이면 STRICT)
-        governance_mode = (
-            "STRICT" if level.value >= EmergencyLevel.LEVEL_2.value else "NORMAL"
-        )
+        governance_mode = "STRICT" if level.value >= EmergencyLevel.LEVEL_2.value else "NORMAL"
 
         with self._lock:
             state = ScopedEmergencyState(
@@ -396,7 +389,7 @@ class NamespacedEmergencyTracker:
             logger.warning(
                 "namespaced_tracker.emergency_activated",
                 target_ns=target_ns,
-                level=level.name,
+                emergency_level_name=level.name,
                 governance_mode=governance_mode,
                 activated_by=activated_by,
             )
@@ -529,11 +522,7 @@ class NamespacedEmergencyTracker:
                 namespace=namespace,
                 emergency_level=EmergencyLevel.NORMAL,
                 governance_mode="NORMAL",
-                scope=(
-                    EmergencyScope.REGIONAL
-                    if namespace != GLOBAL_NAMESPACE
-                    else EmergencyScope.GLOBAL
-                ),
+                scope=(EmergencyScope.REGIONAL if namespace != GLOBAL_NAMESPACE else EmergencyScope.GLOBAL),
             )
 
         # 캐시 저장

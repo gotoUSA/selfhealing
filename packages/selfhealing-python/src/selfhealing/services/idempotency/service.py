@@ -177,7 +177,7 @@ class IdempotencyService:
             if cached_value:
                 logger.debug(
                     "idempotency.cache_hit",
-                    key=key.key,
+                    idempotency_key=key.key,
                 )
                 return IdempotencyResult(
                     is_duplicate=True,
@@ -203,7 +203,7 @@ class IdempotencyService:
                         pass
                     logger.debug(
                         "idempotency.db_hit",
-                        key=key.key,
+                        idempotency_key=key.key,
                     )
                     return IdempotencyResult(
                         is_duplicate=True,
@@ -307,7 +307,7 @@ class IdempotencyService:
             cache.set(key.cache_key, value, timeout=ttl or self.cache_ttl)
             logger.debug(
                 "idempotency.marked_processed",
-                key=key.cache_key,
+                idempotency_cache_key=key.cache_key,
             )
             return True
         except Exception as e:
@@ -335,7 +335,7 @@ class IdempotencyService:
             cache.delete(key.cache_key)
             logger.debug(
                 "idempotency.cleared",
-                key=key.cache_key,
+                idempotency_cache_key=key.cache_key,
             )
             return True
         except Exception as e:

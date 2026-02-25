@@ -285,7 +285,7 @@ class CoordinationPolicyEngine:
         if len(self._policies) < original_count:
             logger.info(
                 "policy_engine.policy_removed",
-                name=name,
+                policy_name=name,
             )
             return True
         return False
@@ -297,7 +297,7 @@ class CoordinationPolicyEngine:
             policy.enabled = True
             logger.info(
                 "policy_engine.policy_enabled",
-                name=name,
+                policy_name=name,
             )
             return True
         return False
@@ -309,7 +309,7 @@ class CoordinationPolicyEngine:
             policy.enabled = False
             logger.info(
                 "policy_engine.policy_disabled",
-                name=name,
+                policy_name=name,
             )
             return True
         return False

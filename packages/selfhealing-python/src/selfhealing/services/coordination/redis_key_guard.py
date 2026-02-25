@@ -449,14 +449,14 @@ class RedisKeyPriorityEviction:
         if info.used_percent <= target_used:
             logger.info(
                 "redis_key_priority_eviction.no_cleanup_needed",
-                info=info.used_percent,
+                redis_memory_used_percent=info.used_percent,
                 target_used=target_used,
             )
             return result
 
         logger.warning(
             "redis_key_priority_eviction.starting_emergency_cleanup",
-            info=info.used_percent,
+            redis_memory_used_percent=info.used_percent,
             target_used=target_used,
         )
 
@@ -475,7 +475,7 @@ class RedisKeyPriorityEviction:
 
         logger.warning(
             "redis_key_priority_eviction.emergency_cleanup_completed",
-            result=result["deleted_p4"],
+            deleted_p4_key_count=result["deleted_p4"],
             deleted_p3=result["deleted_p3"],
         )
 
@@ -508,7 +508,7 @@ class RedisKeyPriorityEviction:
                     redis_client.persist(key)
                     logger.debug(
                         "redis_key_priority_eviction.removed_ttl_protected_key",
-                        key=key,
+                        redis_key=key,
                     )
             except Exception:
                 pass
@@ -525,7 +525,7 @@ class RedisKeyPriorityEviction:
             except Exception as e:
                 logger.warning(
                     "redis_key_priority_eviction.set_ttl_failed",
-                    key=key,
+                    redis_key=key,
                     error=e,
                 )
 

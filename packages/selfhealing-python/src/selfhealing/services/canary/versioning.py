@@ -25,7 +25,7 @@ Usage:
         # 충돌 처리
         logger.warning(
             "conflict_modified_config",
-            e=e.conflicting_operator,
+            conflicting_operator=e.conflicting_operator,
         )
 """
 

@@ -765,7 +765,7 @@ def require_governance(
                 logger.warning(
                     "governance_checks.blocked",
                     func=func.__name__,
-                    result=result.block_reason.value if result.block_reason else 'unknown',
+                    block_reason=result.block_reason.value if result.block_reason else "unknown",
                 )
                 return result
             return func(*args, **kwargs)

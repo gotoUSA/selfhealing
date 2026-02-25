@@ -349,7 +349,7 @@ class CanaryConfigLock:
             logger.warning(
                 "canary_lock.force_released",
                 config_type=config_type,
-                result=result,
+                lock_result=result,
             )
             return result > 0
 

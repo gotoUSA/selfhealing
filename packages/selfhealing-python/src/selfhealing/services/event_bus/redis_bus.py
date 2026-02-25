@@ -235,7 +235,7 @@ class RedisEventBus:
             self._listener_thread.start()
             logger.info(
                 "redis_event_bus.listener_started_channels",
-                value=list(self._subscribed_redis_channels),
+                subscribed_redis_channels=list(self._subscribed_redis_channels),
             )
 
     def stop_listener(self) -> None:
