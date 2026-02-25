@@ -15,10 +15,12 @@ structlog를 stdlib logging의 wrapper로 구성하여 기존 인프라를 그�
   1. merge_contextvars  — contextvars에 bind된 값 자동 병합
   2. add_log_level      — level 필드 자동 주입
   3. add_logger_name    — logger 필드 자동 주입 (__name__ 기반)
-  4. TimeStamper(iso)   — timestamp ISO-8601 형식으로 주입
-  5. _inject_otel_trace_context — trace_id, span_id 자동 주입 (OTEL 활성 시)
-  6. StackInfoRenderer  — 스택 정보 렌더링
-  7. format_exc_info    — 예외 정보 렌더링
+  4. _rate_limit_processor — 동일 이벤트 반복 시 de-dup (10초/100건)
+  5. _sampling_processor   — Hot path 로그 확률적 샘플링
+  6. TimeStamper(iso)   — timestamp ISO-8601 형식으로 주입
+  7. _inject_otel_trace_context — trace_id, span_id 자동 주입 (OTEL 활성 시)
+  8. StackInfoRenderer  — 스택 정보 렌더링
+  9. format_exc_info    — 예외 정보 렌더링
 """
 
 from __future__ import annotations
@@ -30,10 +32,55 @@ from typing import Any
 
 import structlog
 
+from selfhealing.settings.log_processors import (
+    rate_limit_processor,
+    sampling_processor,
+)
+
 # OTEL trace context 주입 프로세서의 재진입을 방지하는 thread-local 플래그.
 # observability 초기화 함수 내부 로그가 다시 프로세서를 호출하여
 # 무한 재귀가 발생하는 것을 막는다.
 _otel_injection_in_progress = threading.local()
+
+# =============================================================================
+# LoggingSettings → stdlib logger 레벨 매핑.
+# LoggingSettings 의 8개 컴포넌트별 로그 레벨을 실제 stdlib 로거에 적용한다.
+# structlog.get_logger()는 내부적으로 stdlib LoggerFactory를 사용하므로
+# 모듈 경로(__name__)가 로거 이름이 된다.
+# =============================================================================
+_COMPONENT_LOGGER_MAP: dict[str, list[str]] = {
+    "dlq_log_level": [
+        "selfhealing.services.dlq",
+        "selfhealing.services.dlq_service",
+        "selfhealing.services.dlq_models",
+    ],
+    "circuit_breaker_log_level": [
+        "selfhealing.services.circuit_breaker",
+        "selfhealing.services.circuit_breaker_service",
+    ],
+    "replay_log_level": [
+        "selfhealing.services.replay_service",
+        "selfhealing.services.adaptive_replay",
+        "selfhealing.services.dlq.replay_operations",
+    ],
+    "sla_log_level": [
+        "selfhealing.services.throttle.sla_notification",
+    ],
+    "forensic_log_level": [
+        "selfhealing.services.forensic_audit_bridge",
+    ],
+    "emergency_log_level": [
+        "selfhealing.services.emergency_mode",
+        "selfhealing.services.namespace_emergency",
+    ],
+    "chaos_log_level": [
+        "selfhealing.services.chaos",
+    ],
+    "l2_storage_log_level": [
+        "selfhealing.adapters.memory.layered_repository",
+        "selfhealing.services.precomputed_cache.l2_cache",
+    ],
+}
 
 
 def configure_structlog() -> None:
@@ -56,6 +103,8 @@ def configure_structlog() -> None:
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
+        rate_limit_processor,
+        sampling_processor,
         structlog.processors.TimeStamper(fmt="iso"),
         _inject_otel_trace_context,
         structlog.processors.StackInfoRenderer(),
@@ -91,6 +140,30 @@ def configure_structlog() -> None:
     ]
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.DEBUG)
+
+    # =========================================================================
+    # 컴포넌트별 로그 레벨 적용 (280_LOGGING_SETTINGS_APPLY)
+    # LoggingSettings 의 8개 레벨 값을 실제 stdlib 로거에 setLevel()로 적용.
+    # 이렇게 하면 환경변수만으로 제어 가능:
+    #   SELFHEALING_LOGGING_CIRCUIT_BREAKER_LOG_LEVEL=WARNING
+    # =========================================================================
+    _apply_component_log_levels(settings)
+
+
+def _apply_component_log_levels(settings: Any) -> None:
+    """LoggingSettings의 컴포넌트별 로그 레벨을 stdlib 로거에 적용한다.
+
+    _COMPONENT_LOGGER_MAP 에 정의된 매핑에 따라 각 컴포넌트의 환경변수 값을
+    실제 logging.getLogger(name).setLevel()로 적용한다.
+
+    이 함수가 없으면 LoggingSettings에 정의된 레벨 값이
+    실제로 적용되지 않는 데드 코드 상태가 된다.
+    """
+    for setting_name, logger_names in _COMPONENT_LOGGER_MAP.items():
+        level_str = getattr(settings, setting_name, "INFO")
+        level = getattr(logging, level_str.upper(), logging.INFO)
+        for logger_name in logger_names:
+            logging.getLogger(logger_name).setLevel(level)
 
 
 def _inject_otel_trace_context(

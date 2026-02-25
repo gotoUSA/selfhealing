@@ -517,11 +517,19 @@ filterwarnings = [
     "ignore::pytest_cov.plugin.CovReportWarning",
 ]
 
+# ==========================================================================
+# Test Logging: WARNING 이상만 출력하여 테스트 가독성 확보.
+# 디버깅이 필요하면: SELFHEALING_TEST_LOG_LEVEL=DEBUG pytest ...
+# ==========================================================================
+log_level = "WARNING"
+log_cli_level = "WARNING"
+
 # pytest-env: Set environment variables before test execution
 # Resolves PostgreSQL cp949 encoding issue on Windows
 [tool.pytest_env]
 PGCLIENTENCODING = "UTF8"
 PYTHONIOENCODING = "utf-8"
+SELFHEALING_TEST_LOG_LEVEL = "WARNING"
 
 # ==========================================
 # Selfhealing Coverage 측정 가이드

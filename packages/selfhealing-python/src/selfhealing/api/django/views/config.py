@@ -280,7 +280,7 @@ class BaseConfigView(APIView):
                 _self=self.config_name.upper(),
                 request=request.user,
                 change_summary=change_summary,
-                result=result.get('applied_strategy', 'immediate'),
+                result=result.get("applied_strategy", "immediate"),
             )
         except Exception as log_err:
             # Fallback to basic logging - never let logging failure affect the API
@@ -293,7 +293,7 @@ class BaseConfigView(APIView):
                 _self=self.config_name,
                 request=request.user,
                 config_changes=config_changes,
-                result=result.get('applied_strategy'),
+                result=result.get("applied_strategy"),
             )
 
         # Determine response status based on result
@@ -382,10 +382,49 @@ class LoggingConfigView(BaseConfigView):
 
     각 Self-Healing 컨포넌트별 로깅 레벨을 동적으로 변경할 수 있습니다.
     이전에는 환경변수로만 제어 가능했던 설정들을 API로 노출.
+
+    PUT 시 RuntimeConfigManager 업데이트 후 실제 stdlib 로거에도 레벨을
+    즉시 적용하여 런타임 핫 리로드를 구현합니다. (283_DYNAMIC_LOG_LEVEL_API)
     """
 
     serializer_class = LoggingConfigSerializer
     config_name = "logging"
+
+    def put(self, request: Request) -> Response:
+        """로깅 설정 업데이트 + stdlib 로거에 레벨 즉시 적용."""
+        import logging as _logging
+
+        response = super().put(request)
+
+        # 성공 시 실제 로거에 레벨 적용 (런타임 핫 리로드)
+        if response.status_code in (200, 202):
+            try:
+                from selfhealing.settings.structlog_config import (
+                    _COMPONENT_LOGGER_MAP,
+                    _apply_component_log_levels,
+                )
+                from selfhealing.settings.logging_config import (
+                    get_logging_settings,
+                    reset_logging_settings,
+                )
+
+                # 싱글톤 캐시 무효화 → 새 설정 로드
+                reset_logging_settings()
+                settings = get_logging_settings()
+                _apply_component_log_levels(settings)
+
+                logger.info(
+                    "config_api.logging_levels_applied_runtime",
+                    applied_levels={k: getattr(settings, k, "INFO") for k in _COMPONENT_LOGGER_MAP},
+                    changed_by=str(request.user),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "config_api.logging_runtime_apply_failed",
+                    error=str(exc),
+                )
+
+        return response
 
 
 class MetricsConfigView(BaseConfigView):

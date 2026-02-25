@@ -209,12 +209,22 @@ def _isolate_logging_state_session():
     Python 3.12의 Logger.setLevel()은 _clear_cache()를 호출하여 전체 로거를
     순회한다. selfhealing 로거 165개 × 10,900 테스트 = 수억 회 연산이
     테스트 스위트를 3~4분에서 9분 이상으로 느리게 만든 근본 원인이었다.
+
+    로그 레벨 오버라이드 (279_TEST_LOG_LEVEL_OVERRIDE):
+    SELFHEALING_TEST_LOG_LEVEL 환경변수(기본 WARNING)로 root logger 레벨을
+    제어하여 테스트 시 로그 노이즈를 90%+ 감소시킨다.
+    디버깅 필요 시: SELFHEALING_TEST_LOG_LEVEL=DEBUG pytest ...
     """
     import logging as _logging
 
     root = _logging.getLogger()
     root_level = root.level
     root_handlers = list(root.handlers)
+
+    # 테스트 환경 로그 레벨 오버라이드: 기본 WARNING으로 노이즈 차단
+    test_log_level_name = os.environ.get("SELFHEALING_TEST_LOG_LEVEL", "WARNING")
+    test_log_level = getattr(_logging, test_log_level_name.upper(), _logging.WARNING)
+    root.setLevel(test_log_level)
 
     # selfhealing 네임스페이스 로거 상태 저장 + propagate 강제 활성화 (1회만)
     _saved: dict[str, tuple[int, bool, list]] = {}

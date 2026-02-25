@@ -108,6 +108,30 @@ class LoggingSettings(BaseSettings):
         description="Use structured JSON format for logs",
     )
 
+    # ==========================================================================
+    # Log Volume Control (281_LOG_RATE_LIMITER, 282_LOG_SAMPLING)
+    # ==========================================================================
+    log_rate_limit_window: int = Field(
+        default=10,
+        ge=0,
+        description="Rate limit window in seconds. 0 = disabled.",
+    )
+    log_rate_limit_max: int = Field(
+        default=100,
+        ge=0,
+        description="Max same-event logs per window. 0 = unlimited.",
+    )
+    log_sampling_rate: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Hot path log sampling rate (0.0-1.0). 1.0 = all logs pass.",
+    )
+    log_sampling_events: str = Field(
+        default="",
+        description=("Comma-separated event names to apply sampling. " "Empty = apply to all DEBUG/INFO logs."),
+    )
+
     @field_validator(
         "dlq_log_level",
         "circuit_breaker_log_level",
@@ -123,9 +147,7 @@ class LoggingSettings(BaseSettings):
         """Validate log level is one of the valid options."""
         v_upper = v.upper()
         if v_upper not in VALID_LOG_LEVELS:
-            raise ValueError(
-                f"Invalid log level '{v}'. Must be one of: {VALID_LOG_LEVELS}"
-            )
+            raise ValueError(f"Invalid log level '{v}'. Must be one of: {VALID_LOG_LEVELS}")
         return v_upper
 
 

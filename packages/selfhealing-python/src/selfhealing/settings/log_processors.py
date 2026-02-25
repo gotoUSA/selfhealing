@@ -1,0 +1,189 @@
+"""
+structlog 프로세서 — 로그 볼륨 제어.
+
+Rate Limiter (De-dup):
+    동일 이벤트가 윈도우 내에 max_count 이상 반복되면 묵음 처리하고,
+    윈도우 종료 시 "suppressed N events" 요약 1건을 출력한다.
+    ERROR/CRITICAL 레벨은 절대 suppress하지 않는다.
+
+Sampling:
+    Hot path 로그(INFO/DEBUG)를 확률적으로 샘플링하여 볼륨을 줄인다.
+    WARNING 이상은 항상 통과한다.
+    특정 이벤트 이름만 대상으로 하여 중요 로그를 보호한다.
+
+설정:
+    LoggingSettings 에서 환경변수로 제어:
+    - SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW=10
+    - SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX=100
+    - SELFHEALING_LOGGING_LOG_SAMPLING_RATE=1.0
+    - SELFHEALING_LOGGING_LOG_SAMPLING_EVENTS=event1,event2
+
+Reference:
+    - docs/self_healing/middleware_system/281_LOG_RATE_LIMITER.md
+    - docs/self_healing/middleware_system/282_LOG_SAMPLING.md
+"""
+
+from __future__ import annotations
+
+import random
+import threading
+import time
+from typing import Any
+
+import structlog
+
+# =============================================================================
+# Rate Limiter (De-dup) 프로세서
+# =============================================================================
+
+# 이벤트별 카운터: {(logger_name, event): {"count": int, "window_start": float, "suppressed": int}}
+_rate_limit_state: dict[tuple[str, str], dict[str, Any]] = {}
+_rate_limit_lock = threading.Lock()
+
+# suppress 하지 않는 레벨 (에러/장애 로그는 항상 통과)
+_NEVER_SUPPRESS_LEVELS = frozenset({"error", "critical"})
+
+
+def _get_rate_limit_settings() -> tuple[int, int]:
+    """Rate limit 설정을 로드한다. 실패 시 안전한 기본값 반환."""
+    try:
+        from selfhealing.settings.logging_config import get_logging_settings
+
+        settings = get_logging_settings()
+        return (
+            getattr(settings, "log_rate_limit_window", 10),
+            getattr(settings, "log_rate_limit_max", 100),
+        )
+    except Exception:
+        return (10, 100)
+
+
+def rate_limit_processor(
+    logger: Any,
+    method_name: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """동일 이벤트 반복 시 de-dup하는 structlog 프로세서.
+
+    동작:
+    1. (logger_name, event) 키로 윈도우 내 발생 횟수를 추적
+    2. max_count 이하: 그대로 통과
+    3. max_count 초과: suppress하고 카운터 증가
+    4. 다음 윈도우 전환 시: "suppressed N similar events" 요약 로그 출력 후 카운터 리셋
+
+    ERROR/CRITICAL 레벨은 suppress하지 않는다.
+    """
+    # ERROR/CRITICAL은 절대 suppress하지 않음
+    if method_name in _NEVER_SUPPRESS_LEVELS:
+        return event_dict
+
+    window_seconds, max_count = _get_rate_limit_settings()
+
+    # rate limiting이 비활성화된 경우 (max=0이면 무제한)
+    if max_count <= 0 or window_seconds <= 0:
+        return event_dict
+
+    event_name = event_dict.get("event", "")
+    logger_name = event_dict.get("logger", "unknown")
+    key = (logger_name, event_name)
+    now = time.monotonic()
+
+    with _rate_limit_lock:
+        state = _rate_limit_state.get(key)
+
+        if state is None or (now - state["window_start"]) >= window_seconds:
+            # 새 윈도우 시작 또는 윈도우 만료
+            suppressed_count = state["suppressed"] if state else 0
+
+            # 이전 윈도우에서 suppress된 이벤트가 있으면 요약 로그를 주입
+            if suppressed_count > 0:
+                event_dict["_rate_limit_suppressed_previous"] = suppressed_count
+
+            _rate_limit_state[key] = {
+                "count": 1,
+                "window_start": now,
+                "suppressed": 0,
+            }
+            return event_dict
+
+        state["count"] += 1
+
+        if state["count"] <= max_count:
+            return event_dict
+
+        # max_count 초과: suppress
+        state["suppressed"] += 1
+        raise structlog.DropEvent
+
+
+def reset_rate_limit_state() -> None:
+    """Rate limit 상태를 초기화한다. 테스트용."""
+    with _rate_limit_lock:
+        _rate_limit_state.clear()
+
+
+# =============================================================================
+# Sampling 프로세서
+# =============================================================================
+
+# DEBUG/INFO 레벨만 샘플링 대상 (WARNING 이상은 항상 통과)
+_SAMPLING_TARGET_LEVELS = frozenset({"debug", "info"})
+
+
+def _get_sampling_settings() -> tuple[float, frozenset[str]]:
+    """샘플링 설정을 로드한다. 실패 시 안전한 기본값 반환."""
+    try:
+        from selfhealing.settings.logging_config import get_logging_settings
+
+        settings = get_logging_settings()
+        rate = getattr(settings, "log_sampling_rate", 1.0)
+        events_str = getattr(settings, "log_sampling_events", "")
+        if events_str:
+            events = frozenset(e.strip() for e in events_str.split(",") if e.strip())
+        else:
+            events = frozenset()
+        return (rate, events)
+    except Exception:
+        return (1.0, frozenset())
+
+
+def sampling_processor(
+    logger: Any,
+    method_name: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """Hot path 로그를 확률적으로 샘플링하는 structlog 프로세서.
+
+    동작:
+    1. WARNING 이상: 항상 통과
+    2. log_sampling_events가 비어있으면: 모든 DEBUG/INFO에 sample_rate 적용
+    3. log_sampling_events가 설정되어 있으면: 해당 이벤트에만 sample_rate 적용
+    4. random() > sample_rate이면 DropEvent
+
+    설정:
+    - SELFHEALING_LOGGING_LOG_SAMPLING_RATE=0.1  (10%만 기록)
+    - SELFHEALING_LOGGING_LOG_SAMPLING_EVENTS=circuit_breaker.checked,action_executor.execute
+    """
+    # WARNING 이상은 항상 통과
+    if method_name not in _SAMPLING_TARGET_LEVELS:
+        return event_dict
+
+    sample_rate, target_events = _get_sampling_settings()
+
+    # sample_rate == 1.0이면 샘플링 비활성화
+    if sample_rate >= 1.0:
+        return event_dict
+
+    event_name = event_dict.get("event", "")
+
+    # target_events가 설정되어 있으면 해당 이벤트만 샘플링
+    if target_events and event_name not in target_events:
+        return event_dict
+
+    # 확률적 샘플링
+    if random.random() > sample_rate:  # noqa: S311
+        raise structlog.DropEvent
+
+    # 샘플링된 로그에 표시
+    event_dict["_sampled"] = True
+    return event_dict
