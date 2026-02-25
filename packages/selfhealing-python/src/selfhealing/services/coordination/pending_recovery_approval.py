@@ -645,7 +645,7 @@ class PendingRecoveryApprovalManager:
                 "pending_recovery_approval.notification",
                 message_type=message_type,
                 request=request.request_id,
-                request_2=request.namespace,
+                namespace=request.namespace,
             )
 
     def _group_by_namespace(

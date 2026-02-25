@@ -208,10 +208,10 @@ class InterlockBypassAuditor:
         logger.warning(
             "audit.interlock_bypass",
             entry=entry.audit_id,
-            entry_1=entry.bypassed_by,
-            entry_2=entry.bypass_reason[:50],
-            entry_3=entry.emergency_level_name,
-            entry_4=entry.severity,
+            bypassed_by=entry.bypassed_by,
+            bypass_reason=entry.bypass_reason[:50],
+            emergency_level_name=entry.emergency_level_name,
+            severity=entry.severity,
         )
 
         return entry

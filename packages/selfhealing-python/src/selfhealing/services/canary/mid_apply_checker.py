@@ -156,7 +156,7 @@ class MidApplyInterlockChecker:
                         "mid_apply_interlock_checker.interlock_triggered_cluster",
                         i=i,
                         interlock_result=interlock_result.action,
-                        interlock_result_2=interlock_result.reason,
+                        reason=interlock_result.reason,
                     )
 
                     # 이미 적용된 클러스터 롤백

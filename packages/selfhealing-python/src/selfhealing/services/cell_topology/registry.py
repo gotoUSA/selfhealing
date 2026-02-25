@@ -77,7 +77,7 @@ class CellRegistry:
         logger.info(
             "cellregistry_initialized_cells",
             _self=self._settings.cell_count,
-            self_1=self._settings.bulkhead_isolation_enabled,
+            bulkhead_isolation_enabled=self._settings.bulkhead_isolation_enabled,
         )
 
     def _build_hash_ring(self) -> None:
@@ -519,7 +519,7 @@ class CellRegistry:
                 "added_cells_warmup_total",
                 count=count,
                 added=added,
-                count_2=len(self._cells),
+                total_cells=len(self._cells),
             )
             return added
 

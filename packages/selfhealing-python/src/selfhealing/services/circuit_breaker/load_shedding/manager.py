@@ -134,7 +134,7 @@ class LoadSheddingManager:
         logger.debug(
             "load_shedding_manager.service_registered",
             config=config.service_id,
-            config_1=config.criticality,
+            criticality=config.criticality,
         )
         return True
 

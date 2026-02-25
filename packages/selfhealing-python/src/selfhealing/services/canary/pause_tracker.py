@@ -170,7 +170,7 @@ class PauseReasonTracker:
             "pause_reason_tracker.recorded_pause",
             rollout_id=rollout_id,
             context=context.triggered_by,
-            context_2=context.causation_chain_id,
+            causation_chain_id=context.causation_chain_id,
         )
 
         return context.causation_chain_id

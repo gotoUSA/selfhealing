@@ -168,7 +168,7 @@ class GracefulDegradationManager:
                 logger.warning(
                     "emergency_mode.drift_detected",
                     level=self._state.level.name,
-                    level_1=backend_state.level.name,
+                    backend_level=backend_state.level.name,
                 )
                 # 자동 동기화: 백엔드 상태로 업데이트
                 self._state = backend_state
@@ -240,9 +240,7 @@ class GracefulDegradationManager:
         with self._state_lock:
             # v6.3.0: 캐시 age 메트릭 업데이트
             if self._last_load_time:
-                age = (
-                    datetime.now(timezone.utc) - self._last_load_time
-                ).total_seconds()
+                age = (datetime.now(timezone.utc) - self._last_load_time).total_seconds()
                 update_emergency_cache_age(age)
 
             # TTL 확인 및 필요시 StateBackend 재조회 (Check on Use 패턴)
@@ -354,8 +352,8 @@ class GracefulDegradationManager:
 
             logger.warning(
                 "emergency_mode.rolled_back_snapshot_original",
-                snapshot=snapshot['timestamp'],
-                snapshot_1=snapshot['action'],
+                snapshot=snapshot["timestamp"],
+                action=snapshot["action"],
             )
 
             return self.get_state()
@@ -377,9 +375,7 @@ class GracefulDegradationManager:
         with self._state_lock:
             self._check_expiration()
             level = self._state.level
-            rules = EMERGENCY_LEVEL_RULES.get(
-                level, EMERGENCY_LEVEL_RULES[EmergencyLevel.NORMAL]
-            )
+            rules = EMERGENCY_LEVEL_RULES.get(level, EMERGENCY_LEVEL_RULES[EmergencyLevel.NORMAL])
             return rules.get(tier_id, 1.0)
 
     # -------------------------------------------------------------------------
@@ -448,9 +444,7 @@ class GracefulDegradationManager:
                 }
 
             if duration_minutes:
-                self._state.expires_at = (
-                    now + timedelta(minutes=duration_minutes)
-                ).isoformat()
+                self._state.expires_at = (now + timedelta(minutes=duration_minutes)).isoformat()
             else:
                 self._state.expires_at = None
 
@@ -471,8 +465,8 @@ class GracefulDegradationManager:
                 activated_by=activated_by,
                 level=level.name,
                 reason=reason,
-                _self=self._state.expires_at or 'manual',
-                value=', chaos_experiment=True' if is_chaos_experiment else '',
+                _self=self._state.expires_at or "manual",
+                value=", chaos_experiment=True" if is_chaos_experiment else "",
             )
 
             # Event Bus 발행: 다른 컴포넌트에 알림
@@ -509,7 +503,7 @@ class GracefulDegradationManager:
                 logger.info(
                     "emergency_mode.auto_trigger_ignored_current",
                     level=self._state.level.name,
-                    level_1=level.name,
+                    requested_level=level.name,
                 )
                 return self.get_state()
 
@@ -524,9 +518,7 @@ class GracefulDegradationManager:
             self._state.activated_by = "system"
             self._state.activation_reason = reason
             self._state.is_auto_triggered = True
-            self._state.expires_at = (
-                now + timedelta(minutes=duration_minutes)
-            ).isoformat()
+            self._state.expires_at = (now + timedelta(minutes=duration_minutes)).isoformat()
 
             self._save_state()
             self._log_history("AUTO_ACTIVATED", old_state, self._state)
@@ -663,8 +655,7 @@ class GracefulDegradationManager:
 
             if self._state.level.value <= target_level.value:
                 raise ValueError(
-                    f"Target level {target_level.name} must be lower than "
-                    f"current level {self._state.level.name}"
+                    f"Target level {target_level.name} must be lower than " f"current level {self._state.level.name}"
                 )
 
             self._state.is_recovering = True
@@ -704,7 +695,7 @@ class GracefulDegradationManager:
                 logger.info(
                     "emergency_mode.gradual_recovery_stopped",
                     stopped_by=stopped_by,
-                    value=reason or 'Manual stop',
+                    value=reason or "Manual stop",
                 )
 
         return self.get_state()

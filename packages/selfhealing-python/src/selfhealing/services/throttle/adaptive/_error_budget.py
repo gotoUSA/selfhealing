@@ -12,11 +12,6 @@ from selfhealing.services.throttle.config import ThrottleResult
 logger = structlog.get_logger()
 
 
-
-
-
-
-
 class ErrorBudgetHandlerMixin:
     """AdaptiveThrottle ErrorBudgetHandlerMixin."""
 
@@ -304,8 +299,8 @@ class ErrorBudgetHandlerMixin:
                 logger.warning(
                     "adaptive_throttle.preemptive_throttle_triggered",
                     forecast=forecast.risk_level,
-                    forecast_1=forecast.estimated_depletion_hours,
-                    forecast_2=forecast.burn_rate_1h,
+                    estimated_depletion_hours=forecast.estimated_depletion_hours,
+                    burn_rate_1h=forecast.burn_rate_1h,
                 )
 
                 self._apply_preemptive_reduction(forecast)
@@ -407,4 +402,3 @@ class ErrorBudgetHandlerMixin:
             self._auto_store_rejection_to_dlq(context, result.reason)
 
         return result
-

@@ -55,8 +55,8 @@ def register_session_invalidation_hook(hook: SessionInvalidationHook) -> None:
     _hooks.append(hook)
     logger.info(
         "security_hooks.session_invalidation_hook_registered",
-        getattr=getattr(hook, '__module__', '?'),
-        getattr_1=getattr(hook, '__qualname__', repr(hook)),
+        getattr=getattr(hook, "__module__", "?"),
+        hook_qualname=getattr(hook, "__qualname__", repr(hook)),
     )
 
 

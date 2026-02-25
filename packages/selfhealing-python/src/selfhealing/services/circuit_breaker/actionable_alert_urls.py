@@ -81,8 +81,8 @@ class ActionableAlertUrlBuilder:
         logger.debug(
             "actionable_alert_url_builder.initialized",
             value=bool(self._dashboard_base_url),
-            value_1=bool(self._admin_base_url),
-            value_2=bool(self._runbook_base_url),
+            admin_configured=bool(self._admin_base_url),
+            runbook_configured=bool(self._runbook_base_url),
         )
 
     def build_cb_open_urls(

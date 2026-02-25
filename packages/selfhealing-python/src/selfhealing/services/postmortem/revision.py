@@ -915,10 +915,10 @@ def migrate_existing_postmortems(
 
     logger.info(
         "migration.complete",
-        result=result['total'],
-        result_1=result['migrated'],
-        result_2=result['skipped'],
-        result_3=result['failed'],
+        result=result["total"],
+        migrated=result["migrated"],
+        skipped=result["skipped"],
+        failed=result["failed"],
     )
 
     return result

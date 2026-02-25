@@ -106,7 +106,7 @@ class GateFaultDetector:
                 logger.warning(
                     "gate_fault_detector.state_healthy_degraded_failures",
                     _self=self._failure_count,
-                    self_1=self._failure_threshold,
+                    failure_threshold=self._failure_threshold,
                 )
 
     def get_status(self) -> dict[str, Any]:

@@ -65,7 +65,7 @@ class EntryOperationsMixin:
             "dlq_service.retry_triggered_entry",
             pk=pk,
             entry=entry.domain,
-            entry_2=entry.failure_type,
+            failure_type=entry.failure_type,
         )
 
         return {

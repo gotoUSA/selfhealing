@@ -90,8 +90,8 @@ class ReplayOperationsMixin:
                         logger.info(
                             "dlq_service.successfully_replayed_entry",
                             entry=entry.id,
-                            entry_1=entry.domain,
-                            entry_2=entry.failure_type,
+                            domain=entry.domain,
+                            failure_type=entry.failure_type,
                         )
                         # Audit 로깅: Replay 성공 (버퍼 패턴 지원)
                         self._log_dlq_audit(
@@ -135,8 +135,8 @@ class ReplayOperationsMixin:
                 "dlq_service.replay_completed",
                 domain=domain,
                 result=result.processed,
-                result_2=result.success,
-                result_3=result.failed,
+                success=result.success,
+                failed=result.failed,
             )
 
         except Exception as e:
@@ -219,7 +219,7 @@ class ReplayOperationsMixin:
                 "dlq_service.entry_exhausted_retries",
                 entry_id=entry_id,
                 entry=entry.retry_count,
-                entry_2=entry.max_retries,
+                max_retries=entry.max_retries,
             )
             self.repository.update_status(
                 entry.id,

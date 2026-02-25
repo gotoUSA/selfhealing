@@ -745,7 +745,7 @@ class CanaryRolloutService:
         logger.info(
             "canary_rollout.staggered_resume_complete_rollouts",
             count=len(resumed),
-            count_1=len(candidates),
+            candidates_count=len(candidates),
         )
 
         return resumed

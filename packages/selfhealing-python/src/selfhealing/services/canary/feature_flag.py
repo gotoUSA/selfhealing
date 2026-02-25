@@ -321,7 +321,7 @@ class CanaryFeatureFlag:
         logger.info(
             "cell_registry.bulkheads_registered",
             config=config.config_type,
-            config_1=config.percentage,
+            percentage=config.percentage,
             strategy=config.strategy.value,
         )
 

@@ -310,7 +310,7 @@ class SnapshotBuilder:
             "snapshot_builder.snapshot_built",
             _self=self._service_name,
             value=bool(self._snapshot.metrics_at_open),
-            value_2=bool(self._snapshot.peak_metrics),
+            has_peak_metrics=bool(self._snapshot.peak_metrics),
             count=len(self._snapshot.captured_logs),
         )
 

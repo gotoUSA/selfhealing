@@ -108,7 +108,7 @@ class FailSafePeriodTracker:
         logger.info(
             "fail_safe_tracker.period_ended_duration_min",
             period=period.period_id,
-            period_1=period.duration_minutes,
+            duration_minutes=period.duration_minutes,
         )
 
         return period
@@ -167,11 +167,7 @@ class FailSafePeriodTracker:
         """현재 상태 조회."""
         with self._lock:
             return {
-                "active_period": (
-                    self._active_period.to_dict() if self._active_period else None
-                ),
+                "active_period": (self._active_period.to_dict() if self._active_period else None),
                 "total_periods": len(self._periods),
-                "unreconciled_count": len(
-                    [p for p in self._periods if not p.is_active]
-                ),
+                "unreconciled_count": len([p for p in self._periods if not p.is_active]),
             }

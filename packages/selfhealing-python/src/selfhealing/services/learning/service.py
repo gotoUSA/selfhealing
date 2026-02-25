@@ -328,7 +328,7 @@ class LearningService:
                 "learning_session_completed_patterns",
                 session_id=session_id,
                 session=session.patterns_learned,
-                session_2=session.suggestions_generated,
+                suggestions_generated=session.suggestions_generated,
             )
         return session
 

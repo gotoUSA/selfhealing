@@ -544,8 +544,6 @@ EMERGENCY_LEVEL_LIMIT_MULTIPLIERS: dict[int, float] = {
 PROTECTED_TIERS_ON_429: set[str] = {"critical"}
 
 
-
-
 from selfhealing.services.throttle.adaptive._emergency import EmergencyModeMixin
 from selfhealing.services.throttle.adaptive._error_budget import ErrorBudgetHandlerMixin
 from selfhealing.services.throttle.adaptive._full_stop import FullStopMixin
@@ -587,7 +585,6 @@ class AdaptiveThrottle(
     # GovernanceCheckMixin 설정
     _governance_service_name: str | None = "adaptive_throttle"
     _governance_domain: str | None = "throttle"
-
 
     def __init__(self, config: ThrottleConfig | None = None):
         super().__init__(config)
@@ -830,7 +827,7 @@ class AdaptiveThrottle(
                     "adaptive_throttle.critical_ms_ms_limit",
                     rtt_ms=rtt_ms,
                     _self=self.config.sla_critical_ms,
-                    self_2=self._current_limit,
+                    current_limit=self._current_limit,
                     new_limit=new_limit,
                 )
                 self.current_limit = new_limit
@@ -899,7 +896,7 @@ class AdaptiveThrottle(
                     "adaptive_throttle.warning_ms_ms_limit",
                     rtt_ms=rtt_ms,
                     _self=self.config.sla_warning_ms,
-                    self_2=self._current_limit,
+                    current_limit=self._current_limit,
                     new_limit=new_limit,
                 )
                 self.current_limit = new_limit
@@ -1298,12 +1295,10 @@ class AdaptiveThrottle(
             "adaptive_throttle.config_swapped",
             old_config=old_config.sla_warning_ms,
             new_config=new_config.sla_warning_ms,
-            old_config_2=old_config.sla_critical_ms,
-            new_config_3=new_config.sla_critical_ms,
+            old_sla_critical_ms=old_config.sla_critical_ms,
+            new_sla_critical_ms=new_config.sla_critical_ms,
         )
         return old_config
-
-
 
 
 # =============================================================================

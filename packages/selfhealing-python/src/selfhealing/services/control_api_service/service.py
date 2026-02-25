@@ -286,7 +286,7 @@ class ControlAPIService:
                 trigger_cb_failures=trigger_cb_failures,
                 request=request.service_name,
                 state=state.state,
-                state_3=state.failure_count,
+                failure_count=state.failure_count,
             )
 
             return ControlResponse(
@@ -318,8 +318,8 @@ class ControlAPIService:
         logger.info(
             "control_api.failure_injection_enabled",
             request=request.service_name,
-            failure_config=failure_config['failure_rate'],
-            failure_config_2=failure_config['failure_type'],
+            failure_config=failure_config["failure_rate"],
+            failure_type=failure_config["failure_type"],
         )
 
         effective_until = None
@@ -361,7 +361,7 @@ class ControlAPIService:
             success_count=success_count,
             request=request.service_name,
             state=state.state,
-            state_3=state.success_count,
+            state_success_count=state.success_count,
         )
 
         return ControlResponse(
@@ -456,12 +456,12 @@ class ControlAPIService:
             logger.info(
                 "control_api.audit",
                 request=request.action,
-                request_1=request.service_name,
-                request_2=request.environment,
+                service_name=request.service_name,
+                environment=request.environment,
                 response=response.status,
-                request_4=request.actor,
-                response_5=response.risk_level,
-                request_6=request.reason,
+                actor=request.actor,
+                risk_level=response.risk_level,
+                reason=request.reason,
             )
         except Exception as e:
             logger.warning(

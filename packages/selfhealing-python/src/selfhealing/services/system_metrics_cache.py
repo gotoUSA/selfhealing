@@ -90,7 +90,7 @@ class SystemMetricsCache:
             logger.info(
                 "system_metrics_cache.starting",
                 _self=self._refresh_interval,
-                self_1=self._sample_interval,
+                sample_interval=self._sample_interval,
             )
 
             # Cold Start 방지: 첫 측정을 동기로 수행 (~100ms)

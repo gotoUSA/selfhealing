@@ -270,7 +270,7 @@ class HoltLinearForecaster:
                 "holt_linear_forecaster.saved_state_points",
                 metric_name=metric_name,
                 _self=self._count,
-                self_2=self._level,
+                level=self._level,
             )
             return True
         except Exception as e:
@@ -329,7 +329,7 @@ class HoltLinearForecaster:
                 "holt_linear_forecaster.restored_state_points",
                 metric_name=metric_name,
                 _self=self._count,
-                self_2=self._level,
+                level=self._level,
             )
             return True
         except Exception as e:

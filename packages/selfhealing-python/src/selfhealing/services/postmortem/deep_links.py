@@ -141,8 +141,8 @@ class PostmortemDeepLinkBuilder:
         logger.debug(
             "postmortem_deep_link_builder.initialized",
             value=bool(self._postmortem_base_url),
-            value_1=bool(self._dashboard_base_url),
-            value_2=bool(self._prometheus_base_url),
+            dashboard_configured=bool(self._dashboard_base_url),
+            prometheus_configured=bool(self._prometheus_base_url),
         )
 
     def build_postmortem_links(

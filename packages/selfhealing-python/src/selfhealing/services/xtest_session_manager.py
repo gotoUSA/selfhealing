@@ -346,7 +346,7 @@ class XTestSessionManager:
         logger.debug(
             "x_test_session.found_expired_sessions_out",
             count=len(expired_sessions),
-            count_1=len(active_ids),
+            active_count=len(active_ids),
         )
 
         return expired_sessions

@@ -99,7 +99,7 @@ class UnifiedNotificationManager:
                 "unified_notification.event",
                 category=payload.category.value,
                 payload=payload.title,
-                payload_2=payload.message,
+                message=payload.message,
             )
             return NotificationResult(success=True, suppressed=True, suppression_reason="log_only")
 

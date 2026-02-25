@@ -268,7 +268,7 @@ class PanicThresholdMonitor:
         logger.critical(
             "panic_threshold_triggered_circuits",
             count=len(open_circuits),
-            count_1=len(total_circuits),
+            total_circuits_count=len(total_circuits),
             open_rate=open_rate,
         )
 
@@ -402,8 +402,8 @@ class PanicThresholdMonitor:
             open_count=open_count,
             total_count=total_count,
             open_rate=open_rate,
-            value=', '.join(halted_systems),
-            value_4=', '.join(open_circuits),
+            value=", ".join(halted_systems),
+            open_circuits=", ".join(open_circuits),
         )
 
     def get_last_result(self) -> PanicThresholdResult | None:

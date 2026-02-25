@@ -328,7 +328,7 @@ class CorrelationEngineService:
             if rate_anomaly:
                 logger.warning(
                     "correlation_engine.event",
-                    rate_anomaly=rate_anomaly['message'],
+                    rate_anomaly=rate_anomaly["message"],
                 )
 
         # 2. Co-occurrence 분석
@@ -491,9 +491,9 @@ class CorrelationEngineService:
             if result:
                 logger.info(
                     "correlation_engine.auto_analysis_complete",
-                    result=result['incident_id'],
-                    value=result['root_cause'].primary_cause.event_node.service_name,
-                    value_2=result['root_cause'].primary_cause.score,
+                    result=result["incident_id"],
+                    value=result["root_cause"].primary_cause.event_node.service_name,
+                    primary_cause_score=result["root_cause"].primary_cause.score,
                 )
         except Exception as e:
             logger.debug(
@@ -738,7 +738,7 @@ class CorrelationEngineService:
             logger.info(
                 "correlation_engine.config_reloaded",
                 _self=self._settings.zscore_threshold,
-                self_1=self._settings.window_seconds,
+                window_seconds=self._settings.window_seconds,
             )
 
         except Exception as e:

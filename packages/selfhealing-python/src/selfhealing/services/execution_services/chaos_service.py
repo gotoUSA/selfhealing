@@ -157,8 +157,8 @@ class ChaosExecutionService(GovernanceCheckMixin):
             logger.info(
                 "chaos_execution_service.completed_executed_skipped_blocked",
                 result=result.executed,
-                result_1=result.skipped,
-                result_2=result.blocked,
+                skipped=result.skipped,
+                blocked=result.blocked,
             )
 
         except Exception as e:
@@ -277,7 +277,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
             logger.info(
                 "chaos_execution_service.daily_report_generated",
                 report=report.report_id,
-                report_1=report.grade,
+                grade=report.grade,
             )
 
             return DailyReportResult(

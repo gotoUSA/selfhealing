@@ -364,8 +364,8 @@ class ThrottleDLQReplayMixin:
                 logger.warning(
                     "adaptive_throttle.entry_exhausted_retries_marking",
                     entry=entry.id,
-                    entry_1=entry.retry_count,
-                    entry_2=entry.max_retries,
+                    retry_count=entry.retry_count,
+                    max_retries=entry.max_retries,
                 )
                 try:
                     self._dlq_service.resolve_entry(entry.id, notes="permanently_failed")

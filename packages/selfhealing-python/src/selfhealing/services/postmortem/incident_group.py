@@ -671,7 +671,7 @@ class IncidentGroupManager:
             "incident_group_manager.group_closed",
             group_id=group_id,
             group=group.incident_count,
-            group_2=group.get_cascading_pattern(),
+            cascading_pattern=group.get_cascading_pattern(),
         )
 
         return group

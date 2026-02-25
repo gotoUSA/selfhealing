@@ -210,8 +210,8 @@ class ThrottleDLQIntegration:
             logger.info(
                 "throttle_dlq.replay_completed",
                 result=result.processed,
-                result_1=result.success,
-                result_2=result.failed,
+                success=result.success,
+                failed=result.failed,
             )
 
             return {

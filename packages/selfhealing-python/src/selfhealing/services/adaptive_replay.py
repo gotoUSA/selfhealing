@@ -110,8 +110,8 @@ class AdaptiveReplayManager:
             logger.info(
                 "adaptive_replay.initialized",
                 _self=self._config.initial_items,
-                self_1=self._config.min_items,
-                self_2=self._config.max_items,
+                min_items=self._config.min_items,
+                max_items=self._config.max_items,
             )
 
     def configure(self, config: AdaptiveReplayConfig) -> None:
@@ -135,8 +135,8 @@ class AdaptiveReplayManager:
                 "adaptive_replay.config_updated",
                 config=config.min_items,
                 old_config=old_config.min_items,
-                config_2=config.max_items,
-                old_config_3=old_config.max_items,
+                new_max_items=config.max_items,
+                old_max_items=old_config.max_items,
                 _self=self._current_items,
             )
 
@@ -222,7 +222,7 @@ class AdaptiveReplayManager:
                     "adaptive_replay.consecutive_successes_increased",
                     _self=self._config.success_streak_required,
                     old_items=old_items,
-                    self_2=self._current_items,
+                    current_items=self._current_items,
                 )
             else:
                 logger.debug(
@@ -249,9 +249,7 @@ class AdaptiveReplayManager:
             recent_count = len(self._history)
             avg_failure_rate = 0.0
             if recent_count > 0:
-                avg_failure_rate = (
-                    sum(h.failure_rate for h in self._history) / recent_count
-                )
+                avg_failure_rate = sum(h.failure_rate for h in self._history) / recent_count
 
             return {
                 "current_max_items": self._current_items,

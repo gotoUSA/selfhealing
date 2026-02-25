@@ -252,9 +252,9 @@ class WeightedAuditRecorder:
         logger.debug(
             "weighted_audit.recorded",
             entry=entry.audit_id,
-            entry_1=entry.raw_consumption_minutes,
-            entry_2=entry.weighted_consumption_minutes,
-            entry_3=entry.final_multiplier,
+            raw_consumption_minutes=entry.raw_consumption_minutes,
+            weighted_consumption_minutes=entry.weighted_consumption_minutes,
+            final_multiplier=entry.final_multiplier,
         )
 
         # Hash Chain에 기록

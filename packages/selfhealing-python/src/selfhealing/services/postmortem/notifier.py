@@ -329,7 +329,7 @@ class PostmortemNotifier:
         logger.debug(
             "postmortem_notifier.initialized",
             _self=self._config.enabled,
-            self_1=self._config.channels,
+            channels=self._config.channels,
         )
 
     def notify_postmortem_created(

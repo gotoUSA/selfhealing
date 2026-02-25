@@ -237,7 +237,7 @@ class DeploymentCorrelator:
             "deployment_correlator.analyzed_deployments_config_changes",
             service_name=service_name,
             count=len(deployments),
-            count_2=len(config_changes),
+            config_changes_count=len(config_changes),
             correlation_type=result.correlation_type.value,
         )
 

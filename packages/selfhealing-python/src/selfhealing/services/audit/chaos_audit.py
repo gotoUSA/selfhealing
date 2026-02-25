@@ -80,7 +80,7 @@ def log_kill_switch_override_audit(
         action=action.upper(),
         service_name=service_name,
         controlled_by_id=controlled_by_id,
-        value=reason or 'N/A',
+        value=reason or "N/A",
     )
     return wal_seq
 
@@ -109,12 +109,10 @@ def log_panic_threshold_audit(
         "total_count": total_count,
         "open_circuits": open_circuits or [],
         "action_taken": action_taken,
-        "halted_systems": halted_systems
-        or ["replay", "canary_recovery", "auto_open", "auto_close"],
+        "halted_systems": halted_systems or ["replay", "canary_recovery", "auto_open", "auto_close"],
         "triggered_by": triggered_by,
         "root_cause_hypothesis": "인프라 전체 붕괴 감지 - 개별 서비스 장애 아님",
-        "message": f"Panic Threshold triggered (Open Rate: {open_rate:.1f}%) - "
-        f"Escalating to Emergency Level 3",
+        "message": f"Panic Threshold triggered (Open Rate: {open_rate:.1f}%) - " f"Escalating to Emergency Level 3",
     }
 
     wal_seq = _write_to_wal(
@@ -205,8 +203,8 @@ def log_freeze_mode_audit(
         "freeze_mode.event",
         action=action.upper(),
         activated_by=activated_by,
-        value=emergency_level or 'N/A',
-        value_3=reason or 'N/A',
+        value=emergency_level or "N/A",
+        reason=reason or "N/A",
     )
     return wal_seq
 
@@ -283,9 +281,7 @@ def log_chaos_experiment_audit(
                 "CHAOS_INJECTION_APPLIED": BufferEventType.CHAOS_INJECTION_APPLIED,
                 "CHAOS_ROLLBACK_TRIGGERED": BufferEventType.CHAOS_ROLLBACK_TRIGGERED,
             }
-            buffer_event_type = buffer_event_mapping.get(
-                wal_event_type, BufferEventType.CHAOS_EXPERIMENT_STARTED
-            )
+            buffer_event_type = buffer_event_mapping.get(wal_event_type, BufferEventType.CHAOS_EXPERIMENT_STARTED)
 
             added = _try_add_to_buffer(
                 request=request,
@@ -379,7 +375,7 @@ def log_emergency_mode_audit(
         action=action.upper(),
         level=level,
         user=user,
-        value=reason or 'N/A',
+        value=reason or "N/A",
     )
 
     # 기존 log_config_change 호환 호출
@@ -509,9 +505,7 @@ def log_error_budget_blocked_audit(
         except ImportError:
             pass
 
-    budget_str = (
-        f"{error_budget_percent:.1f}%" if error_budget_percent is not None else "N/A"
-    )
+    budget_str = f"{error_budget_percent:.1f}%" if error_budget_percent is not None else "N/A"
     trace_str = trace_id[:8] if trace_id else "N/A"
     logger.warning(
         "error_budget_audit.blocked",

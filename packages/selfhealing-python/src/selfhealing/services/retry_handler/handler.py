@@ -441,7 +441,7 @@ class RetryHandler:
             logger.warning(
                 "retry_handler.execute_blocked_errorbudgetgate",
                 gate_result=gate_result.error_budget_percent,
-                gate_result_1=gate_result.threshold_percent,
+                threshold_percent=gate_result.threshold_percent,
             )
             return RetryResult(
                 success=False,

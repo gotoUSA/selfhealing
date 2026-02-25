@@ -115,9 +115,9 @@ class ThrottleRegistry:
             logger.info(
                 "cell_registry.bulkheads_registered",
                 config=config.service_name,
-                config_1=config.initial_limit,
-                config_2=config.min_limit,
-                config_3=config.max_limit,
+                initial_limit=config.initial_limit,
+                min_limit=config.min_limit,
+                max_limit=config.max_limit,
             )
 
     def get_throttle(self, service_name: str) -> AdaptiveThrottle:

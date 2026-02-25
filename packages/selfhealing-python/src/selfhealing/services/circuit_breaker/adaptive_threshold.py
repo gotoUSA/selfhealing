@@ -284,7 +284,7 @@ class AdaptiveThresholdManager:
                 "adaptive_threshold.threshold_exceeded",
                 failure_count=failure_count,
                 threshold=threshold.failure_threshold,
-                threshold_2=threshold.emergency_level,
+                emergency_level=threshold.emergency_level,
             )
 
         return exceeded, threshold

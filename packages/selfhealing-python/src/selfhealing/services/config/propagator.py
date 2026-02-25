@@ -209,7 +209,7 @@ class GlobalConfigPropagator:
             logger.info(
                 "global_config_propagator.propagated_subscribers_via",
                 change=change.config_type,
-                change_1=change.config_key,
+                config_key=change.config_key,
                 subscribers=subscribers,
                 channel=channel,
             )
@@ -346,8 +346,8 @@ class GlobalConfigPropagator:
             logger.info(
                 "global_config_propagator.received_config_change",
                 change=change.config_type,
-                change_1=change.config_key,
-                change_2=change.source_cluster,
+                config_key=change.config_key,
+                source_cluster=change.source_cluster,
             )
 
         except Exception as e:

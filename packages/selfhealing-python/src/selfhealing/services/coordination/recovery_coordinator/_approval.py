@@ -20,7 +20,7 @@ logger = structlog.get_logger()
 class ApprovalMixin:
     """승인 및 검증 Mixin.
 
-수동 승인 플로우와 버짓 안정성 검증을 제공합니다."""
+    수동 승인 플로우와 버짓 안정성 검증을 제공합니다."""
 
     def _handle_all_steps_completed(self, session: RecoverySession) -> None:
         """
@@ -46,7 +46,7 @@ class ApprovalMixin:
             logger.info(
                 "recovery.waiting_approval",
                 session=session.id,
-                session_1=session.namespace,
+                namespace=session.namespace,
             )
         else:
             # 일반 완료 처리

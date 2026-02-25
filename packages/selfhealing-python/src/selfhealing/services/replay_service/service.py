@@ -365,8 +365,8 @@ class ReplayService:
         logger.info(
             "replay_service.batch_replay_completed",
             batch_result=batch_result.total,
-            batch_result_1=batch_result.success_count,
-            batch_result_2=batch_result.failed_count,
+            success_count=batch_result.success_count,
+            failed_count=batch_result.failed_count,
         )
 
         return batch_result
@@ -745,9 +745,9 @@ class ReplayService:
             "replay_service.circuit_close_replay",
             service_name=service_name,
             batch_result=batch_result.total,
-            batch_result_2=batch_result.success_count,
-            batch_result_3=batch_result.failed_count,
-            batch_result_4=batch_result.failed_count if escalate_failures else 0,
+            success_count=batch_result.success_count,
+            failed_count=batch_result.failed_count,
+            escalated_failures=batch_result.failed_count if escalate_failures else 0,
         )
 
         return batch_result

@@ -173,14 +173,10 @@ class RedisKeyPriorityEviction:
     )
 
     # 메모리 경고 임계값 (%) - Settings에서 로드
-    memory_warning_threshold: float = field(
-        default_factory=lambda: get_redis_key_guard_settings().memory_warning_threshold
-    )
+    memory_warning_threshold: float = field(default_factory=lambda: get_redis_key_guard_settings().memory_warning_threshold)
 
     # 메모리 위험 임계값 (%) - Settings에서 로드
-    memory_critical_threshold: float = field(
-        default_factory=lambda: get_redis_key_guard_settings().memory_critical_threshold
-    )
+    memory_critical_threshold: float = field(default_factory=lambda: get_redis_key_guard_settings().memory_critical_threshold)
 
     # 키 패턴별 상세 설정 - Settings에서 TTL 로드
     key_pattern_configs: list[KeyPatternConfig] = field(
@@ -391,11 +387,7 @@ class RedisKeyPriorityEviction:
             "status": (
                 "critical"
                 if info.is_critical(self.memory_critical_threshold)
-                else (
-                    "warning"
-                    if info.is_warning(self.memory_warning_threshold)
-                    else "normal"
-                )
+                else ("warning" if info.is_warning(self.memory_warning_threshold) else "normal")
             ),
             "eviction_policy": info.eviction_policy,
             "keys_total": info.keys_total,
@@ -469,9 +461,7 @@ class RedisKeyPriorityEviction:
         )
 
         # P4 키 삭제 (audit 7일 경과)
-        if self._delete_keys_by_pattern(
-            redis_client, "audit:event:*", target_used, "deleted_p4", result
-        ):
+        if self._delete_keys_by_pattern(redis_client, "audit:event:*", target_used, "deleted_p4", result):
             return result
 
         # 메모리 확인 후 P3도 필요 시 삭제
@@ -480,15 +470,13 @@ class RedisKeyPriorityEviction:
         if info.used_percent > target_used:
             p3_patterns = ["cache:*", "metrics:*", "temp:*"]
             for pattern in p3_patterns:
-                if self._delete_keys_by_pattern(
-                    redis_client, pattern, target_used, "deleted_p3", result
-                ):
+                if self._delete_keys_by_pattern(redis_client, pattern, target_used, "deleted_p3", result):
                     break
 
         logger.warning(
             "redis_key_priority_eviction.emergency_cleanup_completed",
-            result=result['deleted_p4'],
-            result_1=result['deleted_p3'],
+            result=result["deleted_p4"],
+            deleted_p3=result["deleted_p3"],
         )
 
         return result

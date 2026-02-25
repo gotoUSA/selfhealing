@@ -105,7 +105,7 @@ class SessionPersistenceMixin:
         logger.info(
             "recovery.completed",
             session=session.id,
-            session_1=session.namespace,
+            namespace=session.namespace,
         )
 
     def _fail_session(
@@ -147,7 +147,7 @@ class SessionPersistenceMixin:
                 "recovery.compensation_incomplete",
                 session=session.id,
                 count=len(comp_result.failed_steps),
-                count_2=len(comp_result.skipped_steps),
+                skipped_steps_count=len(comp_result.skipped_steps),
             )
 
         # 최종 실패 상태 설정

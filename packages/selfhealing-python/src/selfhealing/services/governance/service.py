@@ -172,7 +172,7 @@ class GovernanceService(GovernanceCheckMixin):
         logger.info(
             "governance_service.emergency_mode_expiry_check",
             result=result.hours_elapsed,
-            result_1=result.hours_remaining,
+            hours_remaining=result.hours_remaining,
         )
 
         # Action 1: Auto-restore (highest priority - 8시간)

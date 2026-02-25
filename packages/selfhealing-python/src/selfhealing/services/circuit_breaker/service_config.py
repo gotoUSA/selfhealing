@@ -128,7 +128,7 @@ class ServiceConfigManager:
             action=action,
             service_id=service_id,
             config=config.criticality,
-            config_3=config.shed_priority,
+            shed_priority=config.shed_priority,
         )
 
         return True
@@ -254,11 +254,7 @@ class ServiceConfigManager:
             ...     print(svc.service_id)
             payment-api
         """
-        return [
-            config
-            for config in self._services.values()
-            if config.criticality == criticality
-        ]
+        return [config for config in self._services.values() if config.criticality == criticality]
 
     def get_critical_services(self) -> list[ServiceConfig]:
         """
@@ -276,11 +272,7 @@ class ServiceConfigManager:
         Returns:
             List[ServiceConfig]: 비핵심 서비스 목록
         """
-        return [
-            config
-            for config in self._services.values()
-            if config.criticality != "critical"
-        ]
+        return [config for config in self._services.values() if config.criticality != "critical"]
 
     # =========================================================================
     # Load Shedding Support
@@ -308,9 +300,7 @@ class ServiceConfigManager:
             >>> # shed_priority 높은 순서로 반환 (먼저 차단할 서비스)
         """
         targets = [
-            config
-            for config in self._services.values()
-            if config.criticality in shed_criticality and config.shed_priority > 0
+            config for config in self._services.values() if config.criticality in shed_criticality and config.shed_priority > 0
         ]
         return sorted(targets, key=lambda s: s.shed_priority, reverse=True)
 
@@ -324,9 +314,7 @@ class ServiceConfigManager:
         Returns:
             List[ServiceConfig]: 차단 순서대로 정렬된 서비스 목록
         """
-        targets = [
-            config for config in self._services.values() if config.shed_priority > 0
-        ]
+        targets = [config for config in self._services.values() if config.shed_priority > 0]
         return sorted(targets, key=lambda s: s.shed_priority, reverse=True)
 
     def is_sheddable(self, service_id: str) -> bool:
@@ -473,9 +461,7 @@ class ServiceConfigManager:
             "low": len(self.get_services_by_criticality("low")),
         }
 
-        sheddable_count = len(
-            [s for s in self._services.values() if s.shed_priority > 0]
-        )
+        sheddable_count = len([s for s in self._services.values() if s.shed_priority > 0])
 
         return {
             "total_services": len(self._services),
