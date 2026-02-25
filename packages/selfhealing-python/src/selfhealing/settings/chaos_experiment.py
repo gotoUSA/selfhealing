@@ -125,7 +125,7 @@ class ChaosExperimentSettings(BaseSettings):
         if v > 1800:
             logger.warning(
                 "chaos_experiment.매우_값입니다_실험_시작이",
-                v=v,
+                setting_value=v,
             )
         return v
 

@@ -100,7 +100,7 @@ class WALRecoveryMixin:
             logger.warning(
                 "cascade_audit.event_dropped_load_shedding",
                 trigger_type=trigger_type,
-                decision=decision['reason'],
+                decision=decision["reason"],
             )
 
             # 폴백 권장 시 로컬에 저장
@@ -138,7 +138,7 @@ class WALRecoveryMixin:
             _append_to_wal(event.to_dict())
             logger.info(
                 "cascade_audit.saved_local_wal",
-                _event=event.id,
+                cascade_event_id=event.id,
             )
         except Exception as e:
             logger.exception(

@@ -204,7 +204,7 @@ class ChaosSettings(BaseSettings):
         if v > 0.3:
             logger.warning(
                 "safe_default.high_chaos_consider_using",
-                v=v,
+                setting_value=v,
             )
         return v
 

@@ -207,7 +207,7 @@ class GracefulDegradation:
         logger.info(
             "graceful_degradation.level_changed",
             old_level=old_level.value,
-            level=level.value,
+            degradation_level=level.value,
         )
 
     def get_enabled_features(self) -> list[str]:

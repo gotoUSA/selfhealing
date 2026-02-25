@@ -98,7 +98,7 @@ class DomainContext:
 
         logger.debug(
             "domain_context.entered",
-            _self=self.domain,
+            domain=self.domain,
             previous_domain=self._previous_domain,
         )
 
@@ -112,8 +112,8 @@ class DomainContext:
 
         logger.debug(
             "domain_context.exited",
-            _self=self.domain,
-            _current_domain=_current_domain.get(),
+            domain=self.domain,
+            current_domain=_current_domain.get(),
         )
 
         # 예외 전파 (False 반환)

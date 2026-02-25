@@ -29,7 +29,7 @@ def clamp_non_negative(value: float, metric_name: str = "unknown") -> float:
     if value < 0:
         logger.warning(
             "safe_gauge.clamping_negative_value_metric",
-            value=value,
+            clamped_value=value,
             metric_name=metric_name,
         )
         return 0.0
@@ -52,14 +52,14 @@ def clamp_percentage(value: float, metric_name: str = "unknown") -> float:
     if value < 0:
         logger.warning(
             "safe_gauge.clamping_negative_percentage_metric",
-            value=value,
+            clamped_value=value,
             metric_name=metric_name,
         )
         return 0.0
     if value > 100:
         logger.warning(
             "safe_gauge.clamping_percentage_metric",
-            value=value,
+            clamped_value=value,
             metric_name=metric_name,
         )
         return 100.0

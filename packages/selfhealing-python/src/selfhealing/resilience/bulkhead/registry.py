@@ -96,7 +96,7 @@ class BulkheadRegistry:
             self._bulkheads[name] = bulkhead
             logger.debug(
                 "cell_registry.bulkheads_registered",
-                name=name,
+                bulkhead_name=name,
             )
 
     def _subscribe_config_updates(self) -> None:
@@ -177,7 +177,7 @@ class BulkheadRegistry:
                 self._bulkheads[name] = bulkhead
                 logger.info(
                     "bulkhead_registry.reloaded",
-                    name=name,
+                    bulkhead_name=name,
                     bulkhead=bulkhead.get_state().max_concurrent,
                 )
 
@@ -236,7 +236,7 @@ class BulkheadRegistry:
                     )
                 logger.info(
                     "bulkhead_registry.created",
-                    name=name,
+                    bulkhead_name=name,
                     bulkhead_type=bulkhead_type,
                 )
 

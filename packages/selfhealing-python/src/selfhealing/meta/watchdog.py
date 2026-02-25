@@ -169,13 +169,13 @@ class SelfHealerWatchdog:
 
         logger.warning(
             "watchdog.unhealthy_detected",
-            name=name,
+            watchdog_name=name,
         )
 
         if self._settings.dry_run_mode:
             logger.info(
                 "watchdog.dry_run_recovery",
-                name=name,
+                watchdog_name=name,
             )
             return False
 
@@ -287,7 +287,7 @@ class SelfHealerWatchdog:
             remaining = self._settings.recovery_cooldown_seconds - elapsed
             logger.info(
                 "watchdog.recovery_cooldown_active",
-                component=component,
+                watchdog_component=component,
                 remaining=remaining,
             )
             return False
@@ -315,7 +315,7 @@ class SelfHealerWatchdog:
             else:
                 logger.debug(
                     "watchdog.no_recovery_action",
-                    component=component,
+                    watchdog_component=component,
                 )
                 return False
 
@@ -330,7 +330,7 @@ class SelfHealerWatchdog:
 
             logger.info(
                 "watchdog.recovery_completed",
-                component=component,
+                watchdog_component=component,
                 success=success,
                 duration_ms=round(duration_ms, 1),
             )
@@ -349,7 +349,7 @@ class SelfHealerWatchdog:
 
             logger.error(
                 "watchdog.recovery_failed",
-                component=component,
+                watchdog_component=component,
                 error=e,
             )
             return False
@@ -647,7 +647,7 @@ class SelfHealerWatchdog:
                 f"Error: {result.error or 'Unknown'}\n"
                 f"Manual intervention required."
             ),
-            component=component,
+            watchdog_component=component,
             details=result.details,
             timestamp=datetime.now(timezone.utc),
         )
@@ -658,7 +658,7 @@ class SelfHealerWatchdog:
             self._escalation_count += 1
             logger.warning(
                 "escalation.escalated",
-                component=component,
+                watchdog_component=component,
                 escalation_result=escalation_result.channels_sent,
             )
         else:
@@ -688,7 +688,7 @@ class SelfHealerWatchdog:
 
             handler = get_fallback_escalation_handler()
             handler.record_failed_escalation(
-                component=component,
+                watchdog_component=component,
                 title=event.title,
                 description=event.description,
                 level=event.level.value,
@@ -699,12 +699,12 @@ class SelfHealerWatchdog:
         except ImportError:
             logger.exception(
                 "watchdog.fallback_escalation_available",
-                component=component,
+                watchdog_component=component,
             )
         except Exception as e:
             logger.exception(
                 "watchdog.fallback_escalation_failed",
-                component=component,
+                watchdog_component=component,
                 error=e,
             )
 

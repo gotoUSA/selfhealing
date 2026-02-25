@@ -370,7 +370,7 @@ class ThrottleSettings(BaseSettings):
         if v < 10:  # min_limit 기본값
             logger.warning(
                 "safe_default.very_low_cause_issues",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -382,7 +382,7 @@ class ThrottleSettings(BaseSettings):
         if v < 200:
             logger.warning(
                 "safe_default.lower_than_typical_warning",
-                v=v,
+                setting_value=v,
             )
         return v
 

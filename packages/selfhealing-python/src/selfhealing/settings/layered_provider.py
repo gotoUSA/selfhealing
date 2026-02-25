@@ -163,7 +163,7 @@ def get_layered_settings(
             logger.debug(
                 "layered_provider.applied_request_overrides",
                 config_type=config_type,
-                value=list(request_overrides.keys()),
+                override_keys=list(request_overrides.keys()),
             )
 
     # 병합된 값으로 새 인스턴스 생성

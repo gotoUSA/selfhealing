@@ -124,7 +124,7 @@ class SecuritySettings(BaseSettings):
         if v > 1000:
             logger.warning(
                 "fatal_config.very_high_system_vulnerable",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -139,7 +139,7 @@ class SecuritySettings(BaseSettings):
         if v < 12:
             logger.warning(
                 "fatal_config.short_consider_hours_sql",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -154,7 +154,7 @@ class SecuritySettings(BaseSettings):
         if v > 20:
             logger.warning(
                 "fatal_config.high_consider_brute_force",
-                v=v,
+                setting_value=v,
             )
         return v
 

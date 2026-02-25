@@ -132,7 +132,7 @@ class ChaosSafetyCapsSettings(BaseSettings):
         if v > 0.5:
             logger.warning(
                 "chaos_safety_caps_settings.high_consider_using_safety",
-                v=v,
+                setting_value=v,
             )
         return v
 

@@ -239,7 +239,7 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
             self._resource_kind_cache[cache_key] = "Deployment"
             logger.debug(
                 "kubernetes_recovery_adapter.detected_deployment",
-                name=name,
+                recovery_adapter_name=name,
             )
             return "Deployment"
         except ApiException as e:
@@ -252,7 +252,7 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
             self._resource_kind_cache[cache_key] = "StatefulSet"
             logger.debug(
                 "kubernetes_recovery_adapter.detected_statefulset",
-                name=name,
+                recovery_adapter_name=name,
             )
             return "StatefulSet"
         except ApiException as e:
@@ -366,7 +366,7 @@ class KubernetesRecoveryAdapter(RecoveryInfrastructureAdapter):
             )
             logger.info(
                 "kubernetes_recovery_adapter.scaled_replicas",
-                name=name,
+                recovery_adapter_name=name,
                 replicas=replicas,
             )
             return RecoveryResult(
@@ -591,7 +591,7 @@ class NoOpRecoveryAdapter(RecoveryInfrastructureAdapter):
     def scale_deployment(self, name: str, replicas: int) -> RecoveryResult:
         logger.info(
             "no_op_recovery_adapter.scale",
-            name=name,
+            recovery_adapter_name=name,
             replicas=replicas,
         )
         return RecoveryResult(

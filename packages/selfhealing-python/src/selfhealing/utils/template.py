@@ -33,6 +33,6 @@ class SafeFormatDict(dict):
     def __missing__(self, key: str) -> str:
         logger.warning(
             "template.missing_variable",
-            key=key,
+            template_variable_key=key,
         )
         return ""

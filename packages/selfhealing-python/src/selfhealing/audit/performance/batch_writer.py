@@ -86,8 +86,7 @@ class BatchFlushWriter:
                 # Check flush conditions
                 should_flush = (
                     len(self._buffer) >= self._config.batch_size
-                    or time.monotonic() - self._last_flush
-                    >= self._config.flush_interval_seconds
+                    or time.monotonic() - self._last_flush >= self._config.flush_interval_seconds
                 )
 
                 if should_flush:
@@ -137,7 +136,7 @@ class BatchFlushWriter:
             logger.debug(
                 "batch_flush_writer.flushed_entries_total",
                 flushed_count=flushed_count,
-                _self=self._entries_written,
+                entries_written=self._entries_written,
             )
             return True
 
@@ -173,9 +172,5 @@ class BatchFlushWriter:
             "entries_written": self._entries_written,
             "flushes_performed": self._flushes_performed,
             "buffer_size": len(self._buffer),
-            "avg_entries_per_flush": (
-                self._entries_written / self._flushes_performed
-                if self._flushes_performed > 0
-                else 0
-            ),
+            "avg_entries_per_flush": (self._entries_written / self._flushes_performed if self._flushes_performed > 0 else 0),
         }

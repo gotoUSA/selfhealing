@@ -100,7 +100,7 @@ class RecoveryShutdownSettings(BaseSettings):
         if v < min_required:
             logger.warning(
                 "recovery_interrupted",
-                v=v,
+                setting_value=v,
                 drain=drain,
                 extension=extension,
                 min_required=min_required,

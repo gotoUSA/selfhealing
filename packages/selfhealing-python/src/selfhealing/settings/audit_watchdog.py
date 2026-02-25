@@ -97,7 +97,7 @@ class AuditWatchdogSettings(BaseSettings):
         if v < 15.0:
             logger.warning(
                 "audit_watchdog_settings.low_consider_using_reduce",
-                v=v,
+                setting_value=v,
             )
         return v
 

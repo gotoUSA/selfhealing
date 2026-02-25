@@ -316,7 +316,7 @@ class SelfHealingMetrics:
             self.dlq_created_total.labels(domain=domain).inc()
             logger.debug(
                 "metrics.dlq_item_created",
-                domain=domain,
+                healing_domain=domain,
                 failure_type=failure_type,
             )
         except Exception as e:
@@ -366,7 +366,7 @@ class SelfHealingMetrics:
             self.retry_outcomes_total.labels(domain=domain, outcome=outcome).inc()
             logger.debug(
                 "metrics.retry_recorded",
-                domain=domain,
+                healing_domain=domain,
                 attempt_count=attempt_count,
                 outcome=outcome,
             )
@@ -425,7 +425,7 @@ class SelfHealingMetrics:
             self.recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
             logger.debug(
                 "metrics.recovery_time_recorded",
-                domain=domain,
+                healing_domain=domain,
                 resolution_type=resolution_type,
                 duration=duration,
             )
@@ -443,7 +443,7 @@ class SelfHealingMetrics:
             self.sla_breach_total.labels(domain=domain).inc()
             logger.info(
                 "metrics.sla_breach_recorded",
-                domain=domain,
+                healing_domain=domain,
             )
         except Exception as e:
             logger.warning(
@@ -558,7 +558,7 @@ class SelfHealingMetrics:
             self.replay_outcomes_total.labels(domain=domain, outcome=outcome).inc()
             logger.debug(
                 "metrics.replay_recorded",
-                domain=domain,
+                healing_domain=domain,
                 replay_type=replay_type,
                 success=success,
             )

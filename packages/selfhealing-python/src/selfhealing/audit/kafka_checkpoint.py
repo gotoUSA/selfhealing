@@ -351,7 +351,7 @@ def sync_wal_to_kafka_with_checkpoint(
                 if not success:
                     logger.error(
                         "wal_kafka_publish_failed",
-                        entry=entry.sequence,
+                        entry_sequence=entry.sequence,
                     )
                     break
 
@@ -388,7 +388,7 @@ def sync_wal_to_kafka_with_checkpoint(
         except Exception as e:
             logger.exception(
                 "wal_kafka_sync_failed",
-                entry=entry.sequence,
+                entry_sequence=entry.sequence,
                 error=e,
             )
             break

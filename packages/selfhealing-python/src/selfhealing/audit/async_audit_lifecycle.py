@@ -111,7 +111,7 @@ def create_audit_flush_callback():
 
             logger.debug(
                 "async_audit_lifecycle.flushed_audit_entries",
-                count=len(entries),
+                entries_count=len(entries),
             )
 
         except Exception as e:

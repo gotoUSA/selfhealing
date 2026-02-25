@@ -84,7 +84,7 @@ class SLOSettings(BaseSettings):
         if v > 0.9999:
             logger.warning(
                 "safe_default.very_high_slo_consider",
-                v=v,
+                setting_value=v,
             )
         return v
 

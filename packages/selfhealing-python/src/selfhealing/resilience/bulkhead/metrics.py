@@ -207,7 +207,7 @@ class BulkheadMetricsUpdater:
         self._thread.start()
         logger.info(
             "bulkhead_metrics_updater.started",
-            _self=self._interval,
+            interval=self._interval,
         )
 
     def stop(self) -> None:

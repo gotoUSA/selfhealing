@@ -262,7 +262,7 @@ class RFC3161Client:
         except urllib.error.URLError as e:
             logger.exception(
                 "failed_get_timestamp",
-                _self=self._tsa_url,
+                tsa_url=self._tsa_url,
                 error=e,
             )
             return None
@@ -611,7 +611,7 @@ class SignedManifest:
         if computed_root != self._merkle_root:
             logger.error(
                 "merkle_root_mismatch_expected",
-                _self=self._merkle_root,
+                merkle_root=self._merkle_root,
                 computed_root=computed_root,
             )
             return False

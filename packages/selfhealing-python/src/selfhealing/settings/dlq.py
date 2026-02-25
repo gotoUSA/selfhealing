@@ -93,7 +93,7 @@ class DLQSettings(BaseSettings):
         if v < 7:
             logger.warning(
                 "safe_default.short_consider_using_data",
-                v=v,
+                setting_value=v,
             )
         return v
 

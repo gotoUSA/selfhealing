@@ -130,7 +130,7 @@ class StartupHashChainSync:
             self._sync_completed = True
             logger.info(
                 "startup_sync.completed",
-                result=result['action'],
+                sync_action=result["action"],
             )
 
             return result

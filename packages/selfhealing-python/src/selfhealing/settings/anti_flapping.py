@@ -133,12 +133,12 @@ class AntiFlappingSettings(BaseSettings):
         if v < 1.1:
             logger.warning(
                 "safe_default.low_recommend_stability",
-                v=v,
+                setting_value=v,
             )
         if v > 1.5:
             logger.warning(
                 "safe_default.high_delay_recovery_too",
-                v=v,
+                setting_value=v,
             )
         return v
 

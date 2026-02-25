@@ -184,7 +184,7 @@ class HashChainWALRecovery:
 
             logger.info(
                 "hash_chain_wal.recovery_completed",
-                result=result,
+                recovery_result=result,
             )
 
         except Exception as e:

@@ -87,12 +87,10 @@ class LocalFileBackend(AuditBackend):
             if distributed_hash_chain and redis_client is not None:
                 # Distributed mode: Redis-based hash chain with local fallback
                 local_fallback = HashChainManager(state_file)
-                self._hash_chain: HashChainManagerProtocol | None = (
-                    RedisHashChainManager(
-                        redis_client=redis_client,
-                        key_prefix=redis_key_prefix,
-                        fallback_manager=local_fallback,
-                    )
+                self._hash_chain: HashChainManagerProtocol | None = RedisHashChainManager(
+                    redis_client=redis_client,
+                    key_prefix=redis_key_prefix,
+                    fallback_manager=local_fallback,
                 )
                 logger.info("local_file_backend.using_distributed_hash_chain")
             else:
@@ -104,16 +102,10 @@ class LocalFileBackend(AuditBackend):
             self._hash_chain = None
 
         # Initialize PendingSequenceManager for atomicity (Write-Ahead Checkpoint)
-        if (
-            enable_pending_manager
-            and distributed_hash_chain
-            and redis_client is not None
-        ):
-            self._pending_manager: PendingSequenceManager | None = (
-                PendingSequenceManager(
-                    redis_client=redis_client,
-                    key_prefix=redis_key_prefix,
-                )
+        if enable_pending_manager and distributed_hash_chain and redis_client is not None:
+            self._pending_manager: PendingSequenceManager | None = PendingSequenceManager(
+                redis_client=redis_client,
+                key_prefix=redis_key_prefix,
             )
             logger.info("local_file_backend.pendingsequencemanager_enabled")
         else:
@@ -268,7 +260,7 @@ class LocalFileBackend(AuditBackend):
                 self._anchor_manager.create_anchor(date=self._last_anchor_date)
                 logger.info(
                     "local_file_backend.created_anchor_backup",
-                    _self=self._last_anchor_date,
+                    last_anchor_date=self._last_anchor_date,
                 )
 
             self._last_anchor_date = today
@@ -333,9 +325,7 @@ class LocalFileBackend(AuditBackend):
         except json.JSONDecodeError:
             return None
 
-    def _entry_matches_config_type(
-        self, entry: dict[str, Any], config_type: str
-    ) -> bool:
+    def _entry_matches_config_type(self, entry: dict[str, Any], config_type: str) -> bool:
         """Check if entry matches config_type filter."""
         return entry.get("change", {}).get("config_type") == config_type
 
@@ -408,9 +398,7 @@ class LocalFileBackend(AuditBackend):
                         if entry is None:
                             continue
 
-                        if self._entry_matches_filters(
-                            entry, config_type, user, start_time, end_time
-                        ):
+                        if self._entry_matches_filters(entry, config_type, user, start_time, end_time):
                             results.append(entry)
 
         except Exception as e:

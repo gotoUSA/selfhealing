@@ -412,7 +412,7 @@ class AsyncLoggerAdapter:
             self._stats["batch_flushes"] += 1
             logger.debug(
                 "async_logger_adapter.flushed_events",
-                count=len(events),
+                events_count=len(events),
             )
         except Exception as e:
             self._stats["flush_errors"] += 1
@@ -596,7 +596,7 @@ class IntegratedAuditRecorder:
             self._observers.append(observer)
             logger.debug(
                 "integrated_recorder.observer_attached",
-                value=type(observer).__name__,
+                adapter_type=type(observer).__name__,
             )
 
     def detach_observer(self, observer: AuditEventObserver) -> None:
@@ -606,7 +606,7 @@ class IntegratedAuditRecorder:
                 self._observers.remove(observer)
                 logger.debug(
                     "integrated_recorder.observer_detached",
-                    value=type(observer).__name__,
+                    adapter_type=type(observer).__name__,
                 )
 
     def attach_async_logger(self, async_logger: AsyncLoggerAdapter) -> None:
@@ -812,7 +812,7 @@ def create_command_center_callback(
                 if response.status != 200:
                     logger.warning(
                         "command_center_returned",
-                        response=response.status,
+                        response_status=response.status,
                     )
         except urllib.error.URLError as e:
             logger.exception(

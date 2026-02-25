@@ -282,7 +282,7 @@ def _emit_critical_log(
     status = "FALLBACK" if fallback_success else "FAILED"
     logger.critical(
         "env_audit.snapshot",
-        status=status,
+        snapshot_status=status,
         snapshot=snapshot["hash"],
         snapshot_count=snapshot["count"],
         primary_success=primary_success,

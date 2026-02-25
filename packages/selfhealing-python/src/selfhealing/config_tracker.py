@@ -151,7 +151,7 @@ class ConfigChangeTracker:
             config_key=config_key,
             old_value=old_value,
             new_value=new_value,
-            actor=actor.actor_id,
+            actor_id=actor.actor_id,
             reason=reason,
         )
 

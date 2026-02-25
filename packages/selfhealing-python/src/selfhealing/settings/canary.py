@@ -112,7 +112,7 @@ class CanarySettings(BaseSettings):
         if v > 60:
             logger.warning(
                 "canary_settings.high_consider_using_responsiveness",
-                v=v,
+                setting_value=v,
             )
         return v
 

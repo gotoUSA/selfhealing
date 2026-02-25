@@ -79,7 +79,7 @@ class SamplingSettings(BaseSettings):
         if v < 10:
             logger.warning(
                 "safe_default.very_low_reduce_accuracy",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -90,12 +90,12 @@ class SamplingSettings(BaseSettings):
         if v < 0.05:
             logger.warning(
                 "safe_default.very_low_miss_issues",
-                v=v,
+                setting_value=v,
             )
         if v > 0.5:
             logger.warning(
                 "safe_default.high_impact_performance",
-                v=v,
+                setting_value=v,
             )
         return v
 

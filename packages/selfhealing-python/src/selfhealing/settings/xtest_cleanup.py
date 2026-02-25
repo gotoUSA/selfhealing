@@ -118,7 +118,7 @@ class XTestCleanupSettings(BaseSettings):
         if v < 1:
             logger.warning(
                 "x_test_cleanup.too_low_using",
-                v=v,
+                setting_value=v,
             )
             return 1
         return v
@@ -130,7 +130,7 @@ class XTestCleanupSettings(BaseSettings):
         if v < 5:
             logger.warning(
                 "x_test_cleanup.too_low_using",
-                v=v,
+                setting_value=v,
             )
             return 5
         return v

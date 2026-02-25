@@ -234,7 +234,7 @@ class MetricReliabilityManager:
 
             logger.warning(
                 "reliability.sync_failed",
-                domain=domain,
+                healing_domain=domain,
                 source=source,
                 reason=reason,
             )
@@ -292,8 +292,8 @@ class MetricReliabilityManager:
                 state.stabilization_start = time.time()
                 logger.info(
                     "reliability.starting_stabilization",
-                    state=state.domain,
-                    _self=self._thresholds.stabilization_duration,
+                    reliability_domain=state.domain,
+                    stabilization_duration=self._thresholds.stabilization_duration,
                 )
             elif old_mode == OperatingMode.CAUTIOUS:
                 # 안정화 기간 확인
@@ -307,7 +307,7 @@ class MetricReliabilityManager:
                     state.stabilization_start = None
                     logger.info(
                         "reliability.stabilization_complete_entering_normal",
-                        state=state.domain,
+                        reliability_domain=state.domain,
                     )
             # NORMAL 유지
 
@@ -462,7 +462,7 @@ class MetricReliabilityManager:
 
             logger.warning(
                 "reliability.forced_strict_mode",
-                domain=domain,
+                healing_domain=domain,
                 reason=reason,
             )
 

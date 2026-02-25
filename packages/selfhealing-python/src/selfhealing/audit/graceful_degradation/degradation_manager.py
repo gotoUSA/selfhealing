@@ -82,9 +82,7 @@ class HashChainDegradationManager:
         self._state_lock = threading.RLock()
 
         # Current state
-        self._level = (
-            DegradationLevel.NORMAL if redis_client else DegradationLevel.DEGRADED
-        )
+        self._level = DegradationLevel.NORMAL if redis_client else DegradationLevel.DEGRADED
         self._level_changed_at = datetime.now(timezone.utc).isoformat()
         self._failure_count = 0
         self._recovery_attempts = 0
@@ -129,8 +127,8 @@ class HashChainDegradationManager:
             logger.warning(
                 "hash_chain_degradation.level_changed_reason_else",
                 old_level=old_level.value,
-                level=level.value,
-                value=f' ({reason})' if reason else '',
+                degradation_level=level.value,
+                degradation_reason=f" ({reason})" if reason else "",
             )
 
             # Record in Redis if available
@@ -248,15 +246,11 @@ class HashChainDegradationManager:
         """Handle filesystem failure event."""
         self.set_level(DegradationLevel.EMERGENCY, "filesystem_failure")
 
-    def register_on_degradation(
-        self, callback: Callable[[DegradationLevel], None]
-    ) -> None:
+    def register_on_degradation(self, callback: Callable[[DegradationLevel], None]) -> None:
         """Register callback for degradation events."""
         self._on_degradation_callbacks.append(callback)
 
-    def register_on_recovery(
-        self, callback: Callable[[DegradationLevel], None]
-    ) -> None:
+    def register_on_recovery(self, callback: Callable[[DegradationLevel], None]) -> None:
         """Register callback for recovery events."""
         self._on_recovery_callbacks.append(callback)
 

@@ -81,7 +81,7 @@ class PrecomputedCacheSettings(BaseSettings):
         if v > 15.0:
             logger.warning(
                 "precomputed_cache_settings.cache_expire_before_refresh",
-                v=v,
+                setting_value=v,
             )
         return v
 

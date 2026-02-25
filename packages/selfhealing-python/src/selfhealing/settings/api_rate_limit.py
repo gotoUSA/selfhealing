@@ -130,7 +130,7 @@ class ApiRateLimitSettings(BaseSettings):
         if v > 50:
             logger.warning(
                 "api_rate_limit.high_consider_using_safety",
-                v=v,
+                setting_value=v,
             )
         return v
 

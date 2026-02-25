@@ -211,7 +211,7 @@ class AuditReconciler:
 
         logger.info(
             "audit_reconciler.initialized",
-            _self=self._config.check_interval_seconds,
+            check_interval_seconds=self._config.check_interval_seconds,
         )
 
     @classmethod
@@ -341,7 +341,7 @@ class AuditReconciler:
 
                 logger.debug(
                     "audit_reconciler.check_completed",
-                    result=result.missing_count,
+                    missing_count=result.missing_count,
                     resent_count=result.resent_count,
                 )
 

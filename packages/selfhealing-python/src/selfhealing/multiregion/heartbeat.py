@@ -106,7 +106,7 @@ class RegionHeartbeat:
         self._worker.start()
         logger.info(
             "heartbeat.started",
-            _self=self._settings.current_region,
+            current_region=self._settings.current_region,
             heartbeat_interval=self.HEARTBEAT_INTERVAL,
             heartbeat_ttl=self.HEARTBEAT_TTL,
         )
@@ -127,7 +127,7 @@ class RegionHeartbeat:
             self._worker.join(timeout=2.0)
         logger.info(
             "heartbeat.stopped",
-            _self=self._settings.current_region,
+            current_region=self._settings.current_region,
         )
 
     def is_running(self) -> bool:
@@ -187,7 +187,7 @@ class MultiRegionShutdownHandler(ShutdownHandler):
             )
             logger.info(
                 "shutdown.notified_peers_stopping",
-                _self=self._settings.current_region,
+                current_region=self._settings.current_region,
             )
         except Exception as e:
             logger.warning(

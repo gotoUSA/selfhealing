@@ -238,7 +238,7 @@ def validate_required_secrets(secrets: SecretsSettings | None = None) -> dict:
             result["critical"].append(name)
             logger.error(
                 "security.critical_secret_set_system",
-                name=name,
+                secret_name=name,
             )
 
     # IMPORTANT 시크릿 검증
@@ -247,7 +247,7 @@ def validate_required_secrets(secrets: SecretsSettings | None = None) -> dict:
             result["warning"].append(name)
             logger.warning(
                 "security.important_secret_set_some",
-                name=name,
+                secret_name=name,
             )
 
     # OPTIONAL 시크릿 검증
@@ -256,7 +256,7 @@ def validate_required_secrets(secrets: SecretsSettings | None = None) -> dict:
             result["info"].append(name)
             logger.info(
                 "security.optional_secret_set",
-                name=name,
+                secret_name=name,
             )
 
     # 프로덕션 환경에서 CRITICAL 시크릿 미설정 시 에러

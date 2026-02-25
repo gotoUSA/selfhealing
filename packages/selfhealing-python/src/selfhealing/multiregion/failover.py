@@ -224,7 +224,7 @@ class RegionFailover:
             logger.debug(
                 "failover.cooldown",
                 elapsed=elapsed,
-                _self=self._settings.failover_cooldown_seconds,
+                failover_cooldown_seconds=self._settings.failover_cooldown_seconds,
             )
             return False
 
@@ -269,7 +269,7 @@ class RegionFailover:
 
         logger.warning(
             "failover.executing_failover",
-            _self=self._current_primary,
+            current_primary=self._current_primary,
             target_region=target_region,
             reason=reason,
         )
@@ -363,9 +363,9 @@ class RegionFailover:
 
         logger.info(
             "failover.traffic_routing_updated",
-            _self=self._current_primary,
+            current_primary=self._current_primary,
             target_region=target_region,
-            result=result.details,
+            routing_result_details=result.details,
         )
 
     def _get_traffic_routing_adapter(self) -> Any:
@@ -459,7 +459,7 @@ class RegionFailover:
             logger.warning(
                 "failover.data_consistency_issues",
                 target_region=target_region,
-                value='; '.join(issues),
+                consistency_issues="; ".join(issues),
             )
         else:
             logger.info(
@@ -547,8 +547,8 @@ class RegionFailover:
                 except Exception as e:
                     logger.warning(
                         "failover.failed_fetch_state",
-                        key=key,
-                        region=region,
+                        state_fetch_key=key,
+                        target_region=region,
                         error=e,
                     )
         return None
@@ -600,7 +600,7 @@ class RegionFailover:
                 if health.status == RegionHealthStatus.UNREACHABLE:
                     logger.warning(
                         "failover.peer_region_unreachable",
-                        region=region,
+                        target_region=region,
                     )
         else:
             # Secondary: Primary 건강 감시 → 승격 시도
@@ -643,7 +643,7 @@ class RegionFailover:
         # 승격 성공 → 페일오버 실행
         logger.warning(
             "failover.secondary_promoting_taking_over",
-            _self=self._settings.current_region,
+            current_region=self._settings.current_region,
             primary_region=primary_region,
         )
         self._execute_failover(

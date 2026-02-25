@@ -65,7 +65,7 @@ class GateFaultSettings(BaseSettings):
         if v < 3:
             logger.warning(
                 "gate_fault_settings.low_consider_using_avoid",
-                v=v,
+                setting_value=v,
             )
         return v
 

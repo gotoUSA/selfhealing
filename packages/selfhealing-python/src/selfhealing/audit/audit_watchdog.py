@@ -255,7 +255,7 @@ class AuditWatchdog:
             )
             logger.info(
                 "audit_watchdog_started",
-                _self=self._config.heartbeat_interval_seconds,
+                heartbeat_interval_seconds=self._config.heartbeat_interval_seconds,
             )
 
     def stop(self, timeout: float = 5.0) -> None:
@@ -338,7 +338,7 @@ class AuditWatchdog:
                     failure_reason = f"{target.name}: {str(e)}"
                     logger.warning(
                         "heartbeat_failed",
-                        target=target.name,
+                        target_name=target.name,
                         error=e,
                     )
 

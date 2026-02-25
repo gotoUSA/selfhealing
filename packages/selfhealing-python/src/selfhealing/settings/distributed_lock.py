@@ -101,7 +101,7 @@ class DistributedLockSettings(BaseSettings):
         if v > 60:
             logger.warning(
                 "distributed_lock.분은_시간입니다_복구가_실패할",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -112,7 +112,7 @@ class DistributedLockSettings(BaseSettings):
         if v < 0.05:
             logger.warning(
                 "distributed_lock.초는_매우_짧습니다_redis",
-                v=v,
+                setting_value=v,
             )
         return v
 

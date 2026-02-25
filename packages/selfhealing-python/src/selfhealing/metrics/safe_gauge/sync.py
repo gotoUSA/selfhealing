@@ -80,7 +80,7 @@ class SyncInfo:
             self.stabilization_start = now
             logger.info(
                 "sync_info.starting_stabilization_period",
-                _self=self.stabilization_duration,
+                stabilization_duration=self.stabilization_duration,
             )
         elif self.status == SyncStatus.RECOVERING:
             # 복구 중 계속 동기화 → 안정화 기간 유지

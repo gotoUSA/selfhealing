@@ -181,7 +181,7 @@ class MerkleSpotChecker:
         logger.info(
             "merkle_spot_checker.built_block_merkle_roots",
             stored=stored,
-            count=len(entries),
+            entries_count=len(entries),
         )
 
         return {"blocks_stored": stored, "total_entries": len(entries)}

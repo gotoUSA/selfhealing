@@ -66,7 +66,7 @@ class SLASettings(BaseSettings):
         if v > 168:  # More than a week
             logger.warning(
                 "safe_default.very_long_sla_consider",
-                v=v,
+                setting_value=v,
             )
         return v
 

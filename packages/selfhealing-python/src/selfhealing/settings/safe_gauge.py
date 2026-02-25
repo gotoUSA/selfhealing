@@ -75,7 +75,7 @@ class SafeGaugeSettings(BaseSettings):
         if v > 5000:
             logger.warning(
                 "safe_gauge.메모리_사용량이_있습니다_환경에서는",
-                v=v,
+                setting_value=v,
             )
         return v
 

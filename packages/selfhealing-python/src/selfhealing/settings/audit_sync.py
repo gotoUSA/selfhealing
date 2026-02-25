@@ -115,7 +115,7 @@ class AuditSyncSettings(BaseSettings):
         if v < 0.5:
             logger.warning(
                 "audit_sync_settings.very_short_consider_using",
-                v=v,
+                setting_value=v,
             )
         return v
 

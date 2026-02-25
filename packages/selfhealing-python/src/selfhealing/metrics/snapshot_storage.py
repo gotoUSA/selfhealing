@@ -206,7 +206,7 @@ class MetricSnapshotStorage:
         except Exception as e:
             logger.warning(
                 "snapshot.failed_create_directory",
-                _self=self._storage_dir,
+                storage_dir=self._storage_dir,
                 error=e,
             )
 
@@ -224,8 +224,8 @@ class MetricSnapshotStorage:
             self._snapshot = MetricSnapshot.from_dict(data)
             logger.info(
                 "snapshot.loaded_snapshot_age_categories",
-                _self=self._snapshot.age_seconds,
-                count=len(self._snapshot.values),
+                snapshot_age_seconds=self._snapshot.age_seconds,
+                values_count=len(self._snapshot.values),
             )
         except Exception as e:
             logger.warning(
@@ -273,7 +273,7 @@ class MetricSnapshotStorage:
                 self._dirty = False
                 logger.debug(
                     "snapshot.saved_snapshot",
-                    _self=self.file_path,
+                    file_path=self.file_path,
                 )
                 return True
 
@@ -377,7 +377,7 @@ class MetricSnapshotStorage:
             if self._snapshot.age_seconds > effective_max_age:
                 logger.debug(
                     "snapshot.value_too_old",
-                    _self=self._snapshot.age_seconds,
+                    snapshot_age_seconds=self._snapshot.age_seconds,
                     effective_max_age=effective_max_age,
                 )
                 return default

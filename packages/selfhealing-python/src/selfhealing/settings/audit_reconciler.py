@@ -97,7 +97,7 @@ class AuditReconcilerSettings(BaseSettings):
         if v < 120:
             logger.warning(
                 "audit_reconciler_settings.low_consider_using_reduce",
-                v=v,
+                setting_value=v,
             )
         return v
 

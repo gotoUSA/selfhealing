@@ -110,7 +110,7 @@ class RetrySettings(BaseSettings):
         if v > 600:
             logger.warning(
                 "safe_default.high_consider_using_responsiveness",
-                v=v,
+                setting_value=v,
             )
         return v
 

@@ -87,7 +87,7 @@ class SteadyStateSettings(BaseSettings):
         if v < 100.0:
             logger.warning(
                 "safe_default.very_tight_ms_cause",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -98,7 +98,7 @@ class SteadyStateSettings(BaseSettings):
         if v > 5.0:
             logger.warning(
                 "safe_default.high_miss_real_issues",
-                v=v,
+                setting_value=v,
             )
         return v
 

@@ -158,7 +158,7 @@ class SafeGaugeChild:
                 # Don't decrement, just log and return
                 logger.debug(
                     "safe_gauge.ignoring_dec_before_any",
-                    _self=self._label_values,
+                    label_values=self._label_values,
                 )
                 return
 
@@ -174,8 +174,8 @@ class SafeGaugeChild:
                 self._gauge_child.set(0)
                 logger.warning(
                     "safe_gauge.clamped_gauge_indicate_event",
-                    value=old_value - amount,
-                    _self=self._label_values,
+                    exceeded_decrement_value=old_value - amount,
+                    label_values=self._label_values,
                 )
 
             self._sync_info.mark_synced("push")
@@ -192,8 +192,8 @@ class SafeGaugeChild:
             if value < 0:
                 logger.warning(
                     "safe_gauge.attempted_set_negative_value",
-                    value=value,
-                    _self=self._label_values,
+                    rejected_value=value,
+                    label_values=self._label_values,
                 )
                 value = 0.0
             self._shadow_value = value
@@ -235,7 +235,7 @@ class SafeGaugeChild:
                     "safe_gauge.synced_source",
                     old_shadow=old_shadow,
                     actual_value=actual_value,
-                    _self=self._label_values,
+                    label_values=self._label_values,
                 )
 
     def mark_stale(self, reason: str = "external") -> None:
@@ -380,7 +380,7 @@ class SafeGauge:
         # 운영 인지를 위한 경고 로그
         logger.warning(
             "safe_gauge.lru_eviction",
-            _self=self._eviction_count,
+            eviction_count=self._eviction_count,
             dict=dict(oldest_key),
             oldest_child=oldest_child.get_shadow_value(),
             max_label_combinations=self._max_label_combinations,

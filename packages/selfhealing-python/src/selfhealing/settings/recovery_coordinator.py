@@ -254,7 +254,7 @@ class RecoveryCoordinatorSettings(BaseSettings):
         if v < 0.9:
             logger.warning(
                 "recovery_coordinator_settings.success_threshold_low_consider",
-                v=v,
+                setting_value=v,
             )
         return v
 

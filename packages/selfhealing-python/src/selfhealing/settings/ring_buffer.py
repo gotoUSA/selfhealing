@@ -73,7 +73,7 @@ class RingBufferSettings(BaseSettings):
         if v > 100000:
             logger.warning(
                 "ring_buffer_settings.high_consider_using_memory",
-                v=v,
+                setting_value=v,
             )
         return v
 

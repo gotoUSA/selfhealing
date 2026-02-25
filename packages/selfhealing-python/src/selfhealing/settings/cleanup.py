@@ -181,7 +181,7 @@ class CleanupSettings(BaseSettings):
         if v < 60:
             logger.warning(
                 "cleanup_settings.low_consider_using_data",
-                v=v,
+                setting_value=v,
             )
         return v
 

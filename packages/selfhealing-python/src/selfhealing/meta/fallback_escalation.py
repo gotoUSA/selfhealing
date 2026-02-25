@@ -160,7 +160,7 @@ class FallbackEscalationHandler:
 
             logger.warning(
                 "emergency_escalation_log.recorded",
-                entry=entry["component"],
+                component_name=entry["component"],
                 title=entry["title"],
             )
             return True
@@ -189,8 +189,8 @@ class FallbackEscalationHandler:
 
         logger.warning(
             "fallback_escalation.stored_memory_buffer_size",
-            entry=entry["component"],
-            count=len(self._memory_buffer),
+            component_name=entry["component"],
+            memory_buffer_count=len(self._memory_buffer),
         )
         return True
 

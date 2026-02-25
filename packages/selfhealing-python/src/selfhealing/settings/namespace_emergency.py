@@ -87,7 +87,7 @@ class NamespaceEmergencySettings(BaseSettings):
         if v < 2:
             logger.warning(
                 "namespace_emergency_settings.low_consider_using_avoid",
-                v=v,
+                setting_value=v,
             )
         return v
 

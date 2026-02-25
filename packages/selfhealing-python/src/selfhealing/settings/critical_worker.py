@@ -309,7 +309,7 @@ class CriticalWorkerSettings(BaseSettings):
         if v < 1:
             logger.warning(
                 "safe_default.invalid_using",
-                v=v,
+                setting_value=v,
             )
             return 1
         return v

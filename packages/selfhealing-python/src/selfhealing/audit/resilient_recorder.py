@@ -321,7 +321,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
 
             logger.debug(
                 "resilient_recorder.queued",
-                entry=entry.action,
+                entry_action=entry.action,
                 audit_id=audit_id,
             )
 
@@ -371,7 +371,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
             logger.debug(
                 "resilient_recorder.flushed_entries",
                 processed=processed,
-                count=len(batch),
+                batch_count=len(batch),
             )
 
         return processed
@@ -388,7 +388,7 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         if total > 0:
             logger.info(
                 "resilient_recorder.final_flush_entries",
-                total=total,
+                flushed_total=total,
             )
 
     def _write_with_fallback(self, entry_dict: dict[str, Any]) -> bool:

@@ -110,7 +110,7 @@ class RecoveryCircuitBreakerSettings(BaseSettings):
         if v > 0.5:
             logger.warning(
                 "high_consider_using_effective",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -122,7 +122,7 @@ class RecoveryCircuitBreakerSettings(BaseSettings):
         if v not in valid_levels:
             logger.warning(
                 "unknown_valid_levels",
-                v=v,
+                setting_value=v,
                 valid_levels=valid_levels,
             )
         return v

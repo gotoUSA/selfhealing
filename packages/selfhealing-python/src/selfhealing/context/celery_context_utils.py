@@ -477,7 +477,7 @@ def restore_all_task_context(
             tokens.domain_token = _current_domain.set(domain)
             logger.debug(
                 "context_utils.domain_restored",
-                domain=domain,
+                healing_domain=domain,
                 domain_source=domain_source,
             )
     except ImportError:
@@ -545,7 +545,7 @@ def cleanup_all_task_context(task: Any) -> None:
             except Exception as e:
                 logger.debug(
                     "context_utils.baggage_token_cleanup_failed",
-                    key=key,
+                    context_key=key,
                     error=e,
                 )
 

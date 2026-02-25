@@ -56,7 +56,7 @@ class HashChainManager:
                 self._previous_hash = data.get("previous_hash", self.GENESIS_HASH)
                 logger.debug(
                     "hash_chain.loaded_state",
-                    _self=self._sequence,
+                    sequence=self._sequence,
                 )
             except Exception as e:
                 logger.warning(
@@ -119,11 +119,7 @@ class HashChainManager:
         with self._lock:
             return {
                 "sequence": self._sequence,
-                "previous_hash": (
-                    self._previous_hash[:16] + "..."
-                    if len(self._previous_hash) > 16
-                    else self._previous_hash
-                ),
+                "previous_hash": (self._previous_hash[:16] + "..." if len(self._previous_hash) > 16 else self._previous_hash),
             }
 
     def reset(self) -> None:

@@ -148,7 +148,7 @@ class NotificationChannelSettings(BaseSettings):
         if v > 100:
             logger.warning(
                 "notification_channel.높은_값입니다_알림_폭주에",
-                v=v,
+                setting_value=v,
             )
         return v
 

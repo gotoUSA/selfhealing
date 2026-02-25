@@ -151,7 +151,7 @@ class CorruptionShieldSettings(BaseSettings):
         if v < 2.0:
             logger.warning(
                 "corruption_shield.매우_민감합니다_오탐_false",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -162,7 +162,7 @@ class CorruptionShieldSettings(BaseSettings):
         if info.field_name == "max_amount" and v > 500_000_000:
             logger.info(
                 "corruption_shield.원으로_설정됨_대규모_거래가",
-                v=v,
+                setting_value=v,
             )
         return v
 

@@ -162,12 +162,10 @@ class MonotonicTimestamp:
                 if current <= self._last_timestamp:
                     # Clock went backward - adjust to maintain monotonicity
                     self._monotonic_offset += 0.001  # Add 1ms
-                    current = self._last_timestamp + timedelta(
-                        seconds=self._monotonic_offset
-                    )
+                    current = self._last_timestamp + timedelta(seconds=self._monotonic_offset)
                     logger.warning(
                         "monotonic_timestamp.clock_skew_detected_adjusted",
-                        _self=self._monotonic_offset,
+                        monotonic_offset=self._monotonic_offset,
                     )
                 else:
                     # Clock is normal - reset offset
@@ -180,9 +178,7 @@ class MonotonicTimestamp:
         """Get statistics about clock adjustments."""
         return {
             "total_offset_seconds": self._monotonic_offset,
-            "last_timestamp": (
-                self._last_timestamp.isoformat() if self._last_timestamp else None
-            ),
+            "last_timestamp": (self._last_timestamp.isoformat() if self._last_timestamp else None),
         }
 
 
@@ -543,16 +539,8 @@ class AtomicMergeSwap:
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._timeout = (
-            timeout_seconds
-            if timeout_seconds is not None
-            else _get_merge_swap_timeout()
-        )
-        self._blocking_timeout = (
-            blocking_timeout
-            if blocking_timeout is not None
-            else _get_merge_swap_blocking_timeout()
-        )
+        self._timeout = timeout_seconds if timeout_seconds is not None else _get_merge_swap_timeout()
+        self._blocking_timeout = blocking_timeout if blocking_timeout is not None else _get_merge_swap_blocking_timeout()
         self._lock_token: str | None = None
         self.acquired = False
 
@@ -680,14 +668,8 @@ class ShardedDateLock:
         self._redis = redis_client
         self._date = date
         self._key_prefix = key_prefix
-        self._timeout = (
-            timeout_seconds if timeout_seconds is not None else _get_date_lock_timeout()
-        )
-        self._blocking_timeout = (
-            blocking_timeout
-            if blocking_timeout is not None
-            else _get_date_lock_blocking_timeout()
-        )
+        self._timeout = timeout_seconds if timeout_seconds is not None else _get_date_lock_timeout()
+        self._blocking_timeout = blocking_timeout if blocking_timeout is not None else _get_date_lock_blocking_timeout()
         self._lock_token: str | None = None
         self.acquired = False
 
@@ -715,7 +697,7 @@ class ShardedDateLock:
                     self.acquired = True
                     logger.debug(
                         "sharded_date_lock.lock_acquired",
-                        _self=self._date,
+                        date=self._date,
                     )
                     return self
 
@@ -728,7 +710,7 @@ class ShardedDateLock:
         except Exception as e:
             logger.exception(
                 "sharded_date_lock.lock_error",
-                _self=self._date,
+                date=self._date,
                 error=e,
             )
             self.acquired = False
@@ -752,13 +734,13 @@ class ShardedDateLock:
             self._redis.eval(lua_script, 1, lock_key, self._lock_token)
             logger.debug(
                 "sharded_date_lock.lock_released",
-                _self=self._date,
+                date=self._date,
             )
 
         except Exception as e:
             logger.exception(
                 "sharded_date_lock.release_error",
-                _self=self._date,
+                date=self._date,
                 error=e,
             )
 
@@ -822,11 +804,7 @@ class IntegrityAuditTrail:
         self._redis = redis_client
         self._log_dir = Path(log_dir) if log_dir else None
         self._key_prefix = key_prefix
-        self._max_redis_entries = (
-            max_redis_entries
-            if max_redis_entries is not None
-            else _get_integrity_trail_max_entries()
-        )
+        self._max_redis_entries = max_redis_entries if max_redis_entries is not None else _get_integrity_trail_max_entries()
         self._lock = threading.Lock()
 
         if self._log_dir:
@@ -865,9 +843,7 @@ class IntegrityAuditTrail:
             "details": details or {},
             "severity": severity,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "hostname": os.environ.get(
-                "HOSTNAME", os.environ.get("POD_NAME", "unknown")
-            ),
+            "hostname": os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown")),
         }
 
         with self._lock:

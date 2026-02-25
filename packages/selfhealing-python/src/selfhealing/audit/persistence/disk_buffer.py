@@ -233,7 +233,7 @@ class DiskPersistentBuffer:
         logger.info(
             "disk_buffer.initialized",
             db_path=db_path,
-            _self=self._sequence,
+            sequence=self._sequence,
             db_name=self._db_name,
         )
 
@@ -535,7 +535,7 @@ class DiskPersistentBuffer:
         self._stats["total_puts"] += 1
         logger.debug(
             "disk_buffer.put",
-            key=key.decode(),
+            buffer_entry_key=key.decode(),
         )
         return key
 
@@ -580,7 +580,7 @@ class DiskPersistentBuffer:
                 if stored_checksum != computed_checksum:
                     logger.warning(
                         "disk_buffer.checksum_mismatch",
-                        key=key.decode(),
+                        buffer_entry_key=key.decode(),
                     )
                     self._stats["checksum_errors"] += 1
                     return None
@@ -919,7 +919,7 @@ class DiskPersistentBuffer:
 
             logger.info(
                 "disk_buffer.replayed_dead_letter",
-                key=key.decode(),
+                buffer_entry_key=key.decode(),
             )
             return True
         except Exception as e:

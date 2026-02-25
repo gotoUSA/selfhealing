@@ -177,7 +177,7 @@ class ErrorBudgetPropagationSettings(BaseSettings):
         if v > 5.0:
             logger.warning(
                 "safe_default.high_consider_lower_values",
-                v=v,
+                setting_value=v,
             )
         return v
 

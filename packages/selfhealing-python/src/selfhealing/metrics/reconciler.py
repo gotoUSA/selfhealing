@@ -162,7 +162,7 @@ class MetricReconciler:
             except Exception as e:
                 logger.warning(
                     "reconciler.failed_sync_dlq_pending",
-                    domain=domain,
+                    healing_domain=domain,
                     error=e,
                 )
 
@@ -184,7 +184,7 @@ class MetricReconciler:
             except Exception as e:
                 logger.warning(
                     "reconciler.failed_sync_cb_state",
-                    service=service,
+                    target_service=service,
                     error=e,
                 )
 
@@ -201,7 +201,7 @@ class MetricReconciler:
             except Exception as e:
                 logger.warning(
                     "reconciler.failed_sync_retry_rate",
-                    domain=domain,
+                    healing_domain=domain,
                     error=e,
                 )
 
@@ -209,7 +209,7 @@ class MetricReconciler:
         self._last_sync_result = result
         logger.info(
             "reconciler.metrics_reconciled",
-            count=len(result.dlq_pending),
+            dlq_pending_count=len(result.dlq_pending),
         )
 
         return result

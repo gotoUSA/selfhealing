@@ -126,7 +126,7 @@ class RateLimitSettings(BaseSettings):
         if v > 50:
             logger.warning(
                 "safe_default.high_consider_using_safety",
-                v=v,
+                setting_value=v,
             )
         return v
 

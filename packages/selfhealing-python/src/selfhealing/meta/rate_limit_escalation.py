@@ -87,7 +87,7 @@ class RateLimitEscalationHandler:
             )
             logger.info(
                 "rate_limit_escalation_handler.subscribed",
-                _self=self._threshold,
+                threshold=self._threshold,
             )
             return True
         except ImportError:
@@ -114,9 +114,9 @@ class RateLimitEscalationHandler:
         if consecutive < self._threshold:
             logger.debug(
                 "rate_limit_escalation_handler.skipping_escalation",
-                key=key,
+                escalation_key=key,
                 consecutive=consecutive,
-                _self=self._threshold,
+                threshold=self._threshold,
             )
             return
 
@@ -124,7 +124,7 @@ class RateLimitEscalationHandler:
         if key in self._escalated_keys:
             logger.debug(
                 "rate_limit_escalation_handler.already_escalated_skipping_duplicate",
-                key=key,
+                escalation_key=key,
             )
             return
 
@@ -157,15 +157,15 @@ class RateLimitEscalationHandler:
         if result.success:
             logger.critical(
                 "rate_limit_escalation_handler.escalated",
-                key=key,
+                escalation_key=key,
                 consecutive=consecutive,
-                result=result.channels_sent,
+                channels_sent=result.channels_sent,
             )
         else:
             logger.error(
                 "rate_limit_escalation_handler.escalation_failed",
-                key=key,
-                result=result.error_message,
+                escalation_key=key,
+                result_error=result.error_message,
             )
 
     def reset_escalation(self, key: str) -> None:
@@ -179,7 +179,7 @@ class RateLimitEscalationHandler:
             self._escalated_keys.discard(key)
             logger.info(
                 "rate_limit_escalation_handler.reset_escalation",
-                key=key,
+                escalation_key=key,
             )
 
     def reset_all_escalations(self) -> None:
@@ -188,7 +188,7 @@ class RateLimitEscalationHandler:
         self._escalated_keys.clear()
         logger.info(
             "rate_limit_escalation_handler.reset_all_escalations_keys",
-            count=count,
+            escalated_keys_count=count,
         )
 
     @property

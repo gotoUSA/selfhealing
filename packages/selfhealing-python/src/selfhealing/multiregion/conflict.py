@@ -282,7 +282,7 @@ class LastWriteWinsResolver(ConflictResolver):
             self._last_keys[key] = incoming_conflict_key
             logger.debug(
                 "lww.accepted",
-                key=key,
+                conflict_key=key,
                 incoming_conflict_key=incoming_conflict_key.timestamp,
                 region_priority=incoming_conflict_key.region_priority,
                 resolution=resolution,
@@ -293,7 +293,7 @@ class LastWriteWinsResolver(ConflictResolver):
             self._metrics.record_event(is_conflict=True, resolution_method="dropped")
             logger.debug(
                 "lww.dropped",
-                key=key,
+                conflict_key=key,
                 incoming_conflict_key=incoming_conflict_key.timestamp,
                 last_conflict_key=last_conflict_key.timestamp,
             )

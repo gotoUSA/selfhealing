@@ -85,7 +85,7 @@ class ProviderRegistry:
         cls._cache_providers[name] = provider_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -94,7 +94,7 @@ class ProviderRegistry:
         cls._task_queues[name] = provider_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -103,7 +103,7 @@ class ProviderRegistry:
         cls._failed_op_repos[name] = repo_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -112,7 +112,7 @@ class ProviderRegistry:
         cls._circuit_breaker_repos[name] = repo_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -121,7 +121,7 @@ class ProviderRegistry:
         cls._security_repos[name] = repo_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -130,7 +130,7 @@ class ProviderRegistry:
         cls._audit_adapters[name] = adapter_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -139,7 +139,7 @@ class ProviderRegistry:
         cls._traffic_routing_adapters[name] = adapter_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -148,7 +148,7 @@ class ProviderRegistry:
         cls._correlation_strategies[name] = strategy_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -157,7 +157,7 @@ class ProviderRegistry:
         cls._root_cause_strategies[name] = strategy_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -166,7 +166,7 @@ class ProviderRegistry:
         cls._graph_build_strategies[name] = strategy_class
         logger.debug(
             "cell_registry.bulkheads_registered",
-            name=name,
+            factory_name=name,
         )
 
     @classmethod
@@ -197,7 +197,7 @@ class ProviderRegistry:
         cls._statistics_adapter = adapter
         logger.info(
             "registry.statistics_adapter_registered",
-            value=type(adapter).__name__,
+            adapter_type=type(adapter).__name__,
         )
 
     @classmethod

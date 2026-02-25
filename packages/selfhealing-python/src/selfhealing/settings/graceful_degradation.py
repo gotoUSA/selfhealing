@@ -107,7 +107,7 @@ class GracefulDegradationSettings(BaseSettings):
         if v > 10.0:
             logger.warning(
                 "graceful_degradation_settings.high_consider_using_responsiveness",
-                v=v,
+                setting_value=v,
             )
         return v
 

@@ -159,7 +159,7 @@ class HashChainCircuitBreaker:
             self._state_changes += 1
             logger.info(
                 "circuitbreaker_open",
-                _self=self._name,
+                name=self._name,
             )
 
     def _transition_to_open(self) -> None:
@@ -168,7 +168,7 @@ class HashChainCircuitBreaker:
         self._state_changes += 1
         logger.warning(
             "circuitbreaker_open_failures",
-            _self=self._name,
+            name=self._name,
             failure_count=self._failure_count,
         )
 
@@ -181,9 +181,8 @@ class HashChainCircuitBreaker:
         self._state_changes += 1
         logger.info(
             "circuitbreaker_closed_recovered",
-            _self=self._name,
+            name=self._name,
         )
-
         # Notify degradation manager
         if self._degradation_manager:
             self._degradation_manager.on_redis_recovery()

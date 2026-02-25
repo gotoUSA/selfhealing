@@ -1122,7 +1122,7 @@ class CheckpointStrategyRegistry:
             cls._strategies[name] = strategy_class
             logger.info(
                 "cell_registry.bulkheads_registered",
-                name=name,
+                strategy_name=name,
             )
 
     @classmethod

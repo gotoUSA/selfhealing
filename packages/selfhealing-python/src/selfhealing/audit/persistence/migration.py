@@ -151,7 +151,7 @@ def drain_on_startup(
             result.skipped += len(entries)
             logger.warning(
                 "drain_on_startup.batch_failed_skipping_entries",
-                count=len(entries),
+                entries_count=len(entries),
             )
 
             if fail_fast:
@@ -163,7 +163,7 @@ def drain_on_startup(
 
     logger.info(
         "drain_on_startup.complete",
-        result=result.drained,
+        drained_count=result.drained,
         failed=result.failed,
         skipped=result.skipped,
         duration_seconds=result.duration_seconds,
@@ -248,7 +248,7 @@ async def async_drain_on_startup(
 
     logger.info(
         "async_drain_on_startup.complete",
-        result=result.drained,
+        drained_count=result.drained,
         failed=result.failed,
         skipped=result.skipped,
     )

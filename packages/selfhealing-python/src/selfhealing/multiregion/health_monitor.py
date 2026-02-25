@@ -500,7 +500,7 @@ class RegionHealthMonitor:
                 )
                 logger.warning(
                     "region_health.marked_unreachable_heartbeat_expired",
-                    region=region,
+                    target_region=region,
                 )
 
     def _subscribe_heartbeat_expiry(self) -> None:
@@ -542,7 +542,7 @@ class RegionHealthMonitor:
                         region = key.split(":")[-1]
                         logger.warning(
                             "region_health.heartbeat_expired",
-                            region=region,
+                            target_region=region,
                         )
                         self._mark_unhealthy(region)
 

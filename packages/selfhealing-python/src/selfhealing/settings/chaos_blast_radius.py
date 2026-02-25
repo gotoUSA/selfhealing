@@ -162,7 +162,7 @@ class ChaosBlastRadiusSettings(BaseSettings):
         if v > 20.0:
             logger.warning(
                 "chaos_blast_radius.위험한_수준입니다_이하를_권장합니다",
-                v=v,
+                setting_value=v,
             )
         return v
 

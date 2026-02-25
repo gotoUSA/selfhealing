@@ -322,7 +322,7 @@ class AuditLogger:
             change=change.get("action", "unknown").upper(),
             config_type=change.get("config_type", ""),
             config_key=change.get("config_key", ""),
-            actor=actor.get("user", "system"),
+            actor_id=actor.get("user", "system"),
             ip_address=actor.get("ip_address", "unknown"),
         )
 

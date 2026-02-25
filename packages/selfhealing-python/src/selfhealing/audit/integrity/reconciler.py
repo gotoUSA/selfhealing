@@ -114,7 +114,7 @@ class HashChainReconciler:
             logger.info(
                 "reconciler.completed_merged_entries_seq",
                 merged_count=merged_count,
-                result=result["new_sequence_start"],
+                new_sequence_start=result["new_sequence_start"],
                 new_sequence_end=result["new_sequence_end"],
             )
 
@@ -285,7 +285,7 @@ class HashChainReconciler:
             # self_audit not available or event not found, just log
             logger.info(
                 "reconciler.reconciliation_event",
-                result=result,
+                reconciliation_result=result,
             )
 
     def get_stats(self) -> dict[str, Any]:

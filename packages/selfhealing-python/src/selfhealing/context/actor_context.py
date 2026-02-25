@@ -168,7 +168,7 @@ class ActorContext:
                 actor_id=actor_id,
                 actor_type=actor_type,
                 source=source,
-                actor=actor.roles,
+                actor_roles=actor.roles,
             )
             yield actor
         finally:

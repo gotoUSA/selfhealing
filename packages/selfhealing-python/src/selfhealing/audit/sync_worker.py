@@ -211,7 +211,7 @@ class AuditSyncWorker:
 
         logger.info(
             "audit_sync_worker.initialized",
-            _self=self._config.sync_interval_seconds,
+            sync_interval_seconds=self._config.sync_interval_seconds,
             batch_size=self._config.batch_size,
         )
 
@@ -367,7 +367,7 @@ class AuditSyncWorker:
                 failed_count += 1
                 logger.warning(
                     "audit_sync_worker.failed_sync_entry",
-                    entry=entry.sequence,
+                    entry_sequence=entry.sequence,
                     error=e,
                 )
         return synced_count, failed_count
@@ -475,7 +475,7 @@ class AuditSyncWorker:
             if result is not None:
                 logger.debug(
                     "audit_sync_worker.skipping_duplicate_entry",
-                    entry=entry.sequence,
+                    entry_sequence=entry.sequence,
                 )
                 return
 
@@ -502,7 +502,7 @@ class AuditSyncWorker:
                     # 범용 로그
                     logger.info(
                         "audit_sync.event",
-                        entry=entry.data,
+                        entry_data=entry.data,
                     )
 
                 # 성공 시 처리 완료 마킹
@@ -599,7 +599,7 @@ class AuditSyncWorker:
                 checkpoint.save(last_sequence=self._last_processed_seq)
                 logger.debug(
                     "audit_sync_worker.checkpoint_saved_via_legacy",
-                    _self=self._last_processed_seq,
+                    last_processed_seq=self._last_processed_seq,
                 )
             except Exception as e:
                 logger.warning(
@@ -619,7 +619,7 @@ class AuditSyncWorker:
             strategy.commit()  # 영속적 저장 보장
             logger.debug(
                 "audit_sync_worker.checkpoint_saved_via_strategy",
-                _self=self._last_processed_seq,
+                last_processed_seq=self._last_processed_seq,
             )
         except Exception as e:
             logger.warning(

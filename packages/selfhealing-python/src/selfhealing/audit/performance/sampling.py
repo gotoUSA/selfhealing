@@ -52,9 +52,7 @@ class SamplingConfig:
             sample_rate=overrides.get("sample_rate", s.sample_rate),
             min_samples=overrides.get("min_samples", s.min_samples),
             max_samples=overrides.get("max_samples", s.max_samples),
-            full_verify_on_failure=overrides.get(
-                "full_verify_on_failure", s.full_verify_on_failure
-            ),
+            full_verify_on_failure=overrides.get("full_verify_on_failure", s.full_verify_on_failure),
         )
 
 
@@ -129,8 +127,8 @@ class SamplingVerifier:
         logger.debug(
             "sampling_verifier.sampling_entries",
             sample_size=sample_size,
-            n=n,
-            value=sample_size/n*100,
+            population_count=n,
+            sample_rate_pct=sample_size / n * 100,
         )
 
         # Verify sampled entries

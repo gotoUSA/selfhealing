@@ -137,7 +137,7 @@ class ResilientRecorderSettings(BaseSettings):
         if v < 2:
             logger.warning(
                 "very_low_cause_frequent",
-                v=v,
+                setting_value=v,
             )
         return v
 

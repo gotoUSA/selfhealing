@@ -113,8 +113,8 @@ class HPAMetricsExporter:
             logger.debug(
                 "hpa_metrics_exporter.updated",
                 queue_size=queue_size,
-                state=state.current_rate,
-                level=state.level.value,
+                current_rate=state.current_rate,
+                degradation_level=state.level.value,
             )
 
         except Exception as e:

@@ -75,9 +75,7 @@ class HashChainGracefulDegradationManager:
         self._key_prefix = key_prefix
         self._wal_dir = Path(wal_dir) if wal_dir else Path("logs/audit/wal")
         self._local_fallback_path = (
-            Path(local_fallback_path)
-            if local_fallback_path
-            else Path("logs/audit/fallback/degraded_entries.jsonl")
+            Path(local_fallback_path) if local_fallback_path else Path("logs/audit/fallback/degraded_entries.jsonl")
         )
         self._lock = threading.RLock()
         self._initialized = False
@@ -158,13 +156,11 @@ class HashChainGracefulDegradationManager:
 
             # Check for unreconciled degraded entries
             if self._degraded_marker:
-                result["degraded_entries"] = (
-                    self._degraded_marker.get_unreconciled_count()
-                )
+                result["degraded_entries"] = self._degraded_marker.get_unreconciled_count()
 
             logger.info(
                 "graceful_degradation.startup_recovery",
-                result=result,
+                recovery_result=result,
             )
 
         except Exception as e:

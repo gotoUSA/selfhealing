@@ -155,7 +155,7 @@ class LocalFileColdStorage:
         except Exception as e:
             logger.exception(
                 "cold_storage.write_failed",
-                key=key,
+                storage_key=key,
                 error=e,
             )
             return False
@@ -178,7 +178,7 @@ class LocalFileColdStorage:
         except Exception as e:
             logger.exception(
                 "cold_storage.read_failed",
-                key=key,
+                storage_key=key,
                 error=e,
             )
             return None
@@ -238,9 +238,7 @@ class ArchiveResult:
     failed_count: int = 0
     archived_dates: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
-    archived_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    archived_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class AnchorColdStorage:
@@ -291,21 +289,13 @@ class AnchorColdStorage:
         self._redis = redis_client
         self._key_prefix = key_prefix
         self._archive_threshold = (
-            archive_threshold_days
-            if archive_threshold_days is not None
-            else _get_archive_threshold_days()
+            archive_threshold_days if archive_threshold_days is not None else _get_archive_threshold_days()
         )
-        self._cold_retention_years = (
-            cold_retention_years
-            if cold_retention_years is not None
-            else _get_cold_retention_years()
-        )
+        self._cold_retention_years = cold_retention_years if cold_retention_years is not None else _get_cold_retention_years()
 
         # Default to local filesystem backend
         if cold_backend is None:
-            base = base_dir or Path(
-                os.getenv("SELFHEALING_DATA_DIR", "/var/lib/selfhealing")
-            )
+            base = base_dir or Path(os.getenv("SELFHEALING_DATA_DIR", "/var/lib/selfhealing"))
             self._cold_backend = LocalFileColdStorage(base)
         else:
             self._cold_backend = cold_backend
@@ -359,7 +349,7 @@ class AnchorColdStorage:
 
             logger.info(
                 "cold_storage.found_expiring_anchors",
-                count=len(expiring),
+                expiring_count=len(expiring),
             )
             return expiring
 
@@ -471,7 +461,7 @@ class AnchorColdStorage:
         except (ImportError, AttributeError):
             logger.info(
                 "cold_storage.archive_result",
-                result=result,
+                archive_result=result,
             )
 
     def retrieve_archived_anchor(

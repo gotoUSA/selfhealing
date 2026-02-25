@@ -311,7 +311,7 @@ class AsyncHealingLogger:
             cls._alert_config = config
         logger.debug(
             "async_healing_logger.alert_configured",
-            config=config.threshold_count,
+            alert_threshold_count=config.threshold_count,
         )
 
     # -------------------------------------------------------------------------
@@ -627,7 +627,7 @@ class AsyncHealingLogger:
                 cls._stats["batch_flushes"] += 1
             logger.debug(
                 "async_healing_logger.flushed_events",
-                count=len(events),
+                events_count=len(events),
             )
 
         except Exception as e:
@@ -653,7 +653,7 @@ class AsyncHealingLogger:
 
                 logger.warning(
                     "async_healing_logger.flush_failed_retry_after",
-                    value=attempt + 1,
+                    retry_attempt_index=attempt + 1,
                     cls=cls._retry_policy.max_retries,
                     delay=delay,
                     error=e,
@@ -712,7 +712,7 @@ class AsyncHealingLogger:
 
             logger.info(
                 "async_healing_logger.moved_events_dlq",
-                count=len(events),
+                events_count=len(events),
             )
 
         except ImportError:
@@ -803,7 +803,7 @@ class AsyncHealingLogger:
                 cls._stats["immediate_flushes"] += 1
             logger.debug(
                 "async_healing_logger.flushed_events_immediate",
-                count=len(events),
+                events_count=len(events),
             )
         except Exception as e:
             with cls._lock:

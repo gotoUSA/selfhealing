@@ -67,7 +67,7 @@ def check_chain_depth(
         logger.warning(
             "cascade_chain.depth_warning",
             current_depth=current_depth,
-            config=config.warn_at_depth,
+            warn_at_depth=config.warn_at_depth,
             cascade_id=cascade_id,
             namespace=namespace,
             trigger_type=trigger_type,
@@ -78,7 +78,7 @@ def check_chain_depth(
         logger.error(
             "cascade_chain.depth_exceeded",
             current_depth=current_depth,
-            config=config.max_chain_depth,
+            max_chain_depth=config.max_chain_depth,
             cascade_id=cascade_id,
         )
 
@@ -95,7 +95,7 @@ def check_chain_depth(
             logger.error(
                 "cascade_chain.depth_exceeded_blocking",
                 current_depth=current_depth,
-                config=config.max_chain_depth,
+                max_chain_depth=config.max_chain_depth,
             )
 
 

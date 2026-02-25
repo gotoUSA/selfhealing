@@ -163,7 +163,7 @@ class StressTestSettings(BaseSettings):
         if v > 60:
             logger.warning(
                 "stress_test_settings.high_consider_using_safety",
-                v=v,
+                setting_value=v,
             )
         return v
 

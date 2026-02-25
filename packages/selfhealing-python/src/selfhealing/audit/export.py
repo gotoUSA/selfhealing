@@ -342,8 +342,8 @@ class AuditExporter:
         s3.upload_file(file_path, self._options.s3_bucket, key)
         logger.info(
             "uploaded",
-            _self=self._options.s3_bucket,
-            key=key,
+            s3_bucket=self._options.s3_bucket,
+            s3_upload_key=key,
         )
 
     def _export_to_http(self, entries: Iterator[dict[str, Any]]) -> None:
@@ -375,7 +375,7 @@ class AuditExporter:
             with urllib.request.urlopen(req, timeout=30) as response:
                 logger.info(
                     "http_export_completed",
-                    response=response.status,
+                    response_status=response.status,
                 )
         except urllib.error.URLError as e:
             raise RuntimeError(f"HTTP export failed: {e}") from e
@@ -423,7 +423,7 @@ class AuditExporter:
         pq.write_table(table, output_path, compression="snappy")
         logger.info(
             "exported_entries",
-            count=len(entries),
+            entries_count=len(entries),
             output_path=output_path,
         )
 

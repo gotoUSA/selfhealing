@@ -364,7 +364,7 @@ class CausationContext:
         try:
             logger.debug(
                 "causation_context.continued_cascade",
-                info=info.cascade_id,
+                cascade_info_id=info.cascade_id,
                 new_depth=new_depth,
             )
             yield continued_info

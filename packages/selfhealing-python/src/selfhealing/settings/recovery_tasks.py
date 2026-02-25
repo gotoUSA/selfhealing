@@ -3,7 +3,7 @@ Recovery Tasks Settings - Pydantic v2.
 
 Celery 복구 태스크별 재시도 전략 설정입니다.
 
-각 복구 태스크(check_recovery_trigger, execute_recovery_step, 
+각 복구 태스크(check_recovery_trigger, execute_recovery_step,
 monitor_active_recovery, cleanup_stale_sessions, run_health_checks)의
 max_retries, default_retry_delay를 개별적으로 설정할 수 있습니다.
 
@@ -159,7 +159,7 @@ class RecoveryTasksSettings(BaseSettings):
         if v < 1:
             logger.warning(
                 "recovery_tasks_settings.critical_task_low_consider",
-                v=v,
+                setting_value=v,
             )
         return v
 
@@ -175,7 +175,7 @@ class RecoveryTasksSettings(BaseSettings):
             if delay < 10:
                 logger.warning(
                     "recovery_tasks_settings.very_short",
-                    name=name,
+                    task_name=name,
                     delay=delay,
                 )
         return self

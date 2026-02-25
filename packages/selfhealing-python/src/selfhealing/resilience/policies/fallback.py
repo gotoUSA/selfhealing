@@ -209,7 +209,7 @@ class FallbackPolicy(ResiliencePolicy[T]):
             except Exception as e:
                 logger.warning(
                     "fallback_chain_failed",
-                    i=i,
+                    fallback_attempt_index=i,
                     error=e,
                 )
                 continue
@@ -447,7 +447,7 @@ class AsyncFallbackPolicy:
             except Exception as e:
                 logger.warning(
                     "async_fallback_chain_failed",
-                    i=i,
+                    fallback_attempt_index=i,
                     error=e,
                 )
                 continue

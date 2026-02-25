@@ -105,7 +105,7 @@ class RecordingMixin:
                 "cascade_audit.recorded",
                 cascade_id=cascade_id,
                 trigger_type=trigger_type,
-                count=len(cascade_effects),
+                cascade_effects_count=len(cascade_effects),
                 namespace=namespace,
             )
 
