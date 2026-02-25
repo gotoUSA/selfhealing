@@ -21,6 +21,9 @@ def pytest_configure(config):
     단위 테스트에서는 실제 DB/Redis 연결을 시도하지 않도록
     atexit 핸들러 등록을 방지하고, 관련 플래그를 비활성화합니다.
     """
+    # 로그 노이즈 차단: selfhealing import 전에 설정해야 configure_structlog()이 존중
+    os.environ.setdefault("SELFHEALING_TEST_LOG_LEVEL", "WARNING")
+
     # 테스트 환경 플래그 설정
     os.environ.setdefault("SELFHEALING_TEST_MODE", "true")
 
@@ -226,6 +229,20 @@ def _isolate_logging_state_session():
     test_log_level = getattr(_logging, test_log_level_name.upper(), _logging.WARNING)
     root.setLevel(test_log_level)
 
+    # root 핸들러 레벨도 설정: 자식 로거에서 propagate된 저레벨 로그도 차단
+    _handler_levels_saved: list[tuple[_logging.Handler, int]] = []
+    for _h in root.handlers:
+        _handler_levels_saved.append((_h, _h.level))
+        _h.setLevel(test_log_level)
+
+    # 외부 라이브러리 노이즈 로거 차단: faker, urllib3 등이 DEBUG 로그를 대량 발생시킴
+    _noisy_loggers = ("faker", "faker.factory", "urllib3", "asyncio", "parso")
+    _noisy_saved: dict[str, int] = {}
+    for _name in _noisy_loggers:
+        _lg = _logging.getLogger(_name)
+        _noisy_saved[_name] = _lg.level
+        _lg.setLevel(test_log_level)
+
     # selfhealing 네임스페이스 로거 상태 저장 + propagate 강제 활성화 (1회만)
     _saved: dict[str, tuple[int, bool, list]] = {}
     for name, logger_obj in _logging.Logger.manager.loggerDict.items():
@@ -239,6 +256,10 @@ def _isolate_logging_state_session():
     # 세션 종료 시 복원
     root.setLevel(root_level)
     root.handlers = root_handlers
+    for _h, _prev_h_level in _handler_levels_saved:
+        _h.setLevel(_prev_h_level)
+    for _name, _prev_level in _noisy_saved.items():
+        _logging.getLogger(_name).setLevel(_prev_level)
     for name, (level, propagate, handlers) in _saved.items():
         logger_obj = _logging.getLogger(name)
         logger_obj.setLevel(level)

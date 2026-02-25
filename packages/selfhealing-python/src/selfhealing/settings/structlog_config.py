@@ -26,6 +26,7 @@ structlog를 stdlib logging의 wrapper로 구성하여 기존 인프라를 그�
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import threading
 from typing import Any
@@ -139,7 +140,17 @@ def configure_structlog() -> None:
         h for h in root_logger.handlers if not isinstance(getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter)
     ]
     root_logger.addHandler(handler)
-    root_logger.setLevel(logging.DEBUG)
+
+    # 테스트 환경에서는 SELFHEALING_TEST_LOG_LEVEL(기본 WARNING)을 존중한다.
+    # 이 값이 없으면(프로덕션) DEBUG로 설정하여 컴포넌트별 레벨만으로 제어한다.
+    # 핸들러 레벨도 동일하게 설정하여 자식 로거에서 propagate된 저레벨 로그도 차단.
+    _test_level_name = os.environ.get("SELFHEALING_TEST_LOG_LEVEL")
+    if _test_level_name:
+        _effective_level = getattr(logging, _test_level_name.upper(), logging.WARNING)
+        root_logger.setLevel(_effective_level)
+        handler.setLevel(_effective_level)
+    else:
+        root_logger.setLevel(logging.DEBUG)
 
     # =========================================================================
     # 컴포넌트별 로그 레벨 적용 (280_LOGGING_SETTINGS_APPLY)

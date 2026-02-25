@@ -66,16 +66,18 @@ class TestStructlogConfigContract:
         assert isinstance(result, dict)
 
     def test_shared_processor_count_in_configure_structlog(self, monkeypatch):
-        """공유 프로세서가 문서 §3.2 명세대로 7개여야 한다.
+        """공유 프로세서가 9개여야 한다.
 
         순서:
           1. merge_contextvars
           2. add_log_level
           3. add_logger_name
-          4. TimeStamper
-          5. _inject_otel_trace_context
-          6. StackInfoRenderer
-          7. format_exc_info
+          4. rate_limit_processor
+          5. sampling_processor
+          6. TimeStamper
+          7. _inject_otel_trace_context
+          8. StackInfoRenderer
+          9. format_exc_info
         """
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
 
@@ -93,9 +95,9 @@ class TestStructlogConfigContract:
 
             configure_structlog()
 
-        # wrap_for_formatter를 제외한 공유 프로세서 수 = 7
+        # wrap_for_formatter를 제외한 공유 프로세서 수 = 9
         shared_count = len(captured) - 1  # 마지막 wrap_for_formatter 제외
-        assert shared_count == 7
+        assert shared_count == 9
 
 
 # =============================================================================
@@ -273,13 +275,23 @@ class TestConfigureStructlogBehavior:
         config = structlog.get_config()
         assert config["wrapper_class"] is structlog.stdlib.BoundLogger
 
-    def test_root_logger_level_set_to_debug_after_configure(self, monkeypatch):
-        """configure_structlog() 후 root logger 레벨이 DEBUG(10)로 설정되어야 한다."""
+    def test_root_logger_level_respects_test_log_level_override(self, monkeypatch):
+        """configure_structlog() 후 root logger 레벨이 SELFHEALING_TEST_LOG_LEVEL 환경변수를 존중해야 한다.
+
+        테스트 환경(SELFHEALING_TEST_LOG_LEVEL 설정됨): 해당 레벨 적용.
+        프로덕션 환경(설정 없음): DEBUG(10)로 설정.
+        """
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
 
         from selfhealing.settings.structlog_config import configure_structlog
 
+        # 테스트 환경: SELFHEALING_TEST_LOG_LEVEL=WARNING이면 WARNING(30)
+        monkeypatch.setenv("SELFHEALING_TEST_LOG_LEVEL", "WARNING")
         configure_structlog()
-
         root = logging.getLogger()
+        assert root.level == logging.WARNING
+
+        # 프로덕션 환경: 환경변수 미설정이면 DEBUG(10)
+        monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
+        configure_structlog()
         assert root.level == logging.DEBUG
