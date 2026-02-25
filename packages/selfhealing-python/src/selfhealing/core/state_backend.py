@@ -91,7 +91,7 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
         self._recover_orphan_tmp_files()
         logger.info(
             "state_backend.file_backend_initialized",
-            _self=self._directory,
+            directory=self._directory,
         )
 
     def _recover_orphan_tmp_files(self) -> None:
@@ -153,13 +153,13 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                     except Exception as recover_err:
                         logger.warning(
                             "state_backend.failed_recover_tmp",
-                            key=key,
+                            state_key=key,
                             recover_err=recover_err,
                         )
             except Exception as e:
                 logger.warning(
                     "state_backend.error_reading",
-                    key=key,
+                    state_key=key,
                     error=e,
                 )
         return default
@@ -176,7 +176,7 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
             except Exception as e:
                 logger.exception(
                     "state_backend.error_writing",
-                    key=key,
+                    state_key=key,
                     error=e,
                 )
                 # Clean up orphan .tmp to avoid stale data on next read
@@ -210,7 +210,7 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                     except Exception as e:
                         logger.warning(
                             "state_backend.error_reading",
-                            key=key,
+                            state_key=key,
                             error=e,
                         )
         return result
@@ -255,7 +255,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             self._client.ping()
             logger.info(
                 "state_backend.redis_backend_connected",
-                _self=self._redis_url,
+                redis_url=self._redis_url,
             )
         except ImportError:
             logger.exception("state_backend.redis_package_installed_run")
@@ -278,7 +278,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
         except Exception as e:
             logger.warning(
                 "state_backend.redis_get_error",
-                key=key,
+                state_key=key,
                 error=e,
             )
         return default
@@ -293,7 +293,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
         except Exception as e:
             logger.exception(
                 "state_backend.redis_set_error",
-                key=key,
+                state_key=key,
                 error=e,
             )
             raise
@@ -304,7 +304,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
         except Exception as e:
             logger.exception(
                 "state_backend.redis_delete_error",
-                key=key,
+                state_key=key,
                 error=e,
             )
             return False
@@ -315,7 +315,7 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
         except Exception as e:
             logger.warning(
                 "state_backend.redis_exists_error",
-                key=key,
+                state_key=key,
                 error=e,
             )
             return False

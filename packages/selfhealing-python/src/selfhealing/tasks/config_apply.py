@@ -59,7 +59,7 @@ def apply_pending_config_changes(self):
         if status == "blocked":
             logger.warning(
                 "config_task.blocked",
-                result=result.get('reason'),
+                reason=result.get("reason"),
             )
 
         # === Audit 기록 ===
@@ -161,7 +161,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
             logger.info(
                 "config_task.waiting_progress_ops_retry",
                 pending_id=pending_id,
-                _self=self.request.retries + 1,
+                retry_attempt=self.request.retries + 1,
             )
             raise self.retry(countdown=min(5 * (self.request.retries + 1), 30))
 

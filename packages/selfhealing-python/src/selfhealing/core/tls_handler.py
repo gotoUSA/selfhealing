@@ -194,9 +194,7 @@ class TLSErrorClassifier:
         if not all(p in error_str for p in pattern.patterns):
             return False
         # If any_patterns specified, at least one must match
-        if pattern.any_patterns and not any(
-            p in error_str for p in pattern.any_patterns
-        ):
+        if pattern.any_patterns and not any(p in error_str for p in pattern.any_patterns):
             return False
         # If no any_patterns, patterns alone are sufficient (if non-empty)
         return bool(pattern.patterns) or bool(pattern.any_patterns)
@@ -303,7 +301,7 @@ class SimpleTLSResilientClient(TLSResilientClient):
                 self.on_tls_error(error_info)
                 logger.warning(
                     "tls_error_attempt",
-                    value=attempt + 1,
+                    retry_attempt=attempt + 1,
                     error_info=error_info.error_type,
                 )
 
@@ -321,7 +319,7 @@ class SimpleTLSResilientClient(TLSResilientClient):
                     self.on_tls_error(error_info)
                     logger.warning(
                         "tls_error_attempt",
-                        value=attempt + 1,
+                        retry_attempt=attempt + 1,
                         error_info=error_info.error_type,
                     )
 

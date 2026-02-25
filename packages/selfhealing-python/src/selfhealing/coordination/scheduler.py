@@ -219,7 +219,7 @@ class LeaderScheduler:
         self._jobs[name] = job
         logger.info(
             "scheduler.작업_등록",
-            name=name,
+            job_name=name,
             interval_seconds=interval_seconds,
         )
         return job
@@ -238,7 +238,7 @@ class LeaderScheduler:
             del self._jobs[name]
             logger.info(
                 "scheduler.작업_제거",
-                name=name,
+                job_name=name,
             )
             return True
         return False
@@ -264,7 +264,7 @@ class LeaderScheduler:
 
         logger.info(
             "scheduler.시작",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
         self._stop_event.clear()
         self._running = True
@@ -276,7 +276,7 @@ class LeaderScheduler:
         """스케줄러 중지."""
         logger.info(
             "scheduler.중지",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
         self._running = False
         self._stop_event.set()
@@ -289,7 +289,7 @@ class LeaderScheduler:
         self._elector.stop()
         logger.info(
             "scheduler.중지됨",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
 
     def _on_become_leader(self) -> None:

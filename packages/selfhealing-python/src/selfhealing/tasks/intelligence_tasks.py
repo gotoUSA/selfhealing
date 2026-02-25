@@ -111,7 +111,7 @@ class CheckSLADriftTask(BaseNotifyingTask):
 
             logger.info(
                 "check_sla_drift.completed_warning",
-                count=len(warnings),
+                warnings_count=len(warnings),
             )
 
             return {
@@ -368,7 +368,7 @@ class AnalyzeCrossStageInsightsTask(BaseNotifyingTask):
 
             logger.info(
                 "analyze_cross_stage_insights.completed_insights",
-                count=len(insights),
+                insights_count=len(insights),
             )
 
             return {
@@ -521,7 +521,7 @@ class CheckRecoveryTransitionsTask(BaseNotifyingTask):
             logger.info(
                 "check_recovery_transitions.completed",
                 transitions=transitions,
-                count=len(recovered),
+                recovered_count=len(recovered),
             )
 
             return {

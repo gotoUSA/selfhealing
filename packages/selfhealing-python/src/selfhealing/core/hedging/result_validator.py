@@ -307,7 +307,7 @@ class HedgingResultValidator:
         # 2. 경고 로깅
         logger.warning(
             "hedging_validator.result_mismatch_detected",
-            record=record.operation_id,
+            operation_id=record.operation_id,
             winner_source=record.winner_source,
             winner_region=record.winner_region or "local",
             other_source=record.other_source,
@@ -362,7 +362,7 @@ class HedgingResultValidator:
                 )
                 logger.info(
                     "hedging_validator.escalated_meta_watchdog",
-                    record=record.operation_id,
+                    operation_id=record.operation_id,
                 )
             except ImportError:
                 pass  # 에스컬레이션 모듈 없음
@@ -392,7 +392,7 @@ class HedgingResultValidator:
                 )
                 logger.debug(
                     "hedging_validator.persisted_diskbuffer",
-                    record=record.operation_id,
+                    operation_id=record.operation_id,
                 )
             except ImportError:
                 pass  # 영속화 모듈 없음

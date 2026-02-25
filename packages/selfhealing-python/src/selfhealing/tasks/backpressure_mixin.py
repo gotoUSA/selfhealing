@@ -135,13 +135,13 @@ class BackpressureTaskMixin:
         if self._backpressure_retry_count > self.backpressure_max_retries:
             logger.error(
                 "backpressure_task_mixin.max_retries_exceeded_task",
-                _self=self._backpressure_retry_count,
+                backpressure_retry_count=self._backpressure_retry_count,
             )
             raise BackpressureMaxRetriesExceeded(f"Max backpressure retries ({self.backpressure_max_retries}) exceeded")
 
         logger.info(
             "backpressure_task_mixin.scheduling_retry",
-            _self=self.backpressure_retry_countdown,
+            backpressure_retry_countdown=self.backpressure_retry_countdown,
             retry_count=self._backpressure_retry_count,
             max_retries=self.backpressure_max_retries,
         )

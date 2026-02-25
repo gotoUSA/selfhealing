@@ -392,7 +392,7 @@ class AutoRollbackGuard:
                     logger.info(
                         "auto_rollback_guard.rolled_back",
                         param=param,
-                        last_good=last_good['value'],
+                        last_good=last_good["value"],
                     )
                 except Exception as e:
                     logger.exception(
@@ -460,14 +460,14 @@ class AutoRollbackGuard:
                 self.config_applier.apply(parameter, last_good_value)
                 logger.info(
                     "auto_rollback_guard.recovered_last_known_good",
-                    parameter=parameter,
+                    rollback_parameter=parameter,
                     last_good_value=last_good_value,
                 )
                 return f"last_known_good:{last_good_value}"
             except Exception as e:
                 logger.warning(
                     "auto_rollback_guard.last_known_good_failed",
-                    parameter=parameter,
+                    rollback_parameter=parameter,
                     error=e,
                 )
 
@@ -478,14 +478,14 @@ class AutoRollbackGuard:
                 self.config_applier.apply(parameter, dna_value)
                 logger.info(
                     "auto_rollback_guard.recovered_dna_declared",
-                    parameter=parameter,
+                    rollback_parameter=parameter,
                     dna_value=dna_value,
                 )
                 return f"dna_declared:{dna_value}"
             except Exception as e:
                 logger.warning(
                     "auto_rollback_guard.dna_declared_failed",
-                    parameter=parameter,
+                    rollback_parameter=parameter,
                     error=e,
                 )
 
@@ -494,14 +494,14 @@ class AutoRollbackGuard:
             self.config_applier.apply(parameter, system_default)
             logger.info(
                 "auto_rollback_guard.recovered_system_default",
-                parameter=parameter,
+                rollback_parameter=parameter,
                 system_default=system_default,
             )
             return f"system_default:{system_default}"
         except Exception as e:
             logger.exception(
                 "auto_rollback_guard.all_recovery_failed",
-                parameter=parameter,
+                rollback_parameter=parameter,
                 error=e,
             )
             return "FAILED"
@@ -565,7 +565,7 @@ class AutoRollbackGuard:
         logger.warning(
             "auto_rollback_guard.event",
             alert_type=alert_type,
-            message=message,
+            detail_message=message,
         )
 
     def get_status(self) -> dict[str, Any]:
@@ -609,7 +609,7 @@ class AutoRollbackGuard:
                     sd.description = description
                 logger.info(
                     "auto_rollback_guard.updated_safe_default",
-                    parameter=parameter,
+                    rollback_parameter=parameter,
                     safe_value=safe_value,
                 )
                 return True

@@ -234,7 +234,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
         """
         logger.info(
             "traffic_aware_replay.starting_check",
-            domain=domain,
+            healing_domain=domain,
         )
 
         task_id = getattr(self.request, "id", None) if hasattr(self, "request") else None
@@ -287,7 +287,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
 
             logger.info(
                 "traffic_aware_replay.completed",
-                result=result["total"],
+                replay_total=result["total"],
                 success=result["success"],
                 failed=result["failed"],
             )

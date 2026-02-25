@@ -208,7 +208,7 @@ class EtcdLeaderElector(LeaderElector):
         self._lease_id = self._lease.id
         logger.debug(
             "etcd_leader_elector.lease_생성",
-            _self=self._lease_id,
+            lease_id=self._lease_id,
         )
         return self._lease
 
@@ -243,7 +243,7 @@ class EtcdLeaderElector(LeaderElector):
                 self._increment_fencing_token()
                 logger.info(
                     "etcd_leader_elector.리더_획득_성공",
-                    _self=self._resource_name,
+                    resource_name=self._resource_name,
                     fencing_token=self._fencing_token,
                 )
                 return True
@@ -294,7 +294,7 @@ class EtcdLeaderElector(LeaderElector):
             self._lease.refresh()
             logger.debug(
                 "etcd_leader_elector.lease_갱신",
-                _self=self._lease_id,
+                lease_id=self._lease_id,
             )
             return True
 
@@ -325,7 +325,7 @@ class EtcdLeaderElector(LeaderElector):
 
             logger.info(
                 "etcd_leader_elector.리더십_반납",
-                _self=self._resource_name,
+                resource_name=self._resource_name,
             )
 
         except Exception as e:
@@ -343,7 +343,7 @@ class EtcdLeaderElector(LeaderElector):
 
         logger.info(
             "etcd_leader_elector.리더가_되었습니다",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
 
         # 비동기 콜백 실행
@@ -360,7 +360,7 @@ class EtcdLeaderElector(LeaderElector):
 
         logger.info(
             "etcd_leader_elector.리더십을_잃었습니다",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
             reason=reason,
         )
 
@@ -446,7 +446,7 @@ class EtcdLeaderElector(LeaderElector):
         if not self._settings.enabled:
             logger.info(
                 "etcd_leader_elector.비활성화됨",
-                _self=self._resource_name,
+                resource_name=self._resource_name,
             )
             return
 
@@ -466,7 +466,7 @@ class EtcdLeaderElector(LeaderElector):
         self._worker.start()
         logger.info(
             "etcd_leader_elector.시작됨",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
 
     def stop(self) -> None:
@@ -485,7 +485,7 @@ class EtcdLeaderElector(LeaderElector):
 
             logger.info(
                 "etcd_leader_elector.리더십을_잃었습니다",
-                _self=self._resource_name,
+                resource_name=self._resource_name,
             )
 
             # 비동기 콜백
@@ -515,7 +515,7 @@ class EtcdLeaderElector(LeaderElector):
 
         logger.info(
             "etcd_leader_elector.중지됨",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
 
     def on_become_leader(self, callback: Callable[[], None]) -> Callable[[], None]:

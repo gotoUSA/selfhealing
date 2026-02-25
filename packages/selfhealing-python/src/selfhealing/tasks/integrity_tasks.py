@@ -238,7 +238,7 @@ def _alert_integrity_violation(namespace: str, result: dict) -> None:
     logger.critical(
         "integrity_violation.event",
         namespace=namespace,
-        result=result.get('errors', []),
+        errors=result.get("errors", []),
     )
 
 

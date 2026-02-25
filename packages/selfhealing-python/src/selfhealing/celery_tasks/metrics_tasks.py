@@ -42,7 +42,7 @@ def collect_self_healing_metrics(self) -> dict:
 
         logger.debug(
             "metrics.collection_complete_values",
-            value=sum(metrics.get('dlq_pending_by_domain', {}).values()),
+            dlq_pending_total=sum(metrics.get("dlq_pending_by_domain", {}).values()),
         )
 
         return {

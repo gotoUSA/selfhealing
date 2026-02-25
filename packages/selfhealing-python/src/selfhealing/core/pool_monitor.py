@@ -202,7 +202,7 @@ class ConnectionPoolMonitor:
             if health_status:
                 logger.info(
                     "pool_monitor.simulation_override_set",
-                    status=health_status.value,
+                    pool_health_status=health_status.value,
                     experiment_id=experiment_id,
                 )
             else:
@@ -271,7 +271,7 @@ class ConnectionPoolMonitor:
         if self._simulation_override is not None:
             logger.debug(
                 "pool_monitor.simulated_status_returned",
-                status=self._simulation_override.value,
+                pool_health_status=self._simulation_override.value,
             )
             stats = self._simulation_stats or self._get_default_simulated_stats()
             return self._simulation_override, stats

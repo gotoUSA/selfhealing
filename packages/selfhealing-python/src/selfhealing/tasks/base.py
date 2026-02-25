@@ -113,7 +113,7 @@ class BaseNotifyingTask:
             }
             logger.exception(
                 "celery_task.task_failed",
-                _self=self.name,
+                task_name=self.name,
                 error=e,
             )
 
@@ -202,7 +202,7 @@ class BaseNotifyingTask:
                 logger.debug(
                     "celery_task.alert_suppressed_threshold",
                     policy=policy.threshold_field,
-                    value=value,
+                    threshold_value=value,
                     threshold=policy.threshold,
                 )
                 return False
@@ -303,7 +303,7 @@ class BaseNotifyingTask:
 
             logger.info(
                 "celery_task.notification_sent",
-                _self=self.name,
+                task_name=self.name,
                 severity=severity,
             )
 
@@ -349,7 +349,7 @@ class BaseNotifyingTask:
         """
         logger.warning(
             "celery_task.task_requires_approval_execution",
-            _self=self.name,
+            task_name=self.name,
         )
 
         # Send approval request notification
@@ -393,8 +393,8 @@ class BaseNotifyingTask:
             # For now, just log
             logger.info(
                 "celery_task.adding_daily_report",
-                _self=self.name,
-                result=result,
+                task_name=self.name,
+                daily_report_result=result,
             )
 
             # TODO: Implement actual storage (Redis or Django cache)

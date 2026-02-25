@@ -250,7 +250,7 @@ class RolloutWatchdog:
 
             logger.info(
                 "watchdog.scan_complete",
-                result=result.scanned_count,
+                scanned_count=result.scanned_count,
                 zombie_count=result.zombie_count,
                 rollback_count=result.rollback_count,
             )
@@ -307,7 +307,7 @@ class RolloutWatchdog:
                 # 정상적인 대기 상태 - Zombie 아님
                 logger.debug(
                     "watchdog.rollout_excluded_zombie_check",
-                    rollout=rollout.id,
+                    rollout_id=rollout.id,
                     triggered_by=triggered_by,
                 )
                 return None
@@ -363,7 +363,7 @@ class RolloutWatchdog:
                     self._send_notification(zombie, "auto_rolled_back")
                     logger.warning(
                         "watchdog.auto_rolled_back",
-                        rollout=rollout.id,
+                        rollout_id=rollout.id,
                         zombie=zombie.reason,
                     )
                     return "auto_rolled_back"
@@ -521,7 +521,7 @@ class RolloutWatchdog:
                         result.promote_count += 1
                         logger.info(
                             "watchdog.auto_promoted_stage",
-                            rollout=rollout.id,
+                            rollout_id=rollout.id,
                             stage=stage.name,
                         )
                 except Exception as e:

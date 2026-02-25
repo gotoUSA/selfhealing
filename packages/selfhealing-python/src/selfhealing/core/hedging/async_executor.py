@@ -173,7 +173,7 @@ class AsyncHedgingExecutor:
             logger.debug(
                 "hedging.primary_respond_within_adding",
                 primary=primary.name,
-                _self=self._config.delay,
+                delay=self._config.delay,
             )
             tasks: dict[asyncio.Task, HedgingCandidate] = {primary_task: primary}
 

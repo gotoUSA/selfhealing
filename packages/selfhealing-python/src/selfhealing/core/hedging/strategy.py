@@ -195,7 +195,7 @@ class HedgingStrategy(FallbackStrategy):
                 self._current_load_level = config_value.lower()
                 logger.info(
                     "hedging_strategy.load_level_updated",
-                    _self=self._current_load_level,
+                    current_load_level=self._current_load_level,
                 )
         except Exception as e:
             logger.warning(
@@ -285,7 +285,7 @@ class HedgingStrategy(FallbackStrategy):
         if self._should_disable_hedging():
             logger.warning(
                 "hedging_strategy.hedging_disabled_due_load",
-                _self=self._current_load_level,
+                current_load_level=self._current_load_level,
             )
             record_hedging_disabled(self._current_load_level)
             # Primary만 실행 (헷징 없이)

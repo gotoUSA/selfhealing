@@ -79,7 +79,7 @@ def archive_cascade_events(
     if dry_run:
         logger.info(
             "cascade_cleanup.archive_dry_run_found",
-            count=len(to_archive),
+            to_archive_count=len(to_archive),
             namespace=namespace,
             older_than_days=older_than_days,
         )
@@ -103,7 +103,7 @@ def archive_cascade_events(
         except Exception as e:
             logger.exception(
                 "cascade_cleanup.archive_failed",
-                _event=event.id,
+                cascade_event_id=event.id,
                 error=e,
             )
             failed_count += 1
@@ -226,7 +226,7 @@ def purge_old_cascade_events(
     if dry_run:
         logger.warning(
             "cascade_cleanup.purge_dry_run_found",
-            count=len(to_purge),
+            to_purge_count=len(to_purge),
             namespace=namespace,
             older_than_days=older_than_days,
         )
@@ -249,7 +249,7 @@ def purge_old_cascade_events(
         except Exception as e:
             logger.exception(
                 "cascade_cleanup.purge_failed",
-                _event=event.id,
+                cascade_event_id=event.id,
                 error=e,
             )
             failed_count += 1
@@ -326,7 +326,7 @@ def create_cascade_daily_checkpoint(
     logger.info(
         "cascade_cleanup.daily_checkpoint_created",
         namespace=namespace,
-        checkpoint=checkpoint.get('event_count'),
+        checkpoint=checkpoint.get("event_count"),
     )
 
     # 머클 블록 루트도 함께 빌드 (스팟체크 기준선)
@@ -389,13 +389,13 @@ def verify_cascade_chain_integrity(
         logger.info(
             "cascade_cleanup.chain_integrity_verified",
             namespace=namespace,
-            result=result['checked'],
+            checked_count=result["checked"],
         )
     else:
         logger.error(
             "cascade_cleanup.chain_integrity_failed",
             namespace=namespace,
-            count=len(result['errors']),
+            errors_count=len(result["errors"]),
         )
 
     return result
@@ -466,7 +466,7 @@ def recover_cascade_from_wal(
     if dry_run:
         logger.info(
             "cascade_cleanup.wal_recovery_dry_run",
-            count=len(entries),
+            entries_count=len(entries),
             namespace=namespace,
         )
         return {

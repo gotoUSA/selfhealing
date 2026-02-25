@@ -191,7 +191,7 @@ def flush_expired_jwt_tokens() -> dict[str, Any]:
             msg = "token_blacklist 앱이 설치되지 않아 건너뜁니다."
             logger.info(
                 "cleanup_task.skipped",
-                msg=msg,
+                detail_msg=msg,
             )
             return {"success": True, "message": msg, "skipped": True}
 
@@ -202,7 +202,7 @@ def flush_expired_jwt_tokens() -> dict[str, Any]:
         msg = "만료된 JWT OutstandingToken 정리 완료"
         logger.info(
             "cleanup_task.event",
-            msg=msg,
+            detail_msg=msg,
         )
         return {"success": True, "message": msg}
 

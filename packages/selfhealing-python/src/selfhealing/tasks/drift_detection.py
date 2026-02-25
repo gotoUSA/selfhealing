@@ -142,7 +142,7 @@ class SLADriftDetector:
                 self._send_drift_notifications(results["warnings"])
                 logger.warning(
                     "sla_drift_completed_warning",
-                    count=len(results["warnings"]),
+                    warnings_count=len(results["warnings"]),
                 )
             else:
                 logger.info("drift_detection.sla_check_no_violations")
@@ -324,7 +324,7 @@ class SLADriftDetector:
             # Log warning
             logger.warning(
                 "sla_drift_warning.event",
-                domain=domain,
+                healing_domain=domain,
                 warning_type=warning_type,
                 severity=severity,
                 warning=warning.get("message"),

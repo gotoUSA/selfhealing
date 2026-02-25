@@ -75,7 +75,7 @@ class RunComplianceCheckTask(BaseNotifyingTask):
         logger.info(
             "run_compliance_check.starting_compliance_check",
             check_type=check_type,
-            value=stage_name or "all",
+            audit_scope=stage_name or "all",
         )
 
         try:
@@ -106,7 +106,7 @@ class RunComplianceCheckTask(BaseNotifyingTask):
 
             logger.info(
                 "run_compliance_check.completed",
-                report=report.total_checks,
+                total_checks=report.total_checks,
                 passed_checks=report.passed_checks,
                 failed_checks=report.failed_checks,
             )
@@ -226,7 +226,7 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
         logger.info(
             "generate_fin_ops_report.generating_report_else",
             period=period,
-            value=f" for {stage_name}" if stage_name else "",
+            stage_filter=f" for {stage_name}" if stage_name else "",
         )
 
         try:
@@ -245,7 +245,7 @@ class GenerateFinOpsReportTask(BaseNotifyingTask):
 
             logger.info(
                 "generate_fin_ops_report.generated_report",
-                report=report.total_cost,
+                total_cost=report.total_cost,
                 record_count=report.record_count,
             )
 

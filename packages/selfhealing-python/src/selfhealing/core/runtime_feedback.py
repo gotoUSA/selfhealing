@@ -418,7 +418,7 @@ class RuntimeFeedbackLoop:
                 if success:
                     logger.info(
                         "runtime_feedback.rolled_back",
-                        result=result.parameter,
+                        adjusted_parameter=result.parameter,
                         new_value=result.new_value,
                         old_value=result.old_value,
                     )
@@ -536,7 +536,7 @@ class RuntimeFeedbackLoop:
                 logger.info(
                     "runtime_feedback.event",
                     alert_type=alert_type,
-                    message=message,
+                    detail_message=message,
                 )
         except Exception as e:
             logger.warning(
@@ -576,7 +576,7 @@ class RuntimeFeedbackLoop:
             if parameter not in self._snapshot_before_adjustment:
                 logger.warning(
                     "runtime_feedback.no_snapshot",
-                    parameter=parameter,
+                    rollback_parameter=parameter,
                 )
                 return False
 
@@ -587,7 +587,7 @@ class RuntimeFeedbackLoop:
                 if success:
                     logger.info(
                         "runtime_feedback.manual_rollback",
-                        parameter=parameter,
+                        rollback_parameter=parameter,
                         old_value=old_value,
                     )
                 return success

@@ -53,7 +53,7 @@ def conditional_replay_on_circuit_close(self, service_name: str, max_items: int 
         logger.info(
             "circuit_recovery_completed",
             service_name=service_name,
-            result=result.total,
+            dlq_total=result.total,
             success_count=result.success_count,
             failed_count=result.failed_count,
         )
@@ -126,7 +126,7 @@ def replay_single_dlq_entry(self, dlq_id: int) -> dict:
             logger.warning(
                 "dlq_replay_failed_replay",
                 dlq_id=dlq_id,
-                result=result.error,
+                result_error=result.error,
             )
             return {
                 "success": False,
@@ -190,7 +190,7 @@ def replay_batch_by_failure_type(
 
         logger.info(
             "dlq_batch_replay_completed",
-            result=result.total,
+            dlq_total=result.total,
             success_count=result.success_count,
             failed_count=result.failed_count,
         )
@@ -244,7 +244,7 @@ def replay_batch_by_domain(
 
     logger.info(
         "dlq_batch_replay_starting",
-        domain=domain,
+        healing_domain=domain,
         max_items=max_items,
     )
 
@@ -257,7 +257,7 @@ def replay_batch_by_domain(
 
         logger.info(
             "dlq_batch_replay_completed",
-            result=result.total,
+            dlq_total=result.total,
             success_count=result.success_count,
             failed_count=result.failed_count,
         )
@@ -320,7 +320,7 @@ def cleanup_resolved_dlq_entries(self, days_old: int = 30) -> dict:
 
         logger.info(
             "dlq_cleanup_completed",
-            result=result.get("expired_count", 0),
+            expired_count=result.get("expired_count", 0),
             archived_count=result.get("archived_count", 0),
         )
 

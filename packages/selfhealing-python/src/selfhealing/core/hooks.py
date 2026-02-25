@@ -182,7 +182,7 @@ class BypassRegistry:
                 "cell_registry.bulkheads_registered",
                 hook_name=hook_name,
                 priority=priority,
-                count=len(cls._hooks),
+                hooks_count=len(cls._hooks),
             )
 
     @classmethod
@@ -201,7 +201,7 @@ class BypassRegistry:
             if removed:
                 logger.info(
                     "bypass_registry.unregistered_hook",
-                    name=name,
+                    hook_name=name,
                 )
 
             return removed
@@ -267,7 +267,7 @@ class BypassRegistry:
         # Standard logging
         logger.info(
             "bypass_registry.bypass_granted",
-            result=result.hook_name,
+            hook_name=result.hook_name,
             reason=result.reason,
             request_path=result.request_path,
         )
@@ -317,7 +317,7 @@ class BypassRegistry:
             cls._hooks = []
             logger.warning(
                 "bypass_registry.cleared_all_hooks",
-                count=count,
+                hooks_count=count,
             )
             return count
 

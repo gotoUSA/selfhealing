@@ -499,9 +499,7 @@ def is_valid_value(config_type: str, key: str, value: Any) -> bool:
     return True
 
 
-def validate_with_safe_fallback(
-    config_type: str, values: dict[str, Any], log_changes: bool = True
-) -> dict[str, Any]:
+def validate_with_safe_fallback(config_type: str, values: dict[str, Any], log_changes: bool = True) -> dict[str, Any]:
     """
     설정값 검증 후 안전한 값으로 폴백.
 
@@ -526,8 +524,8 @@ def validate_with_safe_fallback(
                     logger.warning(
                         "safe_default.invalid_using_safe_default",
                         config_type=config_type,
-                        key=key,
-                        value=value,
+                        config_key=key,
+                        config_value=value,
                         safe_value=safe_value,
                     )
                 result[key] = safe_value
@@ -537,8 +535,8 @@ def validate_with_safe_fallback(
                     logger.warning(
                         "safe_default.invalid_no_safe_default",
                         config_type=config_type,
-                        key=key,
-                        value=value,
+                        config_key=key,
+                        config_value=value,
                     )
                 result[key] = value
         else:
@@ -562,15 +560,11 @@ def validate_all_with_safe_fallback(
     """
     result = {}
     for config_type, values in config_dict.items():
-        result[config_type] = validate_with_safe_fallback(
-            config_type, values, log_changes
-        )
+        result[config_type] = validate_with_safe_fallback(config_type, values, log_changes)
     return result
 
 
-def apply_safe_defaults_to_missing(
-    config_type: str, values: dict[str, Any]
-) -> dict[str, Any]:
+def apply_safe_defaults_to_missing(config_type: str, values: dict[str, Any]) -> dict[str, Any]:
     """
     누락된 설정에 Safe Default 적용.
 
@@ -621,15 +615,11 @@ def get_validation_errors(config_type: str, values: dict[str, Any]) -> dict[str,
 
         # 로그 레벨 검증
         if key.endswith("_log_level") and value not in VALID_LOG_LEVELS:
-            errors[key] = (
-                f"Invalid log level: {value}. Must be one of {VALID_LOG_LEVELS}"
-            )
+            errors[key] = f"Invalid log level: {value}. Must be one of {VALID_LOG_LEVELS}"
 
         # backoff 전략 검증
         if key == "backoff_strategy" and value not in VALID_BACKOFF_STRATEGIES:
-            errors[key] = (
-                f"Invalid backoff strategy: {value}. Must be one of {VALID_BACKOFF_STRATEGIES}"
-            )
+            errors[key] = f"Invalid backoff strategy: {value}. Must be one of {VALID_BACKOFF_STRATEGIES}"
 
     return errors
 
@@ -650,13 +640,9 @@ class FatalConfigError(Exception):
     def __init__(self, violations: dict[str, dict[str, str]]):
         self.violations = violations
         violation_list = [
-            f"{config_type}.{key}: {msg}"
-            for config_type, keys in violations.items()
-            for key, msg in keys.items()
+            f"{config_type}.{key}: {msg}" for config_type, keys in violations.items() for key, msg in keys.items()
         ]
-        super().__init__(
-            "Fatal config violations detected:\n" + "\n".join(violation_list)
-        )
+        super().__init__("Fatal config violations detected:\n" + "\n".join(violation_list))
 
 
 class ConfigValidationResult:
@@ -719,7 +705,7 @@ def _handle_fatal_violation(
         logger.error(
             "fatal.invalid_critical_config_violation",
             config_type=config_type,
-            key=key,
+            config_key=key,
             current=current,
         )
 
@@ -740,7 +726,7 @@ def _handle_non_fatal_violation(
         logger.warning(
             "startup.invalid_applying_safe_default",
             config_type=config_type,
-            key=key,
+            config_key=key,
             current=current,
             safe_value=safe_value,
         )
@@ -753,7 +739,7 @@ def _handle_non_fatal_violation(
             logger.warning(
                 "startup.cannot_modify_frozen",
                 config_type=config_type,
-                key=key,
+                config_key=key,
             )
 
 
@@ -774,9 +760,7 @@ def _validate_single_config_value(
     error_msg = f"Invalid value {current!r}, expected safe default: {safe_value!r}"
 
     if is_fatal_config(config_type, key):
-        _handle_fatal_violation(
-            result, config_type, key, current, error_msg, log_changes
-        )
+        _handle_fatal_violation(result, config_type, key, current, error_msg, log_changes)
     else:
         _handle_non_fatal_violation(
             result,
@@ -799,23 +783,21 @@ def _finalize_validation(
     if log_changes and result.changes_count > 0:
         logger.info(
             "startup.applied_safe_default",
-            result=result.changes_count,
+            changes_count=result.changes_count,
         )
 
     if result.has_fatal_violations:
         if log_changes:
             logger.critical(
                 "fatal.fatal_config_violations_detected",
-                count=len(result.fatal_violations),
-                value=list(result.fatal_violations.keys()),
+                fatal_violations_count=len(result.fatal_violations),
+                fatal_violation_keys=list(result.fatal_violations.keys()),
             )
         if raise_on_fatal:
             raise FatalConfigError(result.fatal_violations)
 
 
-def validate_startup_config(
-    config: Any, log_changes: bool = True, raise_on_fatal: bool = False
-) -> int:
+def validate_startup_config(config: Any, log_changes: bool = True, raise_on_fatal: bool = False) -> int:
     """
     시작 시 설정 검증 + Safe Default 적용.
 
@@ -846,9 +828,7 @@ def validate_startup_config(
 
         defaults = SAFE_DEFAULTS.get(config_type, {})
         for key, safe_value in defaults.items():
-            _validate_single_config_value(
-                result, sub_config, config_type, key, safe_value, log_changes
-            )
+            _validate_single_config_value(result, sub_config, config_type, key, safe_value, log_changes)
 
     _finalize_validation(result, log_changes, raise_on_fatal)
     return result.changes_count
@@ -896,9 +876,7 @@ def validate_config_preflight(config: Any) -> ConfigValidationResult:
 
             if not is_valid_value(config_type, key, current):
                 is_fatal = is_fatal_config(config_type, key)
-                error_msg = (
-                    f"Value {current!r} is invalid (safe default: {safe_value!r})"
-                )
+                error_msg = f"Value {current!r} is invalid (safe default: {safe_value!r})"
 
                 if is_fatal:
                     if config_type not in result.fatal_violations:
@@ -936,7 +914,7 @@ def validate_chaos_config(values: dict[str, Any]) -> dict[str, Any]:
         if result["max_blast_radius"] > 0.5:
             logger.warning(
                 "safe_default.chaos_exceeds_clamping",
-                result=result['max_blast_radius'],
+                max_blast_radius=result["max_blast_radius"],
             )
             result["max_blast_radius"] = 0.5
         if result["max_blast_radius"] < 0:
@@ -947,7 +925,7 @@ def validate_chaos_config(values: dict[str, Any]) -> dict[str, Any]:
         if result["failure_rate"] > 0.5:
             logger.warning(
                 "safe_default.chaos_exceeds_clamping",
-                result=result['failure_rate'],
+                failure_rate=result["failure_rate"],
             )
             result["failure_rate"] = 0.5
         if result["failure_rate"] < 0:

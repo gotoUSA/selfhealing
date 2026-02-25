@@ -147,7 +147,7 @@ class SafetyBounds:
 
         logger.info(
             "safety_bounds.initialized_parameters",
-            count=len(self.bounds),
+            bounds_count=len(self.bounds),
         )
 
     def is_within_bounds(
@@ -174,13 +174,13 @@ class SafetyBounds:
                 if self.strict_mode:
                     logger.warning(
                         "safety_bounds.unknown_parameter_rejected",
-                        parameter=parameter,
+                        safety_parameter=parameter,
                     )
                     return False
                 else:
                     logger.debug(
                         "safety_bounds.unknown_parameter_allowed_non",
-                        parameter=parameter,
+                        safety_parameter=parameter,
                     )
                     return True
 
@@ -188,7 +188,7 @@ class SafetyBounds:
             if new_value < bound.min_value:
                 logger.warning(
                     "safety_bounds.below_minimum",
-                    parameter=parameter,
+                    safety_parameter=parameter,
                     new_value=new_value,
                     bound=bound.min_value,
                 )
@@ -197,7 +197,7 @@ class SafetyBounds:
             if new_value > bound.max_value:
                 logger.warning(
                     "safety_bounds.above_maximum",
-                    parameter=parameter,
+                    safety_parameter=parameter,
                     new_value=new_value,
                     bound=bound.max_value,
                 )
@@ -209,7 +209,7 @@ class SafetyBounds:
                 if change_ratio > bound.max_change_per_cycle:
                     logger.warning(
                         "safety_bounds.change_ratio_exceeds_limit",
-                        parameter=parameter,
+                        safety_parameter=parameter,
                         change_ratio=change_ratio,
                         bound=bound.max_change_per_cycle,
                     )
@@ -281,14 +281,14 @@ class SafetyBounds:
                 if not new_bound.validate():
                     logger.error(
                         "safety_bounds.invalid_bound_config",
-                        parameter=parameter,
+                        safety_parameter=parameter,
                     )
                     return False
 
                 self.bounds[parameter] = new_bound
                 logger.info(
                     "safety_bounds.updated_bounds",
-                    parameter=parameter,
+                    safety_parameter=parameter,
                     new_bound=new_bound.min_value,
                     max_value=new_bound.max_value,
                     max_change_per_cycle=new_bound.max_change_per_cycle,
@@ -308,7 +308,7 @@ class SafetyBounds:
                 del self.bounds[parameter]
                 logger.info(
                     "safety_bounds.removed_bounds",
-                    parameter=parameter,
+                    safety_parameter=parameter,
                 )
                 return True
             return False

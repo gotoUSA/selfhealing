@@ -68,7 +68,7 @@ class TieredRedisProvider:
 
         logger.debug(
             "tiered_redis_provider.initialized",
-            _self=self._local_url,
+            local_url=self._local_url,
             global_url=self._global_url,
         )
 
@@ -95,7 +95,7 @@ class TieredRedisProvider:
             self._local_client = redis.from_url(self._local_url)
             logger.info(
                 "tiered_redis_provider.local_redis_connected",
-                _self=self._local_url,
+                local_url=self._local_url,
             )
         return self._local_client
 
@@ -112,7 +112,7 @@ class TieredRedisProvider:
                 self._global_client = redis.from_url(self._global_url)
                 logger.info(
                     "tiered_redis_provider.global_redis_connected",
-                    _self=self._global_url,
+                    global_url=self._global_url,
                 )
         return self._global_client
 

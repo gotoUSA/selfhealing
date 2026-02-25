@@ -204,7 +204,7 @@ class ActionExecutor:
             except Exception as e:
                 logger.warning(
                     "validation_failed",
-                    action=action.name,
+                    action_name=action.name,
                     error=e,
                 )
                 validation_result = False
@@ -241,8 +241,8 @@ class ActionExecutor:
             result = action.execute_fn()
             logger.info(
                 "action_executor.executed",
-                action=action.name,
-                target=action.target,
+                action_name=action.name,
+                action_target=action.target,
                 mode=mode.mode.value,
             )
             return ActionResult(
@@ -260,8 +260,8 @@ class ActionExecutor:
         except Exception as e:
             logger.exception(
                 "action_executor.failed",
-                action=action.name,
-                target=action.target,
+                action_name=action.name,
+                action_target=action.target,
                 error=e,
             )
             return ActionResult(
@@ -288,8 +288,8 @@ class ActionExecutor:
         """Log the action without executing (shadow/evaluation mode)."""
         logger.info(
             "action_executor.execute",
-            action=action.name,
-            target=action.target,
+            action_name=action.name,
+            action_target=action.target,
             mode=mode.mode.value,
             params=action.params,
         )

@@ -149,7 +149,7 @@ class DecisionEngine:
 
         logger.info(
             "decision_engine.initialized_rules",
-            count=len(self.rules),
+            rules_count=len(self.rules),
         )
 
     def analyze(self, metrics: dict[str, float]) -> list[AdjustmentDecision]:
@@ -360,7 +360,7 @@ class DecisionEngine:
         if removed:
             logger.info(
                 "decision_engine.removed_rule",
-                parameter=parameter,
+                decision_parameter=parameter,
             )
         return removed
 

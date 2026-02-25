@@ -195,7 +195,7 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         logger.info(
             "connection_health.simulation_override_set",
             override_key=key,
-            status=status.value,
+            connection_health_status=status.value,
             experiment_id=experiment_id,
         )
 

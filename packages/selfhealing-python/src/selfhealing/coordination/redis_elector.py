@@ -284,7 +284,7 @@ class RedisLeaderElector(LeaderElector):
                 self._fencing_token = int(result)
                 logger.info(
                     "leader_elector.리더_획득_성공",
-                    _self=self._resource_name,
+                    resource_name=self._resource_name,
                     fencing_token=self._fencing_token,
                 )
                 return True
@@ -341,7 +341,7 @@ class RedisLeaderElector(LeaderElector):
             )
             logger.info(
                 "leader_elector.리더십_반납_완료",
-                _self=self._resource_name,
+                resource_name=self._resource_name,
             )
         except Exception as e:
             logger.exception(
@@ -369,7 +369,7 @@ class RedisLeaderElector(LeaderElector):
 
         logger.info(
             "leader_elector.리더가_되었습니다",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
 
         # 메트릭 업데이트
@@ -395,7 +395,7 @@ class RedisLeaderElector(LeaderElector):
 
         logger.info(
             "leader_elector.리더십을_잃었습니다",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
             reason=reason,
         )
 
@@ -524,7 +524,7 @@ class RedisLeaderElector(LeaderElector):
         if not self._settings.enabled:
             logger.info(
                 "leader_elector.비활성화됨",
-                _self=self._resource_name,
+                resource_name=self._resource_name,
             )
             return
 
@@ -544,7 +544,7 @@ class RedisLeaderElector(LeaderElector):
         self._worker.start()
         logger.info(
             "leader_elector.시작됨",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
 
     def stop(self) -> None:
@@ -563,7 +563,7 @@ class RedisLeaderElector(LeaderElector):
             # _lose_leader는 _state를 확인하므로 직접 콜백 실행
             logger.info(
                 "leader_elector.리더십을_잃었습니다",
-                _self=self._resource_name,
+                resource_name=self._resource_name,
             )
 
             # 메트릭 업데이트
@@ -594,7 +594,7 @@ class RedisLeaderElector(LeaderElector):
 
         logger.info(
             "leader_elector.중지됨",
-            _self=self._resource_name,
+            resource_name=self._resource_name,
         )
 
     def on_become_leader(self, callback: Callable[[], None]) -> Callable[[], None]:
