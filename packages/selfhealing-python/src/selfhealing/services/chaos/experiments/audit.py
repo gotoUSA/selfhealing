@@ -63,7 +63,7 @@ class AuditStorageFailureExperiment(ChaosExperiment):
         logger.warning(
             "audit_storage_failure.injecting_failures_rate",
             _self=self.failure_type,
-            self_1=self.failure_rate*100,
+            failure_rate_pct=self.failure_rate * 100,
         )
 
         try:
@@ -76,9 +76,7 @@ class AuditStorageFailureExperiment(ChaosExperiment):
                         "failure_rate": self.failure_rate,
                         "trigger_fallback": self.trigger_fallback,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -231,8 +229,8 @@ class ReplayFloodExperiment(ChaosExperiment):
         logger.warning(
             "replay_flood.starting_flood_payload",
             _self=self.flood_rate,
-            self_1=self.duration_seconds,
-            self_2=self.payload_size_bytes,
+            duration_seconds=self.duration_seconds,
+            payload_size_bytes=self.payload_size_bytes,
         )
 
         try:
@@ -246,9 +244,7 @@ class ReplayFloodExperiment(ChaosExperiment):
                         "payload_size_bytes": self.payload_size_bytes,
                         "target_queue": self.target_queue,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }

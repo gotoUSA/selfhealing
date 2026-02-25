@@ -200,15 +200,9 @@ class ChaosSchedulerService:
             # Determine approval status
             blast_radius_enum = BlastRadius(blast_radius)
 
-            if (
-                blast_radius_enum == BlastRadius.INSTANCE
-                and self._config.auto_approve_instance_level
-            ):
+            if blast_radius_enum == BlastRadius.INSTANCE and self._config.auto_approve_instance_level:
                 schedule.approval_status = ExperimentApprovalStatus.AUTO_APPROVED.value
-            elif (
-                blast_radius_enum == BlastRadius.SERVICE
-                and self._config.auto_approve_service_level
-            ):
+            elif blast_radius_enum == BlastRadius.SERVICE and self._config.auto_approve_service_level:
                 schedule.approval_status = ExperimentApprovalStatus.AUTO_APPROVED.value
             elif blast_radius_enum == BlastRadius.REGION:
                 # REGION always requires approval
@@ -272,20 +266,14 @@ class ChaosSchedulerService:
                 schedules = [s for s in schedules if s.enabled]
 
             if pending_approval_only:
-                schedules = [
-                    s
-                    for s in schedules
-                    if s.approval_status == ExperimentApprovalStatus.PENDING.value
-                ]
+                schedules = [s for s in schedules if s.approval_status == ExperimentApprovalStatus.PENDING.value]
 
             if target_service:
                 schedules = [s for s in schedules if s.target_service == target_service]
 
             return schedules
 
-    def update_schedule(
-        self, schedule_id: str, **kwargs
-    ) -> ScheduledExperiment | None:
+    def update_schedule(self, schedule_id: str, **kwargs) -> ScheduledExperiment | None:
         """
         Update a schedule.
 
@@ -359,9 +347,7 @@ class ChaosSchedulerService:
     # Approval Workflow
     # =========================================================================
 
-    def approve_schedule(
-        self, schedule_id: str, approved_by: str
-    ) -> ScheduledExperiment | None:
+    def approve_schedule(self, schedule_id: str, approved_by: str) -> ScheduledExperiment | None:
         """
         Approve a pending schedule.
 
@@ -400,9 +386,7 @@ class ChaosSchedulerService:
 
             return schedule
 
-    def deny_schedule(
-        self, schedule_id: str, denied_by: str, reason: str = ""
-    ) -> ScheduledExperiment | None:
+    def deny_schedule(self, schedule_id: str, denied_by: str, reason: str = "") -> ScheduledExperiment | None:
         """
         Deny a pending schedule.
 
@@ -550,9 +534,7 @@ class ChaosSchedulerService:
                 error=e,
             )
 
-    def _check_error_budget_gate(
-        self, schedule_id: str, experiment_id: str, started_at
-    ) -> ExecutionResult | None:
+    def _check_error_budget_gate(self, schedule_id: str, experiment_id: str, started_at) -> ExecutionResult | None:
         """Check error budget gate. Returns ExecutionResult if blocked, None otherwise."""
         try:
             from selfhealing.services.error_budget_gate import check_automation_allowed
@@ -562,7 +544,7 @@ class ChaosSchedulerService:
                 logger.warning(
                     "chaos_scheduler.experiment_blocked_error_budget",
                     gate_result=gate_result.error_budget_percent,
-                    gate_result_1=gate_result.threshold_percent,
+                    threshold_percent=gate_result.threshold_percent,
                 )
                 return self._make_skipped_result(
                     schedule_id,
@@ -585,14 +567,10 @@ class ChaosSchedulerService:
     ) -> ExecutionResult | None:
         """Check scheduler/schedule/approval conditions. Returns ExecutionResult if blocked."""
         if not self._config.enabled:
-            return self._make_skipped_result(
-                schedule_id, experiment_id, started_at, "Scheduler is disabled"
-            )
+            return self._make_skipped_result(schedule_id, experiment_id, started_at, "Scheduler is disabled")
 
         if not schedule.enabled:
-            return self._make_skipped_result(
-                schedule_id, experiment_id, started_at, "Schedule is disabled"
-            )
+            return self._make_skipped_result(schedule_id, experiment_id, started_at, "Schedule is disabled")
 
         if schedule.approval_status not in (
             ExperimentApprovalStatus.AUTO_APPROVED.value,
@@ -617,9 +595,7 @@ class ChaosSchedulerService:
         from selfhealing.services.chaos.safety_guard import get_safety_guard
 
         guard = get_safety_guard()
-        safety_result = guard.check(
-            experiment_id=experiment_id, target_service=schedule.target_service
-        )
+        safety_result = guard.check(experiment_id=experiment_id, target_service=schedule.target_service)
 
         if not safety_result.allowed:
             self._record_audit(
@@ -631,9 +607,7 @@ class ChaosSchedulerService:
                     "block_message": safety_result.block_message,
                 },
             )
-            return self._make_skipped_result(
-                schedule_id, experiment_id, started_at, safety_result.block_message
-            )
+            return self._make_skipped_result(schedule_id, experiment_id, started_at, safety_result.block_message)
         return None
 
     def _check_blast_radius_conditions(
@@ -684,25 +658,19 @@ class ChaosSchedulerService:
         """
         schedule = self.get_schedule(schedule_id)
         if not schedule:
-            return self._create_error_result(
-                schedule_id, "", f"Schedule not found: {schedule_id}"
-            )
+            return self._create_error_result(schedule_id, "", f"Schedule not found: {schedule_id}")
 
         experiment_id = f"chaos-{uuid.uuid4().hex[:12]}"
         started_at = now()
 
         try:
             # Pre-execution checks
-            blocked = self._run_pre_execution_checks(
-                schedule, schedule_id, experiment_id, started_at, force
-            )
+            blocked = self._run_pre_execution_checks(schedule, schedule_id, experiment_id, started_at, force)
             if blocked:
                 return blocked
 
             # Execute experiment
-            return self._execute_experiment(
-                schedule, schedule_id, experiment_id, started_at, force
-            )
+            return self._execute_experiment(schedule, schedule_id, experiment_id, started_at, force)
 
         except Exception as e:
             logger.exception(
@@ -710,9 +678,7 @@ class ChaosSchedulerService:
                 schedule_id=schedule_id,
                 error=e,
             )
-            return self._create_error_result(
-                schedule_id, experiment_id, str(e), started_at
-            )
+            return self._create_error_result(schedule_id, experiment_id, str(e), started_at)
 
     def _create_error_result(
         self,
@@ -745,34 +711,24 @@ class ChaosSchedulerService:
     ) -> ExecutionResult | None:
         """Run all pre-execution checks. Returns blocked result or None."""
         if not force:
-            blocked = self._check_idempotency(
-                schedule, schedule_id, experiment_id, started_at
-            )
+            blocked = self._check_idempotency(schedule, schedule_id, experiment_id, started_at)
             if blocked:
                 return blocked
 
-            blocked = self._check_error_budget_gate(
-                schedule_id, experiment_id, started_at
-            )
+            blocked = self._check_error_budget_gate(schedule_id, experiment_id, started_at)
             if blocked:
                 return blocked
 
-        blocked = self._check_pre_execution_conditions(
-            schedule, schedule_id, experiment_id, started_at
-        )
+        blocked = self._check_pre_execution_conditions(schedule, schedule_id, experiment_id, started_at)
         if blocked:
             return blocked
 
         if not force:
-            blocked = self._check_safety_conditions(
-                schedule, schedule_id, experiment_id, started_at
-            )
+            blocked = self._check_safety_conditions(schedule, schedule_id, experiment_id, started_at)
             if blocked:
                 return blocked
 
-            blocked = self._check_blast_radius_conditions(
-                schedule, schedule_id, experiment_id, started_at
-            )
+            blocked = self._check_blast_radius_conditions(schedule, schedule_id, experiment_id, started_at)
             if blocked:
                 return blocked
 
@@ -852,9 +808,7 @@ class ChaosSchedulerService:
             if not force:
                 br_manager.unregister_experiment(experiment_id)
 
-    def _update_schedule_after_execution(
-        self, schedule: ScheduledExperiment, result: Any
-    ) -> None:
+    def _update_schedule_after_execution(self, schedule: ScheduledExperiment, result: Any) -> None:
         """Update schedule after experiment execution."""
         with self._lock:
             schedule.last_run_at = now().isoformat()
@@ -879,9 +833,7 @@ class ChaosSchedulerService:
             due_schedules = [
                 s
                 for s in self._schedules.values()
-                if s.enabled
-                and s.next_run_at
-                and datetime.fromisoformat(s.next_run_at) <= current
+                if s.enabled and s.next_run_at and datetime.fromisoformat(s.next_run_at) <= current
             ]
 
         for schedule in due_schedules:
@@ -926,9 +878,7 @@ class ChaosSchedulerService:
             from selfhealing.core.state_backend import get_state_backend
 
             backend = get_state_backend()
-            backend.set(
-                f"chaos:kill:{experiment_id}", {"killed": True, "reason": reason}
-            )
+            backend.set(f"chaos:kill:{experiment_id}", {"killed": True, "reason": reason})
             return True
         except Exception as e:
             logger.exception(
@@ -1043,18 +993,14 @@ class ChaosSchedulerService:
     # Internal Helpers
     # =========================================================================
 
-    def _get_daily_next_run(
-        self, current: datetime, hour: int, minute: int
-    ) -> datetime:
+    def _get_daily_next_run(self, current: datetime, hour: int, minute: int) -> datetime:
         """Calculate next run for daily schedule."""
         next_run = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if next_run <= current:
             next_run += timedelta(days=1)
         return next_run
 
-    def _get_weekly_next_run(
-        self, current: datetime, schedule: ScheduledExperiment
-    ) -> datetime:
+    def _get_weekly_next_run(self, current: datetime, schedule: ScheduledExperiment) -> datetime:
         """Calculate next run for weekly schedule."""
         hour, minute = map(int, schedule.schedule_time.split(":"))
 
@@ -1062,9 +1008,7 @@ class ChaosSchedulerService:
         if days_ahead < 0:
             days_ahead += 7
         elif days_ahead == 0:
-            target_time = current.replace(
-                hour=hour, minute=minute, second=0, microsecond=0
-            )
+            target_time = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
             if current >= target_time:
                 days_ahead = 7
 
@@ -1111,9 +1055,7 @@ class ChaosSchedulerService:
             return self._get_cron_next_run(current, schedule.cron_expression)
 
         # Default: tomorrow at 2 AM
-        return (current + timedelta(days=1)).replace(
-            hour=2, minute=0, second=0, microsecond=0
-        )
+        return (current + timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)
 
     def _persist_schedules(self) -> None:
         """Persist schedules to storage."""
@@ -1139,9 +1081,7 @@ class ChaosSchedulerService:
 
             data = backend.get("chaos:schedules")
             if data:
-                self._schedules = {
-                    sid: ScheduledExperiment.from_dict(s) for sid, s in data.items()
-                }
+                self._schedules = {sid: ScheduledExperiment.from_dict(s) for sid, s in data.items()}
         except Exception as e:
             logger.warning(
                 "chaos_scheduler.load_schedules",

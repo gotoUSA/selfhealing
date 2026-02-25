@@ -258,7 +258,7 @@ class ResourceGuard:
         logger.debug(
             "resource_guard.resource_check_passed",
             status=status.cpu_percent,
-            status_1=status.memory_percent,
+            memory_percent=status.memory_percent,
         )
         return result
 

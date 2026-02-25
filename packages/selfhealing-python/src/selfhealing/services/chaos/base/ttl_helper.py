@@ -60,7 +60,7 @@ class MonotonicTTLHelper:
         logger.debug(
             "monotonic_ttl.timer_started",
             _self=self.ttl_seconds,
-            self_1=self._start_time,
+            start_time=self._start_time,
         )
 
     def is_started(self) -> bool:

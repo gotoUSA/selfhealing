@@ -66,7 +66,7 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
         logger.info(
             "cb_open_injection.forcing_cb_open_ttl",
             _self=self.config.target_service,
-            self_1=self._effective_ttl,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -228,8 +228,8 @@ class CircuitBreakerOpenExperiment(ChaosExperiment):
             if status.get("in_canary", False):
                 logger.info(
                     "cb_open_experiment.canary_recovery_started",
-                    status=status.get('canary_state'),
-                    status_1=status.get('traffic_percent'),
+                    status=status.get("canary_state"),
+                    traffic_percent=status.get("traffic_percent"),
                 )
                 return True
 

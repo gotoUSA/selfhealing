@@ -55,18 +55,16 @@ class Error5xxExperiment(ChaosExperiment):
 
     @property
     def error_message(self) -> str:
-        return self.config.parameters.get(
-            "error_message", "Service Unavailable (Chaos Experiment)"
-        )
+        return self.config.parameters.get("error_message", "Service Unavailable (Chaos Experiment)")
 
     def inject_chaos(self) -> bool:
         """Inject 5xx errors into target service with TTL."""
         logger.info(
             "error5xx_injection.injecting_errors_rate_ttl",
             _self=self.error_code,
-            self_1=self.config.target_service,
-            self_2=self.config.injection_rate*100,
-            self_3=self._effective_ttl,
+            target_service=self.config.target_service,
+            injection_rate_pct=self.config.injection_rate * 100,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -80,9 +78,7 @@ class Error5xxExperiment(ChaosExperiment):
                         "rate": self.config.injection_rate,
                         "traffic_type": self.config.traffic_type,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -176,9 +172,9 @@ class Error4xxExperiment(ChaosExperiment):
         logger.info(
             "error4xx_injection.injecting_errors_rate_ttl",
             _self=self.error_code,
-            self_1=self.config.target_service,
-            self_2=self.config.injection_rate*100,
-            self_3=self._effective_ttl,
+            target_service=self.config.target_service,
+            injection_rate_pct=self.config.injection_rate * 100,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -192,9 +188,7 @@ class Error4xxExperiment(ChaosExperiment):
                         "rate": self.config.injection_rate,
                         "traffic_type": self.config.traffic_type,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }

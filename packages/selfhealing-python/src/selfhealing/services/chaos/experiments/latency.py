@@ -68,11 +68,11 @@ class LatencyInjectionExperiment(ChaosExperiment):
         logger.info(
             "latency_injection.injecting_ms_latency_rate",
             _self=self.latency_ms,
-            self_1=self.latency_jitter_ms,
-            self_2=self.config.target_service,
-            self_3=self.config.injection_rate*100,
-            self_4=self._effective_ttl,
-            self_5=self._expires_at,
+            latency_jitter_ms=self.latency_jitter_ms,
+            target_service=self.config.target_service,
+            injection_rate_pct=self.config.injection_rate * 100,
+            effective_ttl=self._effective_ttl,
+            expires_at=self._expires_at,
         )
 
         try:
@@ -88,9 +88,7 @@ class LatencyInjectionExperiment(ChaosExperiment):
                         "rate": self.config.injection_rate,
                         "traffic_type": self.config.traffic_type,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }

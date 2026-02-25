@@ -46,8 +46,8 @@ class RateLimitExperiment(ChaosExperiment):
         logger.info(
             "rate_limit_injection.injecting_rate_limits_ttl",
             _self=self.rate_limit_count,
-            self_1=self.config.target_service,
-            self_2=self._effective_ttl,
+            target_service=self.config.target_service,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -71,9 +71,7 @@ class RateLimitExperiment(ChaosExperiment):
                         "target_service": self.config.target_service,
                         "count": self.rate_limit_count,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }

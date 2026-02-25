@@ -53,9 +53,9 @@ class PartialFailureExperiment(ChaosExperiment):
         """Inject partial failures."""
         logger.info(
             "partial_failure.injecting_failures_ttl",
-            _self=self.failure_rate*100,
-            self_1=self.config.target_service,
-            self_2=self._effective_ttl,
+            _self=self.failure_rate * 100,
+            target_service=self.config.target_service,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -68,9 +68,7 @@ class PartialFailureExperiment(ChaosExperiment):
                         "affected_endpoints": self.affected_endpoints,
                         "trigger_shedding": self.trigger_shedding,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -324,9 +322,7 @@ class CascadingFailureExperiment(ChaosExperiment):
                         "enabled": True,
                         "affected_services": opened_services,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -335,7 +331,7 @@ class CascadingFailureExperiment(ChaosExperiment):
             logger.warning(
                 "cascading_failure.cascade_injection_complete_services",
                 count=len(opened_services),
-                count_1=len(self.affected_services),
+                affected_services_count=len(self.affected_services),
             )
             return True
         except Exception as e:

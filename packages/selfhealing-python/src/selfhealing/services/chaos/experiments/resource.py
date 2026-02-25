@@ -83,7 +83,7 @@ class ResourceExhaustionExperiment(ChaosExperiment):
                 logger.warning(
                     "resource_exhaustion.capping_memory_mb_cgroup",
                     value=actual_bytes / 1024 / 1024,
-                    value_1=max_bytes / 1024 / 1024,
+                    max_mb=max_bytes / 1024 / 1024,
                     _self=self.SAFETY_MARGIN_PERCENT * 100,
                 )
 
@@ -110,10 +110,10 @@ class ResourceExhaustionExperiment(ChaosExperiment):
         logger.info(
             "resource_exhaustion.exhausting_ttl_mb_else",
             _self=self.resource_type,
-            self_1=self.exhaustion_percent*100,
-            self_2=self.config.target_service,
-            self_3=self._effective_ttl,
-            value=f', capped to {safe_bytes / 1024 / 1024:.0f}MB' if safe_bytes else '',
+            exhaustion_pct=self.exhaustion_percent * 100,
+            target_service=self.config.target_service,
+            effective_ttl=self._effective_ttl,
+            value=f", capped to {safe_bytes / 1024 / 1024:.0f}MB" if safe_bytes else "",
         )
 
         try:
@@ -125,9 +125,7 @@ class ResourceExhaustionExperiment(ChaosExperiment):
                         "resource_type": self.resource_type,
                         **exhaustion_config,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -233,8 +231,8 @@ class PoolExhaustionExperiment(ChaosExperiment):
         logger.info(
             "pool_exhaustion.injecting_simulated_status_pool",
             _self=self.simulated_status,
-            self_1=self.target_pool,
-            self_2=self._effective_ttl,
+            target_pool=self.target_pool,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -246,9 +244,7 @@ class PoolExhaustionExperiment(ChaosExperiment):
                 "leak_suspected": PoolHealthStatus.LEAK_SUSPECTED,
             }
 
-            health_status = status_map.get(
-                self.simulated_status.lower(), PoolHealthStatus.EXHAUSTED
-            )
+            health_status = status_map.get(self.simulated_status.lower(), PoolHealthStatus.EXHAUSTED)
 
             # Monitor 인스턴스 생성 및 시뮬레이션 설정
             self._monitor_instance = ConnectionPoolMonitor()
@@ -264,9 +260,7 @@ class PoolExhaustionExperiment(ChaosExperiment):
                         "target_pool": self.target_pool,
                         "simulated_status": self.simulated_status,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }

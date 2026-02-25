@@ -392,7 +392,7 @@ class SyntheticLoadGenerator:
         logger.info(
             "synthetic_load.started_generator_experiment_pattern",
             _self=self.target_service,
-            self_1=self.experiment_id,
+            experiment_id=self.experiment_id,
             pattern=config.pattern.value,
             config=config.target_rps,
         )
@@ -423,7 +423,7 @@ class SyntheticLoadGenerator:
         logger.info(
             "synthetic_load.stopped_generator_stats",
             _self=self.experiment_id,
-            self_1=self._stats.to_dict(),
+            stats=self._stats.to_dict(),
         )
 
         return self._stats

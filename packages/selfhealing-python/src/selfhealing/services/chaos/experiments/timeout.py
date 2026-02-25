@@ -39,9 +39,9 @@ class TimeoutExperiment(ChaosExperiment):
         logger.info(
             "timeout.injecting_timeout_delays_rate",
             _self=self.timeout_delay_seconds,
-            self_1=self.config.target_service,
-            self_2=self.config.injection_rate*100,
-            self_3=self._effective_ttl,
+            target_service=self.config.target_service,
+            injection_rate_pct=self.config.injection_rate * 100,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -54,9 +54,7 @@ class TimeoutExperiment(ChaosExperiment):
                         "rate": self.config.injection_rate,
                         "traffic_type": self.config.traffic_type,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }

@@ -332,9 +332,7 @@ class ResilienceReportGenerator:
             budget_status = self._get_error_budget_status()
 
             # 6. Generate recommendations
-            recommendations = self._generate_recommendations(
-                experiments, stats, forensic_summary, grade
-            )
+            recommendations = self._generate_recommendations(experiments, stats, forensic_summary, grade)
 
             # 7. Calculate trends
             trend, wow_change = self._calculate_trends(report_date_str, grade)
@@ -353,9 +351,7 @@ class ResilienceReportGenerator:
                 average_recovery_time_seconds=stats["avg_recovery_time"],
                 max_recovery_time_seconds=stats["max_recovery_time"],
                 error_budget_consumed_percent=budget_status.get("consumed_percent", 0),
-                error_budget_remaining_percent=budget_status.get(
-                    "remaining_percent", 100
-                ),
+                error_budget_remaining_percent=budget_status.get("remaining_percent", 100),
                 experiments=experiments,
                 grade_trend=trend,
                 week_over_week_change=wow_change,
@@ -382,8 +378,8 @@ class ResilienceReportGenerator:
                 "report_generator.generated_report",
                 report_id=report_id,
                 grade=grade,
-                stats=stats['passed'],
-                stats_3=stats['total'],
+                stats=stats["passed"],
+                total=stats["total"],
             )
 
             return report
@@ -406,9 +402,7 @@ class ResilienceReportGenerator:
     # Data Collection
     # =========================================================================
 
-    def _collect_experiment_results(
-        self, report_date: datetime
-    ) -> list[ExperimentSummary]:
+    def _collect_experiment_results(self, report_date: datetime) -> list[ExperimentSummary]:
         """Collect experiment results for the given date."""
         from .scheduler import get_chaos_scheduler
 
@@ -444,16 +438,10 @@ class ResilienceReportGenerator:
                         status=result.status,
                         started_at=result.started_at,
                         duration_seconds=result.duration_seconds,
-                        recovery_time_seconds=result.experiment_result.get(
-                            "recovery_time_seconds", 0
-                        ),
-                        errors_injected=result.experiment_result.get(
-                            "errors_injected", 0
-                        ),
+                        recovery_time_seconds=result.experiment_result.get("recovery_time_seconds", 0),
+                        errors_injected=result.experiment_result.get("errors_injected", 0),
                         sla_breaches=result.experiment_result.get("sla_breaches", 0),
-                        steady_state_passed=result.experiment_result.get(
-                            "steady_state_hypothesis_passed", True
-                        ),
+                        steady_state_passed=result.experiment_result.get("steady_state_hypothesis_passed", True),
                     )
                     experiments.append(summary)
 
@@ -465,18 +453,14 @@ class ResilienceReportGenerator:
 
         return experiments
 
-    def _run_forensic_analysis(
-        self, experiments: list[ExperimentSummary]
-    ) -> dict[str, Any]:
+    def _run_forensic_analysis(self, experiments: list[ExperimentSummary]) -> dict[str, Any]:
         """Run analysis on experiment results (stub - ForensicAdvisor removed)."""
         # ForensicAdvisor has been removed from the system.
         # This method returns empty analysis results.
         return {
             "patterns_detected": [],
             "recommendations_by_service": {},
-            "total_issues_analyzed": len(
-                [e for e in experiments if e.outcome != ExperimentOutcome.PASSED.value]
-            ),
+            "total_issues_analyzed": len([e for e in experiments if e.outcome != ExperimentOutcome.PASSED.value]),
         }
 
     def _get_error_budget_status(self) -> dict[str, Any]:
@@ -504,24 +488,14 @@ class ResilienceReportGenerator:
     # Calculations
     # =========================================================================
 
-    def _calculate_statistics(
-        self, experiments: list[ExperimentSummary]
-    ) -> dict[str, Any]:
+    def _calculate_statistics(self, experiments: list[ExperimentSummary]) -> dict[str, Any]:
         """Calculate summary statistics."""
         total = len(experiments)
-        passed = len(
-            [e for e in experiments if e.outcome == ExperimentOutcome.PASSED.value]
-        )
-        failed = len(
-            [e for e in experiments if e.outcome == ExperimentOutcome.FAILED.value]
-        )
-        skipped = len(
-            [e for e in experiments if e.outcome == ExperimentOutcome.SKIPPED.value]
-        )
+        passed = len([e for e in experiments if e.outcome == ExperimentOutcome.PASSED.value])
+        failed = len([e for e in experiments if e.outcome == ExperimentOutcome.FAILED.value])
+        skipped = len([e for e in experiments if e.outcome == ExperimentOutcome.SKIPPED.value])
 
-        recovery_times = [
-            e.recovery_time_seconds for e in experiments if e.recovery_time_seconds > 0
-        ]
+        recovery_times = [e.recovery_time_seconds for e in experiments if e.recovery_time_seconds > 0]
 
         sla_breaches = sum(e.sla_breaches for e in experiments)
 
@@ -532,9 +506,7 @@ class ResilienceReportGenerator:
             "skipped": skipped,
             "degraded": total - passed - failed - skipped,
             "pass_rate": (passed / total * 100) if total > 0 else 100.0,
-            "avg_recovery_time": (
-                sum(recovery_times) / len(recovery_times) if recovery_times else 0
-            ),
+            "avg_recovery_time": (sum(recovery_times) / len(recovery_times) if recovery_times else 0),
             "max_recovery_time": max(recovery_times) if recovery_times else 0,
             "sla_breaches": sla_breaches,
         }
@@ -591,9 +563,7 @@ class ResilienceReportGenerator:
 
         return grade.value, explanation
 
-    def _calculate_trends(
-        self, current_date: str, current_grade: str
-    ) -> tuple[str, float]:
+    def _calculate_trends(self, current_date: str, current_grade: str) -> tuple[str, float]:
         """Calculate grade trends."""
         grade_values = {"A": 5, "B": 4, "C": 3, "D": 2, "F": 1}
 
@@ -669,15 +639,10 @@ class ResilienceReportGenerator:
             )
 
         # Failed experiment recommendations
-        failed_services = set(
-            e.target_service
-            for e in experiments
-            if e.outcome == ExperimentOutcome.FAILED.value
-        )
+        failed_services = set(e.target_service for e in experiments if e.outcome == ExperimentOutcome.FAILED.value)
         for service in failed_services:
             recommendations.append(
-                f"Service '{service}' failed chaos experiments. "
-                "Investigate service resilience and retry mechanisms."
+                f"Service '{service}' failed chaos experiments. " "Investigate service resilience and retry mechanisms."
             )
 
         # Forensic recommendations
@@ -744,7 +709,7 @@ class ResilienceReportGenerator:
         logger.debug(
             "report_generator.metrics_recording_skipped",
             report=report.grade,
-            report_1=report.total_experiments,
+            total_experiments=report.total_experiments,
         )
 
     def _record_audit(self, report: DailyResilienceReport) -> None:
@@ -752,10 +717,10 @@ class ResilienceReportGenerator:
         logger.info(
             "resilience_report_audit.event",
             report=report.report_id,
-            report_1=report.report_date,
-            report_2=report.grade,
-            report_3=report.total_experiments,
-            report_4=report.passed_experiments,
+            report_date=report.report_date,
+            grade=report.grade,
+            total_experiments=report.total_experiments,
+            passed_experiments=report.passed_experiments,
         )
 
     def _send_notifications(self, report: DailyResilienceReport, trend: str) -> None:
@@ -768,10 +733,7 @@ class ResilienceReportGenerator:
                 return
 
             # Notify on critical grade
-            if (
-                self._config.notify_on_critical_grade
-                and report.grade == ResilienceGrade.F.value
-            ):
+            if self._config.notify_on_critical_grade and report.grade == ResilienceGrade.F.value:
                 adapter.alert(
                     severity="critical",
                     title="Daily Resilience Report: CRITICAL",
@@ -795,8 +757,7 @@ class ResilienceReportGenerator:
                         f"Resilience grade is declining.\n"
                         f"Current: {report.grade}\n"
                         f"Trend: {trend}\n\n"
-                        f"Recommendations:\n"
-                        + "\n".join(f"- {r}" for r in report.recommendations[:3])
+                        f"Recommendations:\n" + "\n".join(f"- {r}" for r in report.recommendations[:3])
                     ),
                     tags=["chaos", "resilience", "daily-report"],
                 )
@@ -864,15 +825,9 @@ class ResilienceReportGenerator:
             backend = get_state_backend()
 
             # Only keep recent reports
-            cutoff = (now() - timedelta(days=self._config.keep_reports_days)).strftime(
-                "%Y-%m-%d"
-            )
+            cutoff = (now() - timedelta(days=self._config.keep_reports_days)).strftime("%Y-%m-%d")
 
-            data = {
-                rid: r.to_dict()
-                for rid, r in self._reports.items()
-                if r.report_date >= cutoff
-            }
+            data = {rid: r.to_dict() for rid, r in self._reports.items() if r.report_date >= cutoff}
             backend.set("chaos:resilience_reports", data)
         except Exception as e:
             logger.warning(
@@ -901,18 +856,10 @@ class ResilienceReportGenerator:
                         failed_experiments=rdata.get("failed_experiments", 0),
                         skipped_experiments=rdata.get("skipped_experiments", 0),
                         total_sla_breaches=rdata.get("total_sla_breaches", 0),
-                        average_recovery_time_seconds=rdata.get(
-                            "average_recovery_time_seconds", 0
-                        ),
-                        max_recovery_time_seconds=rdata.get(
-                            "max_recovery_time_seconds", 0
-                        ),
-                        error_budget_consumed_percent=rdata.get(
-                            "error_budget_consumed_percent", 0
-                        ),
-                        error_budget_remaining_percent=rdata.get(
-                            "error_budget_remaining_percent", 100
-                        ),
+                        average_recovery_time_seconds=rdata.get("average_recovery_time_seconds", 0),
+                        max_recovery_time_seconds=rdata.get("max_recovery_time_seconds", 0),
+                        error_budget_consumed_percent=rdata.get("error_budget_consumed_percent", 0),
+                        error_budget_remaining_percent=rdata.get("error_budget_remaining_percent", 100),
                         grade_trend=rdata.get("grade_trend", ""),
                         week_over_week_change=rdata.get("week_over_week_change", 0),
                         recommendations=rdata.get("recommendations", []),

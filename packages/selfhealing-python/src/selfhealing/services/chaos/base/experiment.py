@@ -138,7 +138,7 @@ class ChaosExperiment(abc.ABC):
         logger.debug(
             "chaos_experiment.monotonic_timer_started",
             _self=self.experiment_id,
-            self_1=self._effective_ttl,
+            effective_ttl=self._effective_ttl,
         )
 
     def _is_expired_monotonic(self) -> bool:
@@ -212,7 +212,7 @@ class ChaosExperiment(abc.ABC):
             logger.warning(
                 "chaos_experiment.cannot_complete_recovery_monitoring",
                 _self=self.experiment_id,
-                self_1=self.status,
+                status=self.status,
             )
             return
 
@@ -270,7 +270,7 @@ class ChaosExperiment(abc.ABC):
             logger.warning(
                 "chaos_experiment.cannot_transition_status",
                 _self=self.experiment_id,
-                self_1=self.status,
+                status=self.status,
             )
             return
 
@@ -291,7 +291,7 @@ class ChaosExperiment(abc.ABC):
         logger.info(
             "chaos_experiment.transitioned_grace_period",
             _self=self.experiment_id,
-            self_1=self.config.grace_period_seconds,
+            grace_period_seconds=self.config.grace_period_seconds,
         )
 
     def _verify_canary_recovery(self) -> dict[str, Any]:
@@ -466,8 +466,8 @@ class ChaosExperiment(abc.ABC):
         logger.info(
             "dry_run.inject_chaos_ttl_expires",
             _self=self.config.target_service,
-            self_1=self._effective_ttl,
-            self_2=self._expires_at,
+            effective_ttl=self._effective_ttl,
+            expires_at=self._expires_at,
         )
 
         duration = min(5, self.config.duration_seconds or self.default_duration_seconds)

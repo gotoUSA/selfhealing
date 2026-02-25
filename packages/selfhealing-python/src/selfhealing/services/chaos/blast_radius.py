@@ -900,8 +900,8 @@ class BlastRadiusManager:
             logger.info(
                 "blast_radius.approval_decision_recorded",
                 request=request.experiment_id,
-                request_1=request.status,
-                request_2=request.approved_by,
+                status=request.status,
+                approved_by=request.approved_by,
             )
         except Exception as e:
             logger.warning(

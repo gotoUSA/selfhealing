@@ -59,7 +59,7 @@ class CertificateExpiryExperiment(ChaosExperiment):
         logger.warning(
             "certificate_expiry.simulating_expiry_days_mtls",
             _self=self.days_until_expiry,
-            self_1=self.check_mtls,
+            check_mtls=self.check_mtls,
         )
 
         try:
@@ -71,9 +71,7 @@ class CertificateExpiryExperiment(ChaosExperiment):
                         "days_until_expiry": self.days_until_expiry,
                         "check_mtls": self.check_mtls,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -152,8 +150,8 @@ class ClockSkewExperiment(ChaosExperiment):
         logger.info(
             "clock_skew.injecting_skew_jwt_cache",
             _self=self.skew_seconds,
-            self_1=self.affect_jwt,
-            self_2=self.affect_cache,
+            affect_jwt=self.affect_jwt,
+            affect_cache=self.affect_cache,
         )
 
         try:
@@ -166,9 +164,7 @@ class ClockSkewExperiment(ChaosExperiment):
                         "affect_jwt": self.affect_jwt,
                         "affect_cache": self.affect_cache,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -245,8 +241,8 @@ class DNSFailureExperiment(ChaosExperiment):
         """Inject DNS failure simulation."""
         logger.warning(
             "dns_failure.injecting_dns_failure",
-            _self=self.failure_rate*100,
-            self_1=self.config.target_service,
+            _self=self.failure_rate * 100,
+            target_service=self.config.target_service,
         )
 
         try:
@@ -259,9 +255,7 @@ class DNSFailureExperiment(ChaosExperiment):
                         "affected_domains": self.affected_domains,
                         "delay_seconds": self.delay_seconds,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -339,8 +333,8 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
         logger.info(
             "simulated_disk_io.injecting_ms_latency_errors",
             _self=self.latency_ms,
-            self_1=self.error_rate*100,
-            self_2=self.config.target_service,
+            error_rate_pct=self.error_rate * 100,
+            target_service=self.config.target_service,
         )
 
         try:
@@ -353,9 +347,7 @@ class SimulatedDiskIOExperiment(ChaosExperiment):
                         "error_rate": self.error_rate,
                         "affected_paths": self.affected_paths,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -433,8 +425,8 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
         logger.warning(
             "simulated_tls.injecting_failures_rate",
             _self=self.failure_type,
-            self_1=self.failure_rate*100,
-            self_2=self.config.target_service,
+            failure_rate_pct=self.failure_rate * 100,
+            target_service=self.config.target_service,
         )
 
         try:
@@ -447,9 +439,7 @@ class SimulatedTLSFailureExperiment(ChaosExperiment):
                         "failure_type": self.failure_type,
                         "delay_ms": self.delay_ms,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }

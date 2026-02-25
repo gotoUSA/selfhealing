@@ -46,9 +46,9 @@ class PacketLossExperiment(ChaosExperiment):
         """Inject packet loss with TTL."""
         logger.info(
             "packet_loss.injecting_packet_loss_ttl",
-            _self=self.loss_rate*100,
-            self_1=self.config.target_service,
-            self_2=self._effective_ttl,
+            _self=self.loss_rate * 100,
+            target_service=self.config.target_service,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -60,9 +60,7 @@ class PacketLossExperiment(ChaosExperiment):
                         "loss_rate": self.loss_rate,
                         "traffic_type": self.config.traffic_type,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -136,8 +134,8 @@ class ConnectionResetExperiment(ChaosExperiment):
         logger.info(
             "connection_reset.injecting_connection_resets_probability",
             _self=self.config.target_service,
-            self_1=self.reset_probability*100,
-            self_2=self._effective_ttl,
+            reset_probability_pct=self.reset_probability * 100,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -150,9 +148,7 @@ class ConnectionResetExperiment(ChaosExperiment):
                         "reset_probability": self.reset_probability,
                         "traffic_type": self.config.traffic_type,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -243,7 +239,7 @@ class NetworkBlackholeExperiment(ChaosExperiment):
             "network_blackhole.blackholing_endpoints_ttl",
             count=len(self.affected_endpoints),
             _self=self.duration_seconds,
-            self_2=self._effective_ttl,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -254,9 +250,7 @@ class NetworkBlackholeExperiment(ChaosExperiment):
                         "affected_endpoints": self.affected_endpoints,
                         "duration_seconds": self.duration_seconds,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -359,9 +353,9 @@ class ConnectionPartitionExperiment(ChaosExperiment):
         logger.info(
             "connection_partition.injecting_simulated_partition_ttl",
             _self=self.partition_type,
-            self_1=self.db_available,
-            self_2=self.cache_available,
-            self_3=self._effective_ttl,
+            db_available=self.db_available,
+            cache_available=self.cache_available,
+            effective_ttl=self._effective_ttl,
         )
 
         try:
@@ -387,9 +381,7 @@ class ConnectionPartitionExperiment(ChaosExperiment):
                         "db_available": self.db_available,
                         "cache_available": self.cache_available,
                         "experiment_id": self.experiment_id,
-                        "expires_at": (
-                            self._expires_at.isoformat() if self._expires_at else ""
-                        ),
+                        "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
                         "ttl_seconds": self._effective_ttl,
                     }
                 }
@@ -398,7 +390,7 @@ class ConnectionPartitionExperiment(ChaosExperiment):
             logger.info(
                 "connection_partition.partition_simulation_set",
                 partition_state=partition_state.is_partial_partition,
-                partition_state_1=partition_state.is_full_partition,
+                is_full_partition=partition_state.is_full_partition,
             )
             return True
 

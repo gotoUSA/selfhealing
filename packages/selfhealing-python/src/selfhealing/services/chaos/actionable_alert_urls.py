@@ -77,16 +77,14 @@ class ChaosActionableAlertUrlBuilder:
 
     def __init__(self):
         """환경변수에서 기본 URL 로드."""
-        self._admin_base_url = os.getenv(
-            "CHAOS_ADMIN_BASE_URL", "/api/self-healing/chaos/"
-        )
+        self._admin_base_url = os.getenv("CHAOS_ADMIN_BASE_URL", "/api/self-healing/chaos/")
         self._dashboard_base_url = os.getenv("CHAOS_DASHBOARD_URL", "")
         self._runbook_base_url = os.getenv("CHAOS_RUNBOOK_URL", "")
 
         logger.debug(
             "chaos_alert_url_builder.initialized",
             value=bool(self._admin_base_url),
-            value_1=bool(self._dashboard_base_url),
+            dashboard_configured=bool(self._dashboard_base_url),
         )
 
     def build_experiment_alert_urls(
