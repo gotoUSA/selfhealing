@@ -137,10 +137,10 @@ class CgroupResourceMonitor:
         logger.debug(
             "cgroup_resource_monitor.mb_mb_mb_safe",
             value=max_bytes / 1024 / 1024,
-            value_1=current_bytes / 1024 / 1024,
-            value_2=available / 1024 / 1024,
-            value_3=safety_margin * 100,
-            value_4=safe_available / 1024 / 1024,
+            current_mb=current_bytes / 1024 / 1024,
+            available_mb=available / 1024 / 1024,
+            safety_margin_pct=safety_margin * 100,
+            safe_available_mb=safe_available / 1024 / 1024,
         )
 
         return max(0, safe_available)
@@ -206,7 +206,7 @@ class CgroupResourceMonitor:
         logger.warning(
             "cgroup_resource_monitor.requested_mb_exceeds_safe",
             value=requested_bytes / 1024 / 1024,
-            value_1=available / 1024 / 1024,
+            available_mb=available / 1024 / 1024,
         )
         return False, available
 
@@ -283,8 +283,8 @@ class CgroupResourceMonitor:
             logger.debug(
                 "cgroup_resource_monitor.oom_prediction_mb_mb",
                 value=current_level / 1024 / 1024,
-                value_1=safe_limit / 1024 / 1024,
-                value_2=trend_slope / 1024 / 1024,
+                safe_limit_mb=safe_limit / 1024 / 1024,
+                trend_slope_mb=trend_slope / 1024 / 1024,
                 minutes_to_oom=minutes_to_oom,
             )
 

@@ -164,9 +164,9 @@ def drain_on_startup(
     logger.info(
         "drain_on_startup.complete",
         result=result.drained,
-        result_1=result.failed,
-        result_2=result.skipped,
-        result_3=result.duration_seconds,
+        failed=result.failed,
+        skipped=result.skipped,
+        duration_seconds=result.duration_seconds,
     )
 
     return result
@@ -249,8 +249,8 @@ async def async_drain_on_startup(
     logger.info(
         "async_drain_on_startup.complete",
         result=result.drained,
-        result_1=result.failed,
-        result_2=result.skipped,
+        failed=result.failed,
+        skipped=result.skipped,
     )
 
     return result

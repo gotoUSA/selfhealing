@@ -234,7 +234,7 @@ class DiskPersistentBuffer:
             "disk_buffer.initialized",
             db_path=db_path,
             _self=self._sequence,
-            self_2=self._db_name,
+            db_name=self._db_name,
         )
 
     def _quarantine_corrupt_db(self, db_path: Path) -> bool:

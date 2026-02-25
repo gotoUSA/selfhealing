@@ -365,7 +365,7 @@ class CrossClusterAuditLinker:
             logger.info(
                 "cross_cluster_audit_linker.submitted_global_global_hash",
                 anchor=anchor.cluster_id,
-                anchor_1=anchor.anchor_date,
+                anchor_date=anchor.anchor_date,
                 global_anchor=global_anchor.global_hash[:16],
             )
             return True

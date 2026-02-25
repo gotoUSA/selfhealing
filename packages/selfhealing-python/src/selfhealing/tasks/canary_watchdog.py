@@ -251,8 +251,8 @@ class RolloutWatchdog:
             logger.info(
                 "watchdog.scan_complete",
                 result=result.scanned_count,
-                result_1=result.zombie_count,
-                result_2=result.rollback_count,
+                zombie_count=result.zombie_count,
+                rollback_count=result.rollback_count,
             )
 
         except Exception as e:

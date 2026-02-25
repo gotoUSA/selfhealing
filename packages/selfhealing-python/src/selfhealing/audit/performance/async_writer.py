@@ -93,7 +93,7 @@ class AsyncAuditWriter:
         logger.info(
             "async_audit_writer.stopped_queued_written",
             _self=self._entries_queued,
-            self_1=self._entries_written,
+            entries_written=self._entries_written,
         )
 
     def write_async(

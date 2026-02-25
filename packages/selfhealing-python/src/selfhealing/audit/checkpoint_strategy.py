@@ -676,7 +676,7 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
                 "kafka_redis_checkpoint.redis_saved",
                 namespace=namespace,
                 data=data.wal_sequence,
-                data_2=data.kafka_offset,
+                kafka_offset=data.kafka_offset,
             )
         except Exception as e:
             logger.exception(

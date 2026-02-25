@@ -237,9 +237,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
             domain=domain,
         )
 
-        task_id = (
-            getattr(self.request, "id", None) if hasattr(self, "request") else None
-        )
+        task_id = getattr(self.request, "id", None) if hasattr(self, "request") else None
 
         # 1. RuntimeConfig에서 Track 3 설정 로드
         config = self._get_replay_automation_config()
@@ -289,9 +287,9 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
 
             logger.info(
                 "traffic_aware_replay.completed",
-                result=result['total'],
-                result_1=result['success'],
-                result_2=result['failed'],
+                result=result["total"],
+                success=result["success"],
+                failed=result["failed"],
             )
 
             final_result = {
@@ -340,9 +338,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
                 total=result.get("total", 0),
                 success_count=result.get("success", 0),
                 failed_count=result.get("failed", 0),
-                skipped_reason=(
-                    result.get("reason") if result.get("status") == "skipped" else None
-                ),
+                skipped_reason=(result.get("reason") if result.get("status") == "skipped" else None),
                 health_checks=result.get("checks"),
                 error_message=error_message,
                 task_id=task_id,

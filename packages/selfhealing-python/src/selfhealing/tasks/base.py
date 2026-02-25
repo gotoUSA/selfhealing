@@ -157,9 +157,7 @@ class BaseNotifyingTask:
         self._send_pre_notification(*args, **kwargs)
         return True
 
-    def _on_post_execute(
-        self, result: dict[str, Any], *args: Any, **kwargs: Any
-    ) -> None:
+    def _on_post_execute(self, result: dict[str, Any], *args: Any, **kwargs: Any) -> None:
         """Post-execution hook for result notifications."""
         policy = self.notification_policy
 
@@ -205,7 +203,7 @@ class BaseNotifyingTask:
                     "celery_task.alert_suppressed_threshold",
                     policy=policy.threshold_field,
                     value=value,
-                    policy_2=policy.threshold,
+                    threshold=policy.threshold,
                 )
                 return False
 
@@ -364,11 +362,7 @@ class BaseNotifyingTask:
 
             service.send_alert(
                 title=f"[Self-Healing] 승인 필요: {self.name}",
-                message=(
-                    f"고위험 작업 실행 승인이 필요합니다.\n"
-                    f"작업: {self.name}\n"
-                    f"인자: {args}, {kwargs}"
-                ),
+                message=(f"고위험 작업 실행 승인이 필요합니다.\n" f"작업: {self.name}\n" f"인자: {args}, {kwargs}"),
                 severity="critical",
                 channels=self.notification_policy.channels + ["email"],
                 metadata={
@@ -563,7 +557,4 @@ def reset_cooldowns() -> None:
 
 def get_cooldown_status() -> dict[str, str]:
     """Get current cooldown status (for debugging)."""
-    return {
-        key: value.isoformat()
-        for key, value in BaseNotifyingTask._last_alert_times.items()
-    }
+    return {key: value.isoformat() for key, value in BaseNotifyingTask._last_alert_times.items()}

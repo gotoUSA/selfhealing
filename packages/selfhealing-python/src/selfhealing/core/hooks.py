@@ -268,8 +268,8 @@ class BypassRegistry:
         logger.info(
             "bypass_registry.bypass_granted",
             result=result.hook_name,
-            result_1=result.reason,
-            result_2=result.request_path,
+            reason=result.reason,
+            request_path=result.request_path,
         )
 
         # Audit system integration (lazy init)

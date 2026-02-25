@@ -142,8 +142,8 @@ class BackpressureTaskMixin:
         logger.info(
             "backpressure_task_mixin.scheduling_retry",
             _self=self.backpressure_retry_countdown,
-            self_1=self._backpressure_retry_count,
-            self_2=self.backpressure_max_retries,
+            retry_count=self._backpressure_retry_count,
+            max_retries=self.backpressure_max_retries,
         )
 
         # Celery Task의 retry 메서드 호출 (Celery Task를 상속한 경우)

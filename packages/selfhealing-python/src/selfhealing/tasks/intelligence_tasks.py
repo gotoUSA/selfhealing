@@ -235,9 +235,7 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
             stuck_patterns = self._extract_patterns(results_by_action)
 
             # 권장 사항 생성
-            recommendations = self._generate_recommendations(
-                results_by_action, suspicious_count
-            )
+            recommendations = self._generate_recommendations(results_by_action, suspicious_count)
 
             logger.info(
                 "analyze_forensic_pending.completed",
@@ -279,9 +277,7 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
                 )
         return patterns
 
-    def _generate_recommendations(
-        self, results_by_action: dict[str, int], suspicious_count: int
-    ) -> list:
+    def _generate_recommendations(self, results_by_action: dict[str, int], suspicious_count: int) -> list:
         """권장 사항 생성."""
         recommendations = []
 
@@ -313,11 +309,7 @@ class AnalyzeForensicPendingTask(BaseNotifyingTask):
 
         patterns_count = len(result.get("stuck_patterns", []))
 
-        return (
-            f"🔍 포렌식 분석 결과\n"
-            f"• 의심 항목: {result['suspicious_count']}건\n"
-            f"• 패턴: {patterns_count}개 발견"
-        )
+        return f"🔍 포렌식 분석 결과\n" f"• 의심 항목: {result['suspicious_count']}건\n" f"• 패턴: {patterns_count}개 발견"
 
 
 # =============================================================================
@@ -619,9 +611,7 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
 
             # 승인/거부 cutoff분 지난 항목 필터링 (Settings에서 조회)
             settings = CheckSLADriftTask._get_intelligence_settings()
-            cutoff = get_now() - timedelta(
-                minutes=settings.reconciliation_cutoff_minutes
-            )
+            cutoff = get_now() - timedelta(minutes=settings.reconciliation_cutoff_minutes)
 
             for shadow in service.get_all_shadow_budgets():
                 # 이미 검증된 항목 스킵
@@ -680,11 +670,7 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
 
             # 오차율 계산
             if shadow.estimated_errors > 0:
-                variance_percent = abs(
-                    (shadow.estimated_errors - actual_errors)
-                    / shadow.estimated_errors
-                    * 100
-                )
+                variance_percent = abs((shadow.estimated_errors - actual_errors) / shadow.estimated_errors * 100)
             else:
                 variance_percent = 0.0 if actual_errors == 0 else 100.0
 
@@ -698,7 +684,7 @@ class VerifyReconciliationAccuracyTask(BaseNotifyingTask):
             logger.debug(
                 "verify_reconciliation_accuracy.verified",
                 shadow=shadow.calculation_id,
-                shadow_1=shadow.estimated_errors,
+                estimated_errors=shadow.estimated_errors,
                 actual_errors=actual_errors,
                 variance_percent=variance_percent,
             )

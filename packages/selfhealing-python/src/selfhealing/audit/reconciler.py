@@ -79,16 +79,10 @@ class ReconcilerConfig:
 
         s = settings or get_audit_reconciler_settings()
         return cls(
-            check_interval_seconds=overrides.get(
-                "check_interval_seconds", s.check_interval_seconds
-            ),
-            check_window_seconds=overrides.get(
-                "check_window_seconds", s.check_window_seconds
-            ),
+            check_interval_seconds=overrides.get("check_interval_seconds", s.check_interval_seconds),
+            check_window_seconds=overrides.get("check_window_seconds", s.check_window_seconds),
             resend_batch_size=overrides.get("resend_batch_size", s.resend_batch_size),
-            max_resend_attempts=overrides.get(
-                "max_resend_attempts", s.max_resend_attempts
-            ),
+            max_resend_attempts=overrides.get("max_resend_attempts", s.max_resend_attempts),
             alert_threshold=overrides.get("alert_threshold", s.alert_threshold),
         )
 
@@ -348,7 +342,7 @@ class AuditReconciler:
                 logger.debug(
                     "audit_reconciler.check_completed",
                     result=result.missing_count,
-                    result_1=result.resent_count,
+                    resent_count=result.resent_count,
                 )
 
             except Exception as e:
@@ -389,9 +383,7 @@ class AuditReconciler:
                 return result
 
             # 누락 엔트리 식별
-            missing_entries = self._identify_missing_entries(
-                recent_entries, adapter, result
-            )
+            missing_entries = self._identify_missing_entries(recent_entries, adapter, result)
             result.missing_count = len(missing_entries)
 
             # 누락 콜백 호출

@@ -114,8 +114,8 @@ class HashChainReconciler:
             logger.info(
                 "reconciler.completed_merged_entries_seq",
                 merged_count=merged_count,
-                result=result['new_sequence_start'],
-                result_2=result['new_sequence_end'],
+                result=result["new_sequence_start"],
+                new_sequence_end=result["new_sequence_end"],
             )
 
             return result
@@ -296,11 +296,7 @@ class HashChainReconciler:
             Statistics dictionary
         """
         return {
-            "last_reconciliation": (
-                self._last_reconciliation.isoformat()
-                if self._last_reconciliation
-                else None
-            ),
+            "last_reconciliation": (self._last_reconciliation.isoformat() if self._last_reconciliation else None),
             "log_dir": str(self._log_dir),
         }
 

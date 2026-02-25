@@ -190,9 +190,7 @@ class RuntimeFeedbackLoop:
                 "runtime_feedback.paused",
                 reason=reason,
             )
-            self._send_alert(
-                "feedback_loop_paused", f"RuntimeFeedback 일시 정지됨: {reason}"
-            )
+            self._send_alert("feedback_loop_paused", f"RuntimeFeedback 일시 정지됨: {reason}")
             return True
 
     def resume(self) -> bool:
@@ -290,13 +288,11 @@ class RuntimeFeedbackLoop:
     ) -> AdjustmentResult | None:
         """단일 조정 적용"""
         # 1. 안전 한계 검증
-        if not self.safety_bounds.is_within_bounds(
-            decision.parameter, decision.suggested_value
-        ):
+        if not self.safety_bounds.is_within_bounds(decision.parameter, decision.suggested_value):
             logger.warning(
                 "runtime_feedback.rejected_safety_bounds",
                 decision=decision.parameter,
-                decision_1=decision.suggested_value,
+                suggested_value=decision.suggested_value,
             )
             return None
 
@@ -306,9 +302,7 @@ class RuntimeFeedbackLoop:
 
         # 3. 설정 적용
         try:
-            success = self.config_applier.apply(
-                decision.parameter, decision.suggested_value
-            )
+            success = self.config_applier.apply(decision.parameter, decision.suggested_value)
         except Exception as e:
             logger.exception(
                 "runtime_feedback.apply_failed",
@@ -346,9 +340,7 @@ class RuntimeFeedbackLoop:
         self._consecutive_failures = 0
         return result
 
-    def _schedule_health_check(
-        self, adjustments: list[AdjustmentResult], pre_metrics: dict[str, float]
-    ):
+    def _schedule_health_check(self, adjustments: list[AdjustmentResult], pre_metrics: dict[str, float]):
         """
         조정 후 헬스체크 스케줄링
 
@@ -373,9 +365,7 @@ class RuntimeFeedbackLoop:
         thread = threading.Thread(target=_health_check, daemon=True)
         thread.start()
 
-    def _detect_degradation(
-        self, pre_metrics: dict[str, float], post_metrics: dict[str, float]
-    ) -> bool:
+    def _detect_degradation(self, pre_metrics: dict[str, float], post_metrics: dict[str, float]) -> bool:
         """
         메트릭 저하 감지
 
@@ -423,16 +413,14 @@ class RuntimeFeedbackLoop:
                 continue
 
             try:
-                success = self.config_applier.rollback(
-                    result.parameter, result.old_value
-                )
+                success = self.config_applier.rollback(result.parameter, result.old_value)
 
                 if success:
                     logger.info(
                         "runtime_feedback.rolled_back",
                         result=result.parameter,
-                        result_1=result.new_value,
-                        result_2=result.old_value,
+                        new_value=result.new_value,
+                        old_value=result.old_value,
                     )
                     self._record_rollback_audit(result)
                     self._send_rollback_alert(result)
@@ -453,9 +441,7 @@ class RuntimeFeedbackLoop:
             if self._last_rollback_time is None:
                 return False
 
-            elapsed = (
-                datetime.now(timezone.utc) - self._last_rollback_time
-            ).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - self._last_rollback_time).total_seconds()
             return elapsed < self.POST_ROLLBACK_COOLDOWN
 
     def _record_audit(self, result: AdjustmentResult):
@@ -534,8 +520,7 @@ class RuntimeFeedbackLoop:
         """롤백 알림"""
         self._send_alert(
             "auto_rollback",
-            f"🔄 자동 롤백: {result.parameter} {result.new_value} → {result.old_value} "
-            f"(사유: 메트릭 저하 감지)",
+            f"🔄 자동 롤백: {result.parameter} {result.new_value} → {result.old_value} " f"(사유: 메트릭 저하 감지)",
         )
 
     def _send_alert(self, alert_type: str, message: str):
@@ -582,9 +567,7 @@ class RuntimeFeedbackLoop:
                 "consecutive_failures": self._consecutive_failures,
                 "in_rollback_cooldown": self._is_in_rollback_cooldown(),
                 "adjustment_count": len(self._adjustment_history),
-                "last_adjustments": [
-                    self._result_to_dict(r) for r in self._adjustment_history[-5:]
-                ],
+                "last_adjustments": [self._result_to_dict(r) for r in self._adjustment_history[-5:]],
             }
 
     def manual_rollback(self, parameter: str) -> bool:

@@ -63,9 +63,9 @@ def cleanup_xtest_artifacts() -> dict[str, Any]:
         logger.info(
             "x_test_cleanup_task.completed",
             result=result.sessions_cleaned,
-            result_1=result.cb_states_restored,
-            result_2=result.dlq_entries_purged,
-            result_3=result.idempotency_keys_cleared,
+            cb_states_restored=result.cb_states_restored,
+            dlq_entries_purged=result.dlq_entries_purged,
+            idempotency_keys_cleared=result.idempotency_keys_cleared,
         )
 
         return result.to_dict()

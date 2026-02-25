@@ -169,8 +169,8 @@ def log_env_snapshot_to_audit() -> bool:
             metric_count.set(snapshot["count"])
         logger.info(
             "env_audit.snapshot_recorded",
-            snapshot=snapshot['count'],
-            snapshot_1=snapshot['hash'],
+            snapshot=snapshot["count"],
+            snapshot_hash=snapshot["hash"],
         )
         return True
 
@@ -179,9 +179,7 @@ def log_env_snapshot_to_audit() -> bool:
     fallback_success = _log_to_fallback(snapshot)
 
     # Always emit critical log with hash (for syslog/stdout capture)
-    _emit_critical_log(
-        snapshot, primary_success=False, fallback_success=fallback_success
-    )
+    _emit_critical_log(snapshot, primary_success=False, fallback_success=fallback_success)
 
     # Update metrics
     if metric_recorded:
@@ -259,7 +257,7 @@ def _log_to_fallback(snapshot: dict[str, Any]) -> bool:
         logger.warning(
             "env_audit.fallback_recorded",
             fallback_path=fallback_path,
-            snapshot=snapshot['hash'],
+            snapshot=snapshot["hash"],
         )
         return True
     except Exception as e:
@@ -285,8 +283,8 @@ def _emit_critical_log(
     logger.critical(
         "env_audit.snapshot",
         status=status,
-        snapshot=snapshot['hash'],
-        snapshot_2=snapshot['count'],
+        snapshot=snapshot["hash"],
+        snapshot_count=snapshot["count"],
         primary_success=primary_success,
         fallback_success=fallback_success,
     )

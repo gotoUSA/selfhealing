@@ -362,7 +362,7 @@ class LeaderScheduler:
             logger.info(
                 "scheduler.작업_완료",
                 job=job.name,
-                job_1=job.run_count,
+                run_count=job.run_count,
             )
 
         except Exception as e:

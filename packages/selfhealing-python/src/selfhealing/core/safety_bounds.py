@@ -290,8 +290,8 @@ class SafetyBounds:
                     "safety_bounds.updated_bounds",
                     parameter=parameter,
                     new_bound=new_bound.min_value,
-                    new_bound_2=new_bound.max_value,
-                    new_bound_3=new_bound.max_change_per_cycle,
+                    max_value=new_bound.max_value,
+                    max_change_per_cycle=new_bound.max_change_per_cycle,
                 )
                 return True
             except Exception as e:

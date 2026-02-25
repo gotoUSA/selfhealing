@@ -319,11 +319,11 @@ class AuditLogger:
 
         logger.info(
             "audit.event",
-            change=change.get('action', 'unknown').upper(),
-            change_1=change.get('config_type', ''),
-            change_2=change.get('config_key', ''),
-            actor=actor.get('user', 'system'),
-            actor_4=actor.get('ip_address', 'unknown'),
+            change=change.get("action", "unknown").upper(),
+            config_type=change.get("config_type", ""),
+            config_key=change.get("config_key", ""),
+            actor=actor.get("user", "system"),
+            ip_address=actor.get("ip_address", "unknown"),
         )
 
     def _generate_batch_id(self) -> str:

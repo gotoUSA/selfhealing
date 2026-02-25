@@ -285,7 +285,7 @@ class RedisLeaderElector(LeaderElector):
                 logger.info(
                     "leader_elector.리더_획득_성공",
                     _self=self._resource_name,
-                    self_1=self._fencing_token,
+                    fencing_token=self._fencing_token,
                 )
                 return True
             return False

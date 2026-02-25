@@ -212,7 +212,7 @@ class AuditSyncWorker:
         logger.info(
             "audit_sync_worker.initialized",
             _self=self._config.sync_interval_seconds,
-            self_1=self._config.batch_size,
+            batch_size=self._config.batch_size,
         )
 
     @classmethod

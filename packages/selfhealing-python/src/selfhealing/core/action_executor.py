@@ -187,11 +187,7 @@ class ActionExecutor:
                 log_intervention_evaluated(
                     service_name=action.target,
                     allowed=should_execute,
-                    reason=(
-                        ReasonCode.INTERVENTION_ALLOWED
-                        if should_execute
-                        else ReasonCode.POLICY_CONSTRAINT_ACTIVE
-                    ),
+                    reason=(ReasonCode.INTERVENTION_ALLOWED if should_execute else ReasonCode.POLICY_CONSTRAINT_ACTIVE),
                 )
                 decision_logged = True
             except Exception as e:
@@ -246,7 +242,7 @@ class ActionExecutor:
             logger.info(
                 "action_executor.executed",
                 action=action.name,
-                action_1=action.target,
+                target=action.target,
                 mode=mode.mode.value,
             )
             return ActionResult(
@@ -265,7 +261,7 @@ class ActionExecutor:
             logger.exception(
                 "action_executor.failed",
                 action=action.name,
-                action_1=action.target,
+                target=action.target,
                 error=e,
             )
             return ActionResult(
@@ -293,9 +289,9 @@ class ActionExecutor:
         logger.info(
             "action_executor.execute",
             action=action.name,
-            action_1=action.target,
+            target=action.target,
             mode=mode.mode.value,
-            action_3=action.params,
+            params=action.params,
         )
         return ActionResult(
             action_id=action.action_id,

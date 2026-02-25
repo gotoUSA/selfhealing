@@ -169,7 +169,7 @@ class HashChainCircuitBreaker:
         logger.warning(
             "circuitbreaker_open_failures",
             _self=self._name,
-            self_1=self._failure_count,
+            failure_count=self._failure_count,
         )
 
     def _transition_to_closed(self) -> None:

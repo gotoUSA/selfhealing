@@ -69,7 +69,7 @@ class TieredRedisProvider:
         logger.debug(
             "tiered_redis_provider.initialized",
             _self=self._local_url,
-            self_1=self._global_url,
+            global_url=self._global_url,
         )
 
     def get_redis(self, scope: RedisScope = RedisScope.LOCAL) -> Any:

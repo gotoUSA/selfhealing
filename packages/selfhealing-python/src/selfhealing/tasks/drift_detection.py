@@ -135,14 +135,14 @@ class SLADriftDetector:
                     results["warnings"].append(domain_result["warning"])
                     logger.warning(
                         "sla_drift_warning",
-                        domain_result=domain_result['warning']['message'],
+                        domain_result=domain_result["warning"]["message"],
                     )
 
             if results["warnings"]:
                 self._send_drift_notifications(results["warnings"])
                 logger.warning(
                     "sla_drift_completed_warning",
-                    count=len(results['warnings']),
+                    count=len(results["warnings"]),
                 )
             else:
                 logger.info("drift_detection.sla_check_no_violations")
@@ -263,10 +263,7 @@ class SLADriftDetector:
                 "type": "SLA_BREACH_RATE_HIGH",
                 "domain": domain,
                 "severity": "critical" if breach_rate > 25 else "warning",
-                "message": (
-                    f"[{domain}] SLA 위반율이 {breach_rate:.1f}%입니다. "
-                    f"(임계값: 10%) 설정 검토가 필요합니다."
-                ),
+                "message": (f"[{domain}] SLA 위반율이 {breach_rate:.1f}%입니다. " f"(임계값: 10%) 설정 검토가 필요합니다."),
                 "metrics": metrics,
                 "recommendation": (
                     "현재 복구 속도로는 설정된 SLA를 달성하기 어렵습니다. "
@@ -285,9 +282,7 @@ class SLADriftDetector:
                 ),
                 "metrics": metrics,
                 "recommendation": (
-                    "SLA 위반 가능성이 높아지고 있습니다. "
-                    "사전 조치를 검토하세요. "
-                    "[ACTION REQUIRED: 운영자 검토 필요]"
+                    "SLA 위반 가능성이 높아지고 있습니다. " "사전 조치를 검토하세요. " "[ACTION REQUIRED: 운영자 검토 필요]"
                 ),
             }
         elif pending_at_risk > 5:
@@ -295,10 +290,7 @@ class SLADriftDetector:
                 "type": "PENDING_ITEMS_AT_RISK",
                 "domain": domain,
                 "severity": "warning",
-                "message": (
-                    f"[{domain}] {pending_at_risk}개 항목이 SLA 위반 위험에 있습니다. "
-                    f"(SLA 80% 이상 소진)"
-                ),
+                "message": (f"[{domain}] {pending_at_risk}개 항목이 SLA 위반 위험에 있습니다. " f"(SLA 80% 이상 소진)"),
                 "metrics": metrics,
                 "recommendation": (
                     "PENDING 상태의 항목 중 다수가 SLA 만료에 근접해 있습니다. "
@@ -335,8 +327,8 @@ class SLADriftDetector:
                 domain=domain,
                 warning_type=warning_type,
                 severity=severity,
-                warning=warning.get('message'),
-                warning_4=warning.get('recommendation'),
+                warning=warning.get("message"),
+                recommendation=warning.get("recommendation"),
             )
 
             # Send notification via SecurityNotificationService
@@ -464,11 +456,7 @@ class DecisionRecorder:
         try:
             operation = self.get_failed_operation(operation_id)
 
-            advisory = (
-                operation.metadata.get("forensic_advisory", {})
-                if operation.metadata
-                else {}
-            )
+            advisory = operation.metadata.get("forensic_advisory", {}) if operation.metadata else {}
 
             decision_record = {
                 "decided_at": now().isoformat(),
@@ -494,7 +482,7 @@ class DecisionRecorder:
                 operation_id=operation_id,
                 decision=decision,
                 decided_by=decided_by,
-                advisory=advisory.get('recommended_action', 'N/A'),
+                advisory=advisory.get("recommended_action", "N/A"),
             )
 
             return {

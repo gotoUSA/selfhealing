@@ -308,12 +308,12 @@ class HedgingResultValidator:
         logger.warning(
             "hedging_validator.result_mismatch_detected",
             record=record.operation_id,
-            record_1=record.winner_source,
-            record_2=record.winner_region or 'local',
-            record_3=record.other_source,
-            record_4=record.other_region or 'local',
-            record_5=record.mismatch_type,
-            record_6=record.estimated_replication_lag_ms,
+            winner_source=record.winner_source,
+            winner_region=record.winner_region or "local",
+            other_source=record.other_source,
+            other_region=record.other_region or "local",
+            mismatch_type=record.mismatch_type,
+            replication_lag_ms=record.estimated_replication_lag_ms,
         )
 
         # 3. Prometheus 메트릭
