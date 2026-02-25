@@ -2,6 +2,8 @@
 Learning 패턴 기반 가중치 테스트.
 """
 
+import selfhealing.services.learning
+
 import pytest
 
 
@@ -13,6 +15,7 @@ class TestPatternWeightConstants:
         from selfhealing.services.error_budget.reconciliation.shadow_calculator import (
             PATTERN_OCCURRENCE_WEIGHT,
         )
+
         assert PATTERN_OCCURRENCE_WEIGHT["high"] == 2.0
         assert PATTERN_OCCURRENCE_WEIGHT["medium"] == 1.5
         assert PATTERN_OCCURRENCE_WEIGHT["low"] == 1.2
@@ -47,7 +50,8 @@ class TestPatternWeighting:
                 return [mock_pattern]
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 
@@ -72,7 +76,8 @@ class TestPatternWeighting:
                 return [mock_pattern]
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 
@@ -97,7 +102,8 @@ class TestPatternWeighting:
                 return [mock_pattern]
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 
@@ -122,7 +128,8 @@ class TestPatternWeighting:
                 return [mock_pattern]
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 
@@ -131,12 +138,14 @@ class TestPatternWeighting:
 
     def test_pattern_weight_service_failure_returns_default(self, shadow_calculator, monkeypatch):
         """Learning 서비스 장애 시 기본값 1.0 반환."""
+
         class MockLearningService:
             def __init__(self):
                 raise RuntimeError("Service unavailable")
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 
@@ -165,7 +174,8 @@ class TestPatternWeightIntegration:
                 return [mock_pattern]
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 

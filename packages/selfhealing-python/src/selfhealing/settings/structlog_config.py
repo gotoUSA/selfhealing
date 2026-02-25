@@ -131,26 +131,26 @@ def configure_structlog() -> None:
         foreign_pre_chain=shared_processors,
     )
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
-
     root_logger = logging.getLogger()
     # 중복 핸들러 방지: structlog 포매터를 가진 핸들러만 교체
     root_logger.handlers = [
         h for h in root_logger.handlers if not isinstance(getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter)
     ]
-    root_logger.addHandler(handler)
 
-    # 테스트 환경에서는 SELFHEALING_TEST_LOG_LEVEL(기본 WARNING)을 존중한다.
-    # 이 값이 없으면(프로덕션) DEBUG로 설정하여 컴포넌트별 레벨만으로 제어한다.
-    # 핸들러 레벨도 동일하게 설정하여 자식 로거에서 propagate된 저레벨 로그도 차단.
+    # 테스트 환경에서는 NullHandler로 콘솔 출력을 완전 차단한다.
+    # StreamHandler(sys.stdout)는 pytest_configure 시점에 원본 stdout 참조를 잡아
+    # pytest 캡처를 우회하므로, 테스트에서는 NullHandler가 유일한 해결책이다.
+    # pytest의 caplog는 자체 LogCaptureHandler를 사용하므로 영향 없음.
     _test_level_name = os.environ.get("SELFHEALING_TEST_LOG_LEVEL")
     if _test_level_name:
+        handler = logging.NullHandler()
         _effective_level = getattr(logging, _test_level_name.upper(), logging.WARNING)
         root_logger.setLevel(_effective_level)
-        handler.setLevel(_effective_level)
     else:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(formatter)
         root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(handler)
 
     # =========================================================================
     # 컴포넌트별 로그 레벨 적용 (280_LOGGING_SETTINGS_APPLY)

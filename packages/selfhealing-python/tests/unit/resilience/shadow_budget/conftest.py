@@ -6,6 +6,9 @@ Shadow Budget 테스트 공통 fixtures.
 
 from datetime import datetime, timedelta, timezone
 
+import selfhealing.services.learning
+import selfhealing.settings
+
 import pytest
 
 
@@ -13,6 +16,7 @@ import pytest
 def shadow_calculator():
     """Fresh ShadowBudgetCalculator for each test."""
     from selfhealing.services.error_budget.reconciliation import ShadowBudgetCalculator
+
     return ShadowBudgetCalculator()
 
 
@@ -47,7 +51,8 @@ def mock_sla_config(monkeypatch):
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
 
         monkeypatch.setattr(
-            "selfhealing.settings.get_config",
+            selfhealing.settings,
+            "get_config",
             lambda: MockConfig(),
         )
 
@@ -57,13 +62,15 @@ def mock_sla_config(monkeypatch):
 @pytest.fixture
 def mock_learning_service(monkeypatch):
     """Learning Service mock fixture factory."""
+
     def _create_mock(patterns: list):
         class MockLearningService:
             def get_patterns(self, pattern_type=None):
                 return patterns
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 

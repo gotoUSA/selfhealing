@@ -2,6 +2,8 @@
 Domain SLA 기반 가중치 테스트.
 """
 
+import selfhealing.settings
+
 import pytest
 
 
@@ -13,6 +15,7 @@ class TestDomainSLAWeightConstants:
         from selfhealing.services.error_budget.reconciliation.shadow_calculator import (
             DEFAULT_SLA_HOURS,
         )
+
         assert DEFAULT_SLA_HOURS == 24
 
 
@@ -31,19 +34,21 @@ class TestDomainWeighting:
 
         @dataclass
         class MockSLAConfig:
-            thresholds_by_domain: dict = field(default_factory=lambda: {
-                "payment": 1,      # 1시간 SLA → 24배
-                "order": 2,        # 2시간 SLA → 12배
-                "notification": 24, # 24시간 SLA → 1배
-            })
+            thresholds_by_domain: dict = field(
+                default_factory=lambda: {
+                    "payment": 1,  # 1시간 SLA → 24배
+                    "order": 2,  # 2시간 SLA → 12배
+                    "notification": 24,  # 24시간 SLA → 1배
+                }
+            )
 
         @dataclass
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
 
-        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.settings.get_config",
+            selfhealing.settings,
+            "get_config",
             lambda: MockConfig(),
         )
 
@@ -68,9 +73,9 @@ class TestDomainWeighting:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
 
-        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.settings.get_config",
+            selfhealing.settings,
+            "get_config",
             lambda: MockConfig(),
         )
 
@@ -80,12 +85,13 @@ class TestDomainWeighting:
 
     def test_domain_weight_config_failure_returns_default(self, shadow_calculator, monkeypatch):
         """설정 조회 실패 시 기본값 1.0 반환."""
+
         def raise_error():
             raise RuntimeError("Config unavailable")
 
-        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.settings.get_config",
+            selfhealing.settings,
+            "get_config",
             raise_error,
         )
 
@@ -108,9 +114,9 @@ class TestDomainWeightIntegration:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
 
-        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.settings.get_config",
+            selfhealing.settings,
+            "get_config",
             lambda: MockConfig(),
         )
 

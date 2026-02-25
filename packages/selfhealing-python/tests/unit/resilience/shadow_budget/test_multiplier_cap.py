@@ -2,6 +2,9 @@
 Multiplier Cap 테스트.
 """
 
+import selfhealing.services.learning
+import selfhealing.settings
+
 import pytest
 
 
@@ -11,7 +14,7 @@ class TestMultiplierCap:
     def test_cap_prevents_weight_explosion(self, shadow_calculator, monkeypatch):
         """
         Cap이 가중치 폭발을 방지함.
-        
+
         Critical(10x) × Payment(24x) × 반복(2x) = 480x → Cap 50x로 제한
         """
         from dataclasses import dataclass, field
@@ -27,9 +30,9 @@ class TestMultiplierCap:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
 
-        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.settings.get_config",
+            selfhealing.settings,
+            "get_config",
             lambda: MockConfig(),
         )
 
@@ -48,7 +51,8 @@ class TestMultiplierCap:
                 return [mock_pattern]
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 
@@ -80,9 +84,9 @@ class TestMultiplierCap:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
 
-        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.settings.get_config",
+            selfhealing.settings,
+            "get_config",
             lambda: MockConfig(),
         )
 
@@ -101,7 +105,8 @@ class TestMultiplierCap:
                 return [mock_pattern]
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 
@@ -121,9 +126,7 @@ class TestMultiplierCap:
 class TestCalculateShadowBudgetWithDomainAndPattern:
     """calculate_shadow_budget 통합 테스트."""
 
-    def test_calculate_with_domain_and_failure_type(
-        self, shadow_calculator, sample_failsafe_period, monkeypatch
-    ):
+    def test_calculate_with_domain_and_failure_type(self, shadow_calculator, sample_failsafe_period, monkeypatch):
         """domain과 failure_type을 사용한 Shadow Budget 계산."""
         from dataclasses import dataclass, field
 
@@ -138,9 +141,9 @@ class TestCalculateShadowBudgetWithDomainAndPattern:
         class MockConfig:
             sla: MockSLAConfig = field(default_factory=MockSLAConfig)
 
-        # 실제 코드는 selfhealing.settings.get_config를 사용함
         monkeypatch.setattr(
-            "selfhealing.settings.get_config",
+            selfhealing.settings,
+            "get_config",
             lambda: MockConfig(),
         )
 
@@ -159,7 +162,8 @@ class TestCalculateShadowBudgetWithDomainAndPattern:
                 return [mock_pattern]
 
         monkeypatch.setattr(
-            "selfhealing.services.learning.LearningService",
+            selfhealing.services.learning,
+            "LearningService",
             MockLearningService,
         )
 

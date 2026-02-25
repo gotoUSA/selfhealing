@@ -117,7 +117,7 @@ class LoggingSettings(BaseSettings):
         description="Rate limit window in seconds. 0 = disabled.",
     )
     log_rate_limit_max: int = Field(
-        default=100,
+        default=10,
         ge=0,
         description="Max same-event logs per window. 0 = unlimited.",
     )

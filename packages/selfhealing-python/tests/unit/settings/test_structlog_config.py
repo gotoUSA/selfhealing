@@ -218,6 +218,7 @@ class TestConfigureStructlogBehavior:
     def test_json_renderer_selected_when_structured_json_true(self, monkeypatch):
         """structured_json=True이면 root logger에 JSONRenderer가 적용되어야 한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
+        monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
 
         from selfhealing.settings.structlog_config import configure_structlog
 
@@ -233,6 +234,7 @@ class TestConfigureStructlogBehavior:
     def test_console_renderer_selected_when_structured_json_false(self, monkeypatch):
         """structured_json=False이면 root logger에 ConsoleRenderer가 적용되어야 한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "false")
+        monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
 
         from selfhealing.settings.structlog_config import configure_structlog
 
@@ -245,8 +247,9 @@ class TestConfigureStructlogBehavior:
         assert isinstance(renderer, structlog.dev.ConsoleRenderer)
 
     def test_duplicate_calls_do_not_add_multiple_processor_formatters(self, monkeypatch):
-        """configure_structlog()을 여러 번 호출해도 ProcessorFormatter 핸들러가 중복 등록되지 않아야 한다."""
+        """프로덕션 모드에서 configure_structlog()을 여러 번 호출해도 ProcessorFormatter 핸들러가 중복 등록되지 않아야 한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
+        monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
 
         from selfhealing.settings.structlog_config import configure_structlog
 
@@ -259,6 +262,22 @@ class TestConfigureStructlogBehavior:
             1 for h in root.handlers if isinstance(getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter)
         )
         assert processor_formatter_count == 1
+
+    def test_null_handler_used_when_test_log_level_set(self, monkeypatch):
+        """테스트 환경(SELFHEALING_TEST_LOG_LEVEL 설정)에서는 NullHandler로 콘솔 출력을 차단해야 한다."""
+        monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
+        monkeypatch.setenv("SELFHEALING_TEST_LOG_LEVEL", "WARNING")
+
+        from selfhealing.settings.structlog_config import configure_structlog
+
+        configure_structlog()
+
+        root = logging.getLogger()
+        # ProcessorFormatter 핸들러가 없어야 한다 (NullHandler에는 formatter 없음)
+        assert self._get_structlog_formatter() is None
+        # NullHandler가 추가되어 있어야 한다
+        null_handlers = [h for h in root.handlers if isinstance(h, logging.NullHandler)]
+        assert len(null_handlers) >= 1
 
     def test_structlog_wrapper_class_is_bound_logger_after_configure(self, monkeypatch):
         """configure_structlog() 후 structlog 설정의 wrapper_class가 BoundLogger여야 한다.

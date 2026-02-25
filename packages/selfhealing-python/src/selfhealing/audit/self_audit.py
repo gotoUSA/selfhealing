@@ -24,6 +24,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 from dataclasses import dataclass, field
@@ -234,8 +235,8 @@ class SelfAuditLogger:
                 log_kwargs["details"] = details
             log_method("self_audit.event", **log_kwargs)
 
-            # stderr 출력 (실패 이벤트만)
-            if event_type in self.FAILURE_EVENTS:
+            # stderr 출력 (실패 이벤트만, 테스트 환경에서는 생략)
+            if event_type in self.FAILURE_EVENTS and not os.environ.get("SELFHEALING_TEST_MODE"):
                 print(
                     f"[SELF-AUDIT] {now.isoformat()} {event_type.value}: {message}",
                     file=sys.stderr,

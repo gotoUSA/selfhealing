@@ -504,9 +504,13 @@ class ResilientContinuousAuditRecorder(ContinuousAuditRecorder):
         )
 
     def _write_to_stderr(self, entry_dict: dict[str, Any]) -> None:
-        """stderr에 기록 (최후의 수단)."""
+        """stderr에 기록 (최후의 수단, 테스트 환경에서는 생략)."""
         import json
+        import os
         import sys
+
+        if os.environ.get("SELFHEALING_TEST_MODE"):
+            return
 
         try:
             line = json.dumps(entry_dict, default=str)

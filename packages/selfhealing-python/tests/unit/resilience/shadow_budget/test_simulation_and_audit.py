@@ -4,6 +4,9 @@ Simulation Stats, Pending Freeze, Audit 이벤트 테스트.
 
 from datetime import datetime, timezone
 
+import selfhealing.services.circuit_breaker.freeze_mode
+import selfhealing.services.unified_notification
+
 
 class TestSimulationBridge:
     """Simulation Stats Callback 테스트."""
@@ -78,7 +81,8 @@ class TestPendingReconciliationFreeze:
                 freeze_activated["reason"] = reason
 
         monkeypatch.setattr(
-            "selfhealing.services.circuit_breaker.freeze_mode.FreezeModeManager",
+            selfhealing.services.circuit_breaker.freeze_mode,
+            "FreezeModeManager",
             MockFreezeModeManager,
         )
 
@@ -221,19 +225,23 @@ class TestNotificationIntegration:
 
         # Mock 설정
         monkeypatch.setattr(
-            "selfhealing.services.unified_notification.get_unified_notification_manager",
+            selfhealing.services.unified_notification,
+            "get_unified_notification_manager",
             mock_get_manager,
         )
         monkeypatch.setattr(
-            "selfhealing.services.unified_notification.NotificationPayload",
+            selfhealing.services.unified_notification,
+            "NotificationPayload",
             MockNotificationPayload,
         )
         monkeypatch.setattr(
-            "selfhealing.services.unified_notification.NotificationPriority",
+            selfhealing.services.unified_notification,
+            "NotificationPriority",
             type("NotificationPriority", (), {"HIGH": "high", "MEDIUM": "medium"}),
         )
         monkeypatch.setattr(
-            "selfhealing.services.unified_notification.NotificationCategory",
+            selfhealing.services.unified_notification,
+            "NotificationCategory",
             type("NotificationCategory", (), {"APPROVAL": "approval"}),
         )
 

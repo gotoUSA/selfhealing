@@ -71,11 +71,11 @@ class TestRateLimitProcessorContract:
 
         assert LoggingSettings.model_fields["log_rate_limit_window"].default == 10
 
-    def test_rate_limit_max_default_is_100(self):
-        """log_rate_limit_max 기본값이 설계 계약대로 100이어야 한다."""
+    def test_rate_limit_max_default_is_10(self):
+        """log_rate_limit_max 기본값이 10이어야 한다 (프로덕션 로그 볼륨 제어)."""
         from selfhealing.settings.logging_config import LoggingSettings
 
-        assert LoggingSettings.model_fields["log_rate_limit_max"].default == 100
+        assert LoggingSettings.model_fields["log_rate_limit_max"].default == 10
 
     def test_rate_limit_window_rejects_negative_value(self):
         """log_rate_limit_window에 ge=0 제약이 적용되어 음수 입력 시 ValidationError."""

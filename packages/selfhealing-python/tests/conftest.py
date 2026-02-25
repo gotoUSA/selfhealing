@@ -229,12 +229,6 @@ def _isolate_logging_state_session():
     test_log_level = getattr(_logging, test_log_level_name.upper(), _logging.WARNING)
     root.setLevel(test_log_level)
 
-    # root 핸들러 레벨도 설정: 자식 로거에서 propagate된 저레벨 로그도 차단
-    _handler_levels_saved: list[tuple[_logging.Handler, int]] = []
-    for _h in root.handlers:
-        _handler_levels_saved.append((_h, _h.level))
-        _h.setLevel(test_log_level)
-
     # 외부 라이브러리 노이즈 로거 차단: faker, urllib3 등이 DEBUG 로그를 대량 발생시킴
     _noisy_loggers = ("faker", "faker.factory", "urllib3", "asyncio", "parso")
     _noisy_saved: dict[str, int] = {}
@@ -256,8 +250,6 @@ def _isolate_logging_state_session():
     # 세션 종료 시 복원
     root.setLevel(root_level)
     root.handlers = root_handlers
-    for _h, _prev_h_level in _handler_levels_saved:
-        _h.setLevel(_prev_h_level)
     for _name, _prev_level in _noisy_saved.items():
         _logging.getLogger(_name).setLevel(_prev_level)
     for name, (level, propagate, handlers) in _saved.items():

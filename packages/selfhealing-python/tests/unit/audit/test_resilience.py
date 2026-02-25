@@ -418,8 +418,9 @@ class TestSyslogFallback:
         # Cleanup
         SyslogFallback._instance = None
 
-    def test_log_critical_writes_to_stderr(self):
+    def test_log_critical_writes_to_stderr(self, monkeypatch):
         """Test that critical events are written to stderr."""
+        monkeypatch.delenv("SELFHEALING_TEST_MODE", raising=False)
         SyslogFallback._instance = None
         syslog = SyslogFallback.get_instance()
 
@@ -446,8 +447,9 @@ class TestSyslogFallback:
             sys.stderr = old_stderr
             SyslogFallback._instance = None
 
-    def test_log_backend_failure(self):
+    def test_log_backend_failure(self, monkeypatch):
         """Test logging backend failures."""
+        monkeypatch.delenv("SELFHEALING_TEST_MODE", raising=False)
         SyslogFallback._instance = None
         syslog = SyslogFallback.get_instance()
 
@@ -465,8 +467,9 @@ class TestSyslogFallback:
             sys.stderr = old_stderr
             SyslogFallback._instance = None
 
-    def test_log_circuit_open(self):
+    def test_log_circuit_open(self, monkeypatch):
         """Test logging circuit breaker opening."""
+        monkeypatch.delenv("SELFHEALING_TEST_MODE", raising=False)
         SyslogFallback._instance = None
         syslog = SyslogFallback.get_instance()
 
@@ -646,8 +649,9 @@ class TestConvenienceFunctions:
 
         SyslogFallback._instance = None
 
-    def test_log_critical_to_syslog(self):
+    def test_log_critical_to_syslog(self, monkeypatch):
         """Test log_critical_to_syslog function."""
+        monkeypatch.delenv("SELFHEALING_TEST_MODE", raising=False)
         SyslogFallback._instance = None
 
         old_stderr = sys.stderr

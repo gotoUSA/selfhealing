@@ -8,6 +8,7 @@ audit trail that survives application crashes.
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 from datetime import datetime, timezone
@@ -114,11 +115,7 @@ class SyslogFallback:
         config_str = config_type or "unknown"
 
         # Format: [AUDIT] type=X config=Y user=Z message
-        log_line = (
-            f"[AUDIT] timestamp={timestamp} "
-            f"type={event_type} config={config_str} "
-            f"user={user_str} msg={message}"
-        )
+        log_line = f"[AUDIT] timestamp={timestamp} " f"type={event_type} config={config_str} " f"user={user_str} msg={message}"
 
         if details:
             # Add key details (limit size)
@@ -155,8 +152,8 @@ class SyslogFallback:
                     error=e,
                 )
 
-        # Always also write to stderr for visibility
-        if self._stderr_fallback:
+        # Always also write to stderr for visibility (except during tests)
+        if self._stderr_fallback and not os.environ.get("SELFHEALING_TEST_MODE"):
             try:
                 print(f"AUDIT_CRITICAL: {message}", file=sys.stderr, flush=True)
                 success = True
