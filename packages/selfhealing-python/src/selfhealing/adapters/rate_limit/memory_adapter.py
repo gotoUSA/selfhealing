@@ -98,11 +98,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
 
             # Consider expired if:
             # - Cooldown has passed AND counter is zero AND not updated recently
-            if (
-                cooldown_until < now
-                and consecutive_429s == 0
-                and now - last_updated > 3600
-            ):  # 1 hour
+            if cooldown_until < now and consecutive_429s == 0 and now - last_updated > 3600:  # 1 hour
                 expired_keys.append(key)
 
         for key in expired_keys:
@@ -120,7 +116,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
             data = self._data.get(key, {})
 
             return RateLimitState(
-                rate_limit_key=key,
+                key=key,
                 cooldown_until=data.get("cooldown_until", 0.0),
                 consecutive_429s=data.get("consecutive_429s", 0),
                 last_updated=data.get("last_updated", 0.0),
@@ -158,9 +154,7 @@ class InMemoryRateLimitStorage(RateLimitStorageInterface):
             if key not in self._data:
                 self._data[key] = {"consecutive_429s": 0}
 
-            self._data[key]["consecutive_429s"] = (
-                self._data[key].get("consecutive_429s", 0) + 1
-            )
+            self._data[key]["consecutive_429s"] = self._data[key].get("consecutive_429s", 0) + 1
             self._data[key]["last_updated"] = now
 
             new_value = self._data[key]["consecutive_429s"]

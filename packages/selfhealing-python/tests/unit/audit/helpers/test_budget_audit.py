@@ -111,7 +111,7 @@ class TestLogErrorBudgetBlockedAudit:
             call_args = mock_logger.warning.call_args[0][0]
             assert call_args == "error_budget_audit.blocked"
             call_kwargs = mock_logger.warning.call_args[1]
-            assert call_kwargs["action"] == "chaos_experiment"
+            assert call_kwargs["blocked_action"] == "chaos_experiment"
             assert call_kwargs["budget_str"] == "5.5%"
 
     def test_handles_none_error_budget_percent(self):

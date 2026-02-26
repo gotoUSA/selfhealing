@@ -40,8 +40,8 @@ class TestLogRetryAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "retry_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["status"] == "RETRY"
-            assert call_kwargs["domain"] == "payment"
+            assert call_kwargs["retry_status"] == "RETRY"
+            assert call_kwargs["healing_domain"] == "payment"
             assert call_kwargs["attempt"] == 1
 
     def test_logs_retry_exhausted_when_max_attempts_reached(self):
@@ -73,7 +73,7 @@ class TestLogRetryAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "retry_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["status"] == "EXHAUSTED"
+            assert call_kwargs["retry_status"] == "EXHAUSTED"
             assert call_kwargs["attempt"] == 3
 
     def test_logs_retry_success(self):
@@ -102,7 +102,7 @@ class TestLogRetryAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "retry_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["status"] == "SUCCESS"
+            assert call_kwargs["retry_status"] == "SUCCESS"
 
     def test_wal_event_type_is_retry_exhausted(self):
         """Should use RETRY_EXHAUSTED event type when exhausted."""
@@ -237,9 +237,9 @@ class TestLogSystemControlAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "system_control_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["action"] == "ENABLE"
-            assert call_kwargs["actor"] == "admin"
-            assert call_kwargs["value"] == "Maintenance completed"
+            assert call_kwargs["control_action"] == "ENABLE"
+            assert call_kwargs["actor_id"] == "admin"
+            assert call_kwargs["control_reason"] == "Maintenance completed"
 
     def test_logs_disable_action(self):
         """Should log DISABLE action."""
@@ -266,7 +266,7 @@ class TestLogSystemControlAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "system_control_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["action"] == "DISABLE"
+            assert call_kwargs["control_action"] == "DISABLE"
 
     def test_wal_event_type_is_system_control_changed(self):
         """Should use SYSTEM_CONTROL_CHANGED event type."""
@@ -349,7 +349,7 @@ class TestLogRollbackAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "rollback_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["state"] == "PENDING"
+            assert call_kwargs["rollback_state"] == "PENDING"
             assert call_kwargs["request_id"] == "rb-001"
             assert call_kwargs["stage_name"] == "production"
 
@@ -381,8 +381,8 @@ class TestLogRollbackAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "rollback_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["state"] == "COMPLETED"
-            assert call_kwargs["value"] == 45.5
+            assert call_kwargs["rollback_state"] == "COMPLETED"
+            assert call_kwargs["duration_seconds"] == 45.5
 
     def test_logs_failed_state_with_errors(self):
         """Should log FAILED status with errors."""
@@ -411,7 +411,7 @@ class TestLogRollbackAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "rollback_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["state"] == "FAILED"
+            assert call_kwargs["rollback_state"] == "FAILED"
 
     def test_wal_event_type_is_rollback_performed(self):
         """Should use ROLLBACK_PERFORMED event type."""

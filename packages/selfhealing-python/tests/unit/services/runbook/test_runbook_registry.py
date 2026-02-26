@@ -125,9 +125,9 @@ class TestRiskLevelContract:
         """RiskLevel.HIGH의 정수 우선순위는 2."""
         assert RiskLevel.HIGH.order == 2
 
-    def test_risk_level_count_is_three(self):
-        """RiskLevel enum 멤버는 3개이다."""
-        assert len(RiskLevel) == 3
+    def test_risk_level_count_is_four(self):
+        """RiskLevel enum 멤버는 4개이다."""
+        assert len(RiskLevel) == 4
 
     def test_all_risk_levels_are_str_enum(self):
         """모든 RiskLevel 멤버는 str 타입이다."""

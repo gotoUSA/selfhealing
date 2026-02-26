@@ -809,7 +809,7 @@ select = [
 | `adapters/celery/signal_hooks.py` | — | 3건 dot-less/f-string 이벤트 이름 변환 |
 | 한글 이벤트 이름 수동 수정 | `api/django/views/grafana_webhook.py` | `grafana_webhook_alert_목록` → `grafana_webhook.no_alerts` |
 
-**단위 테스트**: `tests/unit/audit/test_self_audit_structlog.py` (10개), `tests/unit/test_phase3_structlog_migration.py` (17개) — **27개 전체 통과**
+**단위 테스트**: `tests/unit/audit/test_self_audit_structlog.py` (10개), `tests/unit/test_structlog_notification_health_pool.py` (17개) — **27개 전체 통과**
 
 ### 7.4 Phase 4: 테스트 및 린트 ✅ 완료 (2026-02-23)
 

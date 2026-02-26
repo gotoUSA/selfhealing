@@ -1,8 +1,13 @@
 """
-Phase 3 수동 검수: notification.py, connection_health.py, pool_monitor.py structlog 전환 검증.
+Notification, ConnectionHealth, PoolMonitor structlog 전환 검증.
 
-각 파일의 stdlib logging → structlog 전환이 올바르게 이루어졌는지,
-기존 동작이 유지되는지 검증한다.
+대상 모듈:
+- selfhealing.interfaces.notification (LoggingNotificationAdapter)
+- selfhealing.core.connection_health (DefaultConnectionHealthMonitor)
+- selfhealing.core.pool_monitor (ConnectionPoolMonitor)
+
+각 모듈이 stdlib logging 대신 structlog를 올바르게 사용하는지,
+이벤트 이름·키워드 규칙이 유지되는지 검증한다.
 
 테스트 분류:
 - Contract: structlog BoundLogger API 계약 및 이벤트 이름 규칙 검증
@@ -207,7 +212,7 @@ class TestPoolMonitorStructlogBehavior:
             mock_logger.info.assert_called_once()
             call = mock_logger.info.call_args
             assert call.args[0] == "pool_monitor.simulation_override_set"
-            assert call.kwargs.get("status") == PoolHealthStatus.CRITICAL.value
+            assert call.kwargs.get("pool_health_status") == PoolHealthStatus.CRITICAL.value
 
     def test_clear_simulation_override_logs_cleared_event(self):
         """clear_simulation_override 호출 시 cleared 이벤트가 기록되어야 한다."""

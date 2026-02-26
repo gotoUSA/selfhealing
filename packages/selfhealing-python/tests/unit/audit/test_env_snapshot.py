@@ -442,7 +442,7 @@ class TestEmitCriticalLog:
             log_message = mock_logger.critical.call_args[0][0]
             assert log_message == "env_audit.snapshot"
             call_kwargs = mock_logger.critical.call_args[1]
-            assert call_kwargs["status"] == "FALLBACK"
+            assert call_kwargs["snapshot_status"] == "FALLBACK"
             assert call_kwargs["snapshot"] == "sha256:abc123"
 
     def test_emits_failed_status(self):
@@ -461,7 +461,7 @@ class TestEmitCriticalLog:
             log_message = mock_logger.critical.call_args[0][0]
             assert log_message == "env_audit.snapshot"
             call_kwargs = mock_logger.critical.call_args[1]
-            assert call_kwargs["status"] == "FAILED"
+            assert call_kwargs["snapshot_status"] == "FAILED"
 
 
 class TestGetEnvSnapshotSummary:

@@ -177,8 +177,8 @@ class TestLogEmergencyModeAudit:
             call_args = mock_logger.info.call_args[0][0]
             assert call_args == "emergency_mode_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
-            assert call_kwargs["action"] == "ACTIVATE"
-            assert call_kwargs["level"] == "LEVEL_1"
+            assert call_kwargs["emergency_action"] == "ACTIVATE"
+            assert call_kwargs["emergency_level"] == "LEVEL_1"
 
     def test_calls_log_config_change_for_compatibility(self):
         """Should also call log_config_change for backward compatibility."""

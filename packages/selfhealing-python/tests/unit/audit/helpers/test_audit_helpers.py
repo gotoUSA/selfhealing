@@ -66,7 +66,7 @@ class TestLogDlqStoreAudit:
             assert call_args == "dlq_audit.store"
             call_kwargs = mock_logger.info.call_args[1]
             assert call_kwargs["dlq_id"] == 456
-            assert call_kwargs["domain"] == "point"
+            assert call_kwargs["healing_domain"] == "point"
 
     def test_handles_adapter_exception_gracefully(self):
         """Should not raise when adapter.log_dlq_store fails."""
@@ -189,7 +189,7 @@ class TestLogDlqReplayAudit:
             assert call_args == "dlq_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
             assert call_kwargs["dlq_id"] == 789
-            assert call_kwargs["status"] == "SUCCESS"
+            assert call_kwargs["replay_status"] == "SUCCESS"
 
     def test_logs_failure_to_standard_logger_when_adapter_unavailable(self):
         """Should log FAILED to standard logger when adapter is unavailable."""
@@ -218,8 +218,8 @@ class TestLogDlqReplayAudit:
             assert call_args == "dlq_audit.event"
             call_kwargs = mock_logger.info.call_args[1]
             assert call_kwargs["dlq_id"] == 101
-            assert call_kwargs["status"] == "FAILED"
-            assert call_kwargs["value"] == "Handler crashed"
+            assert call_kwargs["replay_status"] == "FAILED"
+            assert call_kwargs["error_detail"] == "Handler crashed"
 
     def test_handles_adapter_exception_gracefully(self):
         """Should not raise when adapter.log_dlq_replay fails."""
