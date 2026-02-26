@@ -841,6 +841,44 @@ class TestOnRunbookSelectedCallbackBehavior:
         call_args = callback.call_args[0][0]
         assert call_args.selected.runbook_id == "rb_cb"
 
+    def test_callback_payload_includes_trigger_context(self):
+        """콜백으로 전달된 selected.event_context에 trigger_context가 포함된다."""
+        from unittest.mock import MagicMock
+
+        from selfhealing.services.runbook.models import EventCondition, PatternCondition
+        from selfhealing.services.runbook.pattern_matcher import PatternMatcher
+
+        # Given
+        runbook = FakeRunbook(
+            id="rb_trigger_ctx",
+            trigger_condition=PatternCondition(
+                event_conditions=[EventCondition(event_type="circuit_breaker_opened")],
+            ),
+        )
+        callback = MagicMock()
+        matcher = PatternMatcher(
+            registry=FakeRegistry([runbook]),
+            on_runbook_selected=callback,
+        )
+
+        class FakeEvent:
+            event_type = "circuit_breaker_opened"
+            source = "payment_api"
+            data = {"new_state": "open", "service_name": "payment_api"}
+
+        # When
+        matcher._on_event(FakeEvent())
+
+        # Then
+        callback.assert_called_once()
+        selection = callback.call_args[0][0]
+        trigger_event = selection.selected.event_context
+        assert "trigger_context" in trigger_event
+        assert trigger_event["trigger_context"]["triggered_by_event"] == "circuit_breaker_opened"
+        assert "metric_snapshot" in trigger_event["trigger_context"]
+        assert "matched_conditions" in trigger_event["trigger_context"]
+        assert trigger_event["service_name"] == "payment_api"
+
     def test_no_callback_no_error_when_no_match(self):
         """콜백 없이 매칭이 없을 때도 에러 없이 동작한다."""
         matcher = PatternMatcher(

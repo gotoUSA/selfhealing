@@ -226,6 +226,7 @@ class PatternMatcher:
         if results:
             selection = self.select_runbook(results)
             if selection is not None:
+                selection.selected.event_context = selection.selected.build_trigger_event(selection.selected.event_context)
                 logger.info(
                     "pattern_matcher.runbook_selected",
                     runbook_id=selection.selected.runbook_id,
