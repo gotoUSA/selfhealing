@@ -1328,6 +1328,7 @@ SELFHEALING_RUNBOOK_MAX_RESUME_COUNT: int = 10                # 무한 재개 �
 | A | **타임아웃 In-doubt 보상** | §3.2, §5.2, §6.1 | 타임아웃 시 `partial_execution=True`로 마킹 → In-doubt Step도 보상 대상. No-op 안전 컨벤션(#5)이 전제 조건 |
 | B | **Lock Heartbeat Watchdog** | §5.3, §16 | `_execute_with_timeout()` 전면 교체 — 60초 Polling 루프 + `lock.extend(300초)`. SagaOrchestrator/RecoveryCoordinator 패턴 완전 차용 |
 | C | **ParamResolver (jmespath 대체)** | §9.2 | jmespath 도입 대신 자체 `ParamResolver` Protocol로 확장점 예약. 273번 설계의 jinja2 기각 결정과 일관. 현재 `DotPathResolver`가 타입 보존을 보장하므로 외부 엔진 불필요 |
+| D | **trigger_context 주입 (277 연동)** | §18.4 | PatternMatcher→Executor 호출 시 `trigger_event.trigger_context`에 MatchResult의 `metric_snapshot`/`triggered_by_event`/`confidence`/`matched_conditions` 주입. 277 Recorder가 Postmortem Root Cause Link에 활용 |
 
 ### 18.2 설계 결정 근거 요약
 
@@ -1375,3 +1376,58 @@ finally:
 Lock Heartbeat, Lock TTL 연장, Max Resume Count, Context TTL 등을 오버라이드할 수 있다.
 그러나 `executor.py`는 모듈 상수를 직접 참조하여 환경 변수 설정이 무시되는 상태였다.
 `SagaOrchestrator`의 `_get_settings()` 패턴을 참조하여, try/except 폴백 헬퍼로 일원화하였다.
+
+### 18.4 trigger_context 주입 (277 연동)
+
+277 RunbookPlaybackRecorder가 Postmortem incident에 Root Cause 정보를 포함하려면,
+Executor가 PatternMatcher의 `MatchResult` 데이터를 `trigger_event`에 주입해야 한다.
+(277 §14.C 참조)
+
+#### 문제
+
+`RunbookExecutionContext.trigger_event`는 자유형 `dict[str, Any]`이며 (`execution_models.py` L206),
+PatternMatcher의 `MatchResult`에 보존된 풍부한 트리거 컨텍스트가 Executor→Recorder 경로에서 소실된다.
+
+코드 근거:
+- `MatchResult` (`services/runbook/models.py` L272-310):
+  ```python
+  @dataclass
+  class MatchResult:
+      triggered_by_event: str | None      # 트리거 이벤트 타입
+      metric_snapshot: dict[str, float]    # 매칭 시점 메트릭 스냅샷
+      event_context: dict[str, Any]        # 원본 이벤트 data + source
+      matched_conditions: list[str]        # 매칭된 조건 목록
+      confidence: float                    # 매칭 신뢰도
+  ```
+- `PatternMatcher.evaluate_all()` (`pattern_matcher.py` L325-340):
+  `metric_snapshot=dict(metrics)` — 매칭 시점 메트릭 전체 복사
+- 기존 Postmortem (`utils/postmortem_root_cause.py` L246-278):
+  `build_postmortem_root_cause_fields()`는 timeline 기반이라 런북 실행 경로와 직접 연결 불가
+
+#### 해결
+
+PatternMatcher가 Executor의 `execute_runbook()`을 호출하는 시점에,
+`trigger_event` dict에 `trigger_context` 키를 추가한다.
+
+```python
+# PatternMatcher → Executor 호출 시점
+# match_result: MatchResult (services/runbook/models.py L272-310)
+
+trigger_event = {
+    **original_event_data,
+    "trigger_context": {
+        "triggered_by_event": match_result.triggered_by_event,
+        "metric_snapshot": match_result.metric_snapshot,
+        "match_confidence": match_result.confidence,
+        "matched_conditions": match_result.matched_conditions,
+    },
+}
+executor.execute_runbook(runbook, trigger_event, namespace)
+```
+
+설계 결정:
+- `execute_runbook(runbook, trigger_event, namespace)` 시그니처를 변경하지 않음
+- `trigger_event` dict에 `trigger_context` 키를 추가하는 것만으로 하위 호환성 보장
+- Executor 내부는 `trigger_event`를 passthrough하므로 추가 코드 변경 불필요
+- Recorder(277)가 `trigger_event.get("trigger_context", {})`로 안전하게 접근
+- `trigger_context`가 없는 경우(수동 실행 등)에도 빈 dict 폴백으로 정상 동작
