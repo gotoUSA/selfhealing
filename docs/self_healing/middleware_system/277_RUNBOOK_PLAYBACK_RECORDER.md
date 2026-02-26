@@ -1,6 +1,6 @@
 # 277. Runbook Playback Recorder 설계
 
-> **Status**: Design
+> **Status**: Implemented
 > **References**:
 > - [275_RUNBOOK_EXECUTOR.md](275_RUNBOOK_EXECUTOR.md) — RunbookExecutionContext, RunbookStepResult, CompensationSummary
 > - `audit/cascade_auditor/_recording.py` — RecordingMixin.record() (CascadeEvent 인과 기록)

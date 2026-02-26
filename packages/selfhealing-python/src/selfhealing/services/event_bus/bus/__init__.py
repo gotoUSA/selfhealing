@@ -225,6 +225,13 @@ class EventType(str, Enum):
     RUNBOOK_REGISTRY_UPDATED = "runbook_registry_updated"
     """런북 등록/비활성화 등 레지스트리 변경 — 전 노드 동기화용."""
 
+    # Runbook Playback Recorder Events (277_RUNBOOK_PLAYBACK_RECORDER.md §8)
+    RUNBOOK_EXECUTION_COMPLETED = "runbook_execution_completed"
+    """런북 전체 실행 성공 완료 (Recorder가 기록 후 발행)."""
+
+    RUNBOOK_EXECUTION_FAILED = "runbook_execution_failed"
+    """런북 전체 실행 실패 (Recorder가 기록 후 발행)."""
+
 
 class EventPriority(IntEnum):
     """이벤트 처리 우선순위."""

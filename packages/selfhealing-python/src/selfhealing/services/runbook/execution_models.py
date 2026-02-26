@@ -21,6 +21,50 @@ if TYPE_CHECKING:
 
 
 # =============================================================================
+# 기록 결과 요약
+# =============================================================================
+
+
+@dataclass
+class RecordingSummary:
+    """Runbook 실행 기록 결과 요약.
+
+    RunbookPlaybackRecorder.record()가 반환하는 각 채널별 기록 성공 여부.
+    """
+
+    execution_id: str
+    """기록 대상 실행 ID."""
+
+    cascade_recorded: bool = False
+    """CascadeEventAuditor 기록 성공 여부."""
+
+    pattern_recorded: bool = False
+    """LearningService 패턴 학습 성공 여부."""
+
+    postmortem_recorded: bool = False
+    """PostmortemStore 인시던트 기록 성공 여부."""
+
+    event_emitted: bool = False
+    """EventBus 이벤트 발행 성공 여부."""
+
+    @property
+    def all_recorded(self) -> bool:
+        """Postmortem을 제외한 필수 채널이 모두 성공했는지 여부."""
+        return self.cascade_recorded and self.pattern_recorded and self.event_emitted
+
+    def to_dict(self) -> dict[str, Any]:
+        """직렬화."""
+        return {
+            "execution_id": self.execution_id,
+            "cascade_recorded": self.cascade_recorded,
+            "pattern_recorded": self.pattern_recorded,
+            "postmortem_recorded": self.postmortem_recorded,
+            "event_emitted": self.event_emitted,
+            "all_recorded": self.all_recorded,
+        }
+
+
+# =============================================================================
 # 실행 상태 Enum
 # =============================================================================
 

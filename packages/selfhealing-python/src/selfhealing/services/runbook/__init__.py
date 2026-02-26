@@ -46,12 +46,14 @@ from selfhealing.services.runbook.execution_models import (
     ApprovalDecision,
     ApprovalDecisionType,
     CompensationSummary,
+    RecordingSummary,
     RunbookApprovalRequest,
     RunbookExecutionContext,
     RunbookExecutionStatus,
     RunbookStepResult,
 )
 from selfhealing.services.runbook.executor import RunbookExecutor
+from selfhealing.services.runbook.recorder import RunbookPlaybackRecorder
 from selfhealing.services.runbook.metrics_provider import RunbookMetricsProvider
 from selfhealing.services.runbook.models import (
     ConditionOperator,
@@ -106,6 +108,7 @@ __all__ = [
     "RunbookStepResult",
     "CompensationSummary",
     "RunbookExecutionContext",
+    "RecordingSummary",
     # Approval Gate Models
     "ApprovalDecisionType",
     "ApprovalDecision",
@@ -132,4 +135,6 @@ __all__ = [
     "CompensationContract",
     # Executor
     "RunbookExecutor",
+    # Recorder
+    "RunbookPlaybackRecorder",
 ]

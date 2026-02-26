@@ -144,13 +144,20 @@ class CascadeEventAuditor(
         backend.set(key, {"hash": hash_value})
 
     def _save_cascade_event(self, event: Any) -> None:
-        """Cascade Event 저장."""
+        """Cascade Event 저장.
+
+        CascadeRetentionSettings.hot_retention_days를 TTL로 적용하여
+        Redis 메모리 누수를 방지한다. StateBackend.set()의 ttl_seconds 파라미터를
+        사용하며, RedisStateBackend는 redis.setex()로 원자적 만료를 설정한다.
+        """
         backend = self._get_backend()
         key = self.CASCADE_KEY.format(
             namespace=event.namespace,
             cascade_id=event.id,
         )
-        backend.set(key, event.to_dict())
+        retention = get_cascade_retention_settings()
+        ttl_seconds = retention.hot_retention_days * 86400
+        backend.set(key, event.to_dict(), ttl_seconds=ttl_seconds)
 
     def _add_to_index(self, namespace: str, cascade_id: str) -> None:
         """인덱스에 추가 (최신순)."""
