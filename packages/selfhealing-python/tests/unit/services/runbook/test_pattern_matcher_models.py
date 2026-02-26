@@ -599,3 +599,160 @@ class TestMatchSelectionResultBehavior:
         assert len(result.all_candidates) == 2
         assert result.all_candidates[1].runbook_id == "r2"
         assert result.selection_reason == "highest confidence"
+
+
+# =============================================================================
+# Contract Tests — build_trigger_event 반환 구조
+# =============================================================================
+
+
+class TestBuildTriggerEventContract:
+    """MatchResult.build_trigger_event() 반환 구조 계약값 검증.
+
+    설계 근거: 275_RUNBOOK_EXECUTOR.md §18.4
+    """
+
+    def _make_match_result(self, **kwargs) -> MatchResult:
+        defaults = dict(
+            runbook_id="rb_test",
+            confidence=0.85,
+            matched_conditions=["error_rate gte 0.05"],
+            historical_success_rate=None,
+            similar_pattern_count=0,
+            triggered_by_event="circuit_breaker_opened",
+            metric_snapshot={"error_rate": 0.08},
+        )
+        defaults.update(kwargs)
+        return MatchResult(**defaults)
+
+    def test_trigger_context_key_exists_in_result(self):
+        """반환 dict에 'trigger_context' 키가 존재한다."""
+        mr = self._make_match_result()
+        result = mr.build_trigger_event({})
+        assert "trigger_context" in result
+
+    def test_trigger_context_contains_triggered_by_event(self):
+        """trigger_context에 'triggered_by_event' 키가 있다."""
+        mr = self._make_match_result(triggered_by_event="circuit_breaker_opened")
+        result = mr.build_trigger_event({})
+        assert result["trigger_context"]["triggered_by_event"] == "circuit_breaker_opened"
+
+    def test_trigger_context_contains_metric_snapshot(self):
+        """trigger_context에 'metric_snapshot' 키가 있다."""
+        mr = self._make_match_result(metric_snapshot={"error_rate": 0.08})
+        result = mr.build_trigger_event({})
+        assert result["trigger_context"]["metric_snapshot"] == {"error_rate": 0.08}
+
+    def test_trigger_context_contains_match_confidence(self):
+        """trigger_context에 'match_confidence' 키가 있다 (confidence 값)."""
+        mr = self._make_match_result(confidence=0.85)
+        result = mr.build_trigger_event({})
+        assert result["trigger_context"]["match_confidence"] == 0.85
+
+    def test_trigger_context_contains_matched_conditions(self):
+        """trigger_context에 'matched_conditions' 키가 있다."""
+        mr = self._make_match_result(matched_conditions=["error_rate gte 0.05"])
+        result = mr.build_trigger_event({})
+        assert result["trigger_context"]["matched_conditions"] == ["error_rate gte 0.05"]
+
+
+# =============================================================================
+# Behavior Tests — build_trigger_event 동작 검증
+# =============================================================================
+
+
+class TestBuildTriggerEventBehavior:
+    """MatchResult.build_trigger_event() 동작 검증."""
+
+    def _make_match_result(self, **kwargs) -> MatchResult:
+        defaults = dict(
+            runbook_id="rb_test",
+            confidence=0.75,
+            matched_conditions=["db_pool_usage gte 0.90"],
+            historical_success_rate=None,
+            similar_pattern_count=0,
+            triggered_by_event="error_budget_critical",
+            metric_snapshot={"db_pool_usage": 0.95},
+        )
+        defaults.update(kwargs)
+        return MatchResult(**defaults)
+
+    def test_original_event_data_merged_into_result(self):
+        """original_event_data의 키가 반환 dict에 포함된다."""
+        # Given
+        mr = self._make_match_result()
+        original = {"service_name": "payment_api", "namespace": "prod"}
+
+        # When
+        result = mr.build_trigger_event(original)
+
+        # Then
+        assert result["service_name"] == "payment_api"
+        assert result["namespace"] == "prod"
+
+    def test_trigger_context_does_not_overwrite_original_key(self):
+        """original_event_data에 이미 있는 키는 trigger_context가 추가된 경우에도 보존된다."""
+        # Given
+        mr = self._make_match_result()
+        original = {"service_name": "payment_api"}
+
+        # When
+        result = mr.build_trigger_event(original)
+
+        # Then — original 키와 trigger_context 키가 모두 존재
+        assert "service_name" in result
+        assert "trigger_context" in result
+
+    def test_empty_original_event_data_returns_trigger_context_only(self):
+        """original_event_data가 빈 dict이면 trigger_context만 포함된 dict를 반환한다."""
+        mr = self._make_match_result()
+
+        result = mr.build_trigger_event({})
+
+        assert list(result.keys()) == ["trigger_context"]
+
+    def test_metric_snapshot_in_trigger_context_is_copy_not_reference(self):
+        """trigger_context['metric_snapshot']은 원본 MatchResult.metric_snapshot의 복사본이다."""
+        # Given
+        mr = self._make_match_result(metric_snapshot={"error_rate": 0.06})
+
+        # When
+        result = mr.build_trigger_event({})
+
+        # Then: 반환된 metric_snapshot 수정이 원본에 영향 없음
+        result["trigger_context"]["metric_snapshot"]["error_rate"] = 0.99
+        assert mr.metric_snapshot["error_rate"] == 0.06
+
+    def test_matched_conditions_in_trigger_context_is_copy_not_reference(self):
+        """trigger_context['matched_conditions']은 원본 MatchResult.matched_conditions의 복사본이다."""
+        # Given
+        conditions = ["error_rate gte 0.05"]
+        mr = self._make_match_result(matched_conditions=conditions)
+
+        # When
+        result = mr.build_trigger_event({})
+
+        # Then: 반환된 matched_conditions 수정이 원본에 영향 없음
+        result["trigger_context"]["matched_conditions"].append("extra_condition")
+        assert mr.matched_conditions == ["error_rate gte 0.05"]
+
+    def test_triggered_by_event_none_is_preserved(self):
+        """triggered_by_event가 None인 경우 (Proactive 경로) None이 그대로 포함된다."""
+        mr = self._make_match_result(triggered_by_event=None)
+
+        result = mr.build_trigger_event({})
+
+        assert result["trigger_context"]["triggered_by_event"] is None
+
+    def test_original_event_data_not_mutated(self):
+        """build_trigger_event 호출이 original_event_data를 변경하지 않는다."""
+        # Given
+        mr = self._make_match_result()
+        original = {"service_name": "payment_api"}
+        original_copy = dict(original)
+
+        # When
+        mr.build_trigger_event(original)
+
+        # Then
+        assert original == original_copy

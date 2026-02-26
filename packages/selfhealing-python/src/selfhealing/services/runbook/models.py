@@ -10,6 +10,7 @@ Reference:
 
 from __future__ import annotations
 
+import copy
 import re
 from dataclasses import dataclass, field
 from enum import Enum
@@ -306,6 +307,35 @@ class MatchResult:
     risk_level: int = 0
     """런북 위험도 (RunbookLike.risk_level, 기본 0). select_runbook Tie-breaker 2차 키.
     값이 작을수록 우선 선택 (0=SAFE, 1=MODERATE, 2=DANGEROUS)."""
+
+    def build_trigger_event(self, original_event_data: dict[str, Any]) -> dict[str, Any]:
+        """RunbookExecutor.execute_runbook()에 전달할 trigger_event를 생성한다.
+
+        original_event_data에 trigger_context 키를 추가하여 반환한다.
+        trigger_context에는 277 RunbookPlaybackRecorder가 Postmortem Root Cause Link에
+        활용하는 매칭 시점 정보가 포함된다.
+
+        설계 근거:
+            docs/self_healing/middleware_system/275_RUNBOOK_EXECUTOR.md §18.4
+            "execute_runbook() 시그니처를 변경하지 않음 — trigger_event dict에
+            trigger_context 키를 추가하는 것만으로 하위 호환성 보장"
+
+        Args:
+            original_event_data: 원본 이벤트 데이터 (event.data 또는 event_context 기반)
+
+        Returns:
+            trigger_context가 추가된 trigger_event dict.
+            trigger_context 없는 수동 실행 등에서도 get("trigger_context", {})으로 안전하게 접근 가능.
+        """
+        return {
+            **original_event_data,
+            "trigger_context": {
+                "triggered_by_event": self.triggered_by_event,
+                "metric_snapshot": copy.copy(self.metric_snapshot),  # 원본 불변성 보장
+                "match_confidence": self.confidence,
+                "matched_conditions": list(self.matched_conditions),  # 원본 불변성 보장
+            },
+        }
 
 
 # =============================================================================
