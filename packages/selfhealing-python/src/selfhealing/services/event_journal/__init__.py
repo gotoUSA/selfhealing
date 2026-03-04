@@ -20,11 +20,19 @@ if TYPE_CHECKING:
 _journal_subscriber: JournalSubscriber | None = None
 
 
-def init_event_journal(bus: SelfHealingEventBus | None = None) -> JournalSubscriber:
+def init_event_journal(
+    bus: SelfHealingEventBus | None = None,
+) -> JournalSubscriber | None:
     """EventJournal 구독자를 초기화한다. 앱 시작 시 1회 호출."""
     global _journal_subscriber
     if _journal_subscriber is not None:
         return _journal_subscriber
+
+    from selfhealing.settings.event_journal import get_event_journal_settings
+
+    settings = get_event_journal_settings()
+    if not settings.enabled:
+        return None
 
     from selfhealing.factory import ProviderRegistry
     from selfhealing.services.event_bus.bus import get_event_bus

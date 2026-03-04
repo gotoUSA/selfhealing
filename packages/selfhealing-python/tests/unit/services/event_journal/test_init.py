@@ -5,6 +5,7 @@ Unit tests for Event Journal service init module.
 - init_event_journal() 싱글톤 동작
 - get_event_journal() / reset_event_journal() 라이프사이클
 - ProviderRegistry 통합
+- enabled=False 시 초기화 건너뛰기
 
 테스트 대상: selfhealing.services.event_journal.__init__
 """
@@ -86,4 +87,25 @@ class TestEventJournalSingletonBehavior:
         assert get_event_journal() is not None
 
         reset_event_journal()
+        assert get_event_journal() is None
+
+
+class TestEventJournalEnabledSettingBehavior:
+    """enabled 설정에 따른 init_event_journal() 동작 검증."""
+
+    def setup_method(self):
+        reset_event_journal()
+
+    @patch(
+        "selfhealing.services.event_journal.get_event_journal_settings",
+    )
+    def test_init_returns_none_when_disabled(self, mock_get_settings):
+        """enabled=False이면 None을 반환하고 구독을 등록하지 않는다."""
+        mock_settings = MagicMock()
+        mock_settings.enabled = False
+        mock_get_settings.return_value = mock_settings
+
+        result = init_event_journal()
+
+        assert result is None
         assert get_event_journal() is None

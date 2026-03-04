@@ -8,10 +8,13 @@ Unit tests for RedisEventJournalRepository.
 - 직렬화/역직렬화 왕복
 - TTL 설정
 - 에러 핸들링 (역직렬화 실패)
+- count() ZCARD 최적화 (필터 없는 경우)
+- scan_iter 기반 키 탐색
 
 테스트 대상: selfhealing.adapters.redis.event_journal
 """
 
+import json
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -44,6 +47,33 @@ def _make_entry(
     )
 
 
+def _setup_repo_with_entries(entries_data):
+    """Mock Redis에 직렬화된 엔트리를 준비한다."""
+    mock_redis = MagicMock()
+    repo = RedisEventJournalRepository(redis_client=mock_redis)
+
+    serialized = []
+    for seq, entry in enumerate(entries_data, start=1):
+        data = {
+            "sequence": seq,
+            "event_type": entry.get("event_type", "test"),
+            "source": entry.get("source", "unit"),
+            "timestamp": entry.get(
+                "timestamp",
+                datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc),
+            ).isoformat(),
+            "service_name": entry.get("service_name", "svc"),
+            "context": entry.get("context", {}),
+            "region": entry.get("region", ""),
+            "tier_id": entry.get("tier_id", ""),
+        }
+        serialized.append(json.dumps(data))
+
+    mock_redis.scan_iter.return_value = iter([b"selfhealing:journal:2026-03"])
+    mock_redis.zrangebyscore.return_value = serialized
+    return repo, mock_redis
+
+
 class TestRedisEventJournalContract:
     """RedisEventJournalRepository 설계 계약값 검증."""
 
@@ -62,6 +92,12 @@ class TestRedisEventJournalContract:
         mock_redis = MagicMock()
         repo = RedisEventJournalRepository(redis_client=mock_redis)
         assert repo._ttl_seconds == 2592000
+
+    def test_default_max_query_limit_is_10000(self):
+        """기본 max_query_limit: 10000."""
+        mock_redis = MagicMock()
+        repo = RedisEventJournalRepository(redis_client=mock_redis)
+        assert repo._max_query_limit == 10000
 
 
 class TestRedisEventJournalAppendBehavior:
@@ -132,34 +168,6 @@ class TestRedisEventJournalAppendBehavior:
 class TestRedisEventJournalQueryBehavior:
     """query() 동작 검증."""
 
-    def _setup_repo_with_entries(self, entries_data):
-        """Mock Redis에 직렬화된 엔트리를 준비한다."""
-        import json
-
-        mock_redis = MagicMock()
-        repo = RedisEventJournalRepository(redis_client=mock_redis)
-
-        serialized = []
-        for seq, entry in enumerate(entries_data, start=1):
-            data = {
-                "sequence": seq,
-                "event_type": entry.get("event_type", "test"),
-                "source": entry.get("source", "unit"),
-                "timestamp": entry.get(
-                    "timestamp",
-                    datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc),
-                ).isoformat(),
-                "service_name": entry.get("service_name", "svc"),
-                "context": entry.get("context", {}),
-                "region": entry.get("region", ""),
-                "tier_id": entry.get("tier_id", ""),
-            }
-            serialized.append(json.dumps(data))
-
-        mock_redis.keys.return_value = [b"selfhealing:journal:2026-03"]
-        mock_redis.zrangebyscore.return_value = serialized
-        return repo, mock_redis
-
     def test_query_with_time_range_resolves_partition_keys(self):
         """start_time/end_time이 있으면 월별 파티션 키를 resolve한다."""
         mock_redis = MagicMock()
@@ -173,20 +181,22 @@ class TestRedisEventJournalQueryBehavior:
         # Should query 3 partition keys: 2026-01, 2026-02, 2026-03
         assert mock_redis.zrangebyscore.call_count == 3
 
-    def test_query_without_time_range_uses_all_active_keys(self):
-        """시간 범위 없으면 keys()로 모든 파티션을 조회한다."""
+    def test_query_without_time_range_uses_scan_iter(self):
+        """시간 범위 없으면 scan_iter로 모든 파티션을 조회한다."""
         mock_redis = MagicMock()
-        mock_redis.keys.return_value = [b"selfhealing:journal:2026-03"]
+        mock_redis.scan_iter.return_value = iter([b"selfhealing:journal:2026-03"])
         mock_redis.zrangebyscore.return_value = []
         repo = RedisEventJournalRepository(redis_client=mock_redis)
 
         repo.query(JournalQueryFilter())
 
-        mock_redis.keys.assert_called_once_with("selfhealing:journal:????-??")
+        mock_redis.scan_iter.assert_called_once_with(
+            match="selfhealing:journal:????-??", count=200
+        )
 
     def test_query_filters_by_service_name(self):
         """service_name 필터가 올바르게 동작한다."""
-        repo, _ = self._setup_repo_with_entries(
+        repo, _ = _setup_repo_with_entries(
             [
                 {"service_name": "svc-a"},
                 {"service_name": "svc-b"},
@@ -200,7 +210,7 @@ class TestRedisEventJournalQueryBehavior:
 
     def test_query_truncates_at_limit(self):
         """limit 초과 시 truncated=True를 반환한다."""
-        repo, _ = self._setup_repo_with_entries(
+        repo, _ = _setup_repo_with_entries(
             [{"service_name": f"svc-{i}"} for i in range(5)]
         )
 
@@ -209,6 +219,17 @@ class TestRedisEventJournalQueryBehavior:
         assert result.truncated is True
         assert result.total_count == 5
 
+    def test_query_clamps_limit_to_max_query_limit(self):
+        """filter.limit이 max_query_limit을 초과하면 클램프된다."""
+        repo, _ = _setup_repo_with_entries(
+            [{"service_name": f"svc-{i}"} for i in range(5)]
+        )
+        repo._max_query_limit = 2
+
+        result = repo.query(JournalQueryFilter(limit=100))
+        assert len(result.entries) == 2
+        assert result.truncated is True
+
 
 class TestRedisEventJournalSequenceRangeBehavior:
     """get_sequence_range() 동작 검증."""
@@ -216,7 +237,7 @@ class TestRedisEventJournalSequenceRangeBehavior:
     def test_get_sequence_range_uses_zrangebyscore(self):
         """get_sequence_range()는 zrangebyscore를 사용한다."""
         mock_redis = MagicMock()
-        mock_redis.keys.return_value = [b"selfhealing:journal:2026-03"]
+        mock_redis.scan_iter.return_value = iter([b"selfhealing:journal:2026-03"])
         mock_redis.zrangebyscore.return_value = []
         repo = RedisEventJournalRepository(redis_client=mock_redis)
 
@@ -313,37 +334,9 @@ class TestRedisEventJournalSerializationBehavior:
 class TestRedisEventJournalCountBehavior:
     """count() 동작 검증."""
 
-    def _setup_repo_with_entries(self, entries_data):
-        """Mock Redis에 직렬화된 엔트리를 준비한다."""
-        import json
-
-        mock_redis = MagicMock()
-        repo = RedisEventJournalRepository(redis_client=mock_redis)
-
-        serialized = []
-        for seq, entry in enumerate(entries_data, start=1):
-            data = {
-                "sequence": seq,
-                "event_type": entry.get("event_type", "test"),
-                "source": entry.get("source", "unit"),
-                "timestamp": entry.get(
-                    "timestamp",
-                    datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc),
-                ).isoformat(),
-                "service_name": entry.get("service_name", "svc"),
-                "context": entry.get("context", {}),
-                "region": entry.get("region", ""),
-                "tier_id": entry.get("tier_id", ""),
-            }
-            serialized.append(json.dumps(data))
-
-        mock_redis.keys.return_value = [b"selfhealing:journal:2026-03"]
-        mock_redis.zrangebyscore.return_value = serialized
-        return repo, mock_redis
-
     def test_count_returns_matching_entry_count(self):
         """필터에 맞는 엔트리 수를 반환한다."""
-        repo, _ = self._setup_repo_with_entries(
+        repo, _ = _setup_repo_with_entries(
             [
                 {"event_type": "type_a"},
                 {"event_type": "type_b"},
@@ -354,18 +347,33 @@ class TestRedisEventJournalCountBehavior:
         result = repo.count(JournalQueryFilter(event_types=["type_a"]))
         assert result == 2
 
-    def test_count_with_no_filter_returns_total(self):
-        """필터 없이 count()하면 전체 엔트리 수를 반환한다."""
-        repo, _ = self._setup_repo_with_entries(
+    def test_count_with_no_filter_uses_zcard(self):
+        """필터 없이 count()하면 ZCARD로 빠르게 카운트한다."""
+        mock_redis = MagicMock()
+        mock_redis.scan_iter.return_value = iter(
+            [b"selfhealing:journal:2026-03", b"selfhealing:journal:2026-02"]
+        )
+        mock_redis.zcard.side_effect = [10, 5]
+        repo = RedisEventJournalRepository(redis_client=mock_redis)
+
+        result = repo.count(JournalQueryFilter())
+
+        assert result == 15
+        assert mock_redis.zcard.call_count == 2
+        mock_redis.zrangebyscore.assert_not_called()
+
+    def test_count_with_filter_falls_back_to_deserialization(self):
+        """필터가 있으면 역직렬화 경로를 사용한다."""
+        repo, mock_redis = _setup_repo_with_entries(
             [
-                {"service_name": "svc-1"},
-                {"service_name": "svc-2"},
-                {"service_name": "svc-3"},
+                {"event_type": "type_a"},
+                {"event_type": "type_b"},
             ]
         )
 
-        result = repo.count(JournalQueryFilter())
-        assert result == 3
+        result = repo.count(JournalQueryFilter(event_types=["type_a"]))
+        assert result == 1
+        mock_redis.zcard.assert_not_called()
 
     def test_count_with_time_range_resolves_partition_keys(self):
         """시간 범위 필터 시 월별 파티션 키를 resolve한다."""
@@ -422,15 +430,20 @@ class TestRedisEventJournalPartitionKeyBehavior:
             "selfhealing:journal:2026-01",
         ]
 
-    def test_get_all_active_keys_decodes_bytes(self):
-        """Redis keys()에서 bytes를 str로 디코딩한다."""
+    def test_get_all_active_keys_uses_scan_iter(self):
+        """scan_iter로 키를 탐색하고 bytes를 str로 디코딩한다."""
         mock_redis = MagicMock()
-        mock_redis.keys.return_value = [
-            b"selfhealing:journal:2026-01",
-            b"selfhealing:journal:2026-02",
-        ]
+        mock_redis.scan_iter.return_value = iter(
+            [
+                b"selfhealing:journal:2026-01",
+                b"selfhealing:journal:2026-02",
+            ]
+        )
         repo = RedisEventJournalRepository(redis_client=mock_redis)
 
         keys = repo._get_all_active_keys()
         assert all(isinstance(k, str) for k in keys)
         assert len(keys) == 2
+        mock_redis.scan_iter.assert_called_once_with(
+            match="selfhealing:journal:????-??", count=200
+        )

@@ -756,6 +756,7 @@ class ProviderRegistry:
         cls._correlation_strategies.clear()
         cls._root_cause_strategies.clear()
         cls._graph_build_strategies.clear()
+        cls._event_journal_repos.clear()
         cls._statistics_adapter = None  # Reset statistics adapter
         cls._postmortem_model = None  # Reset postmortem model
         cls._default_cache = "memory"
@@ -876,8 +877,18 @@ def _auto_register_adapters() -> None:
         ProviderRegistry.register_security_repo(
             "memory", InMemorySecurityIncidentRepository
         )
+
+        def _create_memory_journal_repo():
+            from selfhealing.settings.event_journal import get_event_journal_settings
+
+            settings = get_event_journal_settings()
+            return InMemoryEventJournalRepository(
+                max_entries=settings.max_entries_memory,
+                max_query_limit=settings.max_query_limit,
+            )
+
         ProviderRegistry.register_event_journal_repo(
-            "memory", InMemoryEventJournalRepository
+            "memory", _create_memory_journal_repo
         )
     except ImportError:
         pass
@@ -943,6 +954,7 @@ def _auto_register_adapters() -> None:
             return RedisEventJournalRepository(
                 redis_client=client,
                 ttl_seconds=settings.ttl_days * 86400,
+                max_query_limit=settings.max_query_limit,
             )
 
         ProviderRegistry.register_event_journal_repo(

@@ -24,11 +24,16 @@ logger = structlog.get_logger()
 class InMemoryEventJournalRepository(EventJournalRepository):
     """스레드 안전 인메모리 구현. 테스트 및 단일 프로세스용."""
 
-    def __init__(self, max_entries: int = 10000):
+    def __init__(
+        self,
+        max_entries: int = 10000,
+        max_query_limit: int = 10000,
+    ):
         self._entries: list[JournalEntry] = []
         self._lock = threading.RLock()
         self._next_sequence = 1
         self._max_entries = max_entries
+        self._max_query_limit = max_query_limit
 
     def append(self, entry: JournalEntry) -> int:
         with self._lock:
@@ -49,12 +54,13 @@ class InMemoryEventJournalRepository(EventJournalRepository):
                 self._entries = self._entries[-self._max_entries :]
             return seq
 
-    def query(self, filter: JournalQueryFilter) -> JournalQueryResult:
+    def query(self, query_filter: JournalQueryFilter) -> JournalQueryResult:
         with self._lock:
-            matched = self._apply_filter(filter)
+            matched = self._apply_filter(query_filter)
             total_count = len(matched)
-            truncated = total_count > filter.limit
-            entries = matched[: filter.limit]
+            effective_limit = min(query_filter.limit, self._max_query_limit)
+            truncated = total_count > effective_limit
+            entries = matched[:effective_limit]
             return JournalQueryResult(
                 entries=entries,
                 truncated=truncated,
@@ -77,29 +83,35 @@ class InMemoryEventJournalRepository(EventJournalRepository):
                 return 0
             return self._entries[-1].sequence
 
-    def count(self, filter: JournalQueryFilter) -> int:
+    def count(self, query_filter: JournalQueryFilter) -> int:
         with self._lock:
-            return len(self._apply_filter(filter))
+            return len(self._apply_filter(query_filter))
 
-    def _apply_filter(self, filter: JournalQueryFilter) -> list[JournalEntry]:
+    def _apply_filter(self, query_filter: JournalQueryFilter) -> list[JournalEntry]:
         """필터 조건에 맞는 엔트리를 시퀀스 오름차순으로 반환한다."""
         results: list[JournalEntry] = []
         for entry in self._entries:
             if (
-                filter.event_types is not None
-                and entry.event_type not in filter.event_types
+                query_filter.event_types is not None
+                and entry.event_type not in query_filter.event_types
             ):
                 continue
             if (
-                filter.service_name is not None
-                and entry.service_name != filter.service_name
+                query_filter.service_name is not None
+                and entry.service_name != query_filter.service_name
             ):
                 continue
-            if filter.start_time is not None and entry.timestamp < filter.start_time:
+            if (
+                query_filter.start_time is not None
+                and entry.timestamp < query_filter.start_time
+            ):
                 continue
-            if filter.end_time is not None and entry.timestamp >= filter.end_time:
+            if (
+                query_filter.end_time is not None
+                and entry.timestamp >= query_filter.end_time
+            ):
                 continue
-            if filter.region is not None and entry.region != filter.region:
+            if query_filter.region is not None and entry.region != query_filter.region:
                 continue
             results.append(entry)
         return results

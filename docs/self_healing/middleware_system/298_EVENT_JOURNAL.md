@@ -740,3 +740,59 @@ EventJournal은 기존 `healing_events_store.py`를 **대체하지 않는다**.
 | 스키마 | `dict[str, Any]` 비정규화 | `JournalEntry` 정규화 |
 
 두 저장소는 동일한 EventBus 이벤트를 각각 구독하여 독립적으로 저장한다.
+
+---
+
+## 12. 구현 후 코드 리뷰 반영 사항
+
+구현 완료 후 코드 리뷰에서 발견된 6가지 문제를 수정하였다.
+
+### 12.1 `ProviderRegistry.reset()`에 `_event_journal_repos.clear()` 누락 (Critical)
+
+`factory.py`의 `reset()` 메서드가 다른 모든 레지스트리 dict는 초기화하지만
+`_event_journal_repos`를 누락하여 테스트 간 레지스트리 오염이 발생할 수 있었다.
+`cls._graph_build_strategies.clear()` 다음에 `cls._event_journal_repos.clear()`를 추가하였다.
+
+### 12.2 Redis `KEYS` 명령을 `scan_iter`로 교체 (Warning — Performance)
+
+`_get_all_active_keys()`에서 사용하던 `self._redis.keys(pattern)`는
+Redis 전체 키를 O(N)으로 스캔하여 프로덕션에서 블로킹 위험이 있었다.
+기존 프로젝트 패턴(`test_saga_orchestrator_integration.py:239-250`)에서
+`scan_iter(match=pattern, count=200)`을 사용하고 있으므로 동일 패턴을 적용하였다.
+
+**선택 이유**: `SCAN`은 커서 기반 증분 탐색으로 Redis를 블로킹하지 않으며,
+`count=200` 배치 크기는 프로젝트 기존 관례와 일치한다.
+
+### 12.3 Settings 필드 미연결 해소 (Warning — Dead Code)
+
+3개 설정 필드(`enabled`, `max_entries_memory`, `max_query_limit`)가 정의만 되고
+실제 코드에서 참조되지 않았다. 각각 다음과 같이 연결하였다:
+
+- **`enabled`**: `init_event_journal()`에서 `settings.enabled`를 확인하여
+  `False`이면 구독자를 생성하지 않고 `None`을 반환한다.
+- **`max_entries_memory`**: `factory.py` auto-registration에서
+  `InMemoryEventJournalRepository` 생성 시 `settings.max_entries_memory`를 전달한다.
+- **`max_query_limit`**: 양쪽 어댑터 생성자에 `max_query_limit` 파라미터를 추가하고,
+  `query()` 내부에서 `min(query_filter.limit, self._max_query_limit)`로 클램프한다.
+
+### 12.4 Redis `count()` ZCARD 최적화 (Warning — Performance)
+
+기존 `count()`는 필터 유무와 관계없이 모든 엔트리를 역직렬화하여 O(N) JSON 파싱이 발생했다.
+엔트리 레벨 필터가 없는 경우(`event_types`, `service_name`, `region`, `start_time`,
+`end_time` 모두 `None`) `ZCARD` 명령으로 O(1) 카운트를 수행하도록 최적화하였다.
+필터가 있는 경우에는 기존 역직렬화 경로를 유지한다.
+
+**선택 이유**: `ZCARD`는 파티션 단위 O(1) 연산이므로 전체 카운트 시 N번의 JSON 파싱을 제거한다.
+필터가 있으면 어차피 역직렬화가 필요하므로, 필터 유무에 따라 분기하는 것이 가장 단순하다.
+
+### 12.5 `filter` 파라미터를 `query_filter`로 변경 (Suggestion — Readability)
+
+인터페이스(`EventJournalRepository`)와 양쪽 어댑터에서 `query()`, `count()` 등의
+파라미터명이 Python 내장 함수 `filter()`를 섀도잉하고 있었다.
+`query_filter`로 변경하여 내장 함수 섀도잉을 제거하였다.
+
+### 12.6 Redis 테스트 `_setup_repo_with_entries` 중복 제거 (Suggestion — DRY)
+
+`TestRedisEventJournalQueryBehavior`와 `TestRedisEventJournalCountBehavior`에
+동일한 `_setup_repo_with_entries` 헬퍼가 copy-paste되어 있었다.
+모듈 레벨 함수로 추출하여 중복을 제거하였다.

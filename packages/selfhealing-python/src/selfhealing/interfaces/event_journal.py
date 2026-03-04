@@ -87,12 +87,12 @@ class EventJournalRepository(ABC):
         ...
 
     @abstractmethod
-    def query(self, filter: JournalQueryFilter) -> JournalQueryResult:
+    def query(self, query_filter: JournalQueryFilter) -> JournalQueryResult:
         """
         필터 조건에 맞는 엔트리를 시퀀스 순서(오름차순)로 반환한다.
 
         Args:
-            filter: 조회 조건
+            query_filter: 조회 조건
 
         Returns:
             JournalQueryResult — entries(시퀀스 오름차순), truncated 여부, total_count
@@ -125,7 +125,7 @@ class EventJournalRepository(ABC):
         ...
 
     @abstractmethod
-    def count(self, filter: JournalQueryFilter) -> int:
+    def count(self, query_filter: JournalQueryFilter) -> int:
         """필터 조건에 맞는 엔트리 수를 반환한다."""
         ...
 
