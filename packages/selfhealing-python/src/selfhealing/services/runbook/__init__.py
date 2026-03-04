@@ -65,6 +65,16 @@ from selfhealing.services.runbook.models import (
     PatternCondition,
 )
 from selfhealing.services.runbook.pattern_matcher import PatternMatcher
+from selfhealing.services.runbook.primitives import (
+    BUILTIN_PRIMITIVES,
+    AssertMetricParams,
+    ConfigSetParams,
+    EmergencyActivateParams,
+    NotifySendParams,
+    RecoveryStartParams,
+    WaitStabilizeParams,
+    register_builtin_primitives,
+)
 from selfhealing.services.runbook.recorder import RunbookPlaybackRecorder
 from selfhealing.services.runbook.resolvers import (
     DotPathResolver,
@@ -114,6 +124,15 @@ __all__ = [
     "ActionPrimitiveRegistry",
     "BUILTIN_CATEGORIES",
     "RunbookRegistry",
+    # Builtin Primitives
+    "BUILTIN_PRIMITIVES",
+    "ConfigSetParams",
+    "AssertMetricParams",
+    "NotifySendParams",
+    "RecoveryStartParams",
+    "EmergencyActivateParams",
+    "WaitStabilizeParams",
+    "register_builtin_primitives",
     # Execution Models
     "RunbookExecutionStatus",
     "RunbookStepResult",

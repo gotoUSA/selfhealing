@@ -356,13 +356,18 @@ class ActionPrimitiveRegistry:
         self._register_builtins()
 
     def _register_builtins(self) -> None:
-        """내장 primitive 시그니처 등록 (스텁 — 275번 Executor에서 구현체 교체 가능)."""
-        # 내장 primitive는 275번 Executor 구현 시 실제 핸들러가 등록된다.
-        # 여기서는 카테고리 목록만 로깅하여 운영자가 확인 가능하게 한다.
-        logger.debug(
-            "action_primitive_registry.builtins_placeholder",
-            categories=list(BUILTIN_CATEGORIES.keys()),
-        )
+        """내장 primitive + Pydantic 스키마 동시 등록."""
+        try:
+            from selfhealing.services.runbook.primitives import (
+                register_builtin_primitives,
+            )
+
+            register_builtin_primitives(self)
+        except Exception:
+            logger.debug(
+                "action_primitive_registry.builtins_placeholder",
+                categories=list(BUILTIN_CATEGORIES.keys()),
+            )
 
     def register(
         self,
@@ -636,7 +641,9 @@ class RunbookRegistry:
         backend = self._get_state_backend()
         if backend:
             try:
-                enabled_map = {rb_id: rb.enabled for rb_id, rb in self._runbooks.items()}
+                enabled_map = {
+                    rb_id: rb.enabled for rb_id, rb in self._runbooks.items()
+                }
                 backend.set(self._ENABLED_KEY, enabled_map)
             except Exception as exc:
                 # 쓰기 실패는 데이터 유실 위험 — exception 레벨로 기록
@@ -706,8 +713,14 @@ class RunbookRegistry:
 
             # 템플릿 변수({var_name}) 포함 값은 정적 검증에서 제외.
             # 정규식으로 Python format 변수만 감지 — JSON 문자열 오탐 방지.
-            template_keys = {k for k, v in step.params.items() if isinstance(v, str) and _TEMPLATE_VAR_RE.search(v)}
-            static_params = {k: v for k, v in step.params.items() if k not in template_keys}
+            template_keys = {
+                k
+                for k, v in step.params.items()
+                if isinstance(v, str) and _TEMPLATE_VAR_RE.search(v)
+            }
+            static_params = {
+                k: v for k, v in step.params.items() if k not in template_keys
+            }
 
             # 모든 파라미터가 템플릿 변수이면 정적 검증 불가 — 실행 시점에 재검증
             if not static_params:
@@ -722,12 +735,17 @@ class RunbookRegistry:
                     non_template_errors = [
                         e
                         for e in exc.errors()
-                        if not (e["type"] == "missing" and len(e["loc"]) == 1 and e["loc"][0] in template_keys)
+                        if not (
+                            e["type"] == "missing"
+                            and len(e["loc"]) == 1
+                            and e["loc"][0] in template_keys
+                        )
                     ]
                     if not non_template_errors:
                         continue
                 raise ValueError(
-                    f"Runbook '{runbook.id}' step '{step.name}' " f"action '{step.action}' params 검증 실패: {exc}"
+                    f"Runbook '{runbook.id}' step '{step.name}' "
+                    f"action '{step.action}' params 검증 실패: {exc}"
                 ) from exc
 
     def unregister(self, runbook_id: str) -> bool:
@@ -808,7 +826,9 @@ class RunbookRegistry:
     def get_by_tag(self, tag: str) -> list[Runbook]:
         """태그로 런북 필터 — deepcopy 반환."""
         with self._lock:
-            return [copy.deepcopy(rb) for rb in self._runbooks.values() if tag in rb.tags]
+            return [
+                copy.deepcopy(rb) for rb in self._runbooks.values() if tag in rb.tags
+            ]
 
     # =========================================================================
     # 의존성 지연 로드 — SagaOrchestrator 패턴
