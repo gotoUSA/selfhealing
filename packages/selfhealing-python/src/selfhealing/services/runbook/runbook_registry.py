@@ -306,32 +306,48 @@ class Runbook:
     global_timeout_seconds: int | None = None
     """전체 실행 타임아웃 (초). None이면 설정값(SELFHEALING_RUNBOOK_GLOBAL_TIMEOUT_SECONDS) 사용."""
 
-    def validate(self) -> tuple[bool, str]:
+    # 부작용 있는 상태 변경 Action — continue_on_failure=True 경고 대상 (297 §2.5)
+    STATE_CHANGING_ACTIONS: frozenset[str] = frozenset(
+        {"config.set", "recovery.start", "emergency.activate", "emergency.deactivate"}
+    )
+
+    def validate(self) -> tuple[bool, str, list[str]]:
         """런북 정의 유효성 검증.
 
         SagaDefinition.validate()와 동일한 패턴:
         1. steps가 비어있지 않은지
         2. 각 step의 name/action이 비어있지 않은지
         3. step name이 중복되지 않는지
+        4. continue_on_failure + 상태 변경 action 경고 (297 §2.5)
 
         Returns:
-            (True, "") — 유효
-            (False, "에러 메시지") — 무효
+            (valid, error, warnings)
+            (True, "", []) — 유효 (경고 없음)
+            (True, "", [...]) — 유효 (경고 있음)
+            (False, "에러 메시지", []) — 무효
         """
+        warnings: list[str] = []
+
         if not self.steps:
-            return False, "steps가 비어있다. 최소 1개 이상의 step이 필요하다."
+            return False, "steps가 비어있다. 최소 1개 이상의 step이 필요하다.", warnings
 
         seen_names: set[str] = set()
         for step in self.steps:
             if not step.name:
-                return False, f"step에 name이 없다: {step}"
+                return False, f"step에 name이 없다: {step}", warnings
             if not step.action:
-                return False, f"step '{step.name}'에 action이 없다."
+                return False, f"step '{step.name}'에 action이 없다.", warnings
             if step.name in seen_names:
-                return False, f"step name 중복: '{step.name}'"
+                return False, f"step name 중복: '{step.name}'", warnings
             seen_names.add(step.name)
 
-        return True, ""
+            if step.continue_on_failure and step.action in self.STATE_CHANGING_ACTIONS:
+                warnings.append(
+                    f"Step '{step.name}': continue_on_failure=True on state-changing "
+                    f"action '{step.action}' — failed state changes will not be compensated"
+                )
+
+        return True, "", warnings
 
 
 # =============================================================================
@@ -684,9 +700,15 @@ class RunbookRegistry:
             ValueError: 구조 검증 또는 파라미터 스키마 검증 실패 시
         """
         # 1단계: 구조적 유효성 검증
-        valid, error = runbook.validate()
+        valid, error, warnings = runbook.validate()
         if not valid:
             raise ValueError(f"Invalid runbook '{runbook.id}': {error}")
+        for warning in warnings:
+            logger.warning(
+                "runbook_registry.validation_warning",
+                runbook_id=runbook.id,
+                warning=warning,
+            )
 
         # 2단계: 파라미터 스키마 검증
         self._validate_all_step_params(runbook)

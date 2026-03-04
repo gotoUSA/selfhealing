@@ -1,6 +1,6 @@
 # 297. Executor Enhancements — continue_on_failure, poll_interval, labels Fail-Fast
 
-> **Status**: Design
+> **Status**: Implemented
 > **Target**:
 > - `packages/selfhealing-python/src/selfhealing/services/runbook/runbook_registry.py` — RunbookStep 모델
 > - `packages/selfhealing-python/src/selfhealing/services/runbook/executor.py` — Executor 루프

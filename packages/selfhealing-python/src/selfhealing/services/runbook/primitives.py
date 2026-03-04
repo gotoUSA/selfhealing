@@ -53,8 +53,9 @@ class AssertMetricParams(BaseModel):
     """assert.metric action 파라미터."""
 
     metric_name: str
-    operator: Literal["gt", "lt", "eq", "gte", "lte"]
+    operator: Literal["gt", "lt", "eq", "gte", "lte", "neq"]
     threshold: float
+    labels: dict[str, str] | None = None
 
 
 class NotifySendParams(BaseModel):
@@ -84,8 +85,10 @@ class WaitStabilizeParams(BaseModel):
 
     seconds: int = Field(ge=1, le=3600)
     assert_metric: str | None = None
-    operator: Literal["gt", "lt", "eq", "gte", "lte"] = "gte"
+    operator: Literal["gt", "lt", "eq", "gte", "lte", "neq"] = "gte"
     threshold: float | None = None
+    labels: dict[str, str] | None = None
+    poll_interval_seconds: int = Field(default=0, ge=0, le=300)
 
 
 # =============================================================================
@@ -96,6 +99,7 @@ _OPERATOR_MAP: dict[str, Any] = {
     "gt": lambda a, b: a > b,
     "lt": lambda a, b: a < b,
     "eq": lambda a, b: a == b,
+    "neq": lambda a, b: a != b,
     "gte": lambda a, b: a >= b,
     "lte": lambda a, b: a <= b,
 }
@@ -157,7 +161,20 @@ def _handle_assert_metric(ctx: RunbookStepContext) -> StepResult:
     try:
         params = AssertMetricParams(**ctx.params)
 
-        metric_value = _query_metric(params.metric_name)
+        # 297 §4.2: 필수 라벨 Fail-Fast 검증
+        if params.labels:
+            for label_key, label_value in params.labels.items():
+                if not label_value or label_value.startswith("${"):
+                    return StepResult.failed(
+                        error=(
+                            f"Required label '{label_key}' not resolved: '{label_value}'. "
+                            f"Variable interpolation failed — aborting to prevent unscoped metric query."
+                        ),
+                        error_code="LABEL_NOT_RESOLVED",
+                        retryable=False,
+                    )
+
+        metric_value = _query_metric(params.metric_name, labels=params.labels)
         if metric_value is None:
             return StepResult.failed(
                 error=f"Metric '{params.metric_name}' not found",
@@ -383,29 +400,87 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
     """wait.stabilize — 지정 시간 대기 후 선택적 메트릭 검증.
 
     assert_metric/threshold가 지정되면 대기 후 메트릭을 확인한다.
+    poll_interval_seconds > 0이면 주기적으로 메트릭을 확인하고 임계값 초과 시 즉시 Fail-Fast.
     """
     try:
         params = WaitStabilizeParams(**ctx.params)
 
-        time.sleep(params.seconds)
+        # 297 §4.3: 필수 라벨 Fail-Fast 검증
+        if params.labels:
+            for label_key, label_value in params.labels.items():
+                if not label_value or label_value.startswith("${"):
+                    return StepResult.failed(
+                        error=(
+                            f"Required label '{label_key}' not resolved: '{label_value}'."
+                        ),
+                        error_code="LABEL_NOT_RESOLVED",
+                        retryable=False,
+                    )
 
-        if params.assert_metric and params.threshold is not None:
-            metric_value = _query_metric(params.assert_metric)
-            if metric_value is None:
-                return StepResult.failed(
-                    error=f"Metric '{params.assert_metric}' not found after wait",
-                    error_code="WAIT_METRIC_NOT_FOUND",
-                    retryable=True,
-                )
+        if (
+            params.poll_interval_seconds > 0
+            and params.assert_metric
+            and params.threshold is not None
+        ):
+            # 297 §3.3: Polling 모드 — 주기적 메트릭 확인 + 조기 종료
             op_fn = _OPERATOR_MAP[params.operator]
-            if not op_fn(metric_value, params.threshold):
+            elapsed = 0
+            while elapsed < params.seconds:
+                sleep_chunk = min(
+                    params.poll_interval_seconds, params.seconds - elapsed
+                )
+                time.sleep(sleep_chunk)
+                elapsed += sleep_chunk
+
+                metric_value = _query_metric(params.assert_metric, labels=params.labels)
+                if metric_value is not None and not op_fn(
+                    metric_value, params.threshold
+                ):
+                    return StepResult.failed(
+                        error=(
+                            f"Fail-fast: {params.assert_metric}={metric_value:.3f} "
+                            f"violated {params.operator} {params.threshold} "
+                            f"at {elapsed}s/{params.seconds}s"
+                        ),
+                        error_code="WAIT_STABILIZE_FAIL_FAST",
+                        result_data={
+                            "waited_seconds": elapsed,
+                            "total_seconds": params.seconds,
+                            "fail_fast": True,
+                            "metric_value": metric_value,
+                        },
+                    )
+
+            # 전체 대기 완료 — 최종 검증
+            metric_value = _query_metric(params.assert_metric, labels=params.labels)
+            if metric_value is not None and not op_fn(metric_value, params.threshold):
                 return StepResult.failed(
                     error=(
-                        f"Stabilization check failed: {params.assert_metric}="
-                        f"{metric_value} {params.operator} {params.threshold}"
+                        f"Stabilization failed: {params.assert_metric}={metric_value:.3f} "
+                        f"violated {params.operator} {params.threshold}"
                     ),
                     error_code="WAIT_STABILIZE_FAILED",
                 )
+        else:
+            # 기존 동작: 전체 sleep + 사후 검증
+            time.sleep(params.seconds)
+            if params.assert_metric and params.threshold is not None:
+                metric_value = _query_metric(params.assert_metric, labels=params.labels)
+                if metric_value is None:
+                    return StepResult.failed(
+                        error=f"Metric '{params.assert_metric}' not found after wait",
+                        error_code="WAIT_METRIC_NOT_FOUND",
+                        retryable=True,
+                    )
+                op_fn = _OPERATOR_MAP[params.operator]
+                if not op_fn(metric_value, params.threshold):
+                    return StepResult.failed(
+                        error=(
+                            f"Stabilization check failed: {params.assert_metric}="
+                            f"{metric_value} {params.operator} {params.threshold}"
+                        ),
+                        error_code="WAIT_STABILIZE_FAILED",
+                    )
 
         logger.info(
             "primitive.wait_stabilize.done",
@@ -428,14 +503,17 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
 # =============================================================================
 
 
-def _query_metric(metric_name: str) -> float | None:
-    """Prometheus / RunbookMetricsProvider를 통해 메트릭 현재값 조회."""
+def _query_metric(
+    metric_name: str,
+    labels: dict[str, str] | None = None,
+) -> float | None:
+    """메트릭 조회. labels가 있으면 Per-Service 스코프, 없으면 Global."""
     try:
         from selfhealing.factory import ProviderRegistry
 
         provider = ProviderRegistry.get("runbook_metrics_provider")
         if provider and hasattr(provider, "query"):
-            return provider.query(metric_name)
+            return provider.query(metric_name, labels=labels)
     except Exception as exc:
         logger.debug(
             "primitive.query_metric.provider_failed", metric=metric_name, error=str(exc)

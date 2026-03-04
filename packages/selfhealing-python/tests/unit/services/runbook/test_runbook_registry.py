@@ -35,6 +35,7 @@ import pytest
 from pydantic import BaseModel, field_validator
 
 from selfhealing.services.runbook.runbook_registry import (
+    _TEMPLATE_VAR_RE,
     BUILTIN_CATEGORIES,
     ActionPrimitiveRegistry,
     RiskLevel,
@@ -43,7 +44,6 @@ from selfhealing.services.runbook.runbook_registry import (
     RunbookStep,
     RunbookStepContext,
     StepCondition,
-    _TEMPLATE_VAR_RE,
 )
 
 # =============================================================================
@@ -51,7 +51,9 @@ from selfhealing.services.runbook.runbook_registry import (
 # =============================================================================
 
 
-def _make_minimal_step(name: str = "step_one", action: str = "config.set") -> RunbookStep:
+def _make_minimal_step(
+    name: str = "step_one", action: str = "config.set"
+) -> RunbookStep:
     """최소 구성의 RunbookStep 생성."""
     return RunbookStep(name=name, action=action)
 
@@ -392,8 +394,10 @@ class TestRunbookValidateBehavior:
 
     def test_valid_runbook_returns_true_and_empty_error(self):
         """유효한 런북은 (True, '')을 반환한다."""
-        rb = _make_minimal_runbook(steps=[_make_minimal_step("s1"), _make_minimal_step("s2")])
-        valid, error = rb.validate()
+        rb = _make_minimal_runbook(
+            steps=[_make_minimal_step("s1"), _make_minimal_step("s2")]
+        )
+        valid, error, *_ = rb.validate()
         assert valid is True
         assert error == ""
 
@@ -411,7 +415,7 @@ class TestRunbookValidateBehavior:
         )
 
         # When
-        valid, error = rb.validate()
+        valid, error, *_ = rb.validate()
 
         # Then
         assert valid is False
@@ -421,7 +425,7 @@ class TestRunbookValidateBehavior:
         """name이 없는 step이 있으면 (False, 에러 메시지)를 반환한다."""
         step = RunbookStep(name="", action="config.set")
         rb = _make_minimal_runbook(steps=[step])
-        valid, error = rb.validate()
+        valid, error, *_ = rb.validate()
         assert valid is False
         assert "name" in error.lower()
 
@@ -429,7 +433,7 @@ class TestRunbookValidateBehavior:
         """action이 없는 step이 있으면 (False, 에러 메시지)를 반환한다."""
         step = RunbookStep(name="step_one", action="")
         rb = _make_minimal_runbook(steps=[step])
-        valid, error = rb.validate()
+        valid, error, *_ = rb.validate()
         assert valid is False
         assert "action" in error.lower()
 
@@ -440,14 +444,14 @@ class TestRunbookValidateBehavior:
             RunbookStep(name="duplicate", action="assert.metric"),
         ]
         rb = _make_minimal_runbook(steps=steps)
-        valid, error = rb.validate()
+        valid, error, *_ = rb.validate()
         assert valid is False
         assert "중복" in error or "duplicate" in error.lower()
 
     def test_single_valid_step_returns_true(self):
         """단일 유효한 step이 있으면 (True, '')을 반환한다."""
         rb = _make_minimal_runbook(steps=[_make_minimal_step()])
-        valid, error = rb.validate()
+        valid, error, *_ = rb.validate()
         assert valid is True
         assert error == ""
 
@@ -524,7 +528,11 @@ class TestRunbookRegistryRegisterBehavior:
 
         registry = _make_registry(primitive_registry=primitive_reg)
 
-        steps = [RunbookStep(name="check", action="assert.metric", params={"threshold": -1.0})]
+        steps = [
+            RunbookStep(
+                name="check", action="assert.metric", params={"threshold": -1.0}
+            )
+        ]
         rb = _make_minimal_runbook(steps=steps)
 
         # When / Then
@@ -543,7 +551,13 @@ class TestRunbookRegistryRegisterBehavior:
         registry = _make_registry(primitive_registry=primitive_reg)
 
         # 템플릿 변수 포함 — 정적 검증 대상 아님
-        steps = [RunbookStep(name="alert", action="notify.send", params={"target_service": "{event_source}"})]
+        steps = [
+            RunbookStep(
+                name="alert",
+                action="notify.send",
+                params={"target_service": "{event_source}"},
+            )
+        ]
         rb = _make_minimal_runbook(steps=steps)
 
         # ValueError 없이 등록되어야 함
@@ -587,7 +601,9 @@ class TestRunbookRegistryCrudBehavior:
         rb = _make_minimal_runbook("rb_active")
         registry.register(rb)
 
-        assert [r.id for r in registry.get_active_runbooks()] == [r.id for r in registry.get_enabled()]
+        assert [r.id for r in registry.get_active_runbooks()] == [
+            r.id for r in registry.get_enabled()
+        ]
 
     def test_get_all_includes_disabled_runbooks(self):
         """get_all()은 비활성화 런북도 포함하여 반환한다."""
@@ -738,7 +754,10 @@ class TestRunbookRegistryDistributedSyncBehavior:
         registry.register(_make_minimal_runbook("rb_self"))
         registry._runbooks["rb_self"].enabled = True
 
-        event = self._make_event("runbook_registry", {"action": "set_enabled", "runbook_id": "rb_self", "enabled": False})
+        event = self._make_event(
+            "runbook_registry",
+            {"action": "set_enabled", "runbook_id": "rb_self", "enabled": False},
+        )
         registry._on_registry_updated(event)
 
         # 자기 이벤트는 무시 → enabled는 변하지 않아야 함
@@ -749,7 +768,10 @@ class TestRunbookRegistryDistributedSyncBehavior:
         registry = _make_registry()
         registry.register(_make_minimal_runbook("rb_remote"))
 
-        event = self._make_event("other_node", {"action": "set_enabled", "runbook_id": "rb_remote", "enabled": False})
+        event = self._make_event(
+            "other_node",
+            {"action": "set_enabled", "runbook_id": "rb_remote", "enabled": False},
+        )
         registry._on_registry_updated(event)
 
         assert registry._runbooks["rb_remote"].enabled is False
@@ -759,7 +781,9 @@ class TestRunbookRegistryDistributedSyncBehavior:
         registry = _make_registry()
         registry.register(_make_minimal_runbook("rb_del"))
 
-        event = self._make_event("other_node", {"action": "unregister", "runbook_id": "rb_del"})
+        event = self._make_event(
+            "other_node", {"action": "unregister", "runbook_id": "rb_del"}
+        )
         registry._on_registry_updated(event)
 
         assert "rb_del" not in registry._runbooks
@@ -768,7 +792,9 @@ class TestRunbookRegistryDistributedSyncBehavior:
         """등록되지 않은 runbook_id의 unregister 이벤트를 수신해도 예외가 없다."""
         registry = _make_registry()
 
-        event = self._make_event("other_node", {"action": "unregister", "runbook_id": "nonexistent"})
+        event = self._make_event(
+            "other_node", {"action": "unregister", "runbook_id": "nonexistent"}
+        )
         registry._on_registry_updated(event)  # 예외 없이 실행 확인
 
 
@@ -793,7 +819,9 @@ class TestRunbookRegistryThreadSafetyBehavior:
                 errors.append(str(e))
 
         # When: 30개 스레드 동시 등록
-        threads = [threading.Thread(target=register_runbook, args=(i,)) for i in range(30)]
+        threads = [
+            threading.Thread(target=register_runbook, args=(i,)) for i in range(30)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -823,7 +851,10 @@ class TestRunbookRegistryThreadSafetyBehavior:
             except Exception as e:
                 errors.append(str(e))
 
-        threads = [threading.Thread(target=toggle if i % 2 == 0 else read, args=(i,)) for i in range(20)]
+        threads = [
+            threading.Thread(target=toggle if i % 2 == 0 else read, args=(i,))
+            for i in range(20)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -944,7 +975,9 @@ class TestActionPrimitiveRegistrySchemaValidationBehavior:
         """스키마가 등록되지 않은 action은 파라미터 검증을 건너뛴다."""
         registry = _make_registry()
         # 스키마 없는 action
-        steps = [RunbookStep(name="step", action="db.kill_idle", params={"threshold": -999})]
+        steps = [
+            RunbookStep(name="step", action="db.kill_idle", params={"threshold": -999})
+        ]
         rb = _make_minimal_runbook(steps=steps)
 
         # 예외 없이 등록되어야 함
@@ -958,7 +991,9 @@ class TestActionPrimitiveRegistrySchemaValidationBehavior:
         class StrictParams(BaseModel):
             required_field: str  # 필수 필드
 
-        steps = [RunbookStep(name="step", action="config.set", params={})]  # required_field 없음
+        steps = [
+            RunbookStep(name="step", action="config.set", params={})
+        ]  # required_field 없음
         rb = _make_minimal_runbook(steps=steps)
 
         # primitive_registry가 없으므로 예외 없이 등록
@@ -982,12 +1017,18 @@ class TestActionPrimitiveRegistrySchemaValidationBehavior:
         registry = _make_registry(primitive_registry=primitive_reg)
 
         # 유효한 static param
-        valid_steps = [RunbookStep(name="check", action="assert.metric", params={"threshold": 0.8})]
+        valid_steps = [
+            RunbookStep(name="check", action="assert.metric", params={"threshold": 0.8})
+        ]
         rb_valid = _make_minimal_runbook("rb_valid_param", steps=valid_steps)
         registry.register(rb_valid)  # 예외 없음
 
         # 무효한 static param
-        invalid_steps = [RunbookStep(name="check", action="assert.metric", params={"threshold": -0.1})]
+        invalid_steps = [
+            RunbookStep(
+                name="check", action="assert.metric", params={"threshold": -0.1}
+            )
+        ]
         rb_invalid = _make_minimal_runbook("rb_invalid_param", steps=invalid_steps)
         with pytest.raises(ValueError):
             registry.register(rb_invalid)

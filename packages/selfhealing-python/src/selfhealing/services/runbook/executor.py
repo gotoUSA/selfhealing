@@ -208,7 +208,8 @@ class RunbookExecutor:
         acquired = lock.acquire(namespace, execution_id)
         if not acquired:
             raise RunbookLockConflictError(
-                f"Namespace '{namespace}'은 다른 복구/런북 실행이 Lock을 보유 중이다. " f"execution_id={execution_id}"
+                f"Namespace '{namespace}'은 다른 복구/런북 실행이 Lock을 보유 중이다. "
+                f"execution_id={execution_id}"
             )
 
         try:
@@ -242,13 +243,17 @@ class RunbookExecutor:
 
         resumable = {RunbookExecutionStatus.FAILED, RunbookExecutionStatus.EXECUTING}
         if ctx.status not in resumable:
-            raise RunbookExecutionError(f"상태 '{ctx.status.value}'인 실행은 재개할 수 없다.")
+            raise RunbookExecutionError(
+                f"상태 '{ctx.status.value}'인 실행은 재개할 수 없다."
+            )
 
         # 1. Stale Context 방어 (scan_orphan_sagas STALE_THRESHOLD_SECONDS 패턴)
         if not force and ctx.started_at:
             try:
                 settings = self._get_settings()
-                stale_threshold = getattr(settings, "resume_stale_threshold_seconds", 3600)
+                stale_threshold = getattr(
+                    settings, "resume_stale_threshold_seconds", 3600
+                )
                 started = datetime.fromisoformat(ctx.started_at)
                 if started.tzinfo is None:
                     started = started.replace(tzinfo=timezone.utc)
@@ -268,7 +273,9 @@ class RunbookExecutor:
         registry = RunbookRegistry()
         runbook = registry.get(ctx.runbook_id)
         if runbook is None:
-            raise RunbookExecutionError(f"Runbook '{ctx.runbook_id}'을 레지스트리에서 찾을 수 없다.")
+            raise RunbookExecutionError(
+                f"Runbook '{ctx.runbook_id}'을 레지스트리에서 찾을 수 없다."
+            )
         if ctx.runbook_version != runbook.version:
             raise RunbookVersionMismatchError(
                 f"Runbook 버전 불일치: execution={ctx.runbook_version}, "
@@ -294,7 +301,8 @@ class RunbookExecutor:
         acquired = lock.acquire(ctx.namespace, ctx.execution_id)
         if not acquired:
             raise RunbookLockConflictError(
-                f"Namespace '{ctx.namespace}'은 다른 복구/런북 실행이 Lock을 보유 중이다. " f"execution_id={ctx.execution_id}"
+                f"Namespace '{ctx.namespace}'은 다른 복구/런북 실행이 Lock을 보유 중이다. "
+                f"execution_id={ctx.execution_id}"
             )
 
         try:
@@ -346,7 +354,10 @@ class RunbookExecutor:
         """지정 인덱스부터 순차 Step 실행. resume 시 사용."""
         from selfhealing.core.timezone import now
 
-        ordered_steps = sorted(runbook.steps, key=lambda s: getattr(s, "order", 0) if hasattr(s, "order") else 0)
+        ordered_steps = sorted(
+            runbook.steps,
+            key=lambda s: getattr(s, "order", 0) if hasattr(s, "order") else 0,
+        )
 
         for idx, step in enumerate(ordered_steps):
             if idx < start_index:
@@ -359,6 +370,16 @@ class RunbookExecutor:
             ctx.step_results[step.name] = step_result
 
             if not step_result.success and not step_result.idempotent:
+                if getattr(step, "continue_on_failure", False):
+                    # 297 §2.3: 검증 게이트 실패 — abort 없이 다음 Step으로 진행
+                    logger.info(
+                        "runbook_executor.step_failed_continue",
+                        runbook_id=runbook.id,
+                        step=step.name,
+                        error=step_result.error,
+                    )
+                    ctx.step_results[step.name] = step_result
+                    continue
                 # 실패 — 역순 보상
                 logger.warning(
                     "runbook_executor.step_failed",
@@ -428,7 +449,6 @@ class RunbookExecutor:
         from selfhealing.core.timezone import now
         from selfhealing.services.coordination.idempotent_step_handlers import (
             IdempotencyStatus,
-            IdempotencyRecord,
             generate_idempotency_key,
         )
 
@@ -534,7 +554,9 @@ class RunbookExecutor:
         self._mark_idempotency_executing(idempotency_key, ctx.execution_id, step)
 
         # 7. 타임아웃 적용 실행 + Lock Heartbeat (SagaOrchestrator._execute_with_timeout 패턴)
-        step_timeout = getattr(step, "timeout_seconds", None) or getattr(runbook, "global_timeout_seconds", None)
+        step_timeout = getattr(step, "timeout_seconds", None) or getattr(
+            runbook, "global_timeout_seconds", None
+        )
 
         try:
             action_result: ActionResult = self._execute_with_timeout(
@@ -637,7 +659,9 @@ class RunbookExecutor:
 
             # 전체 타임아웃 초과
             future.cancel()
-            raise RunbookStepTimeoutError(f"Runbook step '{step_name}'이 {timeout_seconds}초 후 타임아웃됐다.")
+            raise RunbookStepTimeoutError(
+                f"Runbook step '{step_name}'이 {timeout_seconds}초 후 타임아웃됐다."
+            )
         finally:
             executor.shutdown(wait=False)
 
@@ -662,10 +686,16 @@ class RunbookExecutor:
 
         # 보상 대상: 성공한 step 또는 In-doubt(partial_execution=True) step
         # SagaInstance.get_compensation_targets(): EXECUTED 또는 (EXECUTE_FAILED + partial_execution)
+        # 297 §2.4: continue_on_failure=True로 실패한 Step은 보상 대상에서 제외
+        #   (검증 게이트는 부작용 없으므로 보상할 상태 변경이 없다)
+        continue_on_failure_steps = self._get_continue_on_failure_step_names(runbook)
         compensation_targets = [
             (name, result)
             for name, result in ctx.step_results.items()
-            if (result.success and result.executed) or result.partial_execution
+            if (
+                ((result.success and result.executed) or result.partial_execution)
+                and not (not result.success and name in continue_on_failure_steps)
+            )
         ]
 
         # 역순 정렬: Step order 역순 (보상은 실행의 반대 순서)
@@ -689,7 +719,9 @@ class RunbookExecutor:
             # register_compensate()는 action_name 기준으로 등록하므로
             # RunbookStep.on_failure_action이 있으면 우선, 없으면 step.action으로 조회
             compensate_key = self._resolve_compensate_key(step_name, runbook)
-            compensate_fn = registry.get_compensate(compensate_key) if registry else None
+            compensate_fn = (
+                registry.get_compensate(compensate_key) if registry else None
+            )
             if compensate_fn is None:
                 logger.debug(
                     "runbook_executor.no_compensate_fn",
@@ -707,7 +739,9 @@ class RunbookExecutor:
             )
 
             try:
-                compensate_params = self._build_compensate_params(step_name, step_result, ctx, runbook)
+                compensate_params = self._build_compensate_params(
+                    step_name, step_result, ctx, runbook
+                )
                 from selfhealing.core.action_executor import Action
 
                 action = Action(
@@ -772,6 +806,15 @@ class RunbookExecutor:
                 break
 
         return resolve_params(on_failure_params, ctx, DotPathResolver())
+
+    @staticmethod
+    def _get_continue_on_failure_step_names(runbook: Runbook) -> set[str]:
+        """continue_on_failure=True인 Step 이름 집합 반환 (297 §2.4)."""
+        return {
+            step.name
+            for step in runbook.steps
+            if getattr(step, "continue_on_failure", False)
+        }
 
     @staticmethod
     def _resolve_compensate_key(step_name: str, runbook: Runbook) -> str:
@@ -924,7 +967,11 @@ class RunbookExecutor:
             if data and isinstance(data, dict):
                 return IdempotencyRecord.from_dict(data)
         except Exception as e:
-            logger.warning("runbook_executor.idempotency_get_failed", key=idempotency_key, error=str(e))
+            logger.warning(
+                "runbook_executor.idempotency_get_failed",
+                key=idempotency_key,
+                error=str(e),
+            )
         return None
 
     def _mark_idempotency_executing(
@@ -934,12 +981,12 @@ class RunbookExecutor:
         step: RunbookStep,
     ) -> None:
         """멱등성 레코드를 EXECUTING 상태로 마킹."""
+        from selfhealing.core.timezone import now
         from selfhealing.services.coordination.idempotent_step_handlers import (
+            IDEMPOTENCY_KEY_TTL_HOURS,
             IdempotencyRecord,
             IdempotencyStatus,
-            IDEMPOTENCY_KEY_TTL_HOURS,
         )
-        from selfhealing.core.timezone import now
 
         record = self._get_idempotency_record(idempotency_key) or IdempotencyRecord(
             idempotency_key=idempotency_key,
@@ -972,12 +1019,12 @@ class RunbookExecutor:
         error_msg: str | None = None,
     ) -> None:
         """멱등성 레코드를 COMPLETED 또는 FAILED로 업데이트."""
+        from selfhealing.core.timezone import now
         from selfhealing.services.coordination.idempotent_step_handlers import (
+            IDEMPOTENCY_KEY_TTL_HOURS,
             IdempotencyRecord,
             IdempotencyStatus,
-            IDEMPOTENCY_KEY_TTL_HOURS,
         )
-        from selfhealing.core.timezone import now
 
         record = self._get_idempotency_record(idempotency_key) or IdempotencyRecord(
             idempotency_key=idempotency_key,
@@ -986,9 +1033,13 @@ class RunbookExecutor:
             step_order=getattr(step, "order", 0),
         )
 
-        if failed or (action_result is not None and not getattr(action_result, "success", True)):
+        if failed or (
+            action_result is not None and not getattr(action_result, "success", True)
+        ):
             record.status = IdempotencyStatus.FAILED
-            record.error_message = error_msg or (getattr(action_result, "error", None) if action_result else None)
+            record.error_message = error_msg or (
+                getattr(action_result, "error", None) if action_result else None
+            )
         else:
             record.status = IdempotencyStatus.COMPLETED
             record.result = action_result.to_dict() if action_result else {}
@@ -1004,7 +1055,9 @@ class RunbookExecutor:
                     ttl=IDEMPOTENCY_KEY_TTL_HOURS * 3600,
                 )
             except Exception as e:
-                logger.warning("runbook_executor.idempotency_update_failed", error=str(e))
+                logger.warning(
+                    "runbook_executor.idempotency_update_failed", error=str(e)
+                )
 
     # =========================================================================
     # 컨텍스트 영속화 (_save_session 패턴)
@@ -1019,7 +1072,11 @@ class RunbookExecutor:
         try:
             backend.set(key, ctx.to_dict(), ttl=self._get_context_ttl_seconds())
         except Exception as e:
-            logger.warning("runbook_executor.save_context_failed", execution_id=ctx.execution_id, error=str(e))
+            logger.warning(
+                "runbook_executor.save_context_failed",
+                execution_id=ctx.execution_id,
+                error=str(e),
+            )
 
     def _load_context(self, execution_id: str) -> RunbookExecutionContext | None:
         """영속화된 컨텍스트 로드. resume_execution() 시 사용."""
@@ -1032,7 +1089,11 @@ class RunbookExecutor:
             if data and isinstance(data, dict):
                 return RunbookExecutionContext.from_dict(data)
         except Exception as e:
-            logger.warning("runbook_executor.load_context_failed", execution_id=execution_id, error=str(e))
+            logger.warning(
+                "runbook_executor.load_context_failed",
+                execution_id=execution_id,
+                error=str(e),
+            )
         return None
 
     # =========================================================================
@@ -1047,7 +1108,9 @@ class RunbookExecutor:
     ) -> None:
         """Lock TTL 연장. Fail-Open — 실패해도 실행 흐름을 중단하지 않는다."""
         try:
-            self._get_recovery_lock().extend(namespace, execution_id, additional_seconds=additional_seconds)
+            self._get_recovery_lock().extend(
+                namespace, execution_id, additional_seconds=additional_seconds
+            )
         except Exception as e:
             logger.warning(
                 "runbook_executor.lock_extend_failed",
@@ -1084,7 +1147,8 @@ class RunbookExecutor:
                     "compensation_failed": compensation.failed,
                 },
                 next_action_hint=(
-                    f"Runbook '{ctx.runbook_id}' 실패. " f"resume_execution('{ctx.execution_id}') 호출을 검토하라."
+                    f"Runbook '{ctx.runbook_id}' 실패. "
+                    f"resume_execution('{ctx.execution_id}') 호출을 검토하라."
                 ),
                 recommended_action="manual_review",
             )

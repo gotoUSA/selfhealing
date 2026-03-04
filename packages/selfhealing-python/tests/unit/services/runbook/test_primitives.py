@@ -292,8 +292,8 @@ class TestOperatorMapContract:
     """_OPERATOR_MAP 매핑 계약 검증."""
 
     def test_operator_map_keys(self):
-        """_OPERATOR_MAP은 gt/lt/eq/gte/lte 5개 키를 갖는다."""
-        assert set(_OPERATOR_MAP.keys()) == {"gt", "lt", "eq", "gte", "lte"}
+        """_OPERATOR_MAP은 gt/lt/eq/neq/gte/lte 6개 키를 갖는다."""
+        assert set(_OPERATOR_MAP.keys()) == {"gt", "lt", "eq", "neq", "gte", "lte"}
 
     def test_gt_operator_evaluates_correctly(self):
         """gt 연산자는 a > b."""
@@ -854,7 +854,7 @@ class TestHandleWaitStabilizeBehavior:
         result = _handle_wait_stabilize(ctx)
 
         assert result.success is True
-        mock_query.assert_called_once_with("health_score")
+        mock_query.assert_called_once_with("health_score", labels=None)
 
     @patch("selfhealing.services.runbook.primitives._query_metric", autospec=True)
     @patch("time.sleep")
