@@ -88,10 +88,17 @@ if not step_result.success and not step_result.idempotent:
 
 ```python
 # _compensate_steps() 내부
-for step_result in reversed(executed_steps):
-    if not step_result.success and step_result.step.continue_on_failure:
-        continue  # 검증 게이트 실패 — 보상 불필요
-    # ... 기존 보상 로직
+# continue_on_failure=True인 Step 이름 집합을 사전 계산
+continue_on_failure_steps = self._get_continue_on_failure_step_names(runbook)
+compensation_targets = [
+    (name, result)
+    for name, result in ctx.step_results.items()
+    if (
+        ((result.success and result.executed) or result.partial_execution)
+        and not (not result.success and name in continue_on_failure_steps)
+    )
+]
+# ... 역순 정렬 후 보상 실행
 ```
 
 ### 2.5 사용 제약
@@ -109,7 +116,9 @@ for step_result in reversed(executed_steps):
 
 ```python
 # runbook_registry.py — Runbook.validate() 확장
-STATE_CHANGING_ACTIONS = {"config.set", "recovery.start", "emergency.activate", "emergency.deactivate"}
+STATE_CHANGING_ACTIONS: frozenset[str] = frozenset(
+    {"config.set", "recovery.start", "emergency.activate", "emergency.deactivate"}
+)
 
 for step in self.steps:
     if step.continue_on_failure and step.action in STATE_CHANGING_ACTIONS:
@@ -152,6 +161,7 @@ LEVEL_3 복구의 300초 대기 중 10초 만에 에러율이 100%로 치솟아�
 class WaitStabilizeParams(BaseModel):
     seconds: int = Field(ge=1, le=3600)
     assert_metric: str | None = None
+    operator: Literal["gt", "lt", "eq", "gte", "lte", "neq"] = "gte"
     threshold: float | None = None
     labels: dict[str, str] | None = None          # 메트릭 라벨 필터 (§4 연계)
     poll_interval_seconds: int = Field(default=0, ge=0, le=300)
@@ -168,6 +178,7 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
 
     if params.poll_interval_seconds > 0 and params.assert_metric and params.threshold is not None:
         # Polling 모드: 주기적 메트릭 확인 + 조기 종료
+        op_fn = _OPERATOR_MAP[params.operator]
         elapsed = 0
         while elapsed < params.seconds:
             sleep_chunk = min(params.poll_interval_seconds, params.seconds - elapsed)
@@ -175,11 +186,12 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
             elapsed += sleep_chunk
 
             metric_value = _query_metric(params.assert_metric, labels=params.labels)
-            if metric_value is not None and metric_value >= params.threshold:
+            if metric_value is not None and not op_fn(metric_value, params.threshold):
                 return StepResult(
                     success=False,
                     error=f"Fail-fast: {params.assert_metric}={metric_value:.3f} "
-                          f">= threshold {params.threshold} at {elapsed}s/{params.seconds}s",
+                          f"violated {params.operator} {params.threshold} "
+                          f"at {elapsed}s/{params.seconds}s",
                     error_code="WAIT_STABILIZE_FAIL_FAST",
                     data={
                         "waited_seconds": elapsed,
@@ -191,9 +203,10 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
 
         # 전체 대기 완료 — 최종 검증
         metric_value = _query_metric(params.assert_metric, labels=params.labels)
-        if metric_value is not None and metric_value >= params.threshold:
+        if metric_value is not None and not op_fn(metric_value, params.threshold):
             return StepResult.failed(
-                error=f"Stabilization failed: {params.assert_metric}={metric_value:.3f} >= {params.threshold}",
+                error=f"Stabilization failed: {params.assert_metric}={metric_value:.3f} "
+                      f"violated {params.operator} {params.threshold}",
             )
     else:
         # 기존 동작: 전체 sleep + 사후 검증
@@ -202,9 +215,11 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
             metric_value = _query_metric(params.assert_metric, labels=params.labels)
             if metric_value is None:
                 return StepResult.failed(error=f"Metric '{params.assert_metric}' not available")
-            if metric_value >= params.threshold:
+            op_fn = _OPERATOR_MAP[params.operator]
+            if not op_fn(metric_value, params.threshold):
                 return StepResult.failed(
-                    error=f"{params.assert_metric}={metric_value:.3f} >= {params.threshold}",
+                    error=f"Stabilization check failed: {params.assert_metric}="
+                          f"{metric_value} {params.operator} {params.threshold}",
                 )
 
     return StepResult.succeeded({"waited_seconds": params.seconds})
@@ -303,13 +318,14 @@ def _query_metric(
     """메트릭 조회. labels가 있으면 Per-Service 스코프, 없으면 Global."""
     try:
         from selfhealing.factory import ProviderRegistry
-        metrics_provider = ProviderRegistry.get("metrics_provider")
-        return metrics_provider.get_metric(metric_name, labels=labels)
+        provider = ProviderRegistry.get("runbook_metrics_provider")
+        if provider and hasattr(provider, "query"):
+            return provider.query(metric_name, labels=labels)
     except Exception:
         return None
 ```
 
-이는 273에서 정의한 `RunbookMetricsProvider.get_metric(metric_name, labels)` 프로토콜과 일치한다.
+이는 273에서 정의한 `RunbookMetricsProvider.query(metric_name, labels)` 프로토콜과 일치한다.
 
 ---
 
@@ -321,7 +337,7 @@ def _query_metric(
 | `runbook_registry.py` | `Runbook.validate()` — 상태 변경 action + continue_on_failure 경고 | §2.5 |
 | `executor.py` | `_run_from_step()` — continue_on_failure 분기 추가 | §2.3 |
 | `executor.py` | `_compensate_steps()` — continue_on_failure 실패 Step 건너뛰기 | §2.4 |
-| `primitives.py` | `WaitStabilizeParams` — `poll_interval_seconds`, `labels` 추가 | §3.2 |
+| `primitives.py` | `WaitStabilizeParams` — `operator`, `poll_interval_seconds`, `labels` 추가 | §3.2 |
 | `primitives.py` | `_handle_wait_stabilize()` — polling 모드 구현 | §3.3 |
 | `primitives.py` | `AssertMetricParams` — `labels` 추가 | §4.4 |
 | `primitives.py` | `_handle_assert_metric()` — labels Fail-Fast 검증 | §4.2 |
