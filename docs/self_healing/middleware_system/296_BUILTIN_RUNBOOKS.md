@@ -1,6 +1,6 @@
 # 296. Builtin Runbooks — 시스템 기본 제공 런북 정의
 
-> **Status**: Design
+> **Status**: Implemented
 > **Target**: `packages/selfhealing-python/src/selfhealing/services/runbook/builtins.py`
 > **References**:
 > - [274_RUNBOOK_REGISTRY.md](274_RUNBOOK_REGISTRY.md) — RunbookRegistry, ActionPrimitiveRegistry, Runbook/RunbookStep 데이터 모델
@@ -711,29 +711,12 @@ def register_builtin_runbooks() -> None:
     """빌트인 Runbook을 레지스트리에 등록.
 
     initialize_runbook_system() (service.py:637)에서 호출된다.
+    RunbookService 싱글톤의 내부 RunbookRegistry에 등록한다.
     """
-    from selfhealing.services.runbook.runbook_registry import (
-        Runbook,
-        RunbookRegistry,
-        RunbookStep,
-        RiskLevel,
-        StepCondition,
-    )
-    from selfhealing.services.runbook.models import (
-        EventCondition,
-        PatternCondition,
-    )
+    from selfhealing.services.runbook.service import get_runbook_service
 
-    # ProviderRegistry에서 RunbookRegistry 획득 시도
-    # 없으면 새 인스턴스 생성 (테스트 환경)
-    try:
-        from selfhealing.factory import ProviderRegistry
-        registry = ProviderRegistry.get("runbook_registry")
-    except Exception:
-        registry = None
-
-    if registry is None:
-        registry = RunbookRegistry()
+    service = get_runbook_service()
+    registry = service._get_registry()
 
     builtin_runbooks = [
         _build_emergency_recovery_level3(),
@@ -814,7 +797,7 @@ packages/selfhealing-python/src/selfhealing/services/runbook/
 
 ## 10. 테스트 전략
 
-테스트 위치: `packages/selfhealing-python/tests/unit/test_runbook_builtins.py`
+테스트 위치: `packages/selfhealing-python/tests/unit/services/runbook/test_runbook_builtins.py`
 
 ### 10.1 등록 검증
 
