@@ -6,6 +6,7 @@
 > - [274_RUNBOOK_REGISTRY.md](274_RUNBOOK_REGISTRY.md) — RunbookRegistry, ActionPrimitiveRegistry, Runbook/RunbookStep 데이터 모델
 > - [275_RUNBOOK_EXECUTOR.md](275_RUNBOOK_EXECUTOR.md) — Step 순차 실행 + 보상
 > - [278_RUNBOOK_SERVICE.md](278_RUNBOOK_SERVICE.md) — RunbookService 파이프라인 + 초기화 시퀀스 (§8.1)
+> - [297_EXECUTOR_ENHANCEMENTS.md](297_EXECUTOR_ENHANCEMENTS.md) — continue_on_failure, poll_interval, labels Fail-Fast (본 문서 의존)
 > - `services/coordination/recovery_coordinator/__init__.py` — DEFAULT_RECOVERY_STEPS (기존 하드코딩 복구)
 > - `services/runbook/primitives.py` — 빌트인 ActionPrimitive 7종
 
@@ -121,6 +122,7 @@ class RunbookStep:
     timeout_seconds: int = 120             # Step 타임아웃
     wait_after_seconds: int = 0            # 완료 후 안정화 대기
     idempotent: bool = True                # 멱등성 힌트
+    continue_on_failure: bool = False      # True면 실패해도 abort 없이 다음 Step 진행 (297 §2)
 
 @dataclass
 class Runbook:
@@ -238,7 +240,7 @@ Runbook(
             action="recovery.start",
             order=4,
             params={
-                "namespace": "{namespace}",
+                "namespace": "${trigger.namespace}",
                 "trigger_level": "CANARY_RESUME",
             },
             timeout_seconds=120,
@@ -355,7 +357,7 @@ Runbook(
             action="recovery.start",
             order=4,
             params={
-                "namespace": "{namespace}",
+                "namespace": "${trigger.namespace}",
                 "trigger_level": "CANARY_RESUME",
             },
             timeout_seconds=120,
@@ -488,7 +490,7 @@ Runbook(
             action="notify.send",
             order=1,
             params={
-                "title": "[CB Open] {event_source}",
+                "title": "[CB Open] ${trigger.source}",
                 "message": "Circuit Breaker가 Open되었습니다. 에러율 확인 중.",
                 "priority": "high",
             },
@@ -503,10 +505,11 @@ Runbook(
                 "seconds": 60,
                 "assert_metric": "error_rate",
                 "threshold": 0.7,
+                "labels": {"service": "${trigger.source}"},
             },
             timeout_seconds=90,
         ),
-        # Step 3: 에러율 확인 — 자연 복구 여부 판단
+        # Step 3: 에러율 확인 — 자연 복구 여부 판단 (continue_on_failure: 297 §2 참조)
         RunbookStep(
             name="error_rate_check",
             action="assert.metric",
@@ -515,7 +518,9 @@ Runbook(
                 "metric_name": "error_rate",
                 "operator": "lte",
                 "threshold": 0.3,  # 30% 이하면 자연 복구로 판단
+                "labels": {"service": "${trigger.source}"},
             },
+            continue_on_failure=True,
             timeout_seconds=30,
         ),
         # Step 4: 에러율 초과 시 Emergency 활성화 (Step 3 실패 시에만 실행)
@@ -554,6 +559,8 @@ Runbook(
 
 설계 결정:
 - **StepCondition 활용** — Step 3(assert.metric) 실패 시에만 Step 4(emergency.activate) 실행. 조건부 분기로 불필요한 에스컬레이션 방지
+- **continue_on_failure=True** — Step 3은 검증 게이트 역할이므로 실패 시 Executor abort가 아닌 상태만 기록하고 다음 Step으로 진행해야 한다. 이 필드가 없으면 Step 3 실패 → 즉시 abort → Step 4(prev_failed 조건) 영원히 미도달. 상세 설계는 [297 §2](297_EXECUTOR_ENHANCEMENTS.md) 참조
+- **Per-Service 메트릭 스코프** — `labels: {"service": "${trigger.source}"}`로 CB가 열린 특정 서비스의 에러율만 측정. 전역 에러율 집계 오탐 방지 ([273 §3](273_RUNBOOK_PATTERN_MATCHER.md) LabelFilter 설계 근거)
 - **자연 복구 기회** — 60초 대기 후 에러율 확인. CB가 Half-Open → Closed로 자연 복구될 시간 확보
 - **에스컬레이션 경로** — CB Open → (미회복) → Emergency LEVEL_1 → (미회복) → LEVEL_2/3은 기존 Emergency 시스템이 처리
 
@@ -614,7 +621,7 @@ Runbook(
             },
             timeout_seconds=180,
         ),
-        # Step 4: 에러율 확인
+        # Step 4: 에러율 확인 (continue_on_failure: 297 §2 참조)
         RunbookStep(
             name="error_rate_check",
             action="assert.metric",
@@ -623,7 +630,9 @@ Runbook(
                 "metric_name": "error_rate",
                 "operator": "lte",
                 "threshold": 0.15,
+                "labels": {"service": "${trigger.source}"},
             },
+            continue_on_failure=True,
             timeout_seconds=30,
         ),
         # Step 5: 안정화 실패 시 Emergency 활성화
@@ -649,6 +658,8 @@ Runbook(
 
 설계 결정:
 - **value_delta 사용** — `config.set`의 `value_delta` 파라미터로 현재 multiplier에 0.5를 가산. 절대값 덮어쓰기보다 안전
+- **continue_on_failure=True** — Step 4(assert.metric)은 검증 게이트이므로 실패해도 abort하지 않고 Step 5(prev_failed 조건)로 진행. [297 §2](297_EXECUTOR_ENHANCEMENTS.md) 참조
+- **Per-Service 메트릭 스코프** — `labels: {"service": "${trigger.source}"}`로 Error Budget이 소진된 서비스의 에러율만 측정
 - **에스컬레이션 경로** — Error Budget → Crisis Multiplier → (미회복) → Emergency LEVEL_1
 
 ---
@@ -678,6 +689,7 @@ RiskLevel → ApprovalGate 매핑 (`approval_gate.py:206-246`):
 1. **상태 변경 Step에만 보상 정의** — `config.set`, `emergency.activate` 등
 2. **알림/검증 Step은 보상 불필요** — `notify.send`, `assert.metric`은 부작용 없음
 3. **보상 실패 시 알림** — `on_failure_action="notify.send"`로 운영자에게 통보
+4. **Forward Recovery 원칙 (강제 규약)** — 시스템 상태를 전진시키는(State-progressing) 설정 변경의 보상은 **역보상(이전 값으로 원복)을 하지 않고 알림(notify.send)만 발송**한다. 이유: Emergency de-escalation 과정에서 이미 해제된 억제 상태(예: Multiplier 0.5)로 기계적으로 롤백하면 정상 트래픽까지 차단되어 오히려 장애를 유발한다. 복구 실패 시에는 현재 상태를 유지한 채 운영자가 판단하는 Forward Recovery가 안전하다. `on_failure_action`에 `config.set` 역원복을 추가하는 것은 이 규약 위반이다.
 
 ### 6.2 보상 매핑
 
