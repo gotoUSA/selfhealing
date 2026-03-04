@@ -28,6 +28,7 @@ import structlog
 if TYPE_CHECKING:
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
+    from selfhealing.interfaces.event_journal import EventJournalRepository
     from selfhealing.interfaces.repositories import (
         CircuitBreakerStateRepository,
         FailedOperationRepository,
@@ -57,6 +58,7 @@ class ProviderRegistry:
     _traffic_routing_adapters: dict[str, type] = {}  # Traffic routing adapters
     _correlation_strategies: dict[str, type] = {}  # Correlation ML strategies
     _root_cause_strategies: dict[str, type] = {}  # Root cause analysis strategies
+    _event_journal_repos: dict[str, type] = {}  # Event Journal repositories
     _graph_build_strategies: dict[str, type] = {}  # Graph build strategies
 
     # Statistics adapter (singleton, registered by app)
@@ -119,6 +121,15 @@ class ProviderRegistry:
     def register_security_repo(cls, name: str, repo_class: type) -> None:
         """Register a security incident repository."""
         cls._security_repos[name] = repo_class
+        logger.debug(
+            "cell_registry.bulkheads_registered",
+            factory_name=name,
+        )
+
+    @classmethod
+    def register_event_journal_repo(cls, name: str, repo_class: type) -> None:
+        """Register an event journal repository."""
+        cls._event_journal_repos[name] = repo_class
         logger.debug(
             "cell_registry.bulkheads_registered",
             factory_name=name,
@@ -274,7 +285,10 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._cache_providers:
-            raise ValueError(f"Unknown cache provider: {name}. " f"Available: {list(cls._cache_providers.keys())}")
+            raise ValueError(
+                f"Unknown cache provider: {name}. "
+                f"Available: {list(cls._cache_providers.keys())}"
+            )
 
         instance = cls._cache_providers[name]()
 
@@ -307,7 +321,10 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._task_queues:
-            raise ValueError(f"Unknown task queue: {name}. " f"Available: {list(cls._task_queues.keys())}")
+            raise ValueError(
+                f"Unknown task queue: {name}. "
+                f"Available: {list(cls._task_queues.keys())}"
+            )
 
         instance = cls._task_queues[name]()
 
@@ -331,7 +348,10 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._failed_op_repos:
-            raise ValueError(f"Unknown repository: {name}. " f"Available: {list(cls._failed_op_repos.keys())}")
+            raise ValueError(
+                f"Unknown repository: {name}. "
+                f"Available: {list(cls._failed_op_repos.keys())}"
+            )
 
         instance = cls._failed_op_repos[name]()
 
@@ -355,7 +375,10 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._circuit_breaker_repos:
-            raise ValueError(f"Unknown repository: {name}. " f"Available: {list(cls._circuit_breaker_repos.keys())}")
+            raise ValueError(
+                f"Unknown repository: {name}. "
+                f"Available: {list(cls._circuit_breaker_repos.keys())}"
+            )
 
         instance = cls._circuit_breaker_repos[name]()
 
@@ -379,9 +402,42 @@ class ProviderRegistry:
                 return cls._instances[key]
 
         if name not in cls._security_repos:
-            raise ValueError(f"Unknown repository: {name}. " f"Available: {list(cls._security_repos.keys())}")
+            raise ValueError(
+                f"Unknown repository: {name}. "
+                f"Available: {list(cls._security_repos.keys())}"
+            )
 
         instance = cls._security_repos[name]()
+
+        if singleton:
+            cls._instances[key] = instance
+
+        return instance
+
+    @classmethod
+    def get_event_journal_repo(
+        cls,
+        name: str | None = None,
+        singleton: bool = True,
+    ) -> EventJournalRepository:
+        """Get event journal repository instance."""
+        if name is None:
+            from selfhealing.settings.event_journal import get_event_journal_settings
+
+            name = get_event_journal_settings().backend
+
+        if singleton:
+            key = f"repo:event_journal:{name}"
+            if key in cls._instances:
+                return cls._instances[key]
+
+        if name not in cls._event_journal_repos:
+            raise ValueError(
+                f"Unknown event journal repository: {name}. "
+                f"Available: {list(cls._event_journal_repos.keys())}"
+            )
+
+        instance = cls._event_journal_repos[name]()
 
         if singleton:
             cls._instances[key] = instance
@@ -460,7 +516,10 @@ class ProviderRegistry:
             cls._auto_register_audit_adapters()
 
         if name not in cls._audit_adapters:
-            raise ValueError(f"Unknown audit adapter: {name}. " f"Available: {list(cls._audit_adapters.keys())}")
+            raise ValueError(
+                f"Unknown audit adapter: {name}. "
+                f"Available: {list(cls._audit_adapters.keys())}"
+            )
 
         adapter_class = cls._audit_adapters[name]
 
@@ -528,7 +587,8 @@ class ProviderRegistry:
 
         if name not in cls._traffic_routing_adapters:
             raise ValueError(
-                f"Unknown traffic routing adapter: {name}. " f"Available: {list(cls._traffic_routing_adapters.keys())}"
+                f"Unknown traffic routing adapter: {name}. "
+                f"Available: {list(cls._traffic_routing_adapters.keys())}"
             )
 
         instance = cls._traffic_routing_adapters[name]()
@@ -557,7 +617,9 @@ class ProviderRegistry:
             )
 
             if "k8s_ingress" not in cls._traffic_routing_adapters:
-                cls.register_traffic_routing("k8s_ingress", K8sIngressTrafficRoutingAdapter)
+                cls.register_traffic_routing(
+                    "k8s_ingress", K8sIngressTrafficRoutingAdapter
+                )
         except ImportError:
             pass
 
@@ -580,7 +642,8 @@ class ProviderRegistry:
         """
         if name not in cls._correlation_strategies:
             raise ValueError(
-                f"Unknown correlation strategy: {name}. " f"Available: {list(cls._correlation_strategies.keys())}"
+                f"Unknown correlation strategy: {name}. "
+                f"Available: {list(cls._correlation_strategies.keys())}"
             )
         return cls._correlation_strategies[name]
 
@@ -588,7 +651,10 @@ class ProviderRegistry:
     def get_root_cause_strategy(cls, name: str) -> type:
         """등록된 Root Cause 분석 전략 클래스를 반환한다."""
         if name not in cls._root_cause_strategies:
-            raise ValueError(f"Unknown root cause strategy: {name}. " f"Available: {list(cls._root_cause_strategies.keys())}")
+            raise ValueError(
+                f"Unknown root cause strategy: {name}. "
+                f"Available: {list(cls._root_cause_strategies.keys())}"
+            )
         return cls._root_cause_strategies[name]
 
     @classmethod
@@ -596,7 +662,8 @@ class ProviderRegistry:
         """등록된 Graph Build 전략 클래스를 반환한다."""
         if name not in cls._graph_build_strategies:
             raise ValueError(
-                f"Unknown graph build strategy: {name}. " f"Available: {list(cls._graph_build_strategies.keys())}"
+                f"Unknown graph build strategy: {name}. "
+                f"Available: {list(cls._graph_build_strategies.keys())}"
             )
         return cls._graph_build_strategies[name]
 
@@ -653,7 +720,12 @@ class ProviderRegistry:
             "security_repo": list(cls._security_repos.keys()),
             "audit_adapter": list(cls._audit_adapters.keys()),
             "traffic_routing": list(cls._traffic_routing_adapters.keys()),
-            "statistics_adapter": (type(cls._statistics_adapter).__name__ if cls._statistics_adapter else None),
+            "event_journal_repo": list(cls._event_journal_repos.keys()),
+            "statistics_adapter": (
+                type(cls._statistics_adapter).__name__
+                if cls._statistics_adapter
+                else None
+            ),
         }
 
     @classmethod
@@ -790,13 +862,23 @@ def _auto_register_adapters() -> None:
     try:
         from selfhealing.adapters.memory import (
             InMemoryCircuitBreakerStateRepository,
+            InMemoryEventJournalRepository,
             InMemoryFailedOperationRepository,
             InMemorySecurityIncidentRepository,
         )
 
-        ProviderRegistry.register_failed_operation_repo("memory", InMemoryFailedOperationRepository)
-        ProviderRegistry.register_circuit_breaker_repo("memory", InMemoryCircuitBreakerStateRepository)
-        ProviderRegistry.register_security_repo("memory", InMemorySecurityIncidentRepository)
+        ProviderRegistry.register_failed_operation_repo(
+            "memory", InMemoryFailedOperationRepository
+        )
+        ProviderRegistry.register_circuit_breaker_repo(
+            "memory", InMemoryCircuitBreakerStateRepository
+        )
+        ProviderRegistry.register_security_repo(
+            "memory", InMemorySecurityIncidentRepository
+        )
+        ProviderRegistry.register_event_journal_repo(
+            "memory", InMemoryEventJournalRepository
+        )
     except ImportError:
         pass
 
@@ -840,7 +922,32 @@ def _auto_register_adapters() -> None:
                 use_bulkhead=True,
             )
 
-        ProviderRegistry.register_circuit_breaker_repo("layered", _create_layered_cb_repo)
+        ProviderRegistry.register_circuit_breaker_repo(
+            "layered", _create_layered_cb_repo
+        )
+    except ImportError:
+        pass
+
+    # Event Journal (Redis)
+    try:
+        from selfhealing.adapters.redis import get_redis_client as _get_journal_redis
+        from selfhealing.adapters.redis.event_journal import RedisEventJournalRepository
+
+        def _create_redis_journal_repo():
+            from selfhealing.settings.event_journal import get_event_journal_settings
+
+            settings = get_event_journal_settings()
+            client = _get_journal_redis()
+            if client is None:
+                raise RuntimeError("Redis client not available for EventJournal")
+            return RedisEventJournalRepository(
+                redis_client=client,
+                ttl_seconds=settings.ttl_days * 86400,
+            )
+
+        ProviderRegistry.register_event_journal_repo(
+            "redis", _create_redis_journal_repo
+        )
     except ImportError:
         pass
 

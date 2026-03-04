@@ -12,7 +12,7 @@ Storage Strategy:
 
 Module Structure (Refactored):
 - circuit_breaker.py: InMemoryCircuitBreakerStateRepository
-- layered_repository.py: LayeredCircuitBreakerStateRepository  
+- layered_repository.py: LayeredCircuitBreakerStateRepository
 - drift_reconciliation.py: DriftReconciler, DriftReconciliationResult
 - shadow_logger.py: ShadowLogger, L2SyncFailureRecord
 """
@@ -26,6 +26,9 @@ from selfhealing.adapters.memory.drift_reconciliation import (
     DriftReconciliationRecord,
     DriftReconciliationResult,
     get_drift_reconciler,
+)
+from selfhealing.adapters.memory.event_journal import (
+    InMemoryEventJournalRepository,
 )
 from selfhealing.adapters.memory.failed_operation import (
     InMemoryFailedOperationRepository,
@@ -45,6 +48,7 @@ __all__ = [
     "InMemoryCircuitBreakerStateRepository",
     "LayeredCircuitBreakerStateRepository",
     "InMemorySecurityIncidentRepository",
+    "InMemoryEventJournalRepository",
     # Drift Reconciliation
     "DriftReconciler",
     "DriftReconciliationResult",

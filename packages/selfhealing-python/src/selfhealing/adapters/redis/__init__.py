@@ -18,6 +18,7 @@ from selfhealing.adapters.redis.circuit_breaker import (
     RedisCircuitBreakerStateRepository,
 )
 from selfhealing.adapters.redis.dlq import RedisDLQRepository
+from selfhealing.adapters.redis.event_journal import RedisEventJournalRepository
 
 logger = structlog.get_logger()
 
@@ -71,7 +72,9 @@ def get_redis_client() -> Any | None:
 
         import redis
 
-        redis_url = os.environ.get("REDIS_URL") or os.environ.get("SELFHEALING_REDIS_URL")
+        redis_url = os.environ.get("REDIS_URL") or os.environ.get(
+            "SELFHEALING_REDIS_URL"
+        )
         if redis_url:
             return redis.from_url(redis_url)
     except (ImportError, Exception):
@@ -84,5 +87,6 @@ def get_redis_client() -> Any | None:
 __all__ = [
     "RedisCircuitBreakerStateRepository",
     "RedisDLQRepository",
+    "RedisEventJournalRepository",
     "get_redis_client",
 ]
