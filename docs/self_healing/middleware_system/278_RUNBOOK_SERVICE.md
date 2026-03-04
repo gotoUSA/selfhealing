@@ -148,7 +148,8 @@ class RunbookService:
 ```python
 def _get_pattern_matcher(self) -> PatternMatcher:
     if self._pattern_matcher is None:
-        self._pattern_matcher = PatternMatcher()
+        registry = self._get_registry()
+        self._pattern_matcher = PatternMatcher(registry=registry)
     return self._pattern_matcher
 
 def _get_registry(self) -> RunbookRegistry:
@@ -158,7 +159,10 @@ def _get_registry(self) -> RunbookRegistry:
 
 def _get_approval_gate(self) -> RunbookApprovalGate:
     if self._approval_gate is None:
-        self._approval_gate = RunbookApprovalGate()
+        from selfhealing.services.runbook.approval_gate import (
+            get_runbook_approval_gate,
+        )
+        self._approval_gate = get_runbook_approval_gate()
     return self._approval_gate
 
 def _get_executor(self) -> RunbookExecutor:
@@ -187,11 +191,12 @@ def _get_event_bus(self) -> SelfHealingEventBus:
 EventBus 이벤트 수신 시 호출되는 핵심 메서드:
 
 ```python
-def handle_event(self, event: SelfHealingEvent) -> RunbookExecutionContext | None:
+def handle_event(self, event: Any) -> RunbookExecutionContext | None:
     """
     이벤트 수신 → 패턴 매칭 → Runbook 실행 전체 파이프라인.
 
     EventBus 핸들러로 등록되어 자동 호출됨.
+    SelfHealingEvent 또는 동일 인터페이스의 이벤트 객체를 수신한다.
 
     Returns:
         RunbookExecutionContext (실행 완료 시)
@@ -200,26 +205,44 @@ def handle_event(self, event: SelfHealingEvent) -> RunbookExecutionContext | Non
     if not self._enabled:
         return None
 
-    # 1. 패턴 매칭 (273)
+    # 1. 패턴 매칭 (273) — evaluate_all()로 이벤트/메트릭 평가
     matcher = self._get_pattern_matcher()
-    matched_patterns = matcher.match(event)
-
-    if not matched_patterns:
-        return None  # 매칭 패턴 없음
-
-    # 2. 매칭된 각 패턴에 대해 Runbook 조회 (274)
     registry = self._get_registry()
-    for pattern in matched_patterns:
-        runbook = registry.find_by_pattern(pattern.pattern_id)
-        if runbook is None:
-            continue
 
-        # 3. 파이프라인 실행
-        return self._execute_pipeline(
-            runbook=runbook,
-            trigger_event=event.to_dict(),
-            namespace=event.data.get("namespace", "global"),
-        )
+    triggered_event = (
+        event.event_type.value
+        if hasattr(event, "event_type") and hasattr(event.event_type, "value")
+        else str(getattr(event, "event_type", ""))
+    )
+    event_data = getattr(event, "data", {}) or {}
+    event_context = dict(event_data) if isinstance(event_data, dict) else {}
+
+    matched = matcher.evaluate_all(
+        metrics={},
+        triggered_event=triggered_event,
+        event_context=event_context,
+    )
+
+    if not matched:
+        return None
+
+    # 2. 최고 confidence 런북 선택 (274)
+    selection = matcher.select_runbook(matched)
+    if selection is None:
+        return None
+
+    runbook = registry.get(selection.selected.runbook_id)
+    if runbook is None:
+        return None
+
+    # 3. 파이프라인 실행
+    trigger_event = selection.selected.build_trigger_event(event_data)
+
+    return self._execute_pipeline(
+        runbook=runbook,
+        trigger_event=trigger_event,
+        namespace=event_data.get("namespace", "global"),
+    )
 
     return None  # Runbook 없음
 ```
@@ -312,10 +335,14 @@ def register_subscriptions(self) -> None:
     target_events = [
         EventType.EMERGENCY_LEVEL_CHANGED,
         EventType.ERROR_BUDGET_CRITICAL,
-        EventType.CIRCUIT_BREAKER_STATE_CHANGED,
-        EventType.HEALTH_CHECK_FAILED,
-        EventType.SLA_VIOLATION_DETECTED,
+        EventType.CIRCUIT_BREAKER_OPENED,
     ]
+
+    # 존재하는 EventType만 선택적 구독 (호환성)
+    optional_events = ["HEALTH_CHECK_FAILED", "SLA_VIOLATION_DETECTED"]
+    for name in optional_events:
+        if hasattr(EventType, name):
+            target_events.append(getattr(EventType, name))
 
     for event_type in target_events:
         event_bus.subscribe(
@@ -333,24 +360,33 @@ def register_subscriptions(self) -> None:
 ### 5.2 이벤트 핸들러
 
 ```python
-def _on_event_received(self, event: SelfHealingEvent) -> None:
+def _on_event_received(self, event: Any) -> None:
     """
     EventBus 이벤트 수신 핸들러.
 
     동기 실행 시 EventBus를 차단하므로,
     Celery 태스크로 비동기 위임한다.
+    SELFHEALING_RUNBOOK_ASYNC_EXECUTION 환경변수로 동기/비동기 제어.
     """
-    try:
-        # Celery 태스크로 비동기 실행
-        from selfhealing.adapters.celery.tasks.runbook import (
-            execute_runbook_for_event,
-        )
-        execute_runbook_for_event.delay(event.to_dict())
-    except ImportError:
-        # Celery 미사용 시 동기 실행 (개발/테스트 환경)
+    async_execution = (
+        os.environ.get("SELFHEALING_RUNBOOK_ASYNC_EXECUTION", "true").lower()
+        == "true"
+    )
+
+    if async_execution:
+        try:
+            from selfhealing.adapters.celery.tasks.runbook import (
+                execute_runbook_for_event,
+            )
+            event_dict = event.to_dict() if hasattr(event, "to_dict") else {}
+            execute_runbook_for_event.delay(event_dict)
+        except ImportError:
+            # Celery 미사용 시 동기 실행 (개발/테스트 환경)
+            self.handle_event(event)
+        except Exception as e:
+            logger.warning("runbook_service.event_dispatch_failed", error=str(e))
+    else:
         self.handle_event(event)
-    except Exception as e:
-        logger.warning("runbook_service.event_dispatch_failed", error=e)
 ```
 
 ---
@@ -443,17 +479,36 @@ def execute_runbook_manual(
 )
 def check_approval_timers() -> dict:
     """
-    MEDIUM 리스크 승인 타이머 만료 체크.
+    MEDIUM 리스크 승인 타이머/타임아웃/리마인더 폴링.
 
     Celery Beat에서 주기적으로 호출 (예: 매 30초).
+    3가지 체크를 순차 수행하며 개별 실패 시 다른 체크는 계속 진행한다.
     """
     from selfhealing.services.runbook.approval_gate import RunbookApprovalGate
 
     gate = RunbookApprovalGate()
-    # 대기 중인 승인 요청 목록 조회 → 타이머 만료 체크
-    expired = gate.check_all_pending_timers()
+    results = {"timer_approved": 0, "timed_out": 0, "reminders_sent": 0}
 
-    return {"expired_count": len(expired)}
+    try:
+        timer_results = gate.check_timer_approval("")
+        if timer_results is not None:
+            results["timer_approved"] += 1
+    except Exception as e:
+        logger.warning("runbook_task.timer_check_failed", error=str(e))
+
+    try:
+        timed_out = gate.check_approval_timeouts()
+        results["timed_out"] = len(timed_out)
+    except Exception as e:
+        logger.warning("runbook_task.timeout_check_failed", error=str(e))
+
+    try:
+        reminded = gate.check_and_send_reminders()
+        results["reminders_sent"] = len(reminded)
+    except Exception as e:
+        logger.warning("runbook_task.reminder_check_failed", error=str(e))
+
+    return results
 ```
 
 ---
@@ -908,7 +963,7 @@ def scan_orphan_runbook_executions() -> dict[str, Any]:
 
     # 활성 런북 실행 컨텍스트 스캔
     # 인덱스 키 사용: selfhealing:runbook:active_executions (Set)
-    active_keys = backend.get_all("selfhealing:runbook:execution:*", max_keys=200)
+    active_keys = backend.get_all("selfhealing:runbook:execution:*")
     results["scanned"] = len(active_keys)
 
     for key, data in active_keys.items():
@@ -1132,55 +1187,32 @@ def _on_registry_updated(self, event: SelfHealingEvent) -> None:
 MAX_CASCADE_DEPTH = 3
 """런북 → 런북 체이닝 최대 깊이. 의도적 에스컬레이션(1차 복구 실패 → 2차)을 허용하되 무한 루프 방지."""
 
-def handle_event(self, event: SelfHealingEvent) -> RunbookExecutionContext | None:
+def handle_event(self, event: Any) -> RunbookExecutionContext | None:
     if not self._enabled:
         return None
 
     # 방어 1: 런북 실행으로 인해 파생된 이벤트 필터링
     # runbook_registry.py:563 패턴 — event.source 기반 자기 참조 차단
-    if event.source == "runbook_executor":
+    if hasattr(event, "source") and event.source == "runbook_executor":
         logger.debug(
             "runbook_service.skip_executor_event",
-            event_type=event.event_type,
+            event_type=getattr(event, "event_type", None),
             source=event.source,
         )
         return None
 
     # 방어 2: 재귀 깊이 제한 — trigger_context 체인 추적
-    cascade_depth = event.data.get("trigger_context", {}).get("cascade_depth", 0)
+    event_data = getattr(event, "data", {}) or {}
+    cascade_depth = event_data.get("trigger_context", {}).get("cascade_depth", 0)
     if cascade_depth >= MAX_CASCADE_DEPTH:
         logger.warning(
             "runbook_service.max_cascade_depth_exceeded",
-            event_type=event.event_type,
+            event_type=getattr(event, "event_type", None),
             cascade_depth=cascade_depth,
         )
         return None
 
-    # 1. 패턴 매칭 (273)
-    matcher = self._get_pattern_matcher()
-    matched_patterns = matcher.match(event)
-
-    if not matched_patterns:
-        return None
-
-    # 2. 매칭된 각 패턴에 대해 Runbook 조회 (274)
-    registry = self._get_registry()
-    for pattern in matched_patterns:
-        runbook = registry.find_by_pattern(pattern.pattern_id)
-        if runbook is None:
-            continue
-
-        # trigger_event에 cascade_depth 전파
-        trigger_event = event.to_dict()
-        trigger_event.setdefault("trigger_context", {})["cascade_depth"] = cascade_depth + 1
-
-        return self._execute_pipeline(
-            runbook=runbook,
-            trigger_event=trigger_event,
-            namespace=event.data.get("namespace", "global"),
-        )
-
-    return None
+    # 이후 §4.1의 evaluate_all → select_runbook → _execute_pipeline 흐름
 ```
 
 ### 17.4 Executor 이벤트 발행 시 source 태깅
