@@ -900,13 +900,14 @@ class RecoveryStartParams(BaseModel):
 
 class EmergencyActivateParams(BaseModel):
     """emergency.activate action 파라미터."""
-    level: int = Field(ge=1, le=5)
+    level: int = Field(ge=1, le=3)  # EmergencyLevel이 LEVEL_1~LEVEL_3까지 정의
     reason: str
 
 class WaitStabilizeParams(BaseModel):
     """wait.stabilize action 파라미터."""
     seconds: int = Field(ge=1, le=3600)
     assert_metric: str | None = None
+    operator: Literal["gt", "lt", "eq", "gte", "lte"] = "gte"
     threshold: float | None = None
 ```
 

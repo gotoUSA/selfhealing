@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field, model_validator
 
 if TYPE_CHECKING:
     from selfhealing.services.runbook.runbook_registry import (
+        ActionHandler,
         ActionPrimitiveRegistry,
         RunbookStepContext,
     )
@@ -74,7 +75,7 @@ class RecoveryStartParams(BaseModel):
 class EmergencyActivateParams(BaseModel):
     """emergency.activate action 파라미터."""
 
-    level: int = Field(ge=1, le=5)
+    level: int = Field(ge=1, le=3)
     reason: str
 
 
@@ -83,6 +84,7 @@ class WaitStabilizeParams(BaseModel):
 
     seconds: int = Field(ge=1, le=3600)
     assert_metric: str | None = None
+    operator: Literal["gt", "lt", "eq", "gte", "lte"] = "gte"
     threshold: float | None = None
 
 
@@ -117,17 +119,18 @@ def _handle_config_set(ctx: RunbookStepContext) -> StepResult:
             config_type, field_name = "general", params.key
 
         if params.value is not None:
-            update_kwargs = {field_name: params.value}
+            changes = {field_name: params.value}
         else:
-            current = manager._get_config(config_type)
+            all_config = manager.get_all_config()
+            current = all_config.get(config_type, {})
             current_value = current.get(field_name, 0)
-            update_kwargs = {field_name: current_value + params.value_delta}
+            changes = {field_name: current_value + params.value_delta}
 
-        result = manager._update_config(
+        result = manager.update_with_strategy(
             config_type,
+            changes=changes,
             changed_by=ctx.initiated_by,
             reason=f"runbook:{ctx.runbook_id}",
-            **update_kwargs,
         )
 
         logger.info(
@@ -394,11 +397,12 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
                     error_code="WAIT_METRIC_NOT_FOUND",
                     retryable=True,
                 )
-            if metric_value < params.threshold:
+            op_fn = _OPERATOR_MAP[params.operator]
+            if not op_fn(metric_value, params.threshold):
                 return StepResult.failed(
                     error=(
                         f"Stabilization check failed: {params.assert_metric}="
-                        f"{metric_value} < {params.threshold}"
+                        f"{metric_value} {params.operator} {params.threshold}"
                     ),
                     error_code="WAIT_STABILIZE_FAILED",
                 )
@@ -432,15 +436,19 @@ def _query_metric(metric_name: str) -> float | None:
         provider = ProviderRegistry.get("runbook_metrics_provider")
         if provider and hasattr(provider, "query"):
             return provider.query(metric_name)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(
+            "primitive.query_metric.provider_failed", metric=metric_name, error=str(exc)
+        )
 
     try:
         from selfhealing.metrics import get_metric_value
 
         return get_metric_value(metric_name)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug(
+            "primitive.query_metric.fallback_failed", metric=metric_name, error=str(exc)
+        )
 
     logger.warning("primitive.query_metric.unavailable", metric=metric_name)
     return None
@@ -450,7 +458,7 @@ def _query_metric(metric_name: str) -> float | None:
 # 빌트인 프리미티브 매핑 — ActionPrimitiveRegistry._register_builtins() 에서 사용
 # =============================================================================
 
-BUILTIN_PRIMITIVES: dict[str, tuple] = {
+BUILTIN_PRIMITIVES: dict[str, tuple[ActionHandler, type[BaseModel] | None]] = {
     "config.set": (_handle_config_set, ConfigSetParams),
     "assert.metric": (_handle_assert_metric, AssertMetricParams),
     "notify.send": (_handle_notify_send, NotifySendParams),

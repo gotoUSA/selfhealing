@@ -162,8 +162,8 @@ class TestRecoveryStartParamsContract:
 class TestEmergencyActivateParamsContract:
     """EmergencyActivateParams 설계 계약값 검증."""
 
-    def test_level_field_constraint_ge_1_le_5(self):
-        """level 필드는 ge=1, le=5 제약을 갖는다."""
+    def test_level_field_constraint_ge_1_le_3(self):
+        """level 필드는 ge=1, le=3 제약을 갖는다 (EmergencyLevel이 3단계까지 정의)."""
         field_info = EmergencyActivateParams.model_fields["level"]
         metadata = field_info.metadata
         ge_val = None
@@ -174,7 +174,7 @@ class TestEmergencyActivateParamsContract:
             if hasattr(m, "le"):
                 le_val = m.le
         assert ge_val == 1
-        assert le_val == 5
+        assert le_val == 3
 
 
 # =============================================================================
@@ -203,6 +203,11 @@ class TestWaitStabilizeParamsContract:
         """assert_metric 기본값은 None."""
         p = WaitStabilizeParams(seconds=10)
         assert p.assert_metric is None
+
+    def test_operator_default_is_gte(self):
+        """operator 기본값은 'gte' (안정화 검증: metric >= threshold)."""
+        p = WaitStabilizeParams(seconds=10)
+        assert p.operator == "gte"
 
     def test_threshold_default_is_none(self):
         """threshold 기본값은 None."""
@@ -406,14 +411,14 @@ class TestEmergencyActivateParamsBoundaryBehavior:
         assert p.level == 1
 
     def test_level_at_maximum_is_valid(self):
-        """level=5 (최대 경계)은 유효."""
-        p = EmergencyActivateParams(level=5, reason="test")
-        assert p.level == 5
+        """level=3 (최대 경계)은 유효."""
+        p = EmergencyActivateParams(level=3, reason="test")
+        assert p.level == 3
 
     def test_level_above_maximum_raises_validation_error(self):
-        """level=6 (경계 직후)은 ValidationError."""
+        """level=4 (경계 직후)은 ValidationError."""
         with pytest.raises(ValidationError):
-            EmergencyActivateParams(level=6, reason="test")
+            EmergencyActivateParams(level=4, reason="test")
 
 
 # =============================================================================
@@ -456,10 +461,10 @@ class TestHandleConfigSetBehavior:
     @patch(
         "selfhealing.services.runtime_config.get_runtime_config_manager",
     )
-    def test_config_set_with_value_calls_update_config(self, mock_get_manager):
-        """value 제공 시 _update_config를 호출한다."""
+    def test_config_set_with_value_calls_update_with_strategy(self, mock_get_manager):
+        """value 제공 시 update_with_strategy를 호출한다."""
         mock_manager = MagicMock()
-        mock_manager._update_config.return_value = {"updated": True}
+        mock_manager.update_with_strategy.return_value = {"updated": True}
         mock_get_manager.return_value = mock_manager
 
         ctx = _make_ctx(params={"key": "circuit_breaker.threshold", "value": 10})
@@ -467,11 +472,11 @@ class TestHandleConfigSetBehavior:
 
         assert result.success is True
         assert result.data["config_type"] == "circuit_breaker"
-        mock_manager._update_config.assert_called_once_with(
+        mock_manager.update_with_strategy.assert_called_once_with(
             "circuit_breaker",
+            changes={"threshold": 10},
             changed_by="tester",
             reason="runbook:rb_test",
-            threshold=10,
         )
 
     @patch(
@@ -480,19 +485,19 @@ class TestHandleConfigSetBehavior:
     def test_config_set_with_value_delta_reads_current_and_adds(self, mock_get_manager):
         """value_delta 제공 시 현재값에 delta를 더하여 업데이트."""
         mock_manager = MagicMock()
-        mock_manager._get_config.return_value = {"threshold": 5}
-        mock_manager._update_config.return_value = {"updated": True}
+        mock_manager.get_all_config.return_value = {"circuit_breaker": {"threshold": 5}}
+        mock_manager.update_with_strategy.return_value = {"updated": True}
         mock_get_manager.return_value = mock_manager
 
         ctx = _make_ctx(params={"key": "circuit_breaker.threshold", "value_delta": 3})
         result = _handle_config_set(ctx)
 
         assert result.success is True
-        mock_manager._update_config.assert_called_once_with(
+        mock_manager.update_with_strategy.assert_called_once_with(
             "circuit_breaker",
+            changes={"threshold": 8},
             changed_by="tester",
             reason="runbook:rb_test",
-            threshold=8,
         )
 
     @patch(
@@ -503,7 +508,7 @@ class TestHandleConfigSetBehavior:
     ):
         """key에 dot이 없으면 config_type='general'."""
         mock_manager = MagicMock()
-        mock_manager._update_config.return_value = {"updated": True}
+        mock_manager.update_with_strategy.return_value = {"updated": True}
         mock_get_manager.return_value = mock_manager
 
         ctx = _make_ctx(params={"key": "threshold", "value": 42})
@@ -754,26 +759,17 @@ class TestHandleEmergencyActivateBehavior:
         assert result.success is True
         assert result.data["activated_level"] == 1
 
-    @patch(
-        "selfhealing.services.emergency_mode.manager.GracefulDegradationManager",
-    )
-    @patch("selfhealing.services.emergency_mode.enums.EmergencyLevel")
-    def test_emergency_activate_unsupported_level_returns_invalid(
-        self, mock_level_enum, mock_manager_cls
-    ):
-        """지원하지 않는 레벨(4, 5)은 INVALID_EMERGENCY_LEVEL."""
-        mock_level_enum.LEVEL_1 = "LEVEL_1"
-        mock_level_enum.LEVEL_2 = "LEVEL_2"
-        mock_level_enum.LEVEL_3 = "LEVEL_3"
-
+    def test_emergency_activate_level_above_max_returns_error(self):
+        """level=4 (le=3 초과)는 Pydantic 검증 단계에서 EMERGENCY_ACTIVATE_ERROR."""
         ctx = _make_ctx(params={"level": 4, "reason": "test"})
         result = _handle_emergency_activate(ctx)
 
         assert result.success is False
-        assert result.error_code == "INVALID_EMERGENCY_LEVEL"
+        assert result.error_code == "EMERGENCY_ACTIVATE_ERROR"
+        assert result.retryable is True
 
-    def test_emergency_activate_invalid_params_returns_error(self):
-        """파라미터 검증 실패 시 EMERGENCY_ACTIVATE_ERROR."""
+    def test_emergency_activate_level_below_min_returns_error(self):
+        """level=0 (ge=1 미만)은 Pydantic 검증 단계에서 EMERGENCY_ACTIVATE_ERROR."""
         ctx = _make_ctx(params={"level": 0, "reason": "test"})
         result = _handle_emergency_activate(ctx)
 
@@ -832,9 +828,8 @@ class TestHandleEmergencyDeactivateBehavior:
 class TestHandleWaitStabilizeBehavior:
     """_handle_wait_stabilize 핸들러 동작 검증."""
 
-    @patch("selfhealing.services.runbook.primitives._query_metric", autospec=True)
     @patch("time.sleep")
-    def test_wait_stabilize_basic_waits_and_succeeds(self, mock_sleep, mock_query):
+    def test_wait_stabilize_basic_waits_and_succeeds(self, mock_sleep):
         """기본 대기 후 성공 반환."""
         ctx = _make_ctx(params={"seconds": 10})
         result = _handle_wait_stabilize(ctx)
@@ -864,7 +859,7 @@ class TestHandleWaitStabilizeBehavior:
     @patch("selfhealing.services.runbook.primitives._query_metric", autospec=True)
     @patch("time.sleep")
     def test_wait_stabilize_metric_below_threshold_fails(self, mock_sleep, mock_query):
-        """대기 후 메트릭이 threshold 미만이면 WAIT_STABILIZE_FAILED."""
+        """대기 후 메트릭이 threshold 미만이면 WAIT_STABILIZE_FAILED (기본 operator=gte)."""
         mock_query.return_value = 50.0
 
         ctx = _make_ctx(
@@ -878,6 +873,43 @@ class TestHandleWaitStabilizeBehavior:
 
         assert result.success is False
         assert result.error_code == "WAIT_STABILIZE_FAILED"
+
+    @patch("selfhealing.services.runbook.primitives._query_metric", autospec=True)
+    @patch("time.sleep")
+    def test_wait_stabilize_metric_equal_to_threshold_passes(
+        self, mock_sleep, mock_query
+    ):
+        """대기 후 메트릭이 threshold와 동일하면 기본 operator(gte)에서 성공."""
+        mock_query.return_value = 80.0
+
+        ctx = _make_ctx(
+            params={
+                "seconds": 5,
+                "assert_metric": "health_score",
+                "threshold": 80.0,
+            }
+        )
+        result = _handle_wait_stabilize(ctx)
+
+        assert result.success is True
+
+    @patch("selfhealing.services.runbook.primitives._query_metric", autospec=True)
+    @patch("time.sleep")
+    def test_wait_stabilize_with_custom_operator(self, mock_sleep, mock_query):
+        """커스텀 operator(lt)를 사용하여 메트릭 검증."""
+        mock_query.return_value = 50.0
+
+        ctx = _make_ctx(
+            params={
+                "seconds": 5,
+                "assert_metric": "error_rate",
+                "operator": "lt",
+                "threshold": 80.0,
+            }
+        )
+        result = _handle_wait_stabilize(ctx)
+
+        assert result.success is True
 
     @patch("selfhealing.services.runbook.primitives._query_metric", autospec=True)
     @patch("time.sleep")
@@ -985,10 +1017,17 @@ class TestRegisterBuiltinPrimitivesBehavior:
             assert handler is expected_handler
             assert schema is expected_schema
 
-    def test_register_is_idempotent(self):
-        """동일 registry에 2회 호출해도 정상 동작 (멱등성)."""
+    def test_register_twice_does_not_raise(self):
+        """동일 registry에 2회 호출해도 예외 없이 정상 동작."""
         mock_registry = MagicMock()
         register_builtin_primitives(mock_registry)
         register_builtin_primitives(mock_registry)
 
         assert mock_registry.register.call_count == len(BUILTIN_PRIMITIVES) * 2
+
+        # 2회차에서도 동일한 handler/schema가 전달된다
+        second_call_names = {
+            call.args[0]
+            for call in mock_registry.register.call_args_list[len(BUILTIN_PRIMITIVES) :]
+        }
+        assert second_call_names == set(BUILTIN_PRIMITIVES.keys())

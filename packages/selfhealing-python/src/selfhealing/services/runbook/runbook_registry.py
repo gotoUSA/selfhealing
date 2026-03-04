@@ -363,11 +363,14 @@ class ActionPrimitiveRegistry:
             )
 
             register_builtin_primitives(self)
-        except Exception:
+        except ImportError:
             logger.debug(
                 "action_primitive_registry.builtins_placeholder",
                 categories=list(BUILTIN_CATEGORIES.keys()),
             )
+        except Exception:
+            logger.exception("action_primitive_registry.builtins_registration_failed")
+            raise
 
     def register(
         self,
@@ -589,6 +592,13 @@ class RunbookRegistry:
                         "runbook_registry.remote_unregister_synced",
                         runbook_id=runbook_id,
                     )
+        elif action == "register":
+            logger.debug(
+                "runbook_registry.remote_register_event_received",
+                runbook_id=runbook_id,
+                note="remote register events are informational only; "
+                "each node registers runbooks at boot time",
+            )
 
     def _broadcast_change(self, action: str, runbook_id: str, **extra: Any) -> None:
         """레지스트리 변경을 EventBus로 브로드캐스트.
