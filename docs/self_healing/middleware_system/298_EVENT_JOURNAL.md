@@ -195,6 +195,26 @@ class JournalQueryFilter:
     limit: int = 1000                        # 최대 반환 건수
 ```
 
+### 4.3 JournalQueryResult
+
+```python
+@dataclass(frozen=True)
+class JournalQueryResult:
+    """저널 조회 결과. 절삭(truncation) 여부를 포함한다."""
+
+    entries: list[JournalEntry]
+    truncated: bool              # limit에 도달하여 절삭되었는가
+    total_count: int | None      # 절삭 전 전체 건수 (None이면 미계산)
+```
+
+**설계 결정 — `JournalQueryResult` 래퍼 도입 이유**:
+`query()`가 `list[JournalEntry]`를 직접 반환하면, `limit`에 의해 데이터가 절삭되었는지
+호출자가 알 수 없다. 시뮬레이터(Config Shadow Evaluator)는 절삭된 데이터로 시뮬레이션하면
+결과의 정확도가 낮아지므로, `truncated` 플래그를 통해 "이 시뮬레이션은 데이터 절삭으로
+인해 정확도가 낮을 수 있다"는 경고를 리포트에 포함할 수 있어야 한다.
+예외/경고(`Warning`) 대신 반환값에 플래그를 포함하는 방식을 선택한 이유는,
+기존 코드베이스에 Warning을 던지는 패턴이 없고, 에러 격리 원칙과 일관되기 때문이다.
+
 ---
 
 ## 5. 인터페이스 정의
@@ -208,6 +228,7 @@ class EventJournalRepository(ABC):
 
     append-only 저장소. 기록된 엔트리는 수정/삭제 불가.
     시퀀스 번호는 단조 증가하여 순서를 보장한다.
+    Gap이 존재할 수 있으며(예: 1, 2, 4, 5), 소비자는 연속성을 가정하지 않는다.
 
     Implementations:
     - InMemoryEventJournalRepository: 테스트 및 단일 프로세스
@@ -228,7 +249,7 @@ class EventJournalRepository(ABC):
         ...
 
     @abstractmethod
-    def query(self, filter: JournalQueryFilter) -> list[JournalEntry]:
+    def query(self, filter: JournalQueryFilter) -> JournalQueryResult:
         """
         필터 조건에 맞는 엔트리를 시퀀스 순서(오름차순)로 반환한다.
 
@@ -236,7 +257,7 @@ class EventJournalRepository(ABC):
             filter: 조회 조건
 
         Returns:
-            시퀀스 오름차순 정렬된 엔트리 리스트
+            JournalQueryResult — entries(시퀀스 오름차순), truncated 여부, total_count
         """
         ...
 
@@ -274,6 +295,41 @@ class EventJournalRepository(ABC):
 **설계 결정 — delete/update 메서드 미포함 이유**:
 append-only 원칙. `FailedOperationRepository`는 `update_status()`, `mark_as_resolved()` 등
 상태 변경 메서드가 있지만, EventJournal은 불변 이벤트 로그이므로 쓰기는 `append()`만 제공한다.
+
+### 5.2 EventJournalLifecycle (확장용)
+
+데이터 수명주기 관리는 `EventJournalRepository`(읽기/쓰기 경로)와 분리하여
+별도 인터페이스로 정의한다. ISP(Interface Segregation Principle) 준수.
+기존 `AnchorColdStorage` (`audit/integrity/cold_storage.py:244-538`)가
+메인 audit 인터페이스와 별도 클래스로 존재하는 선례를 따른다.
+
+```python
+class EventJournalLifecycle(ABC):
+    """
+    저널 데이터 수명주기 관리. 운영용 별도 인터페이스.
+
+    append-only 원칙의 EventJournalRepository와 분리하여,
+    아카이브/퍼지 책임을 독립적으로 관리한다.
+
+    MVP에서는 구현하지 않으며, Tiered Storage 도입 시 활성화한다.
+    """
+
+    @abstractmethod
+    def archive_older_than(self, cutoff: datetime) -> int:
+        """cutoff 이전 엔트리를 Cold Storage로 이동. 이동된 건수 반환."""
+        ...
+
+    @abstractmethod
+    def purge_archived(self, before: datetime) -> int:
+        """아카이브 완료된 엔트리 중 before 이전 데이터를 삭제. 삭제된 건수 반환."""
+        ...
+```
+
+**설계 결정 — MVP에서 미구현, 스케치만 포함하는 이유**:
+현재 Redis 단일 백엔드(TTL 30일)로 충분하다. 다만 향후 Tiered Storage 도입 시
+`AnchorColdStorage`의 Hot(Redis) → Cold(GZIP JSONL) 패턴을 그대로 차용하여
+`TieredEventJournalRepository`가 `EventJournalRepository`와 `EventJournalLifecycle`을
+동시에 구현하는 형태로 확장할 수 있다.
 
 **설계 결정 — `get_sequence_range()` 추가 이유**:
 시뮬레이션 시 "이 rollout이 생성된 시점부터 현재까지의 이벤트"를 정확히 재생해야 한다.
@@ -340,9 +396,15 @@ class RedisEventJournalRepository(EventJournalRepository):
         seq = self._redis.incr(self.SEQUENCE_KEY)
 
         # Sorted Set: score=sequence, member=JSON
+        # INCR 성공 후 ZADD 실패 시 시퀀스 Gap이 발생할 수 있다.
+        # Gap은 허용되며, 실패 시 로그를 남겨 운영 모니터링에 활용한다.
         key = self._get_key(entry.timestamp)
         data = self._serialize(entry, seq)
-        self._redis.zadd(key, {data: seq})
+        try:
+            self._redis.zadd(key, {data: seq})
+        except Exception as e:
+            logger.warning("journal_zadd_failed", sequence=seq, error=str(e))
+            raise
 
         # TTL 설정
         if self._redis.ttl(key) < 0:
@@ -355,6 +417,39 @@ class RedisEventJournalRepository(EventJournalRepository):
 기존 `healing_events_store.py`는 List (`LPUSH`/`LRANGE`)를 사용하지만,
 시뮬레이션에는 **시퀀스 범위 쿼리**가 필요하다.
 Redis Sorted Set의 `ZRANGEBYSCORE`로 시퀀스 범위를 O(log N + M)에 조회할 수 있다.
+
+**설계 결정 — 월별 파티셔닝 키 구조**:
+단일 Sorted Set에 30일치 데이터를 모두 담는 대신, 월별로 키를 분리한다:
+
+```
+selfhealing:journal:2026-01    # 1월 데이터
+selfhealing:journal:2026-02    # 2월 데이터
+```
+
+`_get_key(timestamp)` 메서드가 `timestamp.strftime("%Y-%m")`을 기반으로 파티션 키를 생성한다.
+이렇게 하면 시간 범위 쿼리 시 관련 월의 키만 조회하여 스캔 범위를 자연스럽게 줄인다.
+
+**월 경계(Cross-partition) 쿼리 처리**:
+시뮬레이션 시간 범위(`start_time` ~ `end_time`)가 월 경계를 넘어갈 수 있다
+(예: 1월 30일 ~ 2월 3일). `query()` 내부에서 다음과 같이 처리한다:
+
+```python
+def _resolve_partition_keys(self, start_time: datetime, end_time: datetime) -> list[str]:
+    """시간 범위에 걸치는 모든 월별 파티션 키를 반환한다."""
+    keys = []
+    current = start_time.replace(day=1)
+    while current < end_time:
+        keys.append(f"{self.KEY_PREFIX}:{current.strftime('%Y-%m')}")
+        # 다음 월 1일로 이동
+        if current.month == 12:
+            current = current.replace(year=current.year + 1, month=1)
+        else:
+            current = current.replace(month=current.month + 1)
+    return keys
+```
+
+각 파티션 키에 대해 `ZRANGEBYSCORE`를 호출하고, 결과를 시퀀스 순으로 merge sort하여
+전체 결과에 `limit`를 적용한다.
 
 **설계 결정 — TTL 적용**:
 기존 `healing_events_store.py:35-36`의 7일 TTL 패턴을 따르되,
@@ -383,11 +478,42 @@ JOURNALED_EVENT_TYPES: frozenset[EventType] = frozenset({
 })
 
 
+class _JournalCircuitBreaker:
+    """
+    저널링 전용 경량 CB. 외부 의존 없음.
+
+    CircuitBreakerService를 직접 사용하면 순환 의존이 발생한다:
+    CB → EventBus → JournalSubscriber → CB.
+    따라서 자체 완결형 경량 CB로 Redis 장애 시 빠른 fail-fast를 구현한다.
+    기존 ring_buffer.py:213-216의 "알림 실패가 메인 로직 방해 금지" 원칙과 동일.
+    """
+
+    def __init__(self, failure_threshold: int = 5, recovery_seconds: float = 30):
+        self._failures = 0
+        self._threshold = failure_threshold
+        self._open_until: float = 0
+        self._recovery = recovery_seconds
+
+    def is_open(self) -> bool:
+        if self._failures < self._threshold:
+            return False
+        return time.monotonic() < self._open_until
+
+    def record_failure(self) -> None:
+        self._failures += 1
+        if self._failures >= self._threshold:
+            self._open_until = time.monotonic() + self._recovery
+
+    def record_success(self) -> None:
+        self._failures = 0
+
+
 class JournalSubscriber:
     """EventBus에서 이벤트를 수신하여 저널에 기록한다."""
 
     def __init__(self, repository: EventJournalRepository):
         self._repository = repository
+        self._cb = _JournalCircuitBreaker()
 
     def register(self, bus: EventBus) -> None:
         """대상 이벤트 타입에 대해 구독을 등록한다."""
@@ -395,19 +521,65 @@ class JournalSubscriber:
             bus.subscribe(event_type, self._handle_event)
 
     def _handle_event(self, event: SelfHealingEvent) -> None:
-        """이벤트를 JournalEntry로 변환하여 저장한다."""
-        entry = JournalEntry(
+        """
+        이벤트를 JournalEntry로 변환하여 저장한다.
+
+        에러 격리 원칙:
+        - 저널링 실패가 Self-Healing 메인 로직을 중단시켜서는 안 된다.
+        - 기존 패턴: event_buffer.py:447-456 (WAL 실패 시 삼킴),
+          ring_buffer.py:213-216 (알림 실패 시 pass)
+        - Redis 장애 지속 시 내부 CB가 열려 빠르게 fail-fast 처리.
+        """
+        # 내부 CB가 열려있으면 즉시 반환 (Redis 타임아웃 누적 방지)
+        if self._cb.is_open():
+            return
+
+        try:
+            entry = self._build_entry(event)
+            self._repository.append(entry)
+            self._cb.record_success()
+        except (TypeError, ValueError) as e:
+            # 직렬화 에러 — context에 비직렬화 객체 포함
+            logger.warning("journal_serialization_failed",
+                           event_type=event.event_type.value, error=str(e))
+        except Exception as e:
+            # Redis 장애 등 인프라 에러
+            self._cb.record_failure()
+            logger.warning("journal_append_failed",
+                           event_type=event.event_type.value, error=str(e))
+
+    def _build_entry(self, event: SelfHealingEvent) -> JournalEntry:
+        """이벤트를 JournalEntry로 변환한다. 방어적 직렬화 적용."""
+        # context 내 datetime, 커스텀 객체 등을 안전하게 변환
+        safe_context = json.loads(json.dumps(event.data, default=str))
+        return JournalEntry(
             sequence=0,  # repository가 할당
             event_type=event.event_type.value,
             source=event.source,
             timestamp=event.timestamp,
             service_name=event.data.get("service_name", ""),
-            context=event.data,
+            context=safe_context,
             region=event.data.get("region", ""),
             tier_id=event.data.get("tier_id", ""),
         )
-        self._repository.append(entry)
 ```
+
+**설계 결정 — 에러 격리(Swallow) 선택 이유**:
+EventJournal은 사후 분석(post-hoc analysis) 도구이며 Self-Healing 핵심 경로가 아니다.
+저널링 실패 때문에 CB 전환이 지연되면 Self-Healing의 존재 이유에 반한다.
+기존 코드베이스 전반에서 관측성 레이어의 에러는 삼키는 것이 표준 패턴이다:
+`event_buffer.py:447-456`, `ring_buffer.py:213-216`, `wal/_writer.py:68-76`.
+
+**설계 결정 — 내부 경량 CB(`_JournalCircuitBreaker`) 도입 이유**:
+에러를 삼키더라도 Redis 타임아웃(기본 2초)이 이벤트마다 발생하면 지연이 누적된다.
+내부 CB가 5회 연속 실패 후 30초간 OPEN 상태를 유지하여 즉시 반환함으로써
+메인 로직의 레이턴시 스파이크를 원천 차단한다.
+`CircuitBreakerService`를 직접 사용하지 않는 이유는 순환 의존 방지이다.
+
+**설계 결정 — 방어적 직렬화(`json.dumps(default=str)`) 선택 이유**:
+EventBus에서 넘어오는 `context` (`dict[str, Any]`) 내부에 `datetime` 객체나
+사용자 정의 클래스가 포함될 수 있다. `default=str` 폴백으로
+`datetime` → ISO string, 커스텀 객체 → `str(obj)` 변환을 보장한다.
 
 ### 7.2 초기화
 
@@ -474,6 +646,12 @@ class EventJournalSettings(BaseSettings):
         le=1000000,
         description="InMemory 어댑터 최대 엔트리 수",
     )
+    max_query_limit: int = Field(
+        default=10000,
+        ge=100,
+        le=100000,
+        description="query() 최대 반환 건수 상한. JournalQueryFilter.limit이 이 값을 초과하면 클램프된다.",
+    )
     backend: str = Field(
         default="memory",
         description="저장소 백엔드 (memory, redis)",
@@ -532,11 +710,11 @@ def _auto_register_adapters():
 ```
 packages/selfhealing-python/src/selfhealing/
 ├── interfaces/
-│   └── event_journal.py              # EventJournalRepository ABC, JournalEntry, JournalQueryFilter
+│   └── event_journal.py              # EventJournalRepository ABC, EventJournalLifecycle ABC, JournalEntry, JournalQueryFilter, JournalQueryResult
 ├── services/
 │   └── event_journal/
 │       ├── __init__.py               # init_event_journal(), get_event_journal()
-│       └── subscriber.py             # JournalSubscriber, JOURNALED_EVENT_TYPES
+│       └── subscriber.py             # JournalSubscriber, _JournalCircuitBreaker, JOURNALED_EVENT_TYPES
 ├── adapters/
 │   ├── memory/
 │   │   └── event_journal.py          # InMemoryEventJournalRepository
