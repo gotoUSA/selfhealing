@@ -38,6 +38,7 @@ from selfhealing.services.runbook.exceptions import (
     RunbookCompensationError,
     RunbookExecutionError,
     RunbookLockConflictError,
+    RunbookNotFoundError,
     RunbookStaleContextError,
     RunbookStepTimeoutError,
     RunbookVersionMismatchError,
@@ -53,7 +54,6 @@ from selfhealing.services.runbook.execution_models import (
     RunbookStepResult,
 )
 from selfhealing.services.runbook.executor import RunbookExecutor
-from selfhealing.services.runbook.recorder import RunbookPlaybackRecorder
 from selfhealing.services.runbook.metrics_provider import RunbookMetricsProvider
 from selfhealing.services.runbook.models import (
     ConditionOperator,
@@ -65,7 +65,12 @@ from selfhealing.services.runbook.models import (
     PatternCondition,
 )
 from selfhealing.services.runbook.pattern_matcher import PatternMatcher
-from selfhealing.services.runbook.resolvers import DotPathResolver, ParamResolver, resolve_params
+from selfhealing.services.runbook.recorder import RunbookPlaybackRecorder
+from selfhealing.services.runbook.resolvers import (
+    DotPathResolver,
+    ParamResolver,
+    resolve_params,
+)
 from selfhealing.services.runbook.runbook_registry import (
     BUILTIN_CATEGORIES,
     ActionHandler,
@@ -76,6 +81,12 @@ from selfhealing.services.runbook.runbook_registry import (
     RunbookStep,
     RunbookStepContext,
     StepCondition,
+)
+from selfhealing.services.runbook.service import (
+    RunbookService,
+    get_runbook_service,
+    initialize_runbook_system,
+    reset_runbook_service,
 )
 
 __all__ = [
@@ -120,6 +131,7 @@ __all__ = [
     # Exceptions
     "RunbookExecutionError",
     "RunbookLockConflictError",
+    "RunbookNotFoundError",
     "RunbookStepTimeoutError",
     "RunbookStaleContextError",
     "RunbookVersionMismatchError",
@@ -137,4 +149,9 @@ __all__ = [
     "RunbookExecutor",
     # Recorder
     "RunbookPlaybackRecorder",
+    # Service (278)
+    "RunbookService",
+    "get_runbook_service",
+    "reset_runbook_service",
+    "initialize_runbook_system",
 ]

@@ -177,6 +177,38 @@ class RunbookSettings(BaseSettings):
         description="CRITICAL 런북 강제 실행 시 감사 로그 필수 여부",
     )
 
+    # ==========================================================================
+    # RunbookService Settings (278번 Service)
+    # ==========================================================================
+    async_execution: bool = Field(
+        default=True,
+        description="True: Celery 태스크로 비동기 실행, False: 동기 실행 (개발/테스트용)",
+    )
+
+    event_priority: str = Field(
+        default="LOW",
+        description="EventBus 구독 우선순위",
+    )
+
+    subscribe_events: bool = Field(
+        default=True,
+        description="EventBus 구독 여부. Celery Worker에서만 True, 웹 서버에서는 False 권장",
+    )
+
+    orphan_scan_interval_seconds: int = Field(
+        default=120,
+        ge=30,
+        le=600,
+        description="고아 스캔 Beat 간격 (초). 기본 2분",
+    )
+
+    orphan_stale_threshold_seconds: int = Field(
+        default=600,
+        ge=60,
+        le=7200,
+        description="EXECUTING 상태 고아 판별 임계값 (초). 기본 10분",
+    )
+
     @field_validator("approval_timer_seconds")
     @classmethod
     def validate_approval_timer(cls, v: int) -> int:

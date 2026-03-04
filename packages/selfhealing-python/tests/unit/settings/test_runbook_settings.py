@@ -69,10 +69,10 @@ class TestRunbookSettingsContract:
             assert settings.lock_ttl_seconds == 600
 
     def test_field_count(self):
-        """RunbookSettings는 16개 필드로 구성된다 (272: 4개 + 275: 7개 + 276: 5개)."""
+        """RunbookSettings는 21개 필드로 구성된다 (272: 4개 + 275: 7개 + 276: 5개 + 278: 5개)."""
         from selfhealing.settings.runbook import RunbookSettings
 
-        assert len(RunbookSettings.model_fields) == 16
+        assert len(RunbookSettings.model_fields) == 21
 
     # === 275번 Executor 설정 계약값 ===
 
@@ -333,7 +333,10 @@ class TestRunbookSettingsSingletonBehavior:
 
     def test_get_returns_same_instance(self):
         """get_runbook_settings()는 동일 인스턴스를 반환."""
-        from selfhealing.settings.runbook import get_runbook_settings, reset_runbook_settings
+        from selfhealing.settings.runbook import (
+            get_runbook_settings,
+            reset_runbook_settings,
+        )
 
         reset_runbook_settings()
         first = get_runbook_settings()
@@ -342,7 +345,10 @@ class TestRunbookSettingsSingletonBehavior:
 
     def test_reset_clears_cached_instance(self):
         """reset 후 get_runbook_settings()는 새 인스턴스를 반환."""
-        from selfhealing.settings.runbook import get_runbook_settings, reset_runbook_settings
+        from selfhealing.settings.runbook import (
+            get_runbook_settings,
+            reset_runbook_settings,
+        )
 
         reset_runbook_settings()
         first = get_runbook_settings()

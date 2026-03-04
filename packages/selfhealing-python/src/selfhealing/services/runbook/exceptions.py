@@ -19,6 +19,10 @@ class RunbookExecutionError(Exception):
     """Runbook 실행 중 일반 오류."""
 
 
+class RunbookNotFoundError(RunbookExecutionError):
+    """Runbook ID가 레지스트리에 없음."""
+
+
 class RunbookLockConflictError(RunbookExecutionError):
     """Lock 획득 실패 — 같은 namespace에서 다른 복구/런북이 진행 중."""
 
@@ -77,7 +81,10 @@ class ApprovalAlreadyDecidedError(RunbookApprovalError):
     def __init__(self, execution_id: str, current_status: ApprovalDecisionType):
         self.execution_id = execution_id
         self.current_status = current_status
-        super().__init__(f"Approval already decided: {execution_id} " f"is in '{current_status.value}' state")
+        super().__init__(
+            f"Approval already decided: {execution_id} "
+            f"is in '{current_status.value}' state"
+        )
 
 
 class RunbookApprovalDuplicateError(RunbookApprovalError):

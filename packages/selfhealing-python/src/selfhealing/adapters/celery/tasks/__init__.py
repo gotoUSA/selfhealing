@@ -102,6 +102,15 @@ from .postmortem import (
 )
 
 # ============================================================
+# Runbook Tasks
+# ============================================================
+from .runbook import (
+    check_approval_timers,
+    execute_runbook_for_event,
+    execute_runbook_manual,
+)
+
+# ============================================================
 # SLA Notification Tasks
 # ============================================================
 from .sla_notification import send_sla_notification
@@ -142,4 +151,8 @@ __all__ = [
     "flush_aggregated_notifications",
     "check_stale_incident_groups",
     "process_individual_postmortem",
+    # Runbook
+    "execute_runbook_for_event",
+    "execute_runbook_manual",
+    "check_approval_timers",
 ]
