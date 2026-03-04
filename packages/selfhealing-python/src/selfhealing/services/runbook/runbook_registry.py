@@ -193,6 +193,10 @@ class RunbookStep:
     wait_after_seconds: int = 0
     """Step 완료 후 안정화 대기 시간 (초)."""
 
+    # 실패 시 진행 제어 (297 §2)
+    continue_on_failure: bool = False
+    """True면 실패해도 abort 없이 다음 Step 진행. 검증 게이트에서 사용."""
+
     # 멱등성 힌트
     idempotent: bool = True
     """상태 기반 Action이면 True (IdempotentStepHandler 연동)."""
