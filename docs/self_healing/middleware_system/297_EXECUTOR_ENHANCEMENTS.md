@@ -176,10 +176,12 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
 
             metric_value = _query_metric(params.assert_metric, labels=params.labels)
             if metric_value is not None and metric_value >= params.threshold:
-                return StepResult.failed(
+                return StepResult(
+                    success=False,
                     error=f"Fail-fast: {params.assert_metric}={metric_value:.3f} "
                           f">= threshold {params.threshold} at {elapsed}s/{params.seconds}s",
-                    result_data={
+                    error_code="WAIT_STABILIZE_FAIL_FAST",
+                    data={
                         "waited_seconds": elapsed,
                         "total_seconds": params.seconds,
                         "fail_fast": True,
@@ -330,7 +332,7 @@ def _query_metric(
 
 ## 6. 테스트 전략
 
-테스트 위치: `packages/selfhealing-python/tests/unit/test_executor_enhancements.py`
+테스트 위치: `packages/selfhealing-python/tests/unit/services/runbook/test_executor_enhancements.py`
 
 ### 6.1 continue_on_failure 테스트
 

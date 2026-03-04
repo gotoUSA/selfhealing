@@ -436,14 +436,15 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
                 if metric_value is not None and not op_fn(
                     metric_value, params.threshold
                 ):
-                    return StepResult.failed(
+                    return StepResult(
+                        success=False,
                         error=(
                             f"Fail-fast: {params.assert_metric}={metric_value:.3f} "
                             f"violated {params.operator} {params.threshold} "
                             f"at {elapsed}s/{params.seconds}s"
                         ),
                         error_code="WAIT_STABILIZE_FAIL_FAST",
-                        result_data={
+                        data={
                             "waited_seconds": elapsed,
                             "total_seconds": params.seconds,
                             "fail_fast": True,
