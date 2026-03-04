@@ -515,7 +515,7 @@ class JournalSubscriber:
         self._repository = repository
         self._cb = _JournalCircuitBreaker()
 
-    def register(self, bus: EventBus) -> None:
+    def register(self, bus: SelfHealingEventBus) -> None:
         """대상 이벤트 타입에 대해 구독을 등록한다."""
         for event_type in JOURNALED_EVENT_TYPES:
             bus.subscribe(event_type, self._handle_event)
@@ -588,7 +588,7 @@ EventBus에서 넘어오는 `context` (`dict[str, Any]`) 내부에 `datetime` �
 
 _journal_subscriber: JournalSubscriber | None = None
 
-def init_event_journal(bus: EventBus | None = None) -> JournalSubscriber:
+def init_event_journal(bus: SelfHealingEventBus | None = None) -> JournalSubscriber:
     """EventJournal 구독자를 초기화한다. 앱 시작 시 1회 호출."""
     global _journal_subscriber
     if _journal_subscriber is not None:
@@ -713,7 +713,7 @@ packages/selfhealing-python/src/selfhealing/
 │   └── event_journal.py              # EventJournalRepository ABC, EventJournalLifecycle ABC, JournalEntry, JournalQueryFilter, JournalQueryResult
 ├── services/
 │   └── event_journal/
-│       ├── __init__.py               # init_event_journal(), get_event_journal()
+│       ├── __init__.py               # init_event_journal(), get_event_journal(), reset_event_journal()
 │       └── subscriber.py             # JournalSubscriber, _JournalCircuitBreaker, JOURNALED_EVENT_TYPES
 ├── adapters/
 │   ├── memory/

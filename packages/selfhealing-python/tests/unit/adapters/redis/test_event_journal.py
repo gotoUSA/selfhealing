@@ -310,6 +310,76 @@ class TestRedisEventJournalSerializationBehavior:
         assert result.sequence == 1
 
 
+class TestRedisEventJournalCountBehavior:
+    """count() 동작 검증."""
+
+    def _setup_repo_with_entries(self, entries_data):
+        """Mock Redis에 직렬화된 엔트리를 준비한다."""
+        import json
+
+        mock_redis = MagicMock()
+        repo = RedisEventJournalRepository(redis_client=mock_redis)
+
+        serialized = []
+        for seq, entry in enumerate(entries_data, start=1):
+            data = {
+                "sequence": seq,
+                "event_type": entry.get("event_type", "test"),
+                "source": entry.get("source", "unit"),
+                "timestamp": entry.get(
+                    "timestamp",
+                    datetime(2026, 3, 1, 12, 0, 0, tzinfo=timezone.utc),
+                ).isoformat(),
+                "service_name": entry.get("service_name", "svc"),
+                "context": entry.get("context", {}),
+                "region": entry.get("region", ""),
+                "tier_id": entry.get("tier_id", ""),
+            }
+            serialized.append(json.dumps(data))
+
+        mock_redis.keys.return_value = [b"selfhealing:journal:2026-03"]
+        mock_redis.zrangebyscore.return_value = serialized
+        return repo, mock_redis
+
+    def test_count_returns_matching_entry_count(self):
+        """필터에 맞는 엔트리 수를 반환한다."""
+        repo, _ = self._setup_repo_with_entries(
+            [
+                {"event_type": "type_a"},
+                {"event_type": "type_b"},
+                {"event_type": "type_a"},
+            ]
+        )
+
+        result = repo.count(JournalQueryFilter(event_types=["type_a"]))
+        assert result == 2
+
+    def test_count_with_no_filter_returns_total(self):
+        """필터 없이 count()하면 전체 엔트리 수를 반환한다."""
+        repo, _ = self._setup_repo_with_entries(
+            [
+                {"service_name": "svc-1"},
+                {"service_name": "svc-2"},
+                {"service_name": "svc-3"},
+            ]
+        )
+
+        result = repo.count(JournalQueryFilter())
+        assert result == 3
+
+    def test_count_with_time_range_resolves_partition_keys(self):
+        """시간 범위 필터 시 월별 파티션 키를 resolve한다."""
+        mock_redis = MagicMock()
+        mock_redis.zrangebyscore.return_value = []
+        repo = RedisEventJournalRepository(redis_client=mock_redis)
+
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 3, 1, tzinfo=timezone.utc)
+        repo.count(JournalQueryFilter(start_time=start, end_time=end))
+
+        assert mock_redis.zrangebyscore.call_count == 2
+
+
 class TestRedisEventJournalPartitionKeyBehavior:
     """월별 파티셔닝 키 검증."""
 
