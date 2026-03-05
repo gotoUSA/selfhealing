@@ -105,7 +105,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         self._downstream_checkers: list[Callable[[str], bool]] = []
 
         # MeshCoordinator 연동: 서비스별 임계치 오버라이드 맵
-        self._threshold_overrides: dict = {}
+        self._threshold_overrides: dict[str, Any] = {}
 
     def register_state_change_callback(
         self,
@@ -230,6 +230,20 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         """임계치 오버라이드 해제, 원래 config로 복귀."""
         self._threshold_overrides.pop(service_name, None)
 
+    @staticmethod
+    def _record_preemptive_fallback_metric() -> None:
+        """프리엠티브 Fallback 메트릭 기록 (graceful degradation)."""
+        try:
+            from selfhealing.metrics.prometheus import get_metrics
+
+            metrics = get_metrics()
+            if metrics._initialized and hasattr(
+                metrics, "mesh_preemptive_fallback_total"
+            ):
+                metrics.mesh_preemptive_fallback_total.inc()
+        except Exception:
+            pass
+
     def get_effective_config(self, service_name: str) -> CircuitBreakerConfig:
         """
         오버라이드 적용된 실효 config 반환.
@@ -304,6 +318,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                         "circuit_breaker.downstream_preemptive_fallback",
                         service=service_name,
                     )
+                    self._record_preemptive_fallback_metric()
                     return False
             except Exception as e:
                 logger.warning(

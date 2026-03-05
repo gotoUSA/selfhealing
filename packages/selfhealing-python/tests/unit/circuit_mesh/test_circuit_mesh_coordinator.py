@@ -415,6 +415,30 @@ class TestMeshCoordinatorCheckOverrideRenewalsBehavior:
         renewed_override = store.get("svc-up-1")
         assert renewed_override.renewal_count == 1
 
+    def test_renewal_creates_new_instance_not_in_place_mutation(
+        self, coordinator, mock_cb_service, store, settings
+    ):
+        """갱신 시 원본 오버라이드를 변경하지 않고 새 인스턴스를 생성한다."""
+        original_expires = datetime.now(timezone.utc) + timedelta(seconds=30)
+        override = ThresholdOverride(
+            service_name="svc-up-1",
+            original_failure_threshold=5,
+            adjusted_failure_threshold=10,
+            original_recovery_timeout=60,
+            adjusted_recovery_timeout=180,
+            reason="downstream:svc-down OPEN (depth=1)",
+            expires_at=original_expires,
+            renewal_count=0,
+        )
+        store.set("svc-up-1", override)
+        mock_cb_service.get_state.return_value = CircuitState.OPEN
+
+        coordinator.check_override_renewals()
+
+        # 원본 객체는 변경되지 않아야 한다
+        assert override.renewal_count == 0
+        assert override.expires_at == original_expires
+
     def test_expires_override_when_downstream_recovered(
         self, coordinator, mock_cb_service, store
     ):

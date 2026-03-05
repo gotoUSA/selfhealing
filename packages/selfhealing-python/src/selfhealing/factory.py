@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     )
     from selfhealing.interfaces.statistics import StatisticsRepositoryInterface
     from selfhealing.interfaces.task_queue import TaskQueueInterface
+    from selfhealing.services.circuit_mesh.store import MeshOverrideStore
 
 logger = structlog.get_logger()
 
@@ -273,7 +274,7 @@ class ProviderRegistry:
         name: str | None = None,
         singleton: bool = True,
         **kwargs: object,
-    ) -> object:
+    ) -> MeshOverrideStore:
         """Get a mesh override store instance."""
         name = name or "memory"
 

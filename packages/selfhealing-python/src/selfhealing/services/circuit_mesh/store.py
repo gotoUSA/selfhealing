@@ -81,7 +81,7 @@ class TwoTierMeshOverrideStore:
     참조: adapters/memory/layered_repository/repository_operations.py
     """
 
-    REDIS_KEY = "selfhealing:mesh:overrides"
+    REDIS_KEY_PREFIX = "selfhealing:mesh:override:"
 
     def __init__(
         self,
@@ -134,26 +134,30 @@ class TwoTierMeshOverrideStore:
         """L1↔L2 drift 감지. snapshot_interval_seconds 주기로 호출."""
         drift_count = 0
         try:
-            l2_data = self._cache.get(self.REDIS_KEY)
-            if l2_data is None:
-                if self._l1:
-                    drift_count = len(self._l1)
-                return {"drift_detected": drift_count > 0, "drift_count": drift_count}
-
-            l2_keys = (
-                set(json.loads(l2_data).keys())
-                if isinstance(l2_data, str)
-                else set(l2_data.keys())
-            )
-            l1_keys = set(self._l1.keys())
-            drift_count = len(l1_keys.symmetric_difference(l2_keys))
+            for service_name in list(self._l1.keys()):
+                l2_key = f"{self.REDIS_KEY_PREFIX}{service_name}"
+                l2_data = self._cache.get(l2_key)
+                if l2_data is None:
+                    drift_count += 1
         except Exception as e:
             logger.warning("mesh_override_store.drift_check_failed", error=str(e))
+
+        if drift_count > 0:
+            try:
+                from selfhealing.metrics.prometheus import get_metrics
+
+                metrics = get_metrics()
+                if metrics._initialized and hasattr(
+                    metrics, "mesh_override_store_drift_total"
+                ):
+                    metrics.mesh_override_store_drift_total.inc(drift_count)
+            except Exception:
+                pass
 
         return {"drift_detected": drift_count > 0, "drift_count": drift_count}
 
     def _sync_to_l2(self, service_name: str, override: ThresholdOverride) -> None:
-        """L2 Redis에 오버라이드 동기화."""
+        """L2 Redis에 오버라이드 동기화 (per-key, 원자적 쓰기)."""
         try:
             data = {
                 "service_name": override.service_name,
@@ -165,10 +169,8 @@ class TwoTierMeshOverrideStore:
                 "expires_at": override.expires_at.isoformat(),
                 "renewal_count": override.renewal_count,
             }
-            current = self._cache.get(self.REDIS_KEY)
-            store = json.loads(current) if isinstance(current, str) and current else {}
-            store[service_name] = data
-            self._cache.set(self.REDIS_KEY, json.dumps(store))
+            l2_key = f"{self.REDIS_KEY_PREFIX}{service_name}"
+            self._cache.set(l2_key, json.dumps(data))
         except Exception as e:
             logger.warning(
                 "mesh_override_store.l2_sync_failed",
@@ -179,11 +181,8 @@ class TwoTierMeshOverrideStore:
     def _remove_from_l2(self, service_name: str) -> None:
         """L2 Redis에서 오버라이드 제거."""
         try:
-            current = self._cache.get(self.REDIS_KEY)
-            if current:
-                store = json.loads(current) if isinstance(current, str) else current
-                store.pop(service_name, None)
-                self._cache.set(self.REDIS_KEY, json.dumps(store))
+            l2_key = f"{self.REDIS_KEY_PREFIX}{service_name}"
+            self._cache.delete(l2_key)
         except Exception as e:
             logger.warning(
                 "mesh_override_store.l2_remove_failed",
@@ -196,13 +195,11 @@ class TwoTierMeshOverrideStore:
         try:
             from datetime import datetime, timezone
 
-            current = self._cache.get(self.REDIS_KEY)
-            if not current:
+            l2_key = f"{self.REDIS_KEY_PREFIX}{service_name}"
+            raw = self._cache.get(l2_key)
+            if not raw:
                 return None
-            store = json.loads(current) if isinstance(current, str) else current
-            data = store.get(service_name)
-            if not data:
-                return None
+            data = json.loads(raw) if isinstance(raw, str) else raw
             return ThresholdOverride(
                 service_name=data["service_name"],
                 original_failure_threshold=data["original_failure_threshold"],

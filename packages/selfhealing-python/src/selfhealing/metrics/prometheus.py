@@ -223,17 +223,6 @@ class SelfHealingMetrics:
             "Total mesh threshold override TTL renewals",
         )
 
-        self.mesh_recovery_duration_seconds = Histogram(
-            f"{prefix}_mesh_recovery_duration_seconds",
-            "Mesh coordinated recovery duration",
-            buckets=[5, 15, 30, 60, 120, 300, 600],
-        )
-
-        self.mesh_cascade_prevented_total = Counter(
-            f"{prefix}_mesh_cascade_prevented_total",
-            "Total cascade OPEN preventions by mesh coordinator",
-        )
-
         self.mesh_preemptive_fallback_total = Counter(
             f"{prefix}_mesh_preemptive_fallback_total",
             "Total preemptive fallback activations",
@@ -257,6 +246,12 @@ class SelfHealingMetrics:
         self.mesh_override_store_drift_total = Counter(
             f"{prefix}_mesh_override_store_drift_total",
             "Total L1-L2 drift detections in mesh override store",
+        )
+
+        self.mesh_recovery_duration_seconds = Histogram(
+            f"{prefix}_mesh_recovery_duration_seconds",
+            "Duration from downstream CB OPEN to CLOSED recovery in seconds",
+            buckets=[5, 10, 30, 60, 120, 300, 600, 1800, 3600],
         )
 
         # =============================================================================

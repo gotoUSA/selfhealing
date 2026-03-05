@@ -58,9 +58,9 @@ class TestTwoTierStoreContract:
         """MeshOverrideStore 프로토콜을 만족한다."""
         assert isinstance(store, MeshOverrideStore)
 
-    def test_redis_key_contract(self):
-        """Redis 키 계약값: 'selfhealing:mesh:overrides'."""
-        assert TwoTierMeshOverrideStore.REDIS_KEY == "selfhealing:mesh:overrides"
+    def test_redis_key_prefix_contract(self):
+        """Redis 키 접두사 계약값: 'selfhealing:mesh:override:'."""
+        assert TwoTierMeshOverrideStore.REDIS_KEY_PREFIX == "selfhealing:mesh:override:"
 
 
 # =============================================================================
@@ -121,52 +121,34 @@ class TestTwoTierStoreL1Behavior:
 class TestTwoTierStoreL2SyncBehavior:
     """L2 Redis 동기화 동작 검증."""
 
-    def test_set_syncs_to_l2_cache(self, store, mock_cache):
-        """set 시 L2 Redis에 동기화한다."""
+    def test_set_syncs_to_l2_cache_per_key(self, store, mock_cache):
+        """set 시 L2 Redis에 per-key로 동기화한다."""
         override = _make_override("svc-a")
         store.set("svc-a", override)
 
         mock_cache.set.assert_called_once()
         call_args = mock_cache.set.call_args
-        assert call_args[0][0] == TwoTierMeshOverrideStore.REDIS_KEY
+        expected_key = f"{TwoTierMeshOverrideStore.REDIS_KEY_PREFIX}svc-a"
+        assert call_args[0][0] == expected_key
         stored_data = json.loads(call_args[0][1])
-        assert "svc-a" in stored_data
-        assert stored_data["svc-a"]["adjusted_failure_threshold"] == 10
+        assert stored_data["adjusted_failure_threshold"] == 10
 
-    def test_remove_removes_from_l2_cache(self, store, mock_cache):
-        """remove 시 L2 Redis에서도 제거한다."""
-        # Given — L2에 기존 데이터 존재
-        existing = json.dumps({"svc-a": {"service_name": "svc-a"}})
-        mock_cache.get.return_value = existing
-
+    def test_remove_deletes_from_l2_cache(self, store, mock_cache):
+        """remove 시 L2 Redis에서 per-key 삭제한다."""
         store.set("svc-a", _make_override("svc-a"))
         mock_cache.reset_mock()
-        mock_cache.get.return_value = existing
 
         store.remove("svc-a")
-        mock_cache.set.assert_called_once()
-        stored_data = json.loads(mock_cache.set.call_args[0][1])
-        assert "svc-a" not in stored_data
-
-    def test_set_appends_to_existing_l2_data(self, store, mock_cache):
-        """L2에 기존 데이터가 있을 때 set은 기존 데이터를 보존하며 추가."""
-        existing = json.dumps({"svc-existing": {"service_name": "svc-existing"}})
-        mock_cache.get.return_value = existing
-
-        store.set("svc-new", _make_override("svc-new"))
-
-        stored_data = json.loads(mock_cache.set.call_args[0][1])
-        assert "svc-existing" in stored_data
-        assert "svc-new" in stored_data
+        expected_key = f"{TwoTierMeshOverrideStore.REDIS_KEY_PREFIX}svc-a"
+        mock_cache.delete.assert_called_once_with(expected_key)
 
     def test_l2_sync_failure_does_not_affect_l1(self, store, mock_cache):
         """L2 쓰기 실패 시 L1은 정상 작동 (graceful degradation)."""
-        mock_cache.get.side_effect = Exception("Redis connection error")
+        mock_cache.set.side_effect = Exception("Redis connection error")
 
         override = _make_override("svc-a")
         store.set("svc-a", override)
 
-        # L1은 여전히 정상
         assert store.get("svc-a") is not None
 
 
@@ -212,20 +194,17 @@ class TestTwoTierStoreInvalidationBehavior:
 
     def test_on_invalidation_set_action_fetches_from_l2(self, store, mock_cache):
         """set 무효화 이벤트 수신 시 L2에서 가져와 L1 갱신."""
-        # Given — L2에 최신 데이터 존재
         override_data = {
-            "svc-a": {
-                "service_name": "svc-a",
-                "original_failure_threshold": 5,
-                "adjusted_failure_threshold": 15,
-                "original_recovery_timeout": 60,
-                "adjusted_recovery_timeout": 180,
-                "reason": "downstream:svc-down OPEN (depth=1)",
-                "expires_at": (
-                    datetime.now(timezone.utc) + timedelta(seconds=600)
-                ).isoformat(),
-                "renewal_count": 0,
-            }
+            "service_name": "svc-a",
+            "original_failure_threshold": 5,
+            "adjusted_failure_threshold": 15,
+            "original_recovery_timeout": 60,
+            "adjusted_recovery_timeout": 180,
+            "reason": "downstream:svc-down OPEN (depth=1)",
+            "expires_at": (
+                datetime.now(timezone.utc) + timedelta(seconds=600)
+            ).isoformat(),
+            "renewal_count": 0,
         }
         mock_cache.get.return_value = json.dumps(override_data)
 
@@ -240,7 +219,6 @@ class TestTwoTierStoreInvalidationBehavior:
         """이벤트 발행 실패 시 예외 전파 없음 (graceful degradation)."""
         mock_bus.emit.side_effect = Exception("EventBus failure")
         store.set("svc-a", _make_override("svc-a"))
-        # 예외 없이 L1은 정상
         assert store.get("svc-a") is not None
 
 
@@ -267,24 +245,17 @@ class TestTwoTierStoreDriftBehavior:
         assert result["drift_detected"] is True
         assert result["drift_count"] == 1
 
-    def test_drift_detected_when_keys_differ(self, store, mock_cache):
-        """L1과 L2의 키가 다르면 drift 감지."""
+    def test_no_drift_when_l2_has_data(self, store, mock_cache):
+        """L1과 L2 모두 데이터가 있으면 drift 없음."""
         store._l1["svc-a"] = _make_override("svc-a")
-        mock_cache.get.return_value = json.dumps({"svc-b": {}})
-        result = store.check_drift()
-        assert result["drift_detected"] is True
-        assert result["drift_count"] == 2  # svc-a + svc-b (symmetric diff)
-
-    def test_no_drift_when_keys_match(self, store, mock_cache):
-        """L1과 L2의 키가 동일하면 drift 없음."""
-        store._l1["svc-a"] = _make_override("svc-a")
-        mock_cache.get.return_value = json.dumps({"svc-a": {}})
+        mock_cache.get.return_value = json.dumps({"service_name": "svc-a"})
         result = store.check_drift()
         assert result["drift_detected"] is False
         assert result["drift_count"] == 0
 
     def test_drift_check_failure_returns_gracefully(self, store, mock_cache):
         """drift 체크 중 예외 시 graceful 반환."""
+        store._l1["svc-a"] = _make_override("svc-a")
         mock_cache.get.side_effect = Exception("Redis timeout")
         result = store.check_drift()
         assert result["drift_detected"] is False

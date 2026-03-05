@@ -17,6 +17,8 @@ Circuit Breaker Mesh Coordinator
 
 from __future__ import annotations
 
+import threading
+from dataclasses import replace
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -52,11 +54,14 @@ class MeshCoordinator:
         self._cb = cb_service
         self._store = override_store
         self._settings = settings
+        self._lock = threading.Lock()
         self._recovery_queue: list[str] = []
+        self._recovery_start_times: dict[str, float] = {}
 
         # 프리엠티브 Fallback을 위한 로컬 인메모리 Set.
         # Hot Path(should_allow())에서 O(1) 조회, 외부 I/O 없음.
         # EventBus(Redis Pub/Sub)를 통해 멀티 인스턴스 간 비동기 동기화.
+        # _lock으로 보호: RedisEventBus 리스너 스레드와의 경합 방어.
         self._downstream_open_set: set[str] = set()
 
     def initialize(self) -> None:
@@ -74,10 +79,12 @@ class MeshCoordinator:
 
         O(1) set lookup만 수행, 외부 I/O 없음.
         """
-        if not self._downstream_open_set:
-            return True
+        with self._lock:
+            if not self._downstream_open_set:
+                return True
+            open_snapshot = frozenset(self._downstream_open_set)
         dependencies = self._graph.get_dependencies(service_name)
-        return not any(dep in self._downstream_open_set for dep in dependencies)
+        return not any(dep in open_snapshot for dep in dependencies)
 
     # =========================================================================
     # Event Handlers
@@ -96,7 +103,8 @@ class MeshCoordinator:
         if not downstream:
             return
 
-        self._downstream_open_set.add(downstream)
+        with self._lock:
+            self._downstream_open_set.add(downstream)
 
         current_overrides = self._store.get_all()
         if len(current_overrides) >= self._settings.max_concurrent_overrides:
@@ -152,8 +160,10 @@ class MeshCoordinator:
 
             self._record_metric("override_applied")
 
-        if downstream not in self._recovery_queue:
-            self._recovery_queue.append(downstream)
+        with self._lock:
+            if downstream not in self._recovery_queue:
+                self._recovery_queue.append(downstream)
+                self._recovery_start_times[downstream] = now().timestamp()
 
     def on_downstream_half_opened(self, event: SelfHealingEvent) -> None:
         """
@@ -181,7 +191,8 @@ class MeshCoordinator:
         if not downstream:
             return
 
-        self._downstream_open_set.discard(downstream)
+        with self._lock:
+            self._downstream_open_set.discard(downstream)
 
         affected = self._graph.get_dependents_recursive(
             downstream,
@@ -216,16 +227,22 @@ class MeshCoordinator:
 
             self._record_metric("fast_recovery")
 
-        if downstream in self._recovery_queue:
-            self._recovery_queue.remove(downstream)
+        with self._lock:
+            if downstream in self._recovery_queue:
+                self._recovery_queue.remove(downstream)
+            start_ts = self._recovery_start_times.pop(downstream, None)
+
+        if start_ts is not None:
+            duration = now().timestamp() - start_ts
+            self._record_histogram("recovery_duration", duration)
 
     def on_fast_recovery_completed(self, event: SelfHealingEvent) -> None:
         """
-        상류 CB가 fast-recovery 후 CLOSED 전이 시 최종 오버라이드 해제.
+        CB CLOSED 이벤트에서 fast-recovery 오버라이드 정리.
 
-        fast-recovery override의 짧은 TTL이 만료되면
-        get_effective_config()에서 자동 정리되므로, 이 핸들러는
-        즉시 정리를 위한 보조 역할이다.
+        CIRCUIT_BREAKER_CLOSED 이벤트를 수신하여 해당 서비스에
+        fast-recovery 오버라이드가 있으면 즉시 정리한다.
+        TTL 만료 전에 능동적으로 정리하는 보조 역할.
         """
         service = event.data.get("service_name", "")
         existing = self._store.get(service)
@@ -262,18 +279,20 @@ class MeshCoordinator:
 
             if downstream_state == CircuitState.OPEN:
                 if override.renewal_count < self._settings.max_renewals:
-                    override.expires_at = now() + timedelta(
-                        seconds=self._settings.override_ttl_seconds
+                    renewed_override = replace(
+                        override,
+                        expires_at=now()
+                        + timedelta(seconds=self._settings.override_ttl_seconds),
+                        renewal_count=override.renewal_count + 1,
                     )
-                    override.renewal_count += 1
-                    self._store.set(service_name, override)
-                    self._cb.apply_threshold_override(service_name, override)
+                    self._store.set(service_name, renewed_override)
+                    self._cb.apply_threshold_override(service_name, renewed_override)
 
                     logger.info(
                         "mesh_coordinator.override_renewed",
                         service=service_name,
                         downstream=downstream,
-                        renewal_count=override.renewal_count,
+                        renewal_count=renewed_override.renewal_count,
                         max_renewals=self._settings.max_renewals,
                     )
                     renewed += 1
@@ -295,7 +314,9 @@ class MeshCoordinator:
                 self._cb.remove_threshold_override(service_name)
                 expired += 1
 
-                self._record_metric("override_released")
+                self._record_metric("override_expired")
+
+        self._record_gauge("overrides_active", len(all_overrides) - expired)
 
         return {
             "success": True,
@@ -316,19 +337,24 @@ class MeshCoordinator:
         dependency graph의 위상 정렬(topological sort) 기반:
         하류(리프) → 상류(루트) 순서로 Half-Open 시도.
         """
-        if not self._recovery_queue:
+        with self._lock:
+            queue_snapshot = list(self._recovery_queue)
+        if not queue_snapshot:
             return []
 
         return self._graph.topological_sort_subset(
-            self._recovery_queue,
+            queue_snapshot,
             direction="leaves_first",
         )
 
     def get_mesh_snapshot(self) -> dict[str, Any]:
         """현재 메쉬 상태 스냅샷 반환."""
+        with self._lock:
+            open_set = sorted(self._downstream_open_set)
+            queue = list(self._recovery_queue)
         return {
             "timestamp": now().isoformat(),
-            "downstream_open_set": sorted(self._downstream_open_set),
+            "downstream_open_set": open_set,
             "active_overrides": {
                 name: {
                     "adjusted_failure_threshold": o.adjusted_failure_threshold,
@@ -339,7 +365,7 @@ class MeshCoordinator:
                 }
                 for name, o in self._store.get_all().items()
             },
-            "recovery_queue": list(self._recovery_queue),
+            "recovery_queue": queue,
             "recovery_order": self.get_recovery_order(),
         }
 
@@ -356,7 +382,7 @@ class MeshCoordinator:
 
     @staticmethod
     def _record_metric(metric_type: str) -> None:
-        """Prometheus 메트릭 기록 (graceful degradation)."""
+        """Prometheus Counter 메트릭 기록 (graceful degradation)."""
         try:
             from selfhealing.metrics.prometheus import get_metrics
 
@@ -368,6 +394,7 @@ class MeshCoordinator:
                 "override_applied": "mesh_override_applied_total",
                 "override_released": "mesh_override_released_total",
                 "override_renewed": "mesh_override_renewed_total",
+                "override_expired": "mesh_override_expired_total",
                 "fast_recovery": "mesh_fast_recovery_total",
                 "escalation": "mesh_escalation_total",
                 "preemptive_fallback": "mesh_preemptive_fallback_total",
@@ -375,6 +402,44 @@ class MeshCoordinator:
             attr = metric_map.get(metric_type)
             if attr and hasattr(metrics, attr):
                 getattr(metrics, attr).inc()
+        except Exception:
+            pass
+
+    @staticmethod
+    def _record_histogram(histogram_type: str, value: float) -> None:
+        """Prometheus Histogram 메트릭 기록 (graceful degradation)."""
+        try:
+            from selfhealing.metrics.prometheus import get_metrics
+
+            metrics = get_metrics()
+            if not metrics._initialized:
+                return
+
+            histogram_map = {
+                "recovery_duration": "mesh_recovery_duration_seconds",
+            }
+            attr = histogram_map.get(histogram_type)
+            if attr and hasattr(metrics, attr):
+                getattr(metrics, attr).observe(value)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _record_gauge(gauge_type: str, value: int) -> None:
+        """Prometheus Gauge 메트릭 기록 (graceful degradation)."""
+        try:
+            from selfhealing.metrics.prometheus import get_metrics
+
+            metrics = get_metrics()
+            if not metrics._initialized:
+                return
+
+            gauge_map = {
+                "overrides_active": "mesh_overrides_active",
+            }
+            attr = gauge_map.get(gauge_type)
+            if attr and hasattr(metrics, attr):
+                getattr(metrics, attr).set(value)
         except Exception:
             pass
 
@@ -389,6 +454,9 @@ def register_mesh_handlers(coordinator: MeshCoordinator) -> None:
         EventType.CIRCUIT_BREAKER_HALF_OPENED, coordinator.on_downstream_half_opened
     )
     bus.subscribe(EventType.CIRCUIT_BREAKER_CLOSED, coordinator.on_downstream_closed)
+    bus.subscribe(
+        EventType.CIRCUIT_BREAKER_CLOSED, coordinator.on_fast_recovery_completed
+    )
 
     logger.info("mesh_coordinator.event_handlers_registered")
 

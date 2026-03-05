@@ -1,6 +1,6 @@
 # 302. Circuit Breaker Mesh Coordinator — 하류 CB 상태 기반 상류 임계치 동적 조정
 
-> **Status**: Design
+> **Status**: Implemented
 > **Target**:
 > - `packages/selfhealing-python/src/selfhealing/services/circuit_mesh/mesh_coordinator.py` — 신규
 > - `packages/selfhealing-python/src/selfhealing/services/circuit_mesh/__init__.py` — 신규
@@ -234,14 +234,6 @@ MeshCoordinator의 오버라이드 저장소(`MeshOverrideStore`)도 이 패턴�
 
 ```python
 @dataclass
-class DownstreamHealthSignal:
-    """하류 서비스의 CB 상태 시그널."""
-    service_name: str
-    state: CircuitState                # OPEN / HALF_OPEN / CLOSED
-    changed_at: datetime
-    affected_upstream: list[str]       # 이 하류에 의존하는 상류 서비스 목록
-
-@dataclass
 class ThresholdOverride:
     """상류 CB에 적용할 동적 임계치 오버라이드."""
     service_name: str
@@ -252,16 +244,11 @@ class ThresholdOverride:
     reason: str                        # "downstream:payment_api OPEN"
     expires_at: datetime               # TTL 기반 자동 만료
     renewal_count: int = 0             # 현재까지 자동 갱신된 횟수
-
-@dataclass
-class MeshStateSnapshot:
-    """메쉬 전체 상태 스냅샷."""
-    timestamp: datetime
-    cb_states: dict[str, CircuitState]          # service → state
-    active_overrides: list[ThresholdOverride]    # 현재 활성 오버라이드
-    downstream_signals: list[DownstreamHealthSignal]
-    recovery_queue: list[str]                   # 순차 복구 대기열 (하류 우선)
 ```
+
+> **참고**: `DownstreamHealthSignal`과 `MeshStateSnapshot`은 별도 데이터클래스로 정의하지 않는다.
+> `get_mesh_snapshot()`은 plain dict를 반환하며, 하류 상태는 `_downstream_open_set`(set)과
+> `_recovery_queue`(list)로 직접 관리한다. 불필요한 모델 클래스를 제거하여 코드 복잡도를 낮춘다.
 
 ### 3.3 프리엠티브 Fallback 메커니즘
 
@@ -292,6 +279,10 @@ class MeshCoordinator:
         # Hot Path(should_allow())에서 O(1) 조회, 외부 I/O 없음.
         # EventBus(Redis Pub/Sub)를 통해 멀티 인스턴스 간 비동기 동기화.
         self._downstream_open_set: set[str] = set()
+
+        # 스레드 안전성: RedisEventBus의 리스너 스레드가 _downstream_open_set과
+        # _recovery_queue를 변경할 수 있으므로 Lock으로 보호.
+        self._lock = threading.Lock()
 ```
 
 **`should_allow()` pre-check hook 설계**:
@@ -336,9 +327,12 @@ def _check_downstream_health(self, service_name: str) -> bool:
     """
     service_name이 의존하는 하류 중 OPEN인 것이 있으면 False.
     O(1) set lookup만 수행, 외부 I/O 없음.
+    Lock 하에 frozenset 스냅샷을 취하여 스레드 안전성 보장.
     """
+    with self._lock:
+        open_snapshot = frozenset(self._downstream_open_set)
     dependencies = self._graph.get_dependencies(service_name)
-    return not any(dep in self._downstream_open_set for dep in dependencies)
+    return not any(dep in open_snapshot for dep in dependencies)
 ```
 
 **`_downstream_open_set` 동기화 전략**:
@@ -363,8 +357,9 @@ def _check_downstream_health(self, service_name: str) -> bool:
         """
         downstream = event.data["service_name"]
 
-        # 프리엠티브 Fallback 즉시 활성화
-        self._downstream_open_set.add(downstream)
+        # 프리엠티브 Fallback 즉시 활성화 (스레드 안전)
+        with self._lock:
+            self._downstream_open_set.add(downstream)
 
         # 감쇠 전파: depth에 따라 배율 감소
         affected = self._graph.get_dependents_recursive(
@@ -414,9 +409,10 @@ def _check_downstream_health(self, service_name: str) -> bool:
                 adjusted_recovery_timeout=override.adjusted_recovery_timeout,
             )
 
-        # 복구 대기열에 추가 (하류 우선)
-        if downstream not in self._recovery_queue:
-            self._recovery_queue.append(downstream)
+        # 복구 대기열에 추가 (하류 우선, 스레드 안전)
+        with self._lock:
+            if downstream not in self._recovery_queue:
+                self._recovery_queue.append(downstream)
 ```
 
 ### 3.5 순차 복구 조율 알고리즘 (Fast-Recovery 포함)
@@ -450,8 +446,9 @@ def _check_downstream_health(self, service_name: str) -> bool:
         """
         downstream = event.data["service_name"]
 
-        # 프리엠티브 Fallback 해제
-        self._downstream_open_set.discard(downstream)
+        # 프리엠티브 Fallback 해제 (스레드 안전)
+        with self._lock:
+            self._downstream_open_set.discard(downstream)
 
         # 상류에 fast-recovery 적용
         affected = self._graph.get_dependents_recursive(
@@ -488,9 +485,10 @@ def _check_downstream_health(self, service_name: str) -> bool:
                 fast_recovery_timeout=self._settings.fast_recovery_timeout_seconds,
             )
 
-        # 복구 대기열에서 제거
-        if downstream in self._recovery_queue:
-            self._recovery_queue.remove(downstream)
+        # 복구 대기열에서 제거 (스레드 안전)
+        with self._lock:
+            if downstream in self._recovery_queue:
+                self._recovery_queue.remove(downstream)
 
     def on_fast_recovery_completed(self, event: SelfHealingEvent) -> None:
         """
@@ -554,13 +552,16 @@ def _check_downstream_health(self, service_name: str) -> bool:
 
             if downstream_state == CircuitState.OPEN:
                 if override.renewal_count < self._settings.max_renewals:
-                    # TTL 갱신
-                    override.expires_at = now() + timedelta(
-                        seconds=self._settings.override_ttl_seconds
+                    # TTL 갱신 — dataclasses.replace()로 불변 업데이트
+                    renewed = replace(
+                        override,
+                        expires_at=now() + timedelta(
+                            seconds=self._settings.override_ttl_seconds
+                        ),
+                        renewal_count=override.renewal_count + 1,
                     )
-                    override.renewal_count += 1
-                    self._store.set(service_name, override)
-                    self._cb.apply_threshold_override(service_name, override)
+                    self._store.set(service_name, renewed)
+                    self._cb.apply_threshold_override(service_name, renewed)
 
                     logger.info(
                         "mesh_coordinator.override_renewed",
@@ -605,6 +606,9 @@ def register_mesh_handlers(coordinator: MeshCoordinator) -> None:
     bus.subscribe(EventType.CIRCUIT_BREAKER_OPENED, coordinator.on_downstream_opened)
     bus.subscribe(EventType.CIRCUIT_BREAKER_HALF_OPENED, coordinator.on_downstream_half_opened)
     bus.subscribe(EventType.CIRCUIT_BREAKER_CLOSED, coordinator.on_downstream_closed)
+    # fast-recovery 완료 감지: CLOSED 이벤트를 재활용하여 reason 필터링으로 구분.
+    # 별도 EventType 추가 없이 기존 이벤트 인프라만 사용.
+    bus.subscribe(EventType.CIRCUIT_BREAKER_CLOSED, coordinator.on_fast_recovery_completed)
 ```
 
 ### 3.8 CircuitBreakerService 확장점
@@ -691,14 +695,20 @@ class MeshOverrideStore(Protocol):
 ```python
 class TwoTierMeshOverrideStore:
     """
-    L1 로컬 dict + L2 Redis Hash 기반 Two-Tier 오버라이드 저장소.
+    L1 로컬 dict + L2 Redis per-key 기반 Two-Tier 오버라이드 저장소.
 
     읽기 경로 (Hot Path):
         get()/get_all() → L1 dict 조회 → O(1), 외부 I/O 없음
 
     쓰기 경로:
-        set()/remove() → L1 dict 즉시 갱신 → L2 Redis 비동기 쓰기
+        set()/remove() → L1 dict 즉시 갱신 → L2 Redis per-key 원자적 쓰기
         → EventBus로 무효화 이벤트 발행 → 타 인스턴스 L1 갱신
+
+    L2 저장 방식:
+        단일 Hash 대신 per-key 패턴 사용 (selfhealing:mesh:override:{service_name}).
+        CacheProviderInterface가 raw Redis 명령(HSET/HDEL)을 노출하지 않으므로,
+        표준 get/set/delete 인터페이스로 원자적 쓰기를 보장한다.
+        read-modify-write 레이스 컨디션이 원천적으로 제거된다.
 
     동기화:
         - EventBus(Redis Pub/Sub) 구독으로 타 인스턴스의 변경 수신
@@ -707,7 +717,7 @@ class TwoTierMeshOverrideStore:
     참조 구현: adapters/memory/layered_repository/repository_operations.py
     """
 
-    REDIS_KEY = "selfhealing:mesh:overrides"
+    REDIS_KEY_PREFIX = "selfhealing:mesh:override:"
 
     def __init__(
         self,
@@ -929,18 +939,17 @@ MeshCoordinator의 모든 조율 행위는 감사 로그에 기록한다:
 ```python
 # 신규 메트릭 (기존 selfhealing_* 네임스페이스 준수)
 
-selfhealing_mesh_overrides_active                     # Gauge: 현재 활성 오버라이드 수
+selfhealing_mesh_overrides_active                     # Gauge: 현재 활성 오버라이드 수 (MeshCoordinator.check_override_renewals에서 갱신)
 selfhealing_mesh_override_applied_total               # Counter: 오버라이드 적용 횟수
 selfhealing_mesh_override_released_total              # Counter: 오버라이드 해제 횟수
-selfhealing_mesh_override_expired_total               # Counter: TTL 만료 횟수
+selfhealing_mesh_override_expired_total               # Counter: TTL 만료 횟수 (MeshCoordinator._record_metric에서 발행)
 selfhealing_mesh_override_renewed_total               # Counter: TTL 갱신 횟수
-selfhealing_mesh_recovery_duration_seconds            # Histogram: 순차 복구 소요 시간
-selfhealing_mesh_cascade_prevented_total              # Counter: 연쇄 OPEN 방지 횟수
-selfhealing_mesh_preemptive_fallback_total            # Counter: 프리엠티브 Fallback 발동 횟수
+selfhealing_mesh_preemptive_fallback_total            # Counter: 프리엠티브 Fallback 발동 횟수 (CircuitBreakerService.should_allow에서 발행)
 selfhealing_mesh_fast_recovery_total                  # Counter: fast-recovery 적용 횟수
 selfhealing_mesh_escalation_total                     # Counter: EmergencyCoordinator 에스컬레이션 횟수
 selfhealing_mesh_circular_dependency_detected_total   # Counter: 순환 참조 감지 횟수
-selfhealing_mesh_override_store_drift_total           # Counter: L1↔L2 drift 감지 횟수
+selfhealing_mesh_override_store_drift_total           # Counter: L1↔L2 drift 감지 횟수 (TwoTierMeshOverrideStore.check_drift에서 발행)
+selfhealing_mesh_recovery_duration_seconds            # Histogram: 하류 OPEN→CLOSED 복구 소요 시간 (MeshCoordinator.on_downstream_closed에서 관측)
 ```
 
 ---
@@ -964,7 +973,7 @@ selfhealing_mesh_override_store_drift_total           # Counter: L1↔L2 drift �
 │  │ set (로컬 인메모리) │  │                               │
 │  │ O(1) lookup        │  │                     ┌─────────▼───────────┐
 │  └────────┬───────────┘  │                     │ L1: dict (로컬)     │
-│           │               │                     │ L2: Redis Hash      │
+│           │               │                     │ L2: Redis per-key   │
 │  ┌────────▼───────────┐  │                     │ (Source of Truth)   │
 │  │ 감쇠 전파 엔진      │  │                     └─────────────────────┘
 │  │ (depth × damping)  │  │
@@ -993,7 +1002,7 @@ selfhealing_mesh_override_store_drift_total           # Counter: L1↔L2 drift �
 
 ## 10. 분산 환경 레이스 컨디션 분석
 
-### 10.1 단일 인스턴스 (레이스 컨디션 없음)
+### 10.1 단일 인스턴스 — 스레드 안전성
 
 CB 상태 변경 시 실행 순서:
 1. Repository 상태 변경 (atomic)
@@ -1002,6 +1011,11 @@ CB 상태 변경 시 실행 순서:
 
 MeshCoordinator의 핸들러는 2~3단계에서 **동일 스레드 내에서 즉시** 실행되므로,
 C가 OPEN → B의 `_downstream_open_set` 갱신이 원자적으로 완료된다.
+
+**단, RedisEventBus의 리스너 스레드** (`redis_bus.py`의 background listener)가
+타 인스턴스로부터 수신한 이벤트를 처리할 때 `_downstream_open_set`과 `_recovery_queue`에
+동시 접근할 수 있다. 이를 방지하기 위해 `threading.Lock`으로 모든 변경(mutation)을 보호하고,
+읽기 경로(`_check_downstream_health`)에서는 `frozenset` 스냅샷을 취하여 lock 보유 시간을 최소화한다.
 
 ### 10.2 멀티 인스턴스 (Eventual Consistency)
 
@@ -1033,7 +1047,7 @@ C가 OPEN → B의 `_downstream_open_set` 갱신이 원자적으로 완료된다
 
 ---
 
-*문서 버전: 2.0*
+*문서 버전: 3.0*
 *작성일: 2026-03-06*
 *최종 업데이트: 2026-03-06*
 
@@ -1043,3 +1057,4 @@ C가 OPEN → B의 `_downstream_open_set` 갱신이 원자적으로 완료된다
 |------|------|-----------|
 | 1.0 | 2026-03-06 | 초안 작성 |
 | 2.0 | 2026-03-06 | 설계 리뷰 반영: 프리엠티브 Fallback 메커니즘 구체화 (`_downstream_open_set` + `should_allow()` pre-check hook), 감쇠 전파(Damped Propagation) 도입 (`propagation_max_depth` + `damping_factor`), 순환 참조 방어(visited tracking + 메트릭), Two-Tier Cache 저장소(`MeshOverrideStore` + `TwoTierMeshOverrideStore`), Fast-Recovery(`on_downstream_closed`에서 recovery_timeout 즉시 단축), TTL Heartbeat 갱신(`max_renewals` + EmergencyCoordinator 에스컬레이션, Celery beat 스케줄러 명시), 분산 환경 기본 가정, 레이스 컨디션 분석 추가 |
+| 3.0 | 2026-03-06 | 코드 리뷰 8건 반영: (1) `threading.Lock` 스레드 안전성 추가 — RedisEventBus 리스너 스레드 동시 접근 방어, (2) L2 Redis를 단일 Hash에서 per-key 패턴으로 변경 — `REDIS_KEY_PREFIX` + 원자적 쓰기로 read-modify-write 레이스 제거, (3) TTL 갱신에 `dataclasses.replace()` 불변 업데이트 적용, (4) `on_fast_recovery_completed`를 `CIRCUIT_BREAKER_CLOSED` 이벤트에 구독 — 별도 EventType 없이 reason 필터링, (5) factory 반환 타입 `MeshOverrideStore` 명시, (6) 미사용 메트릭 1개 제거 (`mesh_cascade_prevented_total` — `mesh_preemptive_fallback_total`과 의미 중복) + `mesh_recovery_duration_seconds` Histogram 연결 (on_downstream_opened→on_downstream_closed 복구 시간 관측) + 4개 메트릭 실제 코드에 연결 (`mesh_override_expired_total`, `mesh_override_store_drift_total`, `mesh_overrides_active` Gauge, `mesh_preemptive_fallback_total`), (7) 사용하지 않는 `DownstreamHealthSignal`/`MeshStateSnapshot` 데이터클래스 제거 — plain dict 반환, (8) CB service `_threshold_overrides` 타입 힌트 `dict[str, Any]`로 명시 |
