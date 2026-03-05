@@ -161,7 +161,13 @@ class TestLiveCanaryEvaluatorBehavior:
 
     def test_error_rate_increase_exceeds_threshold_fails(self):
         """candidate와 baseline 에러율 차이가 증가 임계값 초과 시 passed=False."""
-        # Given — baseline 에러율 0.01, candidate 에러율 0.03 → delta=0.02 > 0.01
+        # Given — Use label-differentiated keys so baseline and candidate
+        # resolve to different error rates via MockTimeSeriesProvider.
+        # baseline (track=stable) error_rate=0.01, candidate (track=canary)=0.03
+        # → error_delta = 0.03 - 0.01 = 0.02, which exceeds the default
+        #   PassCriteria.error_rate_increase_max of 0.01.
+        # All other metrics (latency, request_count) are set to safe values
+        # so that only the error-rate-increase check triggers the failure.
         provider = MockTimeSeriesProvider()
         provider._scalars = {
             "svc:error_rate_agg:track=stable": 0.01,
@@ -178,13 +184,19 @@ class TestLiveCanaryEvaluatorBehavior:
         # When
         result = evaluator.evaluate(context)
 
-        # Then — error_delta=0.02 > default 0.01
+        # Then — error_delta=0.02 > default threshold 0.01
         assert result.passed is False
         assert "increase" in result.details.lower()
 
     def test_p95_latency_delta_exceeds_threshold_fails(self):
         """P95 latency delta가 임계값 초과 시 passed=False."""
-        # Given — baseline P95=100ms, candidate P95=160ms → delta=60ms > 50ms
+        # Given — Use label-differentiated keys to set distinct P95 latencies
+        # for baseline and candidate.
+        # baseline (track=stable) P95=100ms, candidate (track=canary) P95=160ms
+        # → p95_delta = 160 - 100 = 60ms, which exceeds the default
+        #   PassCriteria.latency_p95_delta_ms of 50ms.
+        # Error rates are equal (0.01) and P99 values are identical (200ms)
+        # so that only the P95 latency delta check triggers the failure.
         provider = MockTimeSeriesProvider()
         provider._scalars = {
             "svc:error_rate_agg:track=stable": 0.01,
@@ -201,13 +213,19 @@ class TestLiveCanaryEvaluatorBehavior:
         # When
         result = evaluator.evaluate(context)
 
-        # Then — p95_delta=60ms > default 50ms
+        # Then — p95_delta=60ms > default threshold 50ms
         assert result.passed is False
         assert "p95" in result.details.lower()
 
     def test_p99_latency_pct_exceeds_threshold_fails(self):
         """P99 latency 비율 증가가 임계값 초과 시 passed=False."""
-        # Given — baseline P99=200ms, candidate P99=260ms → pct=30% > 20%
+        # Given — Use label-differentiated keys to set distinct P99 latencies
+        # for baseline and candidate.
+        # baseline (track=stable) P99=200ms, candidate (track=canary) P99=260ms
+        # → p99_pct = (260 - 200) / 200 = 0.30 (30%), which exceeds the default
+        #   PassCriteria.latency_p99_delta_pct of 0.20 (20%).
+        # Error rates are equal (0.01) and P95 values are identical (100ms)
+        # so that only the P99 latency percentage check triggers the failure.
         provider = MockTimeSeriesProvider()
         provider._scalars = {
             "svc:error_rate_agg:track=stable": 0.01,
@@ -224,7 +242,7 @@ class TestLiveCanaryEvaluatorBehavior:
         # When
         result = evaluator.evaluate(context)
 
-        # Then — p99_pct=30% > default 20%
+        # Then — p99_pct=30% > default threshold 20%
         assert result.passed is False
         assert "p99" in result.details.lower()
 
@@ -283,16 +301,27 @@ class TestLiveCanaryEvaluatorBehavior:
 
     def test_multiple_failures_all_reported(self):
         """여러 임계값 동시 위반 시 모든 실패 사유가 details에 포함된다."""
-        # Given — 에러율 절대값 + 증가분 + P95 + P99 모두 위반
+        # Given — Set up label-differentiated keys where ALL four threshold
+        # checks fail simultaneously. This verifies that the evaluator does
+        # not short-circuit on the first failure but reports every violation.
+        #
+        # baseline (track=stable): error_rate=0.01, P95=100ms, P99=200ms
+        # candidate (track=canary): error_rate=0.10, P95=200ms, P99=300ms
+        #
+        # Expected violations:
+        #   1) error_rate_absolute: 0.10 > 0.05 (default threshold)
+        #   2) error_rate_increase: 0.10 - 0.01 = 0.09 > 0.01 (default threshold)
+        #   3) p95_delta: 200 - 100 = 100ms > 50ms (default threshold)
+        #   4) p99_pct: (300 - 200) / 200 = 50% > 20% (default threshold)
         provider = MockTimeSeriesProvider()
         provider._scalars = {
             "svc:error_rate_agg:track=stable": 0.01,
-            "svc:error_rate_agg:track=canary": 0.10,  # > 0.05 절대, delta=0.09 > 0.01
+            "svc:error_rate_agg:track=canary": 0.10,
             "svc:request_count:track=canary": 500,
             "svc:latency_p95:track=stable": 100.0,
-            "svc:latency_p95:track=canary": 200.0,  # delta=100ms > 50ms
+            "svc:latency_p95:track=canary": 200.0,
             "svc:latency_p99:track=stable": 200.0,
-            "svc:latency_p99:track=canary": 300.0,  # pct=50% > 20%
+            "svc:latency_p99:track=canary": 300.0,
         }
         evaluator = LiveCanaryEvaluator(metrics_provider=provider)
         context = _make_context()
@@ -300,7 +329,7 @@ class TestLiveCanaryEvaluatorBehavior:
         # When
         result = evaluator.evaluate(context)
 
-        # Then — 4가지 실패 사유 모두 포함
+        # Then — All four failure reasons must appear in details string
         assert result.passed is False
         details_lower = result.details.lower()
         assert "error rate" in details_lower
