@@ -251,3 +251,79 @@ class TestDataclassInstanceIsolationBehavior:
         )
         e1.baseline_config["key"] = "value"
         assert e2.baseline_config == {}
+
+
+class TestEvaluationContextContract:
+    """EvaluationContext 설계 계약값 검증."""
+
+    def test_time_window_seconds_default_is_300(self):
+        """time_window_seconds 기본값: 300 (5분)."""
+        from selfhealing.services.config_shadow.models import EvaluationContext
+
+        ctx = EvaluationContext(
+            baseline_config={},
+            candidate_config={},
+        )
+        assert ctx.time_window_seconds == 300
+
+    def test_baseline_labels_default_is_empty_dict(self):
+        """baseline_labels 기본값: 빈 딕셔너리."""
+        from selfhealing.services.config_shadow.models import EvaluationContext
+
+        ctx = EvaluationContext(
+            baseline_config={},
+            candidate_config={},
+        )
+        assert ctx.baseline_labels == {}
+
+    def test_candidate_labels_default_is_empty_dict(self):
+        """candidate_labels 기본값: 빈 딕셔너리."""
+        from selfhealing.services.config_shadow.models import EvaluationContext
+
+        ctx = EvaluationContext(
+            baseline_config={},
+            candidate_config={},
+        )
+        assert ctx.candidate_labels == {}
+
+    def test_service_name_default_is_empty_string(self):
+        """service_name 기본값: 빈 문자열."""
+        from selfhealing.services.config_shadow.models import EvaluationContext
+
+        ctx = EvaluationContext(
+            baseline_config={},
+            candidate_config={},
+        )
+        assert ctx.service_name == ""
+
+    def test_events_default_is_empty_list(self):
+        """events 기본값: 빈 리스트."""
+        from selfhealing.services.config_shadow.models import EvaluationContext
+
+        ctx = EvaluationContext(
+            baseline_config={},
+            candidate_config={},
+        )
+        assert ctx.events == []
+
+
+class TestEvaluationContextInstanceIsolationBehavior:
+    """EvaluationContext default_factory 인스턴스 격리 검증."""
+
+    def test_events_are_independent(self):
+        """EvaluationContext 인스턴스 간 events 리스트가 공유되지 않는다."""
+        from selfhealing.services.config_shadow.models import EvaluationContext
+
+        ctx1 = EvaluationContext(baseline_config={}, candidate_config={})
+        ctx2 = EvaluationContext(baseline_config={}, candidate_config={})
+        ctx1.events.append("dummy")
+        assert ctx2.events == []
+
+    def test_labels_are_independent(self):
+        """EvaluationContext 인스턴스 간 labels 딕셔너리가 공유되지 않는다."""
+        from selfhealing.services.config_shadow.models import EvaluationContext
+
+        ctx1 = EvaluationContext(baseline_config={}, candidate_config={})
+        ctx2 = EvaluationContext(baseline_config={}, candidate_config={})
+        ctx1.baseline_labels["key"] = "value"
+        assert ctx2.baseline_labels == {}

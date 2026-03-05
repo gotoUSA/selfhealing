@@ -84,6 +84,13 @@ class TestConfigShadowSettingsContract:
         settings = ConfigShadowSettings()
         assert settings.confidence_graduation_target_events == 50
 
+    def test_live_evaluation_enabled_default_is_false(self):
+        """live_evaluation_enabled 기본값: False."""
+        from selfhealing.settings.config_shadow import ConfigShadowSettings
+
+        settings = ConfigShadowSettings()
+        assert settings.live_evaluation_enabled is False
+
     def test_env_prefix_is_selfhealing_shadow(self):
         """env_prefix가 SELFHEALING_SHADOW_이다."""
         from selfhealing.settings.config_shadow import ConfigShadowSettings
@@ -251,6 +258,14 @@ class TestConfigShadowSettingsBehavior:
         monkeypatch.setenv("SELFHEALING_SHADOW_MIN_CONFIDENCE", "0.8")
         settings = ConfigShadowSettings()
         assert settings.min_confidence == pytest.approx(0.8)
+
+    def test_env_override_live_evaluation_enabled(self, monkeypatch):
+        """환경변수 SELFHEALING_SHADOW_LIVE_EVALUATION_ENABLED으로 오버라이드."""
+        from selfhealing.settings.config_shadow import ConfigShadowSettings
+
+        monkeypatch.setenv("SELFHEALING_SHADOW_LIVE_EVALUATION_ENABLED", "true")
+        settings = ConfigShadowSettings()
+        assert settings.live_evaluation_enabled is True
 
     def test_singleton_returns_same_instance(self):
         """get_config_shadow_settings()는 동일 인스턴스를 반환."""
