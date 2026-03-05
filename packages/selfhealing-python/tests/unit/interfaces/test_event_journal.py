@@ -96,13 +96,14 @@ class TestJournalQueryFilterContract:
         assert f.limit == 1000
 
     def test_all_filter_fields_default_to_none(self):
-        """필터 필드(event_types, service_name, start_time, end_time, region)의 기본값: None."""
+        """필터 필드(event_types, service_name, start_time, end_time, region, context_filters)의 기본값: None."""
         f = JournalQueryFilter()
         assert f.event_types is None
         assert f.service_name is None
         assert f.start_time is None
         assert f.end_time is None
         assert f.region is None
+        assert f.context_filters is None
 
 
 class TestJournalQueryResultContract:
