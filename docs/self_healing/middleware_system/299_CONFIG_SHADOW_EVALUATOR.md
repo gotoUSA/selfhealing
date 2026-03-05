@@ -162,11 +162,49 @@ class ShadowEvaluation:
     candidate_config: dict[str, Any] = field(default_factory=dict)
     service_name: str = ""                # 대상 서비스
     time_window_hours: int = 336          # 분석 시간 범위 (기본 14일)
+    region: str = ""                      # 멀티리전 격리 (JournalEntry.region과 동일)
 
     # 출력
     report: EvaluationReport | None = None
     error_message: str = ""
 ```
+
+**설계 결정 — 환경/테넌트 격리 (Multi-tenancy)**:
+
+`service_name`에 환경을 인코딩하는 것(`payment_gateway_prod`)은 안티패턴이다.
+기존 `JournalEntry`(`interfaces/event_journal.py:33-34`)에 이미 `region`, `tier_id` 필드가 존재하며,
+`JournalQueryFilter`(`interfaces/event_journal.py:45`)에도 `region` 필터가 있다.
+
+- **region**: `ShadowEvaluation.region` 필드를 추가하여 `JournalQueryFilter.region`으로 전달한다(6.2 참조).
+- **env/tenant_id**: 현재 아키텍처는 단일 클러스터 마이크로서비스이므로 별도 필드 불필요.
+  향후 필요 시 `JournalEntry.context`에 저장하고, `JournalQueryFilter`에 `context_filters` 필드를 추가하여
+  JSON 내부 값(예: `{"env": "staging"}`)을 매칭 필터링한다(아래 참조).
+
+#### JournalQueryFilter 확장 — context_filters
+
+298의 `JournalQueryFilter`(`interfaces/event_journal.py:37-46`)에 `context_filters` 필드를 추가하여
+`context` JSON 내부 필터링을 지원한다:
+
+```python
+@dataclass
+class JournalQueryFilter:
+    """저널 조회 필터."""
+    event_types: list[str] | None = None
+    service_name: str | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    region: str | None = None
+    limit: int = 1000
+    # 추가: context JSON 내부 키-값 매칭 필터
+    context_filters: dict[str, str] | None = None  # 예: {"env": "staging", "tenant_id": "acme"}
+```
+
+**어댑터 구현 영향**:
+- `adapters/memory/event_journal.py:90-117`의 `_apply_filter()`: `context_filters` 각 키-값이
+  `entry.context`에 존재하고 일치하는지 추가 체크 (in-memory 순회)
+- `adapters/redis/event_journal.py:236-262`의 `_matches_filter()`: 동일 로직.
+  Redis는 JSON 내부 검색 불가(Sorted Set 구조)이므로 `ZRANGEBYSCORE` 후
+  클라이언트 사이드 필터링. `limit`과 시간 범위가 1차 필터로 작동하여 실용적 성능 유지.
 
 **설계 결정 — CanaryState 미확장 이유**:
 `services/canary/models.py:56-78`의 `CanaryState` enum에 EVALUATING/EVALUATED를 추가하면
@@ -273,6 +311,106 @@ class ConfigEvaluator(Protocol):
 "Protocol-based for structural subtyping (duck typing)".
 ABC 상속 대신 Protocol을 사용하여 기존 클래스를 래핑하지 않고도 Evaluator로 등록할 수 있다.
 
+### 4.2 TimeSeriesMetricsProvider Protocol — Raw Metrics 연동 (DIP)
+
+Journal에는 의사결정 이벤트만 저장되므로, 임계치 상향 시뮬레이션의 정확도를 높이려면
+외부 메트릭 시계열(Prometheus, Datadog 등)에서 Raw request rate/error rate를 가져와야 한다.
+
+**기존 코드 근거**: 프로젝트에 이미 3개의 MetricsProvider Protocol이 존재한다:
+- `core/auto_rollback_guard.py:90-104` — `MetricsProvider(Protocol)`: `get_error_rate()`, `get_latency_p99()`, `get_throughput()`
+- `services/auto_tuning/metrics_provider.py:17-22` — `MetricsAdapterProtocol`: `fetch_current_metrics() -> dict[str, float]`
+- `services/runbook/metrics_provider.py:17-62` — `RunbookMetricsProvider`: `get_metric(name, labels)`, `get_metrics_snapshot(names, labels)`
+
+기존 Protocol들은 **현재 시점의 값**만 반환한다.
+Config Shadow Evaluator는 **과거 시간 범위의 시계열**이 필요하므로 확장 Protocol을 정의한다.
+
+```python
+@runtime_checkable
+class TimeSeriesMetricsProvider(Protocol):
+    """시계열 메트릭 제공자. 시뮬레이션 시 과거 Raw 데이터 조회.
+
+    기존 MetricsProvider(core/auto_rollback_guard.py:90)는 "현재값"만 반환.
+    Config Shadow는 과거 시간 범위의 시계열이 필요하므로 별도 Protocol 정의.
+
+    Implementations:
+    - MockTimeSeriesProvider: 테스트 및 개발용 (현재 스프린트)
+    - PrometheusTimeSeriesProvider: Prometheus PromQL 기반 (향후)
+    - DatadogTimeSeriesProvider: Datadog Metrics API 기반 (향후)
+    """
+
+    def query_error_rate(
+        self,
+        service_name: str,
+        start: datetime,
+        end: datetime,
+        step_seconds: int = 60,
+    ) -> list[tuple[datetime, float]]:
+        """시간 범위의 에러율 시계열을 반환한다.
+
+        Args:
+            service_name: 대상 서비스
+            start: 조회 시작 시각 (UTC)
+            end: 조회 종료 시각 (UTC)
+            step_seconds: 시계열 간격 (기본 60초)
+
+        Returns:
+            (timestamp, error_rate) 튜플 리스트. error_rate는 0.0 ~ 1.0.
+        """
+        ...
+
+    def query_request_rate(
+        self,
+        service_name: str,
+        start: datetime,
+        end: datetime,
+        step_seconds: int = 60,
+    ) -> list[tuple[datetime, float]]:
+        """시간 범위의 요청률(RPS) 시계열을 반환한다."""
+        ...
+```
+
+#### MockTimeSeriesProvider — 개발/테스트용
+
+외부 시스템(Prometheus/Datadog) 없이 시뮬레이터 로직을 100% 검증하기 위한 Mock.
+`services/auto_tuning/metrics_provider.py:25-85`의 `MetricsProviderWrapper` 래핑 패턴을 참고.
+
+```python
+class MockTimeSeriesProvider:
+    """테스트용 시계열 메트릭 제공자.
+
+    임의의 시계열 데이터를 주입하여 시뮬레이터 로직을 검증한다.
+    프로덕션에서는 Prometheus/Datadog 어댑터로 교체.
+    """
+
+    def __init__(self, data: dict[str, list[tuple[datetime, float]]] | None = None):
+        self._data = data or {}
+
+    def query_error_rate(
+        self, service_name: str, start: datetime, end: datetime,
+        step_seconds: int = 60,
+    ) -> list[tuple[datetime, float]]:
+        key = f"{service_name}:error_rate"
+        return [
+            (ts, val) for ts, val in self._data.get(key, [])
+            if start <= ts < end
+        ]
+
+    def query_request_rate(
+        self, service_name: str, start: datetime, end: datetime,
+        step_seconds: int = 60,
+    ) -> list[tuple[datetime, float]]:
+        key = f"{service_name}:request_rate"
+        return [
+            (ts, val) for ts, val in self._data.get(key, [])
+            if start <= ts < end
+        ]
+```
+
+**설계 결정 — DIP(의존성 역전) 구조**:
+현재 스프린트에서는 `MockTimeSeriesProvider`로 시뮬레이터 로직을 완성하고,
+추후 프로덕션 환경에 맞춰 어댑터만 갈아 끼운다.
+`ShadowEvaluatorService.__init__`에서 `metrics_provider` 파라미터로 주입받는다(6.1 참조).
+
 ---
 
 ## 5. Evaluator 구현체
@@ -306,7 +444,9 @@ class CircuitBreakerEvaluator:
         )
 
         passed = self._check_pass_criteria(baseline_opens, candidate_opens)
-        confidence = self._calculate_confidence(events)
+        confidence, conf_warnings = self._calculate_confidence(
+            events, baseline_config, candidate_config,
+        )
 
         return EvaluatorResult(
             evaluator_name=self.name,
@@ -327,6 +467,7 @@ class CircuitBreakerEvaluator:
                 "open_count_change_percent": delta_pct,
             },
             details=f"CB 개방 {baseline_opens.open_count}회 → {candidate_opens.open_count}회 ({delta_pct:+.1f}%)",
+            warnings=conf_warnings,
         )
 ```
 
@@ -354,8 +495,22 @@ def _simulate(
     opened_at: datetime | None = None
     open_count = 0
     total_open_seconds = 0.0
+    initialized = False
 
     for event in events:
+        # ── Cold Start 보정 ──────────────────────────────────
+        # 시뮬레이션 시작 시점(time_window 시작)의 실제 CB 상태는 알 수 없다.
+        # 14일 범위에서 초기 수 분의 오차가 전체에 미치는 영향은 0.001% 미만이므로
+        # Warm-up 기간(추가 데이터 fetch)은 ROI가 낮다.
+        # 대신 첫 번째 CB 이벤트의 context 스냅샷으로 경량 보정한다.
+        # Journal의 context에는 failure_count, failure_rate_percent 등
+        # 당시 CB 상태 스냅샷이 포함된다 (services/event_journal/subscriber.py:111-123).
+        if not initialized and event.event_type.startswith("circuit_breaker_"):
+            snapshot_failures = event.context.get("failure_count", 0)
+            if snapshot_failures > 0:
+                for _ in range(min(snapshot_failures, sliding_window_size)):
+                    failure_window.append(True)
+            initialized = True
         if state == "open":
             # recovery_timeout 경과 확인 — service.py:245-248 로직
             if opened_at and (event.timestamp - opened_at).total_seconds() >= recovery_timeout:
@@ -426,23 +581,57 @@ def _check_pass_criteria(
     return True
 ```
 
-#### Confidence 계산
+#### Confidence 계산 — 방향성 패널티 포함
+
+`core/decision_engine.py:258-311`의 `sample_confidence * stability_factor` 패턴을 차용하되,
+**Counterfactual 데이터 부재 문제**를 해결하기 위해 방향성 패널티를 추가한다.
+
+**문제**: Journal에는 의사결정 이벤트(상태 변경)만 저장된다(`services/event_journal/subscriber.py:28-38`).
+CB가 열리면 이후 트래픽은 Fast-fail로 차단되므로, 임계치를 **상향**(예: 5→10)하는 시뮬레이션에서는
+"6번째~10번째 실패"에 해당하는 원시 트래픽 데이터 자체가 존재하지 않는다.
+반대로 임계치를 **하향**(예: 5→3)하는 시뮬레이션은 기존 스냅샷의 `failure_count`로 추론 가능하다.
+
+**해결**: 임계치 상향 방향에는 confidence를 비례적으로 할인하고, warnings에 명시적 한계를 기술한다.
 
 ```python
-def _calculate_confidence(self, events: list[JournalEntry]) -> float:
-    """이벤트 충분성 기반 신뢰도 계산."""
+def _calculate_confidence(
+    self,
+    events: list[JournalEntry],
+    baseline_config: dict[str, Any],
+    candidate_config: dict[str, Any],
+) -> tuple[float, list[str]]:
+    """이벤트 충분성 + 방향성 기반 신뢰도 계산."""
     cb_events = [e for e in events if e.event_type.startswith("circuit_breaker_")]
+    warnings: list[str] = []
 
-    # decision_engine.py:258-311의 sample count confidence 패턴 차용
+    # 1단계: 샘플 수 기반 confidence — decision_engine.py:278-280 패턴
     if len(cb_events) < 5:
-        return 0.2      # 데이터 부족
+        base_confidence = 0.2
     elif len(cb_events) < 20:
-        return 0.5      # 중간
+        base_confidence = 0.5
     elif len(cb_events) < 50:
-        return 0.8      # 양호
+        base_confidence = 0.8
     else:
-        return 0.95     # 충분
+        base_confidence = 0.95
+
+    # 2단계: 방향성 패널티 — 임계치 상향 시 데이터 부재 반영
+    baseline_threshold = baseline_config.get("failure_threshold", 5)
+    candidate_threshold = candidate_config.get("failure_threshold", 5)
+
+    if candidate_threshold > baseline_threshold:
+        # 상향 비율만큼 confidence 할인 (예: 5→10 = 0.5배)
+        ratio = baseline_threshold / candidate_threshold
+        base_confidence *= ratio
+        warnings.append(
+            f"threshold_increase: 임계치 상향({baseline_threshold}→{candidate_threshold}) "
+            f"시뮬레이션은 CB 개방 이후의 원시 트래픽 데이터가 Journal에 "
+            f"존재하지 않아 정확도가 제한됩니다 (confidence ×{ratio:.2f} 적용)"
+        )
+
+    return min(base_confidence, 0.95), warnings
 ```
+
+이 warnings는 `EvaluatorResult.warnings` 필드를 통해 운영자에게 전달된다.
 
 ### 5.2 ErrorBudgetEvaluator
 
@@ -554,7 +743,22 @@ def _check_pass_criteria(
 
 ## 6. ShadowEvaluatorService
 
-### 6.1 서비스 클래스
+### 6.1 비동기 실행 모델
+
+**설계 결정 — 동기(MVP) 건너뛰고 비동기 직행 이유**:
+시스템 부하가 겹치면 동기식 API는 HTTP Timeout의 원인이 되며,
+동기식에 맞춰 개발한 UI/API 스펙을 나중에 비동기로 전환하면
+프론트엔드·백엔드 전체를 갈아엎는 대공사가 발생한다.
+
+처음부터 **HTTP 202 Accepted + evaluation_id 반환 + 상태 폴링** 아키텍처를 확정하여
+기술 부채를 원천 차단한다.
+
+**기존 코드 근거**:
+- `interfaces/task_queue.py:31-39` — `TaskStatus`(PENDING/STARTED/SUCCESS/FAILURE/RETRY/REVOKED) 완비
+- `interfaces/task_queue.py:56-96` — `TaskResult` frozen dataclass (`is_finished`, `is_successful` 프로퍼티)
+- `adapters/celery/tasks/runbook.py:20-54` — `@shared_task(bind=True, max_retries=1, acks_late=True)` 패턴
+
+### 6.2 서비스 클래스
 
 ```python
 class ShadowEvaluatorService:
@@ -564,9 +768,12 @@ class ShadowEvaluatorService:
         self,
         journal_repo: EventJournalRepository | None = None,
         evaluators: list[ConfigEvaluator] | None = None,
+        metrics_provider: TimeSeriesMetricsProvider | None = None,
     ):
         self._journal_repo = journal_repo or ProviderRegistry.get_event_journal_repo()
         self._evaluators = evaluators or self._default_evaluators()
+        self._metrics_provider = metrics_provider
+        self._evaluations: dict[str, ShadowEvaluation] = {}
 
     def _default_evaluators(self) -> list[ConfigEvaluator]:
         return [
@@ -574,7 +781,7 @@ class ShadowEvaluatorService:
             ErrorBudgetEvaluator(),
         ]
 
-    def evaluate(
+    def submit_evaluation(
         self,
         config_type: str,
         baseline_config: dict[str, Any],
@@ -582,54 +789,73 @@ class ShadowEvaluatorService:
         service_name: str = "",
         time_window_hours: int = 336,
         rollout_id: str | None = None,
+        region: str = "",
     ) -> ShadowEvaluation:
         """
-        설정 변경에 대한 Shadow Evaluation을 실행한다.
+        Shadow Evaluation을 생성하고 비동기 실행을 예약한다.
 
-        Args:
-            config_type: 설정 종류 ("circuit_breaker", "error_budget")
-            baseline_config: 현재 설정
-            candidate_config: 후보 설정
-            service_name: 대상 서비스 (비어있으면 전체)
-            time_window_hours: 분석 시간 범위 (기본 14일)
-            rollout_id: 연결할 Canary rollout ID (선택)
+        즉시 PENDING 상태의 ShadowEvaluation을 반환한다.
+        실제 시뮬레이션은 Celery 워커가 수행한다 (6.3 참조).
+        클라이언트는 get_evaluation()으로 상태를 폴링한다.
 
         Returns:
-            ShadowEvaluation 결과
+            PENDING 상태의 ShadowEvaluation (evaluation_id 포함)
         """
         evaluation = ShadowEvaluation(
             evaluation_id=str(uuid4())[:8],
             rollout_id=rollout_id,
-            status=EvaluationStatus.RUNNING,
+            status=EvaluationStatus.PENDING,
             created_at=utc_now(),
             config_type=config_type,
             baseline_config=baseline_config,
             candidate_config=candidate_config,
             service_name=service_name,
             time_window_hours=time_window_hours,
+            region=region,
         )
+        self._evaluations[evaluation.evaluation_id] = evaluation
+
+        # Celery task 디스패치 (6.3 참조)
+        run_shadow_evaluation.delay(evaluation_id=evaluation.evaluation_id)
+
+        return evaluation
+
+    def execute_evaluation(self, evaluation_id: str) -> ShadowEvaluation:
+        """
+        실제 시뮬레이션 실행. Celery 워커에서 호출된다.
+
+        submit_evaluation()에서 생성된 evaluation의 상태를 RUNNING → COMPLETED/FAILED로 전이.
+        """
+        evaluation = self._evaluations.get(evaluation_id)
+        if evaluation is None:
+            raise ValueError(f"Unknown evaluation_id: {evaluation_id}")
+
+        evaluation.status = EvaluationStatus.RUNNING
 
         try:
             # 1. EventJournal에서 이벤트 조회
             end_time = utc_now()
-            start_time = end_time - timedelta(hours=time_window_hours)
+            start_time = end_time - timedelta(hours=evaluation.time_window_hours)
 
-            filter = JournalQueryFilter(
-                service_name=service_name or None,
+            query_filter = JournalQueryFilter(
+                service_name=evaluation.service_name or None,
                 start_time=start_time,
                 end_time=end_time,
+                region=evaluation.region or None,
             )
-            events = self._journal_repo.query(filter)
+            events = self._journal_repo.query(query_filter)
 
             # 2. 해당 config_type의 Evaluator 찾기
-            evaluator = self._find_evaluator(config_type)
+            evaluator = self._find_evaluator(evaluation.config_type)
             if evaluator is None:
                 evaluation.status = EvaluationStatus.FAILED
-                evaluation.error_message = f"No evaluator for config_type: {config_type}"
+                evaluation.error_message = f"No evaluator for config_type: {evaluation.config_type}"
                 return evaluation
 
             # 3. 시뮬레이션 실행
-            result = evaluator.evaluate(events, baseline_config, candidate_config)
+            result = evaluator.evaluate(
+                events, evaluation.baseline_config, evaluation.candidate_config,
+            )
 
             # 4. 리포트 생성
             evaluation.report = EvaluationReport(
@@ -656,6 +882,10 @@ class ShadowEvaluatorService:
 
         return evaluation
 
+    def get_evaluation(self, evaluation_id: str) -> ShadowEvaluation | None:
+        """evaluation_id로 상태를 조회한다. 클라이언트 폴링용."""
+        return self._evaluations.get(evaluation_id)
+
     def _find_evaluator(self, config_type: str) -> ConfigEvaluator | None:
         for evaluator in self._evaluators:
             if evaluator.name == config_type:
@@ -663,7 +893,59 @@ class ShadowEvaluatorService:
         return None
 ```
 
-### 6.2 싱글톤 패턴
+### 6.3 Celery Task — 비동기 워커
+
+`adapters/celery/tasks/runbook.py:20-54`의 패턴을 따른다:
+`@shared_task`, `bind=True`, `max_retries=1`, `acks_late=True`.
+
+```python
+# adapters/celery/tasks/config_shadow.py
+from celery import shared_task
+
+
+@shared_task(
+    bind=True,
+    name="selfhealing.tasks.config_shadow.run_shadow_evaluation",
+    max_retries=1,
+    default_retry_delay=30,
+    acks_late=True,
+)
+def run_shadow_evaluation(self, evaluation_id: str) -> dict:
+    """Shadow Evaluation을 비동기로 실행한다."""
+    try:
+        service = get_shadow_evaluator_service()
+        evaluation = service.execute_evaluation(evaluation_id)
+        return {
+            "evaluation_id": evaluation.evaluation_id,
+            "status": evaluation.status.value,
+            "passed": evaluation.report.passed if evaluation.report else None,
+        }
+    except Exception as exc:
+        logger.error(
+            "config_shadow.task_failed",
+            evaluation_id=evaluation_id,
+            error=str(exc),
+        )
+        raise self.retry(exc=exc)
+```
+
+**API 레벨 사용 예시**:
+```python
+# POST /api/shadow-evaluations/ → HTTP 202 Accepted
+evaluation = service.submit_evaluation(
+    config_type="circuit_breaker",
+    baseline_config={"failure_threshold": 5},
+    candidate_config={"failure_threshold": 10},
+    service_name="payment_gateway",
+)
+# → {"evaluation_id": "a1b2c3d4", "status": "pending"}
+
+# GET /api/shadow-evaluations/a1b2c3d4/ → HTTP 200
+evaluation = service.get_evaluation("a1b2c3d4")
+# → {"evaluation_id": "a1b2c3d4", "status": "completed", "report": {...}}
+```
+
+### 6.4 싱글톤 패턴
 
 기존 서비스 싱글톤 패턴(`services/replay_service/service.py:764-770`)을 따른다:
 
@@ -696,7 +978,7 @@ def compare_candidates(
     """여러 후보 설정을 baseline과 비교한다."""
     results = []
     for candidate in candidates:
-        result = self.evaluate(
+        result = self.submit_evaluation(
             config_type=config_type,
             baseline_config=baseline_config,
             candidate_config=candidate,
@@ -732,10 +1014,14 @@ packages/selfhealing-python/src/selfhealing/services/config_shadow/
 ├── __init__.py                      # get_shadow_evaluator_service()
 ├── service.py                       # ShadowEvaluatorService
 ├── models.py                        # ShadowEvaluation, EvaluationReport, EvaluatorResult, etc.
+├── metrics_provider.py              # TimeSeriesMetricsProvider Protocol + MockTimeSeriesProvider
 └── evaluators/
     ├── __init__.py                  # ConfigEvaluator Protocol
     ├── circuit_breaker.py           # CircuitBreakerEvaluator
     └── error_budget.py              # ErrorBudgetEvaluator
+
+packages/selfhealing-python/src/selfhealing/adapters/celery/tasks/
+└── config_shadow.py                 # run_shadow_evaluation Celery task (6.3)
 ```
 
 ---
