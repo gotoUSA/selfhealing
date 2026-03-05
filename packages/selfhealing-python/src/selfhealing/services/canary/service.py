@@ -300,7 +300,7 @@ class CanaryRolloutService:
             rollout_id: 롤아웃 ID
             force_during_chaos: 카오스 실험 중에도 강제 진행
             bypass_shadow: Shadow Evaluation 실패 시 bypass 여부
-            bypass_shadow_reason: bypass 시 사유 (최소 10자)
+            bypass_shadow_reason: bypass 시 사유 (최소 길이: settings.bypass_min_reason_length)
 
         Returns:
             성공 여부
@@ -1034,9 +1034,9 @@ class CanaryRolloutService:
                 )
                 return False
 
-        if evaluation.candidate_config and hasattr(rollout, "candidate_config"):
+        if evaluation.candidate_config and rollout.new_values:
             eval_hash = _config_hash(evaluation.candidate_config)
-            current_hash = _config_hash(rollout.candidate_config)
+            current_hash = _config_hash(rollout.new_values)
             if eval_hash != current_hash:
                 logger.warning(
                     "canary_rollout.shadow_config_mismatch",

@@ -285,7 +285,7 @@ def _check_shadow_evaluation(
         if settings.require_evaluation:
             logger.warning(
                 "canary_rollout.shadow_evaluation_required_not_found",
-                rollout_id=rollout.rollout_id,
+                rollout_id=rollout.id,
             )
             return False
         return None
@@ -294,7 +294,7 @@ def _check_shadow_evaluation(
     if evaluation.status in (EvaluationStatus.PENDING, EvaluationStatus.RUNNING):
         logger.warning(
             "canary_rollout.shadow_evaluation_in_progress",
-            rollout_id=rollout.rollout_id,
+            rollout_id=rollout.id,
             evaluation_id=evaluation.evaluation_id,
             status=evaluation.status.value,
         )
@@ -314,9 +314,9 @@ def _check_shadow_evaluation(
             return False
 
     # === Config Hash 체크: 평가 시점과 현재 설정 일치 검증 ===
-    if evaluation.candidate_config and hasattr(rollout, "candidate_config"):
+    if evaluation.candidate_config and rollout.new_values:
         eval_hash = _config_hash(evaluation.candidate_config)
-        current_hash = _config_hash(rollout.candidate_config)
+        current_hash = _config_hash(rollout.new_values)
         if eval_hash != current_hash:
             logger.warning(
                 "canary_rollout.shadow_config_mismatch",

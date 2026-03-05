@@ -47,7 +47,6 @@ class _FakeRollout:
     current_stage: Any = None
     current_stage_index: int = 0
     affected_clusters: list[str] = field(default_factory=list)
-    candidate_config: dict[str, Any] | None = None
     previous_values: dict[str, Any] = field(default_factory=dict)
     new_values: dict[str, Any] = field(default_factory=dict)
     config_type: str = "circuit_breaker"
@@ -406,7 +405,7 @@ class TestCheckShadowEvaluationBehavior:
 
     def test_config_hash_mismatch_returns_false(self, canary_service, rollout):
         """평가 시 config와 현재 config의 해시가 다르면 False."""
-        rollout.candidate_config = {"timeout": 30}
+        rollout.new_values = {"timeout": 30}
         evaluation = _make_completed_evaluation(
             candidate_config={"timeout": 60},
             completed_at=datetime.now(timezone.utc),
@@ -438,7 +437,7 @@ class TestCheckShadowEvaluationBehavior:
     def test_config_hash_match_allows_pass(self, canary_service, rollout):
         """평가 시 config와 현재 config의 해시가 동일하면 통과 가능."""
         config = {"timeout": 30, "retries": 3}
-        rollout.candidate_config = config
+        rollout.new_values = config
         evaluation = _make_completed_evaluation(
             candidate_config=config.copy(),
             completed_at=datetime.now(timezone.utc),

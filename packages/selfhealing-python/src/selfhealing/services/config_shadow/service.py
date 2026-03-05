@@ -237,7 +237,7 @@ class ShadowEvaluatorService:
     ) -> ShadowEvaluation:
         """Canary rollout에 연결된 Shadow Evaluation을 실행한다.
 
-        evaluate()와 동일하되 rollout_id를 연결하고 결과를 캐시한다.
+        submit_evaluation()과 동일하되 rollout_id를 연결하고 결과를 캐시한다.
         이후 start_rollout()의 _check_shadow_evaluation()에서 조회된다.
         """
         evaluation = self.submit_evaluation(
