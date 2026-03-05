@@ -271,7 +271,7 @@ def _check_shadow_evaluation(
     try:
         from selfhealing.services.config_shadow import get_shadow_evaluator_service
         service = get_shadow_evaluator_service()
-        evaluation = service.get_latest_for_rollout(rollout.rollout_id)
+        evaluation = service.get_latest_for_rollout(rollout.id)
     except ImportError:
         logger.debug("canary_rollout.shadow_evaluator_not_available")
         return None
@@ -355,10 +355,10 @@ def _check_shadow_evaluation(
     # === 평가 실패: bypass 확인 ===
     if bypass_shadow:
         # promote()의 bypass_reason 패턴 (service.py:409-411)
-        if not bypass_shadow_reason or len(bypass_shadow_reason) < 10:
+        if not bypass_shadow_reason or len(bypass_shadow_reason) < settings.bypass_min_reason_length:
             logger.error(
                 "canary_rollout.shadow_bypass_reason_required",
-                min_chars=10,
+                min_chars=settings.bypass_min_reason_length,
             )
             return False
 
@@ -485,10 +485,10 @@ def evaluate_for_rollout(
     """
     Canary rollout에 연결된 Shadow Evaluation을 실행한다.
 
-    evaluate()와 동일하되 rollout_id를 연결하고 결과를 캐시한다.
+    submit_evaluation()과 동일하되 rollout_id를 연결하고 결과를 캐시한다.
     이후 start_rollout()의 _check_shadow_evaluation()에서 조회된다.
     """
-    evaluation = self.evaluate(
+    evaluation = self.submit_evaluation(
         config_type=config_type,
         baseline_config=baseline_config,
         candidate_config=candidate_config,
