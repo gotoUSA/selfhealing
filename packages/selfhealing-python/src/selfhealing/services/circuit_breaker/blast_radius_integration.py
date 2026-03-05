@@ -83,7 +83,9 @@ class BlastRadiusAssessment:
     critical_services_affected: list[str] = field(default_factory=list)
     recommendation: str = ""
     details: dict[str, Any] = field(default_factory=dict)
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
 
     def should_block_auto_open(self) -> bool:
         """자동 OPEN을 차단해야 하는지 여부."""
@@ -215,7 +217,114 @@ class ServiceDependencyGraph:
             List[str]: critical 서비스 목록
         """
         affected = self.get_cascading_affected(service_id)
-        return [s for s in affected if s in self._dependencies and self._dependencies[s].criticality == "critical"]
+        return [
+            s
+            for s in affected
+            if s in self._dependencies
+            and self._dependencies[s].criticality == "critical"
+        ]
+
+    def get_dependencies(self, service_id: str) -> list[str]:
+        """
+        서비스가 의존하는 하류 서비스 목록 조회.
+
+        Args:
+            service_id: 서비스 ID
+
+        Returns:
+            이 서비스가 의존하는 서비스 목록 (depends_on)
+        """
+        if service_id not in self._dependencies:
+            return []
+        return list(self._dependencies[service_id].depends_on)
+
+    def get_dependents_recursive(
+        self,
+        service_id: str,
+        max_depth: int = 1,
+        _visited: set[str] | None = None,
+        _current_depth: int = 0,
+    ) -> list[tuple[str, int]]:
+        """
+        감쇠 전파를 위한 재귀적 상류 서비스 탐색.
+
+        Returns:
+            [(service_name, depth)] — depth는 원본 서비스로부터의 거리.
+
+        순환 참조 방어: visited set으로 이미 방문한 노드는 재탐색하지 않는다.
+        기존 get_cascading_affected()의 BFS + visited 패턴을 따른다.
+        """
+        if _visited is None:
+            _visited = set()
+        if _current_depth >= max_depth or service_id in _visited:
+            return []
+
+        _visited.add(service_id)
+        results: list[tuple[str, int]] = []
+
+        for dependent in self.get_dependents(service_id):
+            if dependent in _visited:
+                logger.warning(
+                    "dependency_graph.circular_dependency_detected",
+                    service=service_id,
+                    dependent=dependent,
+                )
+                continue
+            results.append((dependent, _current_depth + 1))
+            results.extend(
+                self.get_dependents_recursive(
+                    dependent, max_depth, _visited, _current_depth + 1
+                )
+            )
+
+        return results
+
+    def topological_sort_subset(
+        self,
+        services: list[str],
+        direction: str = "leaves_first",
+    ) -> list[str]:
+        """
+        주어진 서비스 부분집합에 대해 위상 정렬 수행.
+
+        direction="leaves_first": 하류(의존 없는 리프) → 상류 순서 (복구용)
+        direction="roots_first": 상류(루트) → 하류 순서
+
+        Kahn's algorithm on subgraph.
+        """
+        subset = set(services)
+        if not subset:
+            return []
+
+        in_degree: dict[str, int] = dict.fromkeys(subset, 0)
+        adjacency: dict[str, list[str]] = {s: [] for s in subset}
+
+        for s in subset:
+            if s not in self._dependencies:
+                continue
+            for dep in self._dependencies[s].depends_on:
+                if dep in subset:
+                    adjacency[dep].append(s)
+                    in_degree[s] += 1
+
+        queue = [s for s in subset if in_degree[s] == 0]
+        result: list[str] = []
+
+        while queue:
+            queue.sort()
+            node = queue.pop(0)
+            result.append(node)
+            for neighbor in adjacency.get(node, []):
+                in_degree[neighbor] -= 1
+                if in_degree[neighbor] == 0:
+                    queue.append(neighbor)
+
+        remaining = [s for s in subset if s not in result]
+        result.extend(sorted(remaining))
+
+        if direction == "leaves_first":
+            return result
+        return list(reversed(result))
 
     def clear(self) -> None:
         """모든 의존성 정보 초기화."""
@@ -401,13 +510,18 @@ class BlastRadiusIntegration:
         affected_count = len(affected_list)
 
         # 2. Critical 서비스 영향 확인
-        critical_affected = [s for s in affected_list if self._service_criticality.get(s) == "critical"]
+        critical_affected = [
+            s for s in affected_list if self._service_criticality.get(s) == "critical"
+        ]
 
         # 3. 레벨 결정
         level = self._determine_level(affected_count, critical_affected)
 
         # 4. 연쇄 장애 위험 판단
-        cascading_risk = affected_count >= self._config.moderate_threshold or len(critical_affected) > 0
+        cascading_risk = (
+            affected_count >= self._config.moderate_threshold
+            or len(critical_affected) > 0
+        )
 
         # 5. 권장 조치 결정
         recommendation = self._get_recommendation(level, critical_affected)
@@ -471,7 +585,10 @@ class BlastRadiusIntegration:
         """권장 조치 결정."""
         if level == BlastRadiusLevel.CRITICAL:
             if critical_affected:
-                return f"CB OPEN 차단 권장: critical 서비스 영향 ({', '.join(critical_affected)}). " f"수동 승인 필요."
+                return (
+                    f"CB OPEN 차단 권장: critical 서비스 영향 ({', '.join(critical_affected)}). "
+                    f"수동 승인 필요."
+                )
             return "CB OPEN 차단 권장: 영향 범위가 너무 넓음. 수동 승인 필요."
         elif level == BlastRadiusLevel.EXTENSIVE:
             return "CB OPEN 진행 가능, 단 운영팀 경고 알림 필요."
@@ -507,7 +624,10 @@ class BlastRadiusIntegration:
         )
 
         # 2. CRITICAL이고 block_on_critical이면 차단
-        if assessment.level == BlastRadiusLevel.CRITICAL and self._config.block_on_critical:
+        if (
+            assessment.level == BlastRadiusLevel.CRITICAL
+            and self._config.block_on_critical
+        ):
             reason = (
                 f"Blast Radius CRITICAL: {assessment.affected_count} services affected. "
                 f"Cascading risk: {assessment.cascading_risk}"
@@ -519,7 +639,10 @@ class BlastRadiusIntegration:
             return False, reason, assessment
 
         # 3. EXTENSIVE면 경고만
-        if assessment.level == BlastRadiusLevel.EXTENSIVE and self._config.alert_on_extensive:
+        if (
+            assessment.level == BlastRadiusLevel.EXTENSIVE
+            and self._config.alert_on_extensive
+        ):
             logger.warning(
                 "blast_radius_integration.cb_auto_open_proceeding",
                 service_id=service_id,

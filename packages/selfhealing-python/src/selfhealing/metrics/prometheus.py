@@ -195,6 +195,71 @@ class SelfHealingMetrics:
         )
 
         # =============================================================================
+        # Circuit Mesh Coordinator Metrics
+        # =============================================================================
+
+        self.mesh_overrides_active = Gauge(
+            f"{prefix}_mesh_overrides_active",
+            "Current active mesh threshold overrides",
+        )
+
+        self.mesh_override_applied_total = Counter(
+            f"{prefix}_mesh_override_applied_total",
+            "Total mesh threshold overrides applied",
+        )
+
+        self.mesh_override_released_total = Counter(
+            f"{prefix}_mesh_override_released_total",
+            "Total mesh threshold overrides released",
+        )
+
+        self.mesh_override_expired_total = Counter(
+            f"{prefix}_mesh_override_expired_total",
+            "Total mesh threshold overrides expired by TTL",
+        )
+
+        self.mesh_override_renewed_total = Counter(
+            f"{prefix}_mesh_override_renewed_total",
+            "Total mesh threshold override TTL renewals",
+        )
+
+        self.mesh_recovery_duration_seconds = Histogram(
+            f"{prefix}_mesh_recovery_duration_seconds",
+            "Mesh coordinated recovery duration",
+            buckets=[5, 15, 30, 60, 120, 300, 600],
+        )
+
+        self.mesh_cascade_prevented_total = Counter(
+            f"{prefix}_mesh_cascade_prevented_total",
+            "Total cascade OPEN preventions by mesh coordinator",
+        )
+
+        self.mesh_preemptive_fallback_total = Counter(
+            f"{prefix}_mesh_preemptive_fallback_total",
+            "Total preemptive fallback activations",
+        )
+
+        self.mesh_fast_recovery_total = Counter(
+            f"{prefix}_mesh_fast_recovery_total",
+            "Total fast-recovery overrides applied",
+        )
+
+        self.mesh_escalation_total = Counter(
+            f"{prefix}_mesh_escalation_total",
+            "Total escalations to EmergencyCoordinator",
+        )
+
+        self.mesh_circular_dependency_detected_total = Counter(
+            f"{prefix}_mesh_circular_dependency_detected_total",
+            "Total circular dependency detections in mesh",
+        )
+
+        self.mesh_override_store_drift_total = Counter(
+            f"{prefix}_mesh_override_store_drift_total",
+            "Total L1-L2 drift detections in mesh override store",
+        )
+
+        # =============================================================================
         # Replay Metrics
         # =============================================================================
 
@@ -357,7 +422,9 @@ class SelfHealingMetrics:
     # Retry Recording Methods
     # =========================================================================
 
-    def record_retry_attempt(self, domain: str, attempt_count: int, outcome: str) -> None:
+    def record_retry_attempt(
+        self, domain: str, attempt_count: int, outcome: str
+    ) -> None:
         """Record a retry attempt outcome."""
         if not self._initialized:
             return
@@ -376,7 +443,9 @@ class SelfHealingMetrics:
                 error=e,
             )
 
-    def record_retry(self, domain: str, success: bool, delay: float | None = None) -> None:
+    def record_retry(
+        self, domain: str, success: bool, delay: float | None = None
+    ) -> None:
         """Record a retry attempt with optional delay."""
         if not self._initialized:
             return
@@ -422,7 +491,9 @@ class SelfHealingMetrics:
             return
         try:
             duration = (resolved_at - created_at).total_seconds()
-            self.recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
+            self.recovery_time_seconds.labels(
+                domain=domain, resolution_type=resolution_type
+            ).observe(duration)
             logger.debug(
                 "metrics.recovery_time_recorded",
                 healing_domain=domain,
@@ -455,14 +526,18 @@ class SelfHealingMetrics:
     # Circuit Breaker Recording Methods
     # =========================================================================
 
-    def set_circuit_state(self, service_name: str, state: str, cell_id: str = "") -> None:
+    def set_circuit_state(
+        self, service_name: str, state: str, cell_id: str = ""
+    ) -> None:
         """Set the circuit breaker state metric."""
         if not self._initialized:
             return
         try:
             state_map = {"closed": 0, "open": 1, "half_open": 2}
             value = state_map.get(state, 0)
-            self.circuit_breaker_state.labels(service_name=service_name, cell_id=cell_id).set(value)
+            self.circuit_breaker_state.labels(
+                service_name=service_name, cell_id=cell_id
+            ).set(value)
         except Exception as e:
             logger.warning(
                 "metrics.failed_set_circuit_breaker",
@@ -527,12 +602,16 @@ class SelfHealingMetrics:
                 error=e,
             )
 
-    def record_circuit_breaker_open_duration(self, service_name: str, duration_seconds: float) -> None:
+    def record_circuit_breaker_open_duration(
+        self, service_name: str, duration_seconds: float
+    ) -> None:
         """Record how long a circuit breaker was in open state."""
         if not self._initialized:
             return
         try:
-            self.circuit_breaker_open_duration.labels(service_name=service_name).observe(duration_seconds)
+            self.circuit_breaker_open_duration.labels(
+                service_name=service_name
+            ).observe(duration_seconds)
             logger.debug(
                 "metrics.cb_open_duration_recorded",
                 service_name=service_name,
@@ -548,12 +627,16 @@ class SelfHealingMetrics:
     # Replay Recording Methods
     # =========================================================================
 
-    def record_replay_attempt(self, domain: str, replay_type: str, success: bool) -> None:
+    def record_replay_attempt(
+        self, domain: str, replay_type: str, success: bool
+    ) -> None:
         """Record a replay attempt."""
         if not self._initialized:
             return
         try:
-            self.replay_attempts_total.labels(domain=domain, replay_type=replay_type).inc()
+            self.replay_attempts_total.labels(
+                domain=domain, replay_type=replay_type
+            ).inc()
             outcome = "success" if success else "failure"
             self.replay_outcomes_total.labels(domain=domain, outcome=outcome).inc()
             logger.debug(
@@ -568,7 +651,9 @@ class SelfHealingMetrics:
                 error=e,
             )
 
-    def record_replay(self, domain: str, result: str, duration: float | None = None) -> None:
+    def record_replay(
+        self, domain: str, result: str, duration: float | None = None
+    ) -> None:
         """Record a replay operation."""
         if not self._initialized:
             return
@@ -592,7 +677,9 @@ class SelfHealingMetrics:
         if not self._initialized:
             return
         try:
-            self.security_incidents.labels(incident_type=incident_type, severity=severity).inc()
+            self.security_incidents.labels(
+                incident_type=incident_type, severity=severity
+            ).inc()
         except Exception as e:
             logger.warning(
                 "metrics.failed_record_security_incident",
@@ -743,8 +830,12 @@ class SelfHealingMetrics:
         if not self._initialized:
             return
         try:
-            safe_count = clamp_non_negative(count, f"active_connections[{connection_type}]")
-            self.active_connections.labels(connection_type=connection_type).set(safe_count)
+            safe_count = clamp_non_negative(
+                count, f"active_connections[{connection_type}]"
+            )
+            self.active_connections.labels(connection_type=connection_type).set(
+                safe_count
+            )
         except Exception as e:
             logger.warning(
                 "metrics.failed_set_active_connections",
@@ -935,7 +1026,9 @@ def record_circuit_breaker_state_change(
     )
 
 
-def record_circuit_breaker_open_duration(service_name: str, duration_seconds: float) -> None:
+def record_circuit_breaker_open_duration(
+    service_name: str, duration_seconds: float
+) -> None:
     """Record how long a circuit breaker was in open state."""
     get_metrics().record_circuit_breaker_open_duration(service_name, duration_seconds)
 
@@ -985,7 +1078,9 @@ def set_active_connections(connection_type: str, count: int) -> None:
     get_metrics().set_active_connections(connection_type, count)
 
 
-def set_latency_percentile(endpoint: str, percentile: str, value_seconds: float) -> None:
+def set_latency_percentile(
+    endpoint: str, percentile: str, value_seconds: float
+) -> None:
     """Set request latency percentile (Latency)."""
     get_metrics().set_latency_percentile(endpoint, percentile, value_seconds)
 

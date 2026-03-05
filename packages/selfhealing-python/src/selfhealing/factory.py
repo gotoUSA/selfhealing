@@ -60,6 +60,7 @@ class ProviderRegistry:
     _root_cause_strategies: dict[str, type] = {}  # Root cause analysis strategies
     _event_journal_repos: dict[str, type] = {}  # Event Journal repositories
     _graph_build_strategies: dict[str, type] = {}  # Graph build strategies
+    _mesh_override_stores: dict[str, type] = {}  # Mesh override stores
 
     # Statistics adapter (singleton, registered by app)
     _statistics_adapter: StatisticsRepositoryInterface | None = None
@@ -256,6 +257,49 @@ class ProviderRegistry:
             True if a model is registered.
         """
         return cls._postmortem_model is not None
+
+    @classmethod
+    def register_mesh_override_store(cls, name: str, store_class: type) -> None:
+        """Register a mesh override store implementation."""
+        cls._mesh_override_stores[name] = store_class
+        logger.debug(
+            "registry.mesh_override_store_registered",
+            factory_name=name,
+        )
+
+    @classmethod
+    def get_mesh_override_store(
+        cls,
+        name: str | None = None,
+        singleton: bool = True,
+        **kwargs: object,
+    ) -> object:
+        """Get a mesh override store instance."""
+        name = name or "memory"
+
+        if singleton:
+            key = f"mesh_override_store:{name}"
+            if key in cls._instances:
+                return cls._instances[key]
+
+        if name not in cls._mesh_override_stores:
+            from selfhealing.services.circuit_mesh.store import (
+                InMemoryMeshOverrideStore,
+            )
+
+            cls._mesh_override_stores["memory"] = InMemoryMeshOverrideStore
+            if name not in cls._mesh_override_stores:
+                raise KeyError(
+                    f"Mesh override store '{name}' not registered. "
+                    f"Available: {list(cls._mesh_override_stores.keys())}"
+                )
+
+        instance = cls._mesh_override_stores[name](**kwargs)
+
+        if singleton:
+            cls._instances[f"mesh_override_store:{name}"] = instance
+
+        return instance
 
     # =========================================================================
     # Provider Getters

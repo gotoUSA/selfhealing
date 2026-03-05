@@ -263,3 +263,62 @@ def force_close_circuit_breaker(
             "service_name": service_name,
             "error": str(e),
         }
+
+
+@shared_task(
+    bind=True,
+    name="selfhealing.celery_tasks.check_mesh_override_renewals",
+    queue="maintenance",
+    max_retries=1,
+    time_limit=60,
+    soft_time_limit=55,
+)
+def check_mesh_override_renewals(self) -> dict:
+    """
+    Periodic task to check mesh coordinator override TTL renewals.
+
+    Renews overrides whose TTL is about to expire if the downstream
+    service is still OPEN. Escalates to EmergencyCoordinator if
+    max_renewals is exceeded.
+
+    This task should be scheduled to run every 60 seconds (snapshot_interval_seconds).
+
+    Returns:
+        Dictionary with renewal check results
+    """
+    logger.debug("mesh_coordinator.renewal_check_started")
+
+    try:
+        from selfhealing.settings.circuit_mesh import get_circuit_mesh_settings
+
+        settings = get_circuit_mesh_settings()
+        if not settings.enabled:
+            return {"success": True, "message": "Circuit mesh disabled", "count": 0}
+
+        from selfhealing.services.circuit_mesh.mesh_coordinator import (
+            get_mesh_coordinator,
+        )
+
+        coordinator = get_mesh_coordinator()
+        if coordinator is None:
+            return {
+                "success": True,
+                "message": "Mesh coordinator not initialized",
+                "count": 0,
+            }
+
+        result = coordinator.check_override_renewals()
+
+        if result.get("renewed", 0) > 0 or result.get("escalated", 0) > 0:
+            logger.info(
+                "mesh_coordinator.renewal_check_completed",
+                renewed=result.get("renewed", 0),
+                expired=result.get("expired", 0),
+                escalated=result.get("escalated", 0),
+            )
+
+        return result
+
+    except Exception as e:
+        logger.exception("mesh_coordinator.renewal_check_error", error=e)
+        return {"success": False, "error": str(e)}

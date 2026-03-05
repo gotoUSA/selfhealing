@@ -100,6 +100,13 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             "half_open": [],
         }
 
+        # MeshCoordinator 연동: 하류 상태 pre-check 함수 목록
+        # checker(service_name) → True면 하류 정상, False면 프리엠티브 Fallback
+        self._downstream_checkers: list[Callable[[str], bool]] = []
+
+        # MeshCoordinator 연동: 서비스별 임계치 오버라이드 맵
+        self._threshold_overrides: dict = {}
+
     def register_state_change_callback(
         self,
         state: str,
@@ -195,6 +202,58 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         return self.config.enabled
 
     # =========================================================================
+    # Mesh Coordinator Extension Points
+    # =========================================================================
+
+    def register_downstream_checker(
+        self,
+        checker: Callable[[str], bool],
+    ) -> None:
+        """
+        should_allow() pre-check hook 등록.
+
+        checker(service_name) → False면 프리엠티브 Fallback.
+        checker는 반드시 로컬 인메모리 조회만 수행해야 한다 (외부 I/O 금지).
+        """
+        self._downstream_checkers.append(checker)
+
+    def apply_threshold_override(self, service_name: str, override: Any) -> None:
+        """
+        메쉬 코디네이터가 설정한 임계치 오버라이드 적용.
+
+        오버라이드가 활성인 동안 해당 서비스의 failure_threshold와
+        recovery_timeout은 오버라이드 값을 사용한다.
+        """
+        self._threshold_overrides[service_name] = override
+
+    def remove_threshold_override(self, service_name: str) -> None:
+        """임계치 오버라이드 해제, 원래 config로 복귀."""
+        self._threshold_overrides.pop(service_name, None)
+
+    def get_effective_config(self, service_name: str) -> CircuitBreakerConfig:
+        """
+        오버라이드 적용된 실효 config 반환.
+
+        L1 로컬 캐시에서 조회하므로 외부 I/O 없음.
+        오버라이드가 없으면 기본 config, 있으면 해당 필드만 교체.
+        """
+        if service_name not in self._threshold_overrides:
+            return self.config
+
+        override = self._threshold_overrides[service_name]
+        if now() > override.expires_at:
+            self._threshold_overrides.pop(service_name)
+            return self.config
+
+        return CircuitBreakerConfig(
+            **{
+                **vars(self.config),
+                "failure_threshold": override.adjusted_failure_threshold,
+                "recovery_timeout": override.adjusted_recovery_timeout,
+            }
+        )
+
+    # =========================================================================
     # State Query Operations
     # =========================================================================
 
@@ -236,16 +295,35 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         if not self.is_enabled:
             return True
 
+        # 하류 상태 pre-check (MeshCoordinator 연동)
+        # O(1) 인메모리 조회만 수행, 외부 I/O 없음
+        for checker in self._downstream_checkers:
+            try:
+                if not checker(service_name):
+                    logger.info(
+                        "circuit_breaker.downstream_preemptive_fallback",
+                        service=service_name,
+                    )
+                    return False
+            except Exception as e:
+                logger.warning(
+                    "circuit_breaker.downstream_checker_failed",
+                    service=service_name,
+                    error=str(e),
+                )
+
         state = self.get_or_create_state(service_name)
 
         if state.state == CircuitState.CLOSED:
             return True
 
+        effective_config = self.get_effective_config(service_name)
+
         if state.state == CircuitState.OPEN:
             # Check recovery timeout for automatic transition to half-open
             if state.opened_at:
                 elapsed = (now() - state.opened_at).total_seconds()
-                if elapsed >= self.config.recovery_timeout:
+                if elapsed >= effective_config.recovery_timeout:
                     # Transition to half-open via repository
                     self.repository.update_state(
                         service_name=service_name,
@@ -337,7 +415,8 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         import warnings
 
         warnings.warn(
-            "should_allow_with_fallback() is deprecated. " "Use CircuitBreakerPolicy + FallbackPolicy 조합으로 대체하세요.",
+            "should_allow_with_fallback() is deprecated. "
+            "Use CircuitBreakerPolicy + FallbackPolicy 조합으로 대체하세요.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -394,7 +473,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             )
 
         # Default: block
-        return CircuitBreakerFallbackResult.block(message=f"Circuit breaker open for {service_name}")
+        return CircuitBreakerFallbackResult.block(
+            message=f"Circuit breaker open for {service_name}"
+        )
 
     def _get_cached_data(self, cache_key: str) -> Any | None:
         """
@@ -493,7 +574,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     # Failure/Success Recording (for automatic mode)
     # =========================================================================
 
-    def record_failure(self, service_name: str, error_context: dict[str, Any] | None = None) -> None:
+    def record_failure(
+        self, service_name: str, error_context: dict[str, Any] | None = None
+    ) -> None:
         """
         Record a failure for a service.
 
@@ -521,11 +604,14 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         updated_state = self.repository.record_failure(service_name)
 
         # Check if threshold exceeded and circuit should open
-        should_open = self._should_open_circuit(updated_state)
+        effective_config = self.get_effective_config(service_name)
+        should_open = self._should_open_circuit(updated_state, effective_config)
 
         if should_open and updated_state.state == "closed":
             # Collect snapshot before opening
-            snapshot = self._collect_failure_snapshot(service_name, updated_state, error_context)
+            snapshot = self._collect_failure_snapshot(
+                service_name, updated_state, error_context
+            )
 
             # Open the circuit
             self.repository.update_state(
@@ -569,7 +655,11 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             except ImportError:
                 pass  # Metrics not available
 
-    def _should_open_circuit(self, state: CircuitBreakerStateData) -> bool:
+    def _should_open_circuit(
+        self,
+        state: CircuitBreakerStateData,
+        effective_config: CircuitBreakerConfig | None = None,
+    ) -> bool:
         """
         Determine if circuit should be opened based on failure threshold and minimum calls.
 
@@ -580,16 +670,18 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         Args:
             state: Current circuit breaker state
+            effective_config: Optional overridden config from MeshCoordinator
 
         Returns:
             True if circuit should open
         """
+        cfg = effective_config or self.config
         total_calls = state.failure_count + state.success_count
 
         # Sliding Window: total_calls를 window 크기로 제한 (§9)
         # InMemoryRepo(ring buffer)는 이미 window-based count를 반환하므로 no-op.
         # RedisRepo 등 non-windowed repo 사용 시 누적 카운트 오염을 방지한다.
-        window_size = self.config.sliding_window_size
+        window_size = cfg.sliding_window_size
         if window_size > 0 and total_calls > window_size:
             logger.debug(
                 "circuit_breaker.capping",
@@ -602,30 +694,32 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             total_calls = window_size
 
         # Check minimum_calls - prevent false positives with low traffic
-        if total_calls < self.config.minimum_calls:
+        if total_calls < cfg.minimum_calls:
             logger.debug(
                 "circuit_breaker.opening",
                 target_service_name=state.service_name,
                 total_calls=total_calls,
-                minimum_calls=self.config.minimum_calls,
+                minimum_calls=cfg.minimum_calls,
             )
             return False
 
         # Check rate-based threshold if configured
-        if self.config.failure_rate_threshold > 0:
-            failure_rate = (state.failure_count / total_calls * 100) if total_calls > 0 else 0
-            if failure_rate >= self.config.failure_rate_threshold:
+        if cfg.failure_rate_threshold > 0:
+            failure_rate = (
+                (state.failure_count / total_calls * 100) if total_calls > 0 else 0
+            )
+            if failure_rate >= cfg.failure_rate_threshold:
                 logger.info(
                     "circuit_breaker.rate_threshold_exceeded",
                     target_service_name=state.service_name,
                     failure_rate=failure_rate,
-                    failure_rate_threshold=self.config.failure_rate_threshold,
+                    failure_rate_threshold=cfg.failure_rate_threshold,
                     window_size=window_size,
                 )
                 return True
 
         # Check count-based threshold
-        if state.failure_count >= self.config.failure_threshold:
+        if state.failure_count >= cfg.failure_threshold:
             return True
 
         return False
@@ -657,7 +751,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                 "success_count": state.success_count,
                 "total_calls": state.failure_count + state.success_count,
                 "failure_rate_percent": (
-                    state.failure_count / (state.failure_count + state.success_count) * 100
+                    state.failure_count
+                    / (state.failure_count + state.success_count)
+                    * 100
                     if (state.failure_count + state.success_count) > 0
                     else 0
                 ),
@@ -712,7 +808,9 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
         return snapshot
 
-    def _log_circuit_open_audit(self, service_name: str, snapshot: dict[str, Any]) -> None:
+    def _log_circuit_open_audit(
+        self, service_name: str, snapshot: dict[str, Any]
+    ) -> None:
         """
         Log circuit open event to audit log with snapshot.
 
@@ -730,10 +828,16 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
             # snapshot에서 값을 참조한다 (flat / nested 구조 모두 지원)
             cb_data = snapshot.get("circuit_breaker", {})
-            failure_count = cb_data.get("failure_count") or snapshot.get("failure_count", "N/A")
+            failure_count = cb_data.get("failure_count") or snapshot.get(
+                "failure_count", "N/A"
+            )
             threshold_data = cb_data.get("threshold_config", {})
-            threshold_value = threshold_data.get("failure_threshold") or snapshot.get("threshold", "N/A")
-            reason = f"auto_trigger|failures={failure_count}" f"|threshold={threshold_value}"
+            threshold_value = threshold_data.get("failure_threshold") or snapshot.get(
+                "threshold", "N/A"
+            )
+            reason = (
+                f"auto_trigger|failures={failure_count}|threshold={threshold_value}"
+            )
 
             log_cb_state_change_audit(
                 cb_name=service_name,
@@ -916,7 +1020,11 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
         try:
             # Get all states and filter for OPEN, non-manually-controlled ones
             all_states = self.repository.get_all_states()
-            open_states = [s for s in all_states if s.state == CircuitState.OPEN and not s.manually_controlled]
+            open_states = [
+                s
+                for s in all_states
+                if s.state == CircuitState.OPEN and not s.manually_controlled
+            ]
 
             for state in open_states:
                 if state.opened_at is None:
@@ -924,7 +1032,8 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
                 elapsed = (now() - state.opened_at).total_seconds()
 
-                if elapsed >= self.config.recovery_timeout:
+                effective_cfg = self.get_effective_config(state.service_name)
+                if elapsed >= effective_cfg.recovery_timeout:
                     # Transition to half-open
                     self.repository.update_state(
                         service_name=state.service_name,
