@@ -102,8 +102,9 @@ class CircuitBreakerEvaluator:
                     state = "half_open"
 
             if event.event_type == "circuit_breaker_opened":
-                # Use context failure_count for accurate failure window population.
-                # Each opened event carries the actual failure count from the real CB.
+                # failure_count in context is optional; defaults to 1 per event.
+                # When present (e.g., via enriched journal), seeds the window
+                # with the reported count. Safe because close events clear the window.
                 event_failures = event.context.get("failure_count", 1)
                 for _ in range(min(event_failures, sliding_window_size)):
                     failure_window.append(True)

@@ -143,6 +143,7 @@ class ShadowEvaluatorService:
             time_window_hours=time_window_hours,
             region=region,
         )
+        self._evaluations[evaluation_id] = evaluation
         return self._run_evaluation(evaluation)
 
     def _run_evaluation(self, evaluation: ShadowEvaluation) -> ShadowEvaluation:

@@ -320,6 +320,23 @@ class TestExecuteFromParamsBehavior:
         assert result.report is not None
         assert result.report.passed is True
 
+    def test_stores_evaluation_retrievable_via_get_evaluation(self):
+        """execute_from_params로 생성된 evaluation이 get_evaluation()으로 조회된다."""
+        journal = _make_mock_journal()
+        mock_eval = _make_mock_evaluator("circuit_breaker", passed=True)
+        service = ShadowEvaluatorService(journal_repo=journal, evaluators=[mock_eval])
+
+        result = service.execute_from_params(
+            evaluation_id="worker-eval-001",
+            config_type="circuit_breaker",
+            baseline_config={},
+            candidate_config={},
+        )
+
+        retrieved = service.get_evaluation("worker-eval-001")
+        assert retrieved is result
+        assert retrieved.status == EvaluationStatus.COMPLETED
+
     def test_unknown_config_type_returns_failed(self):
         """매칭 evaluator 없으면 FAILED."""
         journal = _make_mock_journal()

@@ -512,8 +512,9 @@ def _simulate(
                 state = "half_open"
 
         if event.event_type == "circuit_breaker_opened":
-            # context.failure_count로 실제 실패 수를 반영한다.
-            # Journal에 개별 실패 이벤트가 없으므로 CB 이벤트의 context snapshot을 활용.
+            # failure_count in context is optional; defaults to 1 per event.
+            # When present (e.g., via enriched journal), seeds the window
+            # with the reported count. Safe because close events clear the window.
             event_failures = event.context.get("failure_count", 1)
             for _ in range(min(event_failures, sliding_window_size)):
                 failure_window.append(True)
@@ -872,6 +873,7 @@ class ShadowEvaluatorService:
             time_window_hours=time_window_hours,
             region=region,
         )
+        self._evaluations[evaluation_id] = evaluation
         return self._run_evaluation(evaluation)
 
     def _run_evaluation(self, evaluation: ShadowEvaluation) -> ShadowEvaluation:
