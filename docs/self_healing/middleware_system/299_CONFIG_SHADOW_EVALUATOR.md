@@ -466,7 +466,10 @@ class CircuitBreakerEvaluator:
                 "open_count_delta": delta_opens,
                 "open_count_change_percent": delta_pct,
             },
-            details=f"CB 개방 {baseline_opens.open_count}회 → {candidate_opens.open_count}회 ({delta_pct:+.1f}%)",
+            details=(
+                f"CB open {baseline_opens.open_count} -> "
+                f"{candidate_opens.open_count} ({delta_pct:+.1f}%)"
+            ),
             warnings=conf_warnings,
         )
 ```
@@ -495,6 +498,7 @@ def _simulate(
     opened_at: datetime | None = None
     open_count = 0
     total_open_seconds = 0.0
+    recovery_durations: list[float] = []
     initialized = False
 
     for event in events:
@@ -547,10 +551,24 @@ def _simulate(
 
         elif event.event_type == "circuit_breaker_closed":
             if state in ("open", "half_open") and opened_at:
-                total_open_seconds += (event.timestamp - opened_at).total_seconds()
+                duration = (event.timestamp - opened_at).total_seconds()
+                total_open_seconds += duration
+                recovery_durations.append(duration)
             state = "closed"
             failure_window.clear()
             opened_at = None
+
+    avg_recovery = (
+        sum(recovery_durations) / len(recovery_durations)
+        if recovery_durations
+        else 0.0
+    )
+
+    return SimulationResult(
+        open_count=open_count,
+        total_open_seconds=total_open_seconds,
+        avg_recovery_seconds=avg_recovery,
+    )
 ```
 
 **핵심**: 실제 CB 서비스의 `_should_open()` (`service.py:585-631`) 판정 로직을 그대로 재현한다.
@@ -623,9 +641,9 @@ def _calculate_confidence(
         ratio = baseline_threshold / candidate_threshold
         base_confidence *= ratio
         warnings.append(
-            f"threshold_increase: 임계치 상향({baseline_threshold}→{candidate_threshold}) "
-            f"시뮬레이션은 CB 개방 이후의 원시 트래픽 데이터가 Journal에 "
-            f"존재하지 않아 정확도가 제한됩니다 (confidence ×{ratio:.2f} 적용)"
+            f"threshold_increase: threshold raised ({baseline_threshold}->"
+            f"{candidate_threshold}), simulation accuracy limited due to "
+            f"missing raw traffic data after CB open (confidence x{ratio:.2f})"
         )
 
     return min(base_confidence, 0.95), warnings
@@ -692,9 +710,6 @@ def _simulate(
 
     # 설정값 — settings/error_budget.py 및 settings/error_budget_gate.py 참조
     critical_threshold = config.get("critical_threshold_percent", 10)
-    warning_threshold = config.get("warning_threshold_percent", 20)
-    burn_rate_fast_critical = config.get("burn_rate_fast_critical", 14.4)
-
     total_drain = 0.0
     critical_episodes = 0
     max_burn_rate_1h = 0.0
@@ -843,7 +858,8 @@ class ShadowEvaluatorService:
                 end_time=end_time,
                 region=evaluation.region or None,
             )
-            events = self._journal_repo.query(query_filter)
+            query_result = self._journal_repo.query(query_filter)
+            events = query_result.entries
 
             # 2. 해당 config_type의 Evaluator 찾기
             evaluator = self._find_evaluator(evaluation.config_type)

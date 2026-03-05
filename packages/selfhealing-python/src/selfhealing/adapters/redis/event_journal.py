@@ -197,6 +197,7 @@ class RedisEventJournalRepository(EventJournalRepository):
             and query_filter.region is None
             and query_filter.start_time is None
             and query_filter.end_time is None
+            and query_filter.context_filters is None
         )
 
     def _serialize(self, entry: JournalEntry, seq: int) -> str:

@@ -20,6 +20,7 @@ from selfhealing.services.config_shadow.models import (
     EvaluationStatus,
     ShadowEvaluation,
 )
+from selfhealing.services.config_shadow.service import ShadowEvaluatorService
 
 
 class TestRunShadowEvaluationContract:
@@ -65,7 +66,7 @@ class TestRunShadowEvaluationBehavior:
             ),
         )
 
-        mock_service = MagicMock()
+        mock_service = MagicMock(spec=ShadowEvaluatorService)
         mock_service.execute_evaluation.return_value = mock_evaluation
         mock_get_service.return_value = mock_service
 
@@ -105,7 +106,7 @@ class TestRunShadowEvaluationBehavior:
             report=None,
         )
 
-        mock_service = MagicMock()
+        mock_service = MagicMock(spec=ShadowEvaluatorService)
         mock_service.execute_evaluation.return_value = mock_evaluation
         mock_get_service.return_value = mock_service
 
