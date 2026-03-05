@@ -143,14 +143,15 @@ class LiveCanaryEvaluator:
             )
 
         # 5d. P99 Latency 비율 증가
-        if baseline_p99 > 0:
-            p99_pct = (candidate_p99 - baseline_p99) / baseline_p99
-            if p99_pct > criteria.latency_p99_delta_pct:
-                passed = False
-                details_parts.append(
-                    f"P99 latency increased by {p99_pct:.1%} > "
-                    f"threshold {criteria.latency_p99_delta_pct:.1%}"
-                )
+        p99_pct = (
+            (candidate_p99 - baseline_p99) / baseline_p99 if baseline_p99 > 0 else 0.0
+        )
+        if baseline_p99 > 0 and p99_pct > criteria.latency_p99_delta_pct:
+            passed = False
+            details_parts.append(
+                f"P99 latency increased by {p99_pct:.1%} > "
+                f"threshold {criteria.latency_p99_delta_pct:.1%}"
+            )
 
         if passed:
             details_parts.append(
@@ -178,9 +179,7 @@ class LiveCanaryEvaluator:
             delta={
                 "error_rate_delta": error_delta,
                 "p95_delta_ms": p95_delta,
-                "p99_delta_pct": (candidate_p99 - baseline_p99) / baseline_p99
-                if baseline_p99 > 0
-                else 0.0,
+                "p99_delta_pct": p99_pct,
             },
             details="; ".join(details_parts),
             warnings=warnings,

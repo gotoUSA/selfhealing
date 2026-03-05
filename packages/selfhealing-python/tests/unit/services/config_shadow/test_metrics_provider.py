@@ -154,6 +154,75 @@ class TestMockTimeSeriesProviderScalarBehavior:
         assert provider.query_latency_aggregated("unknown", t, t) == 0.0
 
 
+class TestMockTimeSeriesProviderLabelAwareBehavior:
+    """MockTimeSeriesProvider label-aware 키 분리 동작 검증."""
+
+    def test_labeled_scalar_returns_label_specific_value(self):
+        """label 키가 등록되면 해당 label에 맞는 값을 반환한다."""
+        provider = MockTimeSeriesProvider()
+        provider._scalars = {
+            "svc:error_rate_agg:track=stable": 0.01,
+            "svc:error_rate_agg:track=canary": 0.05,
+        }
+        t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        stable = provider.query_error_rate_aggregated(
+            "svc", t, t, labels={"track": "stable"}
+        )
+        canary = provider.query_error_rate_aggregated(
+            "svc", t, t, labels={"track": "canary"}
+        )
+        assert stable == pytest.approx(0.01)
+        assert canary == pytest.approx(0.05)
+
+    def test_unlabeled_fallback_when_no_labeled_key(self):
+        """label 키가 없으면 label 없는 기본 키로 폴백한다."""
+        provider = MockTimeSeriesProvider()
+        provider._scalars = {"svc:error_rate_agg": 0.03}
+        t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        result = provider.query_error_rate_aggregated(
+            "svc", t, t, labels={"track": "canary"}
+        )
+        assert result == pytest.approx(0.03)
+
+    def test_labeled_key_takes_priority_over_unlabeled(self):
+        """label 키와 unlabeled 키가 모두 있으면 label 키가 우선한다."""
+        provider = MockTimeSeriesProvider()
+        provider._scalars = {
+            "svc:latency_p99": 100.0,
+            "svc:latency_p99:track=canary": 250.0,
+        }
+        t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        result = provider.query_latency_aggregated(
+            "svc", t, t, percentile=0.99, labels={"track": "canary"}
+        )
+        assert result == pytest.approx(250.0)
+
+    def test_multi_label_key_sorted(self):
+        """복수 레이블은 키 이름순으로 정렬되어 키가 구성된다."""
+        provider = MockTimeSeriesProvider()
+        provider._scalars = {
+            "svc:request_count:namespace=prod,track=canary": 1000,
+        }
+        t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        result = provider.query_request_count(
+            "svc", t, t, labels={"track": "canary", "namespace": "prod"}
+        )
+        assert result == 1000
+
+    def test_none_labels_uses_unlabeled_key(self):
+        """labels=None 시 기존 unlabeled 키를 사용한다 (하위 호환)."""
+        provider = MockTimeSeriesProvider()
+        provider._scalars = {"svc:error_rate_agg": 0.02}
+        t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+        result = provider.query_error_rate_aggregated("svc", t, t, labels=None)
+        assert result == pytest.approx(0.02)
+
+
 class TestMetricsProviderSingletonBehavior:
     """get_metrics_provider / set / reset 싱글톤 라이프사이클 검증."""
 

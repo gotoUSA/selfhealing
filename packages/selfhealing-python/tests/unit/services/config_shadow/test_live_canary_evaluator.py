@@ -161,85 +161,70 @@ class TestLiveCanaryEvaluatorBehavior:
 
     def test_error_rate_increase_exceeds_threshold_fails(self):
         """candidate와 baseline 에러율 차이가 증가 임계값 초과 시 passed=False."""
-        # Given — baseline: key with baseline_labels, candidate: key with candidate_labels
-        # MockTimeSeriesProvider doesn't distinguish by labels, uses same key
-        # So we use two separate keys won't work — need to set up properly
-        # Since MockProvider returns same scalar regardless of labels,
-        # we need candidate_error - baseline_error > 0.01
-        # With same key, delta=0. Use custom criteria instead.
+        # Given — baseline 에러율 0.01, candidate 에러율 0.03 → delta=0.02 > 0.01
         provider = MockTimeSeriesProvider()
         provider._scalars = {
-            "svc:error_rate_agg": 0.03,  # both baseline and candidate
-            "svc:request_count": 500,
-            "svc:latency_p95": 100.0,
-            "svc:latency_p99": 200.0,
+            "svc:error_rate_agg:track=stable": 0.01,
+            "svc:error_rate_agg:track=canary": 0.03,
+            "svc:request_count:track=canary": 500,
+            "svc:latency_p95:track=stable": 100.0,
+            "svc:latency_p95:track=canary": 100.0,
+            "svc:latency_p99:track=stable": 200.0,
+            "svc:latency_p99:track=canary": 200.0,
         }
-        # error_delta = 0.03 - 0.03 = 0.0, which passes
-        # Need criteria with very tight increase_max to test the logic
-        criteria = PassCriteria(
-            error_rate_absolute_max=1.0,  # won't trigger
-            error_rate_increase_max=-0.01,  # delta=0 > -0.01 triggers
-        )
-        evaluator = LiveCanaryEvaluator(
-            metrics_provider=provider, pass_criteria=criteria
-        )
+        evaluator = LiveCanaryEvaluator(metrics_provider=provider)
         context = _make_context()
 
         # When
         result = evaluator.evaluate(context)
 
-        # Then
+        # Then — error_delta=0.02 > default 0.01
         assert result.passed is False
         assert "increase" in result.details.lower()
 
     def test_p95_latency_delta_exceeds_threshold_fails(self):
         """P95 latency delta가 임계값 초과 시 passed=False."""
-        # Given — MockProvider returns same p95 for both labels (delta=0)
-        # Use criteria with negative threshold to trigger
+        # Given — baseline P95=100ms, candidate P95=160ms → delta=60ms > 50ms
         provider = MockTimeSeriesProvider()
         provider._scalars = {
-            "svc:error_rate_agg": 0.01,
-            "svc:request_count": 500,
-            "svc:latency_p95": 100.0,
-            "svc:latency_p99": 200.0,
+            "svc:error_rate_agg:track=stable": 0.01,
+            "svc:error_rate_agg:track=canary": 0.01,
+            "svc:request_count:track=canary": 500,
+            "svc:latency_p95:track=stable": 100.0,
+            "svc:latency_p95:track=canary": 160.0,
+            "svc:latency_p99:track=stable": 200.0,
+            "svc:latency_p99:track=canary": 200.0,
         }
-        criteria = PassCriteria(
-            latency_p95_delta_ms=-1.0,  # delta=0 > -1.0 triggers
-        )
-        evaluator = LiveCanaryEvaluator(
-            metrics_provider=provider, pass_criteria=criteria
-        )
+        evaluator = LiveCanaryEvaluator(metrics_provider=provider)
         context = _make_context()
 
         # When
         result = evaluator.evaluate(context)
 
-        # Then
+        # Then — p95_delta=60ms > default 50ms
         assert result.passed is False
         assert "p95" in result.details.lower()
 
     def test_p99_latency_pct_exceeds_threshold_fails(self):
         """P99 latency 비율 증가가 임계값 초과 시 passed=False."""
+        # Given — baseline P99=200ms, candidate P99=260ms → pct=30% > 20%
         provider = MockTimeSeriesProvider()
         provider._scalars = {
-            "svc:error_rate_agg": 0.01,
-            "svc:request_count": 500,
-            "svc:latency_p95": 100.0,
-            "svc:latency_p99": 200.0,
+            "svc:error_rate_agg:track=stable": 0.01,
+            "svc:error_rate_agg:track=canary": 0.01,
+            "svc:request_count:track=canary": 500,
+            "svc:latency_p95:track=stable": 100.0,
+            "svc:latency_p95:track=canary": 100.0,
+            "svc:latency_p99:track=stable": 200.0,
+            "svc:latency_p99:track=canary": 260.0,
         }
-        # p99_pct = (200-200)/200 = 0, but threshold is negative to trigger
-        criteria = PassCriteria(
-            latency_p99_delta_pct=-0.01,  # delta_pct=0 > -0.01 triggers
-        )
-        evaluator = LiveCanaryEvaluator(
-            metrics_provider=provider, pass_criteria=criteria
-        )
+        evaluator = LiveCanaryEvaluator(metrics_provider=provider)
         context = _make_context()
 
         # When
         result = evaluator.evaluate(context)
 
-        # Then
+        # Then — p99_pct=30% > default 20%
         assert result.passed is False
         assert "p99" in result.details.lower()
 
@@ -298,25 +283,30 @@ class TestLiveCanaryEvaluatorBehavior:
 
     def test_multiple_failures_all_reported(self):
         """여러 임계값 동시 위반 시 모든 실패 사유가 details에 포함된다."""
-        # Given — all thresholds violated with tight criteria
+        # Given — 에러율 절대값 + 증가분 + P95 + P99 모두 위반
         provider = MockTimeSeriesProvider()
         provider._scalars = {
-            "svc:error_rate_agg": 0.1,  # > 0.05
-            "svc:request_count": 500,
-            "svc:latency_p95": 100.0,
-            "svc:latency_p99": 200.0,
+            "svc:error_rate_agg:track=stable": 0.01,
+            "svc:error_rate_agg:track=canary": 0.10,  # > 0.05 절대, delta=0.09 > 0.01
+            "svc:request_count:track=canary": 500,
+            "svc:latency_p95:track=stable": 100.0,
+            "svc:latency_p95:track=canary": 200.0,  # delta=100ms > 50ms
+            "svc:latency_p99:track=stable": 200.0,
+            "svc:latency_p99:track=canary": 300.0,  # pct=50% > 20%
         }
-        # error_delta = 0 (same for both), so only absolute triggers
-        # p95_delta = 0, p99_pct = 0 — won't trigger with defaults
         evaluator = LiveCanaryEvaluator(metrics_provider=provider)
         context = _make_context()
 
         # When
         result = evaluator.evaluate(context)
 
-        # Then
+        # Then — 4가지 실패 사유 모두 포함
         assert result.passed is False
-        assert "error rate" in result.details.lower()
+        details_lower = result.details.lower()
+        assert "error rate" in details_lower
+        assert "increase" in details_lower
+        assert "p95" in details_lower
+        assert "p99" in details_lower
 
     def test_custom_pass_criteria_applied(self):
         """커스텀 PassCriteria가 판정에 사용된다."""

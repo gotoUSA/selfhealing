@@ -1,6 +1,6 @@
 # 301. Live Canary Evaluator — promote() 시점의 실시간 메트릭 기반 평가
 
-> **Status**: Proposed
+> **Status**: Implemented (post-review fixes applied)
 > **Target**:
 > - `packages/selfhealing-python/src/selfhealing/services/config_shadow/evaluators/live_canary.py` — 신규
 > - `packages/selfhealing-python/src/selfhealing/services/config_shadow/evaluators/__init__.py` — Protocol 리팩토링 (Q1)
@@ -913,12 +913,12 @@ def _check_live_canary_evaluation(
             candidate_config=rollout.new_values,
             service_name=rollout.config_type,
             time_window_seconds=criteria.evaluation_window_seconds,
-            baseline_labels={"track": "stable"},
+            baseline_labels=_BASELINE_LABELS.copy(),
             candidate_labels={
-                "track": "canary",
+                **_CANDIDATE_LABELS_BASE,
                 "cluster": current_stage.clusters[0]
                 if current_stage.clusters
-                else "canary",
+                else _CANDIDATE_LABELS_BASE["track"],
             },
         )
 
@@ -943,7 +943,7 @@ def _check_live_canary_evaluation(
     except ImportError:
         return None
     except Exception as e:
-        logger.warning("canary_promote.live_evaluation_error", error=e)
+        logger.error("canary_promote.live_evaluation_error", error=e, exc_info=True)
         return None  # Fail-Open
 ```
 
@@ -1104,3 +1104,52 @@ Step 10: 테스트 작성/수정
 
 기존 `promote()` 호출부는 `force=True`로 Live Evaluation을 우회할 수 있으므로
 **호출부 변경 불필요**.
+
+---
+
+## 12. Post-Review Fixes
+
+구현 후 코드 리뷰에서 발견된 6가지 이슈와 적용된 수정사항.
+
+### 12.1 collect_metrics() Regression (Critical)
+
+`_collect_stage_metrics()` 제거 시 공개 메서드 `collect_metrics()`가 무조건 `[]`을 반환하게 됨.
+호출처 4곳(canary_watchdog.py:675, canary views:528, 테스트 2곳)이 영향을 받음.
+
+**수정**: `collect_metrics()`를 `LiveCanaryEvaluator`를 통해 실시간 메트릭을 조회하고
+`CanaryMetrics` 형태로 변환하여 반환하도록 재구현.
+
+### 12.2 Exception Handling (Warning)
+
+`_check_live_canary_evaluation()`의 `except Exception as e`에서 `logger.warning` 사용.
+프로그래밍 오류가 묻힐 수 있음.
+
+**수정**: `logger.warning` → `logger.error` + `exc_info=True`로 변경.
+Fail-open 패턴은 프로젝트 컨벤션(Shadow eval, Chaos guard 등)에 부합하므로 유지.
+
+### 12.3 Hardcoded Labels (Warning)
+
+`baseline_labels={"track": "stable"}` 등이 메서드 내부에 하드코딩.
+
+**수정**: 모듈 상수 `_BASELINE_LABELS`, `_CANDIDATE_LABELS_BASE`로 추출.
+
+### 12.4 MockTimeSeriesProvider Label-Aware (Warning)
+
+Mock이 `labels` 파라미터를 무시하여 baseline/candidate 분리 테스트 불가.
+
+**수정**: `_resolve_scalar()` 도입으로 label-aware 키 조회 구현.
+`"{service}:{metric}:{k}={v},..."` 형식의 labeled 키를 우선 조회하고,
+없으면 unlabeled 키로 폴백 (하위 호환).
+
+### 12.5 P99 Delta Duplicated Computation (Suggestion)
+
+`p99_pct` 계산이 판정 블록(line 147)과 delta dict(line 181-183)에서 중복.
+
+**수정**: 판정 블록 전에 한 번 계산하고 delta dict에서 재사용. P95와 동일 패턴.
+
+### 12.6 Negative Threshold Tests (Suggestion)
+
+Mock의 label 미지원으로 인해 `error_rate_increase_max=-0.01` 같은 비현실적 값으로 테스트.
+
+**수정**: 12.4의 label-aware Mock 활용으로 현실적 시나리오 테스트로 전환.
+예: baseline=0.01, candidate=0.03 → delta=0.02 > 0.01 (기본 임계값).

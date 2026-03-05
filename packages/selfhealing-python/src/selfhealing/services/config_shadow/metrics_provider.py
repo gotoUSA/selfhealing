@@ -116,11 +116,41 @@ class MockTimeSeriesProvider:
 
     임의의 시계열 데이터를 주입하여 시뮬레이터 로직을 검증한다.
     프로덕션에서는 Prometheus/Datadog 어댑터로 교체.
+
+    키 구성:
+    - labels=None: "{service}:{metric}" (기존 호환)
+    - labels 지정 시: "{service}:{metric}:{k}={v},..." (label-aware)
     """
 
     def __init__(self, data: dict[str, list[tuple[datetime, float]]] | None = None):
         self._data = data or {}
         self._scalars: dict[str, float] = {}
+
+    @staticmethod
+    def _label_suffix(labels: dict[str, str] | None) -> str:
+        if not labels:
+            return ""
+        return ":" + ",".join(f"{k}={v}" for k, v in sorted(labels.items()))
+
+    def _scalar_key(
+        self,
+        service_name: str,
+        metric: str,
+        labels: dict[str, str] | None = None,
+    ) -> str:
+        return f"{service_name}:{metric}{self._label_suffix(labels)}"
+
+    def _resolve_scalar(
+        self,
+        service_name: str,
+        metric: str,
+        labels: dict[str, str] | None,
+        default: float = 0.0,
+    ) -> float:
+        labeled_key = self._scalar_key(service_name, metric, labels)
+        if labeled_key in self._scalars:
+            return self._scalars[labeled_key]
+        return self._scalars.get(f"{service_name}:{metric}", default)
 
     # --- 시계열 메서드 (labels 파라미터 추가, 기본값 None) ---
 
@@ -132,7 +162,9 @@ class MockTimeSeriesProvider:
         step_seconds: int = 60,
         labels: dict[str, str] | None = None,
     ) -> list[tuple[datetime, float]]:
-        key = f"{service_name}:error_rate"
+        key = f"{service_name}:error_rate{self._label_suffix(labels)}"
+        if key not in self._data:
+            key = f"{service_name}:error_rate"
         return [(ts, val) for ts, val in self._data.get(key, []) if start <= ts < end]
 
     def query_request_rate(
@@ -143,7 +175,9 @@ class MockTimeSeriesProvider:
         step_seconds: int = 60,
         labels: dict[str, str] | None = None,
     ) -> list[tuple[datetime, float]]:
-        key = f"{service_name}:request_rate"
+        key = f"{service_name}:request_rate{self._label_suffix(labels)}"
+        if key not in self._data:
+            key = f"{service_name}:request_rate"
         return [(ts, val) for ts, val in self._data.get(key, []) if start <= ts < end]
 
     # --- 스칼라 집계 메서드 ---
@@ -155,7 +189,7 @@ class MockTimeSeriesProvider:
         end: datetime,
         labels: dict[str, str] | None = None,
     ) -> float:
-        return self._scalars.get(f"{service_name}:error_rate_agg", 0.0)
+        return self._resolve_scalar(service_name, "error_rate_agg", labels)
 
     def query_request_count(
         self,
@@ -164,7 +198,7 @@ class MockTimeSeriesProvider:
         end: datetime,
         labels: dict[str, str] | None = None,
     ) -> int:
-        return int(self._scalars.get(f"{service_name}:request_count", 0))
+        return int(self._resolve_scalar(service_name, "request_count", labels))
 
     def query_latency_aggregated(
         self,
@@ -174,8 +208,11 @@ class MockTimeSeriesProvider:
         percentile: float = 0.99,
         labels: dict[str, str] | None = None,
     ) -> float:
-        key = f"{service_name}:latency_p{int(percentile * 100)}"
-        return self._scalars.get(key, 0.0)
+        return self._resolve_scalar(
+            service_name,
+            f"latency_p{int(percentile * 100)}",
+            labels,
+        )
 
 
 _metrics_provider: TimeSeriesMetricsProvider | None = None

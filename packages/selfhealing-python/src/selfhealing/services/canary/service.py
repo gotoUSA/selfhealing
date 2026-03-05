@@ -67,6 +67,10 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger()
 
+# Live Canary Evaluation 기본 레이블 (K8s track 기반 트래픽 분리)
+_BASELINE_LABELS: dict[str, str] = {"track": "stable"}
+_CANDIDATE_LABELS_BASE: dict[str, str] = {"track": "canary"}
+
 
 def _config_hash(config: dict) -> str:
     """설정 딕셔너리의 결정론적 해시를 생성한다."""
@@ -946,6 +950,9 @@ class CanaryRolloutService:
         """
         롤아웃 메트릭 수집 (Public API).
 
+        LiveCanaryEvaluator를 통해 실시간 메트릭을 조회하고
+        CanaryMetrics 형태로 변환하여 반환한다.
+
         Args:
             rollout_id: 롤아웃 ID
 
@@ -956,7 +963,64 @@ class CanaryRolloutService:
         if not rollout:
             return []
 
-        return []
+        current_stage = rollout.current_stage
+        if not current_stage:
+            return []
+
+        try:
+            from selfhealing.services.config_shadow.evaluators.live_canary import (
+                LiveCanaryEvaluator,
+            )
+            from selfhealing.services.config_shadow.metrics_provider import (
+                get_metrics_provider,
+            )
+            from selfhealing.services.config_shadow.models import EvaluationContext
+
+            evaluator = LiveCanaryEvaluator(
+                metrics_provider=get_metrics_provider(),
+                pass_criteria=current_stage.pass_criteria,
+            )
+
+            context = EvaluationContext(
+                baseline_config=rollout.previous_values,
+                candidate_config=rollout.new_values,
+                service_name=rollout.config_type,
+                time_window_seconds=current_stage.pass_criteria.evaluation_window_seconds,
+                baseline_labels=_BASELINE_LABELS.copy(),
+                candidate_labels={
+                    **_CANDIDATE_LABELS_BASE,
+                    "cluster": current_stage.clusters[0]
+                    if current_stage.clusters
+                    else _CANDIDATE_LABELS_BASE["track"],
+                },
+            )
+
+            result = evaluator.evaluate(context)
+
+            return [
+                CanaryMetrics(
+                    cluster=current_stage.clusters[0]
+                    if current_stage.clusters
+                    else "canary",
+                    stage_name=current_stage.name,
+                    error_rate_before=result.baseline_metrics.get("error_rate", 0.0),
+                    error_rate_after=result.candidate_metrics.get("error_rate", 0.0),
+                    latency_p99_before=result.baseline_metrics.get(
+                        "latency_p99_ms", 0.0
+                    ),
+                    latency_p99_after=result.candidate_metrics.get(
+                        "latency_p99_ms", 0.0
+                    ),
+                    requests_total=result.candidate_metrics.get("request_count", 0),
+                    is_healthy=result.passed,
+                    unhealthy_reason=result.details if not result.passed else None,
+                ),
+            ]
+        except ImportError:
+            return []
+        except Exception as e:
+            logger.error("canary_rollout.collect_metrics_error", error=e, exc_info=True)
+            return []
 
     # =========================================================================
     # Private Methods - Shadow Evaluation Gate
@@ -1266,12 +1330,12 @@ class CanaryRolloutService:
                 candidate_config=rollout.new_values,
                 service_name=rollout.config_type,
                 time_window_seconds=criteria.evaluation_window_seconds,
-                baseline_labels={"track": "stable"},
+                baseline_labels=_BASELINE_LABELS.copy(),
                 candidate_labels={
-                    "track": "canary",
+                    **_CANDIDATE_LABELS_BASE,
                     "cluster": current_stage.clusters[0]
                     if current_stage.clusters
-                    else "canary",
+                    else _CANDIDATE_LABELS_BASE["track"],
                 },
             )
 
@@ -1296,7 +1360,7 @@ class CanaryRolloutService:
         except ImportError:
             return None
         except Exception as e:
-            logger.warning("canary_promote.live_evaluation_error", error=e)
+            logger.error("canary_promote.live_evaluation_error", error=e, exc_info=True)
             return None
 
     # =========================================================================
