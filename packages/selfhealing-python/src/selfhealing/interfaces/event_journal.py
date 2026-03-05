@@ -44,6 +44,7 @@ class JournalQueryFilter:
     end_time: datetime | None = None
     region: str | None = None
     limit: int = 1000
+    context_filters: dict[str, str] | None = None
 
 
 @dataclass(frozen=True)

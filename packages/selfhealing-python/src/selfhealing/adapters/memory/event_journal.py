@@ -113,5 +113,13 @@ class InMemoryEventJournalRepository(EventJournalRepository):
                 continue
             if query_filter.region is not None and entry.region != query_filter.region:
                 continue
+            if query_filter.context_filters is not None:
+                match = True
+                for key, val in query_filter.context_filters.items():
+                    if str(entry.context.get(key)) != val:
+                        match = False
+                        break
+                if not match:
+                    continue
             results.append(entry)
         return results

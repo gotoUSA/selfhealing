@@ -259,4 +259,8 @@ class RedisEventJournalRepository(EventJournalRepository):
             return False
         if query_filter.region is not None and entry.region != query_filter.region:
             return False
+        if query_filter.context_filters is not None:
+            for key, val in query_filter.context_filters.items():
+                if str(entry.context.get(key)) != val:
+                    return False
         return True
