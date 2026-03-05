@@ -16,7 +16,6 @@ from selfhealing.services.circuit_breaker.config import (
     CircuitBreakerConfig,
     CircuitState,
 )
-from selfhealing.services.circuit_mesh import ThresholdOverride
 from selfhealing.services.circuit_mesh.mesh_coordinator import (
     MeshCoordinator,
     get_mesh_coordinator,
@@ -25,6 +24,8 @@ from selfhealing.services.circuit_mesh.mesh_coordinator import (
 )
 from selfhealing.services.circuit_mesh.store import InMemoryMeshOverrideStore
 from selfhealing.settings.circuit_mesh import CircuitMeshSettings
+
+from .conftest import make_override
 
 # =============================================================================
 # Fixtures
@@ -223,15 +224,7 @@ class TestMeshCoordinatorOnDownstreamOpenedBehavior:
         for i in range(settings.max_concurrent_overrides):
             store.set(
                 f"svc-existing-{i}",
-                ThresholdOverride(
-                    service_name=f"svc-existing-{i}",
-                    original_failure_threshold=5,
-                    adjusted_failure_threshold=10,
-                    original_recovery_timeout=60,
-                    adjusted_recovery_timeout=180,
-                    reason="test",
-                    expires_at=datetime.now(timezone.utc) + timedelta(seconds=600),
-                ),
+                make_override(service_name=f"svc-existing-{i}", reason="test"),
             )
 
         mock_graph.get_dependents_recursive.return_value = [("svc-new", 1)]
@@ -264,16 +257,7 @@ class TestMeshCoordinatorOnDownstreamClosedBehavior:
     ):
         """영향받는 상류에 fast-recovery 오버라이드를 적용한다."""
         # Given — 기존 오버라이드 존재
-        existing = ThresholdOverride(
-            service_name="svc-up-1",
-            original_failure_threshold=5,
-            adjusted_failure_threshold=10,
-            original_recovery_timeout=60,
-            adjusted_recovery_timeout=180,
-            reason="downstream:svc-down OPEN (depth=1)",
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=600),
-        )
-        store.set("svc-up-1", existing)
+        store.set("svc-up-1", make_override(service_name="svc-up-1"))
         mock_graph.get_dependents_recursive.return_value = [("svc-up-1", 1)]
 
         # When
@@ -342,14 +326,12 @@ class TestMeshCoordinatorOnFastRecoveryCompletedBehavior:
 
     def test_removes_fast_recovery_override(self, coordinator, mock_cb_service, store):
         """fast-recovery 오버라이드를 정리한다."""
-        override = ThresholdOverride(
+        override = make_override(
             service_name="svc-up-1",
-            original_failure_threshold=5,
             adjusted_failure_threshold=5,
-            original_recovery_timeout=60,
             adjusted_recovery_timeout=5,
             reason="downstream:svc-down RECOVERED → fast-recovery",
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=15),
+            expires_in_seconds=15,
         )
         store.set("svc-up-1", override)
 
@@ -363,16 +345,7 @@ class TestMeshCoordinatorOnFastRecoveryCompletedBehavior:
         self, coordinator, mock_cb_service, store
     ):
         """fast-recovery가 아닌 오버라이드는 건너뛴다."""
-        override = ThresholdOverride(
-            service_name="svc-up-1",
-            original_failure_threshold=5,
-            adjusted_failure_threshold=10,
-            original_recovery_timeout=60,
-            adjusted_recovery_timeout=180,
-            reason="downstream:svc-down OPEN (depth=1)",
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=600),
-        )
-        store.set("svc-up-1", override)
+        store.set("svc-up-1", make_override(service_name="svc-up-1"))
 
         event = _make_event("svc-up-1")
         coordinator.on_fast_recovery_completed(event)
@@ -394,17 +367,10 @@ class TestMeshCoordinatorCheckOverrideRenewalsBehavior:
     ):
         """하류가 여전히 OPEN이면 TTL 갱신한다."""
         # Given — 만료 임박 오버라이드
-        override = ThresholdOverride(
-            service_name="svc-up-1",
-            original_failure_threshold=5,
-            adjusted_failure_threshold=10,
-            original_recovery_timeout=60,
-            adjusted_recovery_timeout=180,
-            reason="downstream:svc-down OPEN (depth=1)",
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=30),
-            renewal_count=0,
+        store.set(
+            "svc-up-1",
+            make_override(service_name="svc-up-1", expires_in_seconds=30),
         )
-        store.set("svc-up-1", override)
         mock_cb_service.get_state.return_value = CircuitState.OPEN
 
         # When
@@ -420,15 +386,9 @@ class TestMeshCoordinatorCheckOverrideRenewalsBehavior:
     ):
         """갱신 시 원본 오버라이드를 변경하지 않고 새 인스턴스를 생성한다."""
         original_expires = datetime.now(timezone.utc) + timedelta(seconds=30)
-        override = ThresholdOverride(
+        override = make_override(
             service_name="svc-up-1",
-            original_failure_threshold=5,
-            adjusted_failure_threshold=10,
-            original_recovery_timeout=60,
-            adjusted_recovery_timeout=180,
-            reason="downstream:svc-down OPEN (depth=1)",
             expires_at=original_expires,
-            renewal_count=0,
         )
         store.set("svc-up-1", override)
         mock_cb_service.get_state.return_value = CircuitState.OPEN
@@ -443,17 +403,10 @@ class TestMeshCoordinatorCheckOverrideRenewalsBehavior:
         self, coordinator, mock_cb_service, store
     ):
         """하류가 복구되면 오버라이드 만료시킨다."""
-        override = ThresholdOverride(
-            service_name="svc-up-1",
-            original_failure_threshold=5,
-            adjusted_failure_threshold=10,
-            original_recovery_timeout=60,
-            adjusted_recovery_timeout=180,
-            reason="downstream:svc-down OPEN (depth=1)",
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=30),
-            renewal_count=0,
+        store.set(
+            "svc-up-1",
+            make_override(service_name="svc-up-1", expires_in_seconds=30),
         )
-        store.set("svc-up-1", override)
         mock_cb_service.get_state.return_value = CircuitState.CLOSED
 
         result = coordinator.check_override_renewals()
@@ -466,17 +419,14 @@ class TestMeshCoordinatorCheckOverrideRenewalsBehavior:
         self, coordinator, mock_cb_service, store, settings
     ):
         """max_renewals 초과 시 에스컬레이션 발생."""
-        override = ThresholdOverride(
-            service_name="svc-up-1",
-            original_failure_threshold=5,
-            adjusted_failure_threshold=10,
-            original_recovery_timeout=60,
-            adjusted_recovery_timeout=180,
-            reason="downstream:svc-down OPEN (depth=1)",
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=30),
-            renewal_count=settings.max_renewals,
+        store.set(
+            "svc-up-1",
+            make_override(
+                service_name="svc-up-1",
+                expires_in_seconds=30,
+                renewal_count=settings.max_renewals,
+            ),
         )
-        store.set("svc-up-1", override)
         mock_cb_service.get_state.return_value = CircuitState.OPEN
 
         result = coordinator.check_override_renewals()
@@ -488,17 +438,10 @@ class TestMeshCoordinatorCheckOverrideRenewalsBehavior:
         self, coordinator, mock_cb_service, store, settings
     ):
         """TTL이 충분한 오버라이드는 건너뛴다."""
-        override = ThresholdOverride(
-            service_name="svc-up-1",
-            original_failure_threshold=5,
-            adjusted_failure_threshold=10,
-            original_recovery_timeout=60,
-            adjusted_recovery_timeout=180,
-            reason="downstream:svc-down OPEN (depth=1)",
-            expires_at=datetime.now(timezone.utc) + timedelta(seconds=300),
-            renewal_count=0,
+        store.set(
+            "svc-up-1",
+            make_override(service_name="svc-up-1", expires_in_seconds=300),
         )
-        store.set("svc-up-1", override)
 
         result = coordinator.check_override_renewals()
 
@@ -510,15 +453,7 @@ class TestMeshCoordinatorCheckOverrideRenewalsBehavior:
         """total_overrides가 전체 오버라이드 수를 반환."""
         store.set(
             "svc-a",
-            ThresholdOverride(
-                service_name="svc-a",
-                original_failure_threshold=5,
-                adjusted_failure_threshold=10,
-                original_recovery_timeout=60,
-                adjusted_recovery_timeout=180,
-                reason="downstream:svc-down OPEN (depth=1)",
-                expires_at=datetime.now(timezone.utc) + timedelta(seconds=300),
-            ),
+            make_override(service_name="svc-a", expires_in_seconds=300),
         )
         result = coordinator.check_override_renewals()
         assert result["total_overrides"] == 1
