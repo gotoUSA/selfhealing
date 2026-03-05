@@ -10,7 +10,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfhealing.interfaces.event_journal import JournalEntry  # noqa: F401
 
 
 class EvaluationStatus(str, Enum):
@@ -91,3 +94,26 @@ class BudgetSimulationResult:
     total_drain_percent: float = 0.0
     critical_episodes: int = 0
     max_burn_rate_1h: float = 0.0
+
+
+@dataclass
+class EvaluationContext:
+    """Evaluator에 전달되는 통합 평가 컨텍스트.
+
+    Shadow Evaluator는 events를 사용하고,
+    Live Evaluator는 time_window_seconds + labels를 사용한다.
+    """
+
+    baseline_config: dict[str, Any]
+    candidate_config: dict[str, Any]
+
+    # Shadow 용 (과거 이벤트 리플레이)
+    events: list[JournalEntry] = field(default_factory=list)
+
+    # Live 용 (실시간 메트릭 쿼리)
+    time_window_seconds: int = 300
+    baseline_labels: dict[str, str] = field(default_factory=dict)
+    candidate_labels: dict[str, str] = field(default_factory=dict)
+
+    # 공통
+    service_name: str = ""

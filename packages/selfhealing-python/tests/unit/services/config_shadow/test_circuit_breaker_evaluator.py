@@ -23,7 +23,10 @@ from selfhealing.interfaces.event_journal import JournalEntry
 from selfhealing.services.config_shadow.evaluators.circuit_breaker import (
     CircuitBreakerEvaluator,
 )
-from selfhealing.services.config_shadow.models import SimulationResult
+from selfhealing.services.config_shadow.models import (
+    EvaluationContext,
+    SimulationResult,
+)
 
 
 def _make_entry(
@@ -340,7 +343,12 @@ class TestCircuitBreakerEvaluateFullFlowBehavior:
             "recovery_timeout": 30,
         }
 
-        result = evaluator.evaluate(events, baseline_config, candidate_config)
+        context = EvaluationContext(
+            baseline_config=baseline_config,
+            candidate_config=candidate_config,
+            events=events,
+        )
+        result = evaluator.evaluate(context)
 
         assert result.evaluator_name == "circuit_breaker"
         assert isinstance(result.passed, bool)
@@ -353,11 +361,11 @@ class TestCircuitBreakerEvaluateFullFlowBehavior:
     def test_evaluate_with_empty_events_passes(self):
         """이벤트 없을 때 open_count=0이므로 passed=True."""
         evaluator = CircuitBreakerEvaluator()
-        result = evaluator.evaluate(
-            [],
-            {"failure_threshold": 5},
-            {"failure_threshold": 3},
+        context = EvaluationContext(
+            baseline_config={"failure_threshold": 5},
+            candidate_config={"failure_threshold": 3},
         )
+        result = evaluator.evaluate(context)
         assert result.passed is True
         assert result.baseline_metrics["open_count"] == 0
         assert result.candidate_metrics["open_count"] == 0
@@ -391,7 +399,12 @@ class TestCircuitBreakerEvaluateFullFlowBehavior:
             "recovery_timeout": 30,
         }
 
-        result = evaluator.evaluate(events, baseline_config, candidate_config)
+        context = EvaluationContext(
+            baseline_config=baseline_config,
+            candidate_config=candidate_config,
+            events=events,
+        )
+        result = evaluator.evaluate(context)
         # candidate가 더 많은 open을 유발해야 함
         assert (
             result.candidate_metrics["open_count"]

@@ -12,6 +12,7 @@ from typing import Any
 from selfhealing.interfaces.event_journal import JournalEntry
 from selfhealing.services.config_shadow.models import (
     BudgetSimulationResult,
+    EvaluationContext,
     EvaluatorResult,
 )
 
@@ -27,12 +28,11 @@ class ErrorBudgetEvaluator:
     def event_types(self) -> list[str]:
         return ["error_budget_critical"]
 
-    def evaluate(
-        self,
-        events: list[JournalEntry],
-        baseline_config: dict[str, Any],
-        candidate_config: dict[str, Any],
-    ) -> EvaluatorResult:
+    def evaluate(self, context: EvaluationContext) -> EvaluatorResult:
+        events = context.events
+        baseline_config = context.baseline_config
+        candidate_config = context.candidate_config
+
         baseline_budget = self._simulate(events, baseline_config)
         candidate_budget = self._simulate(events, candidate_config)
 

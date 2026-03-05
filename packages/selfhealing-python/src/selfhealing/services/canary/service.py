@@ -456,19 +456,13 @@ class CanaryRolloutService:
                 requested_by=requested_by,
             )
 
-        # 현재 단계 메트릭 검증 (force가 아니면)
+        # Live Canary Evaluation (실시간 메트릭 검증)
         if not force:
-            metrics = self._collect_stage_metrics(rollout)
-            is_healthy, failure_reason = self._is_stage_healthy(
-                rollout.current_stage,
-                metrics,
-                tier_id=tier_id,
-            )
-
-            if not is_healthy:
+            live_check = self._check_live_canary_evaluation(rollout, tier_id=tier_id)
+            if live_check is not None and not live_check:
                 logger.warning(
                     "canary_rollout.promotion_blocked",
-                    failure_reason=failure_reason,
+                    rollout_id=rollout.id,
                 )
                 return False
 
@@ -962,7 +956,7 @@ class CanaryRolloutService:
         if not rollout:
             return []
 
-        return self._collect_stage_metrics(rollout)
+        return []
 
     # =========================================================================
     # Private Methods - Shadow Evaluation Gate
@@ -1220,60 +1214,90 @@ class CanaryRolloutService:
         )
 
     # =========================================================================
-    # Private Methods - Metrics & Health
+    # Private Methods - Live Canary Evaluation
     # =========================================================================
 
-    def _collect_stage_metrics(
+    def _check_live_canary_evaluation(
         self,
         rollout: CanaryRollout,
-    ) -> list[CanaryMetrics]:
-        """
-        현재 단계의 메트릭 수집.
-
-        TODO: Prometheus/메트릭 시스템 연동
-        """
-        # 현재는 빈 목록 반환 (메트릭 시스템 연동 필요)
-        return []
-
-    def _is_stage_healthy(
-        self,
-        stage: CanaryStage | None,
-        metrics: list[CanaryMetrics],
         tier_id: str | None = None,
-    ) -> tuple[bool, str | None]:
-        """
-        단계 건강 상태 판정.
-
-        Args:
-            stage: 현재 Canary 단계
-            metrics: 수집된 메트릭 목록
-            tier_id: 티어 ID (설정 시 apply_tier_floor 적용)
+    ) -> bool | None:
+        """Canary 노드의 실시간 메트릭을 평가한다.
 
         Returns:
-            (건강 여부, 실패 사유)
+            True: 통과 (승격 가능)
+            False: 차단 (승격 불가)
+            None: 비활성화 또는 오류 (체크 생략)
         """
-        if not stage:
-            return True, None
+        try:
+            from selfhealing.settings.config_shadow import get_config_shadow_settings
 
-        if not metrics:
-            # 메트릭 없으면 통과 (샘플 부족)
-            return True, None
+            settings = get_config_shadow_settings()
+            if not settings.live_evaluation_enabled:
+                return None
+        except ImportError:
+            return None
 
-        # 티어별 최소 보안 기준 강제 (221 설계 §4.9)
-        if tier_id:
+        current_stage = rollout.current_stage
+        if not current_stage:
+            return None
+
+        try:
             from selfhealing.services.canary.models import apply_tier_floor
+            from selfhealing.services.config_shadow.evaluators.live_canary import (
+                LiveCanaryEvaluator,
+            )
+            from selfhealing.services.config_shadow.metrics_provider import (
+                get_metrics_provider,
+            )
+            from selfhealing.services.config_shadow.models import EvaluationContext
 
-            effective_criteria = apply_tier_floor(stage.pass_criteria, tier_id)
-        else:
-            effective_criteria = stage.pass_criteria
+            criteria = current_stage.pass_criteria
+            if tier_id:
+                criteria = apply_tier_floor(criteria, tier_id)
 
-        # PassCriteria 사용
-        for m in metrics:
-            passed, reason = effective_criteria.evaluate(m)
-            if not passed:
-                return False, reason
+            evaluator = LiveCanaryEvaluator(
+                metrics_provider=get_metrics_provider(),
+                pass_criteria=criteria,
+            )
 
-        return True, None
+            context = EvaluationContext(
+                baseline_config=rollout.previous_values,
+                candidate_config=rollout.new_values,
+                service_name=rollout.config_type,
+                time_window_seconds=criteria.evaluation_window_seconds,
+                baseline_labels={"track": "stable"},
+                candidate_labels={
+                    "track": "canary",
+                    "cluster": current_stage.clusters[0]
+                    if current_stage.clusters
+                    else "canary",
+                },
+            )
+
+            result = evaluator.evaluate(context)
+
+            if result.passed:
+                logger.info(
+                    "canary_promote.live_evaluation_passed",
+                    rollout_id=rollout.id,
+                    confidence=result.confidence_score,
+                )
+                return True
+
+            logger.warning(
+                "canary_promote.live_evaluation_failed",
+                rollout_id=rollout.id,
+                details=result.details,
+                confidence=result.confidence_score,
+            )
+            return False
+
+        except ImportError:
+            return None
+        except Exception as e:
+            logger.warning("canary_promote.live_evaluation_error", error=e)
+            return None
 
     # =========================================================================
     # Private Methods - Serialization

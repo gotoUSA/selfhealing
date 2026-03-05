@@ -121,68 +121,6 @@ class TestPassCriteria:
         assert default_criteria.min_requests_required == 100
         assert default_criteria.evaluation_window_seconds == 300
 
-    def test_evaluate_healthy_metrics_passes(self, default_criteria, healthy_metrics):
-        """건강한 메트릭은 합격해야 함."""
-        passed, reason = default_criteria.evaluate(healthy_metrics)
-        assert passed is True
-        assert reason is None
-
-    def test_evaluate_insufficient_samples_passes(self, default_criteria):
-        """샘플 수가 부족하면 보수적으로 통과."""
-        metrics = CanaryMetrics(
-            cluster="seoul",
-            stage_name="canary",
-            error_rate_after=0.10,  # 10% 에러율 (한계 초과)
-            requests_total=50,  # 100 미만
-        )
-        passed, reason = default_criteria.evaluate(metrics)
-        assert passed is True
-        assert reason is None
-
-    def test_evaluate_error_rate_absolute_fails(
-        self, default_criteria, unhealthy_error_rate_metrics
-    ):
-        """에러율 절대값 초과시 실패."""
-        passed, reason = default_criteria.evaluate(unhealthy_error_rate_metrics)
-        assert passed is False
-        assert "Error rate" in reason
-        assert "exceeds" in reason
-
-    def test_evaluate_error_rate_increase_fails(self, default_criteria):
-        """에러율 증가분 초과시 실패."""
-        metrics = CanaryMetrics(
-            cluster="seoul",
-            stage_name="canary",
-            error_rate_before=0.02,
-            error_rate_after=0.04,  # 2% 증가 (1% 한계 초과)
-            requests_total=150,
-        )
-        passed, reason = default_criteria.evaluate(metrics)
-        assert passed is False
-        assert "increased by" in reason
-
-    def test_evaluate_latency_increase_fails(
-        self, default_criteria, unhealthy_latency_metrics
-    ):
-        """레이턴시 증가율 초과시 실패."""
-        passed, reason = default_criteria.evaluate(unhealthy_latency_metrics)
-        assert passed is False
-        assert "latency increased" in reason
-
-    def test_evaluate_zero_baseline_latency_skips_check(self, default_criteria):
-        """기준 레이턴시가 0이면 레이턴시 검사 스킵."""
-        metrics = CanaryMetrics(
-            cluster="seoul",
-            stage_name="canary",
-            error_rate_before=0.01,
-            error_rate_after=0.015,
-            latency_p99_before=0.0,  # 기준 없음
-            latency_p99_after=100.0,
-            requests_total=150,
-        )
-        passed, reason = default_criteria.evaluate(metrics)
-        assert passed is True
-
     def test_custom_criteria_values(self):
         """커스텀 기준값으로 생성 가능."""
         criteria = PassCriteria(
@@ -380,7 +318,10 @@ class TestCanaryRollout:
         # 인덱스 2: 모든 클러스터
         sample_rollout.current_stage_index = 2
         assert sample_rollout.affected_clusters == [
-            "seoul-canary", "seoul-main", "tokyo", "singapore"
+            "seoul-canary",
+            "seoul-main",
+            "tokyo",
+            "singapore",
         ]
 
     def test_is_terminal_property(self, sample_rollout):

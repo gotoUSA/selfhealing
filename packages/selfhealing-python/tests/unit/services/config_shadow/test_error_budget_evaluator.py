@@ -20,7 +20,10 @@ from selfhealing.interfaces.event_journal import JournalEntry
 from selfhealing.services.config_shadow.evaluators.error_budget import (
     ErrorBudgetEvaluator,
 )
-from selfhealing.services.config_shadow.models import BudgetSimulationResult
+from selfhealing.services.config_shadow.models import (
+    BudgetSimulationResult,
+    EvaluationContext,
+)
 
 
 def _make_entry(
@@ -240,11 +243,12 @@ class TestErrorBudgetEvaluateFullFlowBehavior:
             )
             for _ in range(10)
         ]
-        result = evaluator.evaluate(
-            events,
-            {"critical_threshold_percent": 10},
-            {"critical_threshold_percent": 5},
+        context = EvaluationContext(
+            baseline_config={"critical_threshold_percent": 10},
+            candidate_config={"critical_threshold_percent": 5},
+            events=events,
         )
+        result = evaluator.evaluate(context)
         assert result.evaluator_name == "error_budget"
         assert "total_drain_percent" in result.baseline_metrics
         assert "critical_episodes" in result.candidate_metrics
@@ -254,9 +258,11 @@ class TestErrorBudgetEvaluateFullFlowBehavior:
     def test_evaluate_empty_events_passes(self):
         """빈 이벤트: drain=0이므로 passed=True."""
         evaluator = ErrorBudgetEvaluator()
-        result = evaluator.evaluate(
-            [], {"critical_threshold_percent": 10}, {"critical_threshold_percent": 5}
+        context = EvaluationContext(
+            baseline_config={"critical_threshold_percent": 10},
+            candidate_config={"critical_threshold_percent": 5},
         )
+        result = evaluator.evaluate(context)
         assert result.passed is True
 
 

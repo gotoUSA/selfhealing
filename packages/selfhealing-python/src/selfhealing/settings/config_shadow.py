@@ -11,6 +11,7 @@ Environment Variables:
     SELFHEALING_SHADOW_BYPASS_MIN_REASON_LENGTH=10
     SELFHEALING_SHADOW_EVALUATION_TTL_HOURS=1.0
     SELFHEALING_SHADOW_BLOCK_ON_LOW_CONFIDENCE=false
+    SELFHEALING_SHADOW_LIVE_EVALUATION_ENABLED=false
 """
 
 from pydantic import Field
@@ -77,6 +78,13 @@ class ConfigShadowSettings(BaseSettings):
         ge=20,
         le=500,
         description="재평가 트리거를 위한 최소 이벤트 수",
+    )
+    live_evaluation_enabled: bool = Field(
+        default=False,
+        description=(
+            "promote() 시 Live Canary Evaluation 활성화 여부. "
+            "TimeSeriesMetricsProvider 구현체가 등록된 후 True로 전환."
+        ),
     )
 
 

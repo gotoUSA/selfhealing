@@ -11,7 +11,11 @@ from collections import deque
 from typing import Any
 
 from selfhealing.interfaces.event_journal import JournalEntry
-from selfhealing.services.config_shadow.models import EvaluatorResult, SimulationResult
+from selfhealing.services.config_shadow.models import (
+    EvaluationContext,
+    EvaluatorResult,
+    SimulationResult,
+)
 
 
 class CircuitBreakerEvaluator:
@@ -25,12 +29,11 @@ class CircuitBreakerEvaluator:
     def event_types(self) -> list[str]:
         return ["circuit_breaker_opened", "circuit_breaker_closed"]
 
-    def evaluate(
-        self,
-        events: list[JournalEntry],
-        baseline_config: dict[str, Any],
-        candidate_config: dict[str, Any],
-    ) -> EvaluatorResult:
+    def evaluate(self, context: EvaluationContext) -> EvaluatorResult:
+        events = context.events
+        baseline_config = context.baseline_config
+        candidate_config = context.candidate_config
+
         baseline_opens = self._simulate(events, baseline_config)
         candidate_opens = self._simulate(events, candidate_config)
 

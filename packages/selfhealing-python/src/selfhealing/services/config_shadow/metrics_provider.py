@@ -14,7 +14,9 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class TimeSeriesMetricsProvider(Protocol):
-    """시계열 메트릭 제공자. 시뮬레이션 시 과거 Raw 데이터 조회.
+    """시계열 메트릭 제공자.
+
+    추세 데이터(시계열 List)와 판정용 집계값(Scalar)을 분리하여 제공한다.
 
     Implementations:
     - MockTimeSeriesProvider: 테스트 및 개발용
@@ -22,12 +24,15 @@ class TimeSeriesMetricsProvider(Protocol):
     - DatadogTimeSeriesProvider: Datadog Metrics API 기반 (향후)
     """
 
+    # --- 시계열 메서드 (추세 분석 / UI 대시보드용) ---
+
     def query_error_rate(
         self,
         service_name: str,
         start: datetime,
         end: datetime,
         step_seconds: int = 60,
+        labels: dict[str, str] | None = None,
     ) -> list[tuple[datetime, float]]:
         """시간 범위의 에러율 시계열을 반환한다.
 
@@ -36,6 +41,7 @@ class TimeSeriesMetricsProvider(Protocol):
             start: 조회 시작 시각 (UTC)
             end: 조회 종료 시각 (UTC)
             step_seconds: 시계열 간격 (기본 60초)
+            labels: K8s 복합 레이블 (예: {"track": "canary", "namespace": "prod"})
 
         Returns:
             (timestamp, error_rate) 튜플 리스트. error_rate는 0.0 ~ 1.0.
@@ -48,8 +54,60 @@ class TimeSeriesMetricsProvider(Protocol):
         start: datetime,
         end: datetime,
         step_seconds: int = 60,
+        labels: dict[str, str] | None = None,
     ) -> list[tuple[datetime, float]]:
         """시간 범위의 요청률(RPS) 시계열을 반환한다."""
+        ...
+
+    # --- 스칼라 집계 메서드 (Evaluator 판정용) ---
+
+    def query_error_rate_aggregated(
+        self,
+        service_name: str,
+        start: datetime,
+        end: datetime,
+        labels: dict[str, str] | None = None,
+    ) -> float:
+        """윈도우 전체의 가중치 기반 에러율 스칼라.
+
+        내부적으로 sum(rate(errors)) / sum(rate(requests)) 형태의
+        PromQL/Datadog 쿼리를 실행한다.
+
+        Returns:
+            가중치 기반 에러율 (0.0 ~ 1.0)
+        """
+        ...
+
+    def query_request_count(
+        self,
+        service_name: str,
+        start: datetime,
+        end: datetime,
+        labels: dict[str, str] | None = None,
+    ) -> int:
+        """윈도우 전체의 총 요청 수."""
+        ...
+
+    def query_latency_aggregated(
+        self,
+        service_name: str,
+        start: datetime,
+        end: datetime,
+        percentile: float = 0.99,
+        labels: dict[str, str] | None = None,
+    ) -> float:
+        """윈도우 전체의 Latency Percentile 스칼라 (밀리초).
+
+        내부적으로 histogram_quantile(percentile, ...) 형태의
+        PromQL을 실행한다. Percentile은 평균할 수 없으므로
+        반드시 Provider 수준에서 한 번에 계산해야 한다.
+
+        Args:
+            percentile: 0.95 (P95) 또는 0.99 (P99)
+
+        Returns:
+            해당 percentile의 latency (밀리초)
+        """
         ...
 
 
@@ -62,6 +120,9 @@ class MockTimeSeriesProvider:
 
     def __init__(self, data: dict[str, list[tuple[datetime, float]]] | None = None):
         self._data = data or {}
+        self._scalars: dict[str, float] = {}
+
+    # --- 시계열 메서드 (labels 파라미터 추가, 기본값 None) ---
 
     def query_error_rate(
         self,
@@ -69,6 +130,7 @@ class MockTimeSeriesProvider:
         start: datetime,
         end: datetime,
         step_seconds: int = 60,
+        labels: dict[str, str] | None = None,
     ) -> list[tuple[datetime, float]]:
         key = f"{service_name}:error_rate"
         return [(ts, val) for ts, val in self._data.get(key, []) if start <= ts < end]
@@ -79,6 +141,65 @@ class MockTimeSeriesProvider:
         start: datetime,
         end: datetime,
         step_seconds: int = 60,
+        labels: dict[str, str] | None = None,
     ) -> list[tuple[datetime, float]]:
         key = f"{service_name}:request_rate"
         return [(ts, val) for ts, val in self._data.get(key, []) if start <= ts < end]
+
+    # --- 스칼라 집계 메서드 ---
+
+    def query_error_rate_aggregated(
+        self,
+        service_name: str,
+        start: datetime,
+        end: datetime,
+        labels: dict[str, str] | None = None,
+    ) -> float:
+        return self._scalars.get(f"{service_name}:error_rate_agg", 0.0)
+
+    def query_request_count(
+        self,
+        service_name: str,
+        start: datetime,
+        end: datetime,
+        labels: dict[str, str] | None = None,
+    ) -> int:
+        return int(self._scalars.get(f"{service_name}:request_count", 0))
+
+    def query_latency_aggregated(
+        self,
+        service_name: str,
+        start: datetime,
+        end: datetime,
+        percentile: float = 0.99,
+        labels: dict[str, str] | None = None,
+    ) -> float:
+        key = f"{service_name}:latency_p{int(percentile * 100)}"
+        return self._scalars.get(key, 0.0)
+
+
+_metrics_provider: TimeSeriesMetricsProvider | None = None
+
+
+def get_metrics_provider() -> TimeSeriesMetricsProvider:
+    """TimeSeriesMetricsProvider 싱글톤 반환.
+
+    프로덕션에서는 PrometheusTimeSeriesProvider 등으로 교체.
+    기본값은 MockTimeSeriesProvider.
+    """
+    global _metrics_provider
+    if _metrics_provider is None:
+        _metrics_provider = MockTimeSeriesProvider()
+    return _metrics_provider
+
+
+def set_metrics_provider(provider: TimeSeriesMetricsProvider) -> None:
+    """TimeSeriesMetricsProvider 등록 (DI용)."""
+    global _metrics_provider
+    _metrics_provider = provider
+
+
+def reset_metrics_provider() -> None:
+    """싱글톤 리셋 (테스트용)."""
+    global _metrics_provider
+    _metrics_provider = None

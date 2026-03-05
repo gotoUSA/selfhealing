@@ -28,10 +28,11 @@ from selfhealing.services.config_shadow.metrics_provider import (
     TimeSeriesMetricsProvider,
 )
 from selfhealing.services.config_shadow.models import (
+    EvaluationContext,
     EvaluationReport,
     EvaluationStatus,
     ShadowEvaluation,
-)
+)  # fmt: skip
 from selfhealing.utils.time import utc_now
 
 logger = structlog.get_logger(__name__)
@@ -170,16 +171,17 @@ class ShadowEvaluatorService:
                 region=evaluation.region or None,
             )
             query_result = self._journal_repo.query(query_filter)
-            events = query_result.entries
 
-            result = evaluator.evaluate(
-                events,
-                evaluation.baseline_config,
-                evaluation.candidate_config,
+            context = EvaluationContext(
+                baseline_config=evaluation.baseline_config,
+                candidate_config=evaluation.candidate_config,
+                events=query_result.entries,
+                service_name=evaluation.service_name,
             )
+            result = evaluator.evaluate(context)
 
             evaluation.report = EvaluationReport(
-                events_analyzed=len(events),
+                events_analyzed=len(query_result.entries),
                 time_range_start=start_time,
                 time_range_end=end_time,
                 evaluator_results=[result],

@@ -81,10 +81,10 @@ class CanaryState(str, Enum):
 @dataclass
 class PassCriteria:
     """
-    자동 프로모션을 위한 합격 기준.
+    자동 프로모션을 위한 합격 기준 (임계값 DTO).
 
-    모든 조건을 만족해야 프로모션 허용.
-    Reference: SafetyGuard 패턴 (chaos/safety_guard/guard.py)
+    판정 로직은 LiveCanaryEvaluator가 담당한다.
+    이 클래스는 임계값 데이터만 보유한다.
     """
 
     # 에러율 관련
@@ -133,37 +133,6 @@ class PassCriteria:
         }
         overrides = _TIER_DEFAULTS.get(tier_id, {})
         return cls(**overrides)
-
-    def evaluate(self, metrics: "CanaryMetrics") -> tuple[bool, str | None]:
-        """
-        메트릭 평가.
-
-        Args:
-            metrics: 평가할 CanaryMetrics 객체
-
-        Returns:
-            (합격 여부, 실패 사유). 합격시 사유는 None.
-        """
-        # 최소 샘플 수 확인
-        if metrics.requests_total < self.min_requests_required:
-            return True, None  # 샘플 부족 - 통과 (보수적)
-
-        # 에러율 절대값 검사
-        if metrics.error_rate_after > self.error_rate_absolute_max:
-            return False, (f"Error rate {metrics.error_rate_after:.2%} exceeds " f"{self.error_rate_absolute_max:.2%}")
-
-        # 에러율 증가분 검사
-        error_increase = metrics.error_rate_after - metrics.error_rate_before
-        if error_increase > self.error_rate_increase_max:
-            return False, (f"Error rate increased by {error_increase:.2%} " f"(max: {self.error_rate_increase_max:.2%})")
-
-        # p99 레이턴시 검사
-        if metrics.latency_p99_before > 0:
-            latency_pct = (metrics.latency_p99_after - metrics.latency_p99_before) / metrics.latency_p99_before
-            if latency_pct > self.latency_p99_delta_pct:
-                return False, (f"p99 latency increased by {latency_pct:.1%} " f"(max: {self.latency_p99_delta_pct:.1%})")
-
-        return True, None
 
 
 @dataclass
@@ -329,7 +298,11 @@ class CanaryRollout:
         if self.state == CanaryState.CREATED:
             return 0.0
         # 현재 단계까지의 percentage 합계
-        return sum(stage.percentage for i, stage in enumerate(self.stages) if i <= self.current_stage_index)
+        return sum(
+            stage.percentage
+            for i, stage in enumerate(self.stages)
+            if i <= self.current_stage_index
+        )
 
 
 def apply_tier_floor(user_criteria: PassCriteria, tier_id: str) -> PassCriteria:
