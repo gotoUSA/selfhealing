@@ -21,6 +21,10 @@ class CircuitBreakerEvaluator:
     def name(self) -> str:
         return "circuit_breaker"
 
+    @property
+    def event_types(self) -> list[str]:
+        return ["circuit_breaker_opened", "circuit_breaker_closed"]
+
     def evaluate(
         self,
         events: list[JournalEntry],
@@ -87,17 +91,8 @@ class CircuitBreakerEvaluator:
         open_count = 0
         total_open_seconds = 0.0
         recovery_durations: list[float] = []
-        initialized = False
 
         for event in events:
-            # Cold Start 보정: 첫 CB 이벤트의 context 스냅샷으로 경량 보정
-            if not initialized and event.event_type.startswith("circuit_breaker_"):
-                snapshot_failures = event.context.get("failure_count", 0)
-                if snapshot_failures > 0:
-                    for _ in range(min(snapshot_failures, sliding_window_size)):
-                        failure_window.append(True)
-                initialized = True
-
             if state == "open":
                 if (
                     opened_at
@@ -107,7 +102,11 @@ class CircuitBreakerEvaluator:
                     state = "half_open"
 
             if event.event_type == "circuit_breaker_opened":
-                failure_window.append(True)
+                # Use context failure_count for accurate failure window population.
+                # Each opened event carries the actual failure count from the real CB.
+                event_failures = event.context.get("failure_count", 1)
+                for _ in range(min(event_failures, sliding_window_size)):
+                    failure_window.append(True)
 
                 if state == "closed":
                     total_calls = len(failure_window)

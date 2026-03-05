@@ -6,15 +6,20 @@ Config Shadow Evaluator — 설정 변경 사전 시뮬레이션 엔진.
 
 from __future__ import annotations
 
+import threading
+
 from selfhealing.services.config_shadow.service import ShadowEvaluatorService
 
 _service: ShadowEvaluatorService | None = None
+_lock = threading.Lock()
 
 
 def get_shadow_evaluator_service() -> ShadowEvaluatorService:
     global _service
     if _service is None:
-        _service = ShadowEvaluatorService()
+        with _lock:
+            if _service is None:
+                _service = ShadowEvaluatorService()
     return _service
 
 

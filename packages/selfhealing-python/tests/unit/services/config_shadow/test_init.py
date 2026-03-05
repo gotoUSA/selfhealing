@@ -8,6 +8,7 @@ Unit tests for Config Shadow __init__.py singleton lifecycle.
 테스트 대상: selfhealing.services.config_shadow.__init__
 """
 
+import threading
 from unittest.mock import patch
 
 import selfhealing.services.config_shadow as config_shadow_module
@@ -57,3 +58,24 @@ class TestGetShadowEvaluatorServiceBehavior:
         second = get_shadow_evaluator_service()
         assert first is not second
         assert mock_init.call_count == 2
+
+    @patch(
+        "selfhealing.services.config_shadow.service.ShadowEvaluatorService.__init__",
+        return_value=None,
+    )
+    def test_concurrent_init_creates_single_instance(self, mock_init):
+        """동시 초기화 시 Lock으로 인해 단일 인스턴스만 생성된다."""
+        results = []
+
+        def call_service():
+            results.append(get_shadow_evaluator_service())
+
+        threads = [threading.Thread(target=call_service) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(results) == 10
+        assert all(r is results[0] for r in results)
+        assert mock_init.call_count == 1

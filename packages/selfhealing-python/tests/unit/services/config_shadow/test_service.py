@@ -43,9 +43,17 @@ def _make_mock_journal(entries: list[JournalEntry] | None = None) -> MagicMock:
     return mock
 
 
-def _make_mock_evaluator(name: str, passed: bool = True) -> MagicMock:
+def _make_mock_evaluator(
+    name: str,
+    passed: bool = True,
+    event_types: list[str] | None = None,
+) -> MagicMock:
     mock = MagicMock(spec=ConfigEvaluator)
     mock.name = name
+    mock.event_types = event_types or [
+        "circuit_breaker_opened",
+        "circuit_breaker_closed",
+    ]
     mock.evaluate.return_value = EvaluatorResult(
         evaluator_name=name,
         passed=passed,
@@ -111,19 +119,29 @@ class TestSubmitEvaluationBehavior:
         assert result.service_name == "payment"
 
     @patch("selfhealing.adapters.celery.tasks.config_shadow.run_shadow_evaluation")
-    def test_triggers_celery_task_with_evaluation_id(self, mock_task):
-        """Celery 태스크를 evaluation_id와 함께 호출한다."""
+    def test_triggers_celery_task_with_full_params(self, mock_task):
+        """Celery 태스크를 전체 evaluation 파라미터와 함께 호출한다."""
         mock_task.delay = MagicMock()
         journal = _make_mock_journal()
         service = ShadowEvaluatorService(journal_repo=journal)
 
         result = service.submit_evaluation(
             config_type="circuit_breaker",
-            baseline_config={},
-            candidate_config={},
+            baseline_config={"failure_threshold": 5},
+            candidate_config={"failure_threshold": 3},
+            service_name="payment",
         )
 
-        mock_task.delay.assert_called_once_with(evaluation_id=result.evaluation_id)
+        mock_task.delay.assert_called_once_with(
+            evaluation_id=result.evaluation_id,
+            config_type="circuit_breaker",
+            baseline_config={"failure_threshold": 5},
+            candidate_config={"failure_threshold": 3},
+            service_name="payment",
+            time_window_hours=336,
+            region="",
+            rollout_id=None,
+        )
 
     @patch("selfhealing.adapters.celery.tasks.config_shadow.run_shadow_evaluation")
     def test_stores_evaluation_in_internal_dict(self, mock_task):
@@ -250,8 +268,8 @@ class TestExecuteEvaluationBehavior:
         assert result.report.time_range_start is not None
         assert result.report.time_range_end is not None
 
-    def test_journal_query_uses_service_name_and_region(self):
-        """journal query에 service_name과 region이 전달된다."""
+    def test_journal_query_uses_service_name_region_and_event_types(self):
+        """journal query에 service_name, region, event_types가 전달된다."""
         journal = _make_mock_journal()
         mock_eval = _make_mock_evaluator("circuit_breaker")
         service = ShadowEvaluatorService(journal_repo=journal, evaluators=[mock_eval])
@@ -270,11 +288,73 @@ class TestExecuteEvaluationBehavior:
 
         service.execute_evaluation(submitted.evaluation_id)
 
-        # Given
         call_args = journal.query.call_args[0][0]
         assert isinstance(call_args, JournalQueryFilter)
         assert call_args.service_name == "payment"
         assert call_args.region == "us-east-1"
+        assert call_args.event_types == [
+            "circuit_breaker_opened",
+            "circuit_breaker_closed",
+        ]
+
+
+class TestExecuteFromParamsBehavior:
+    """execute_from_params 동작 검증 (Celery 워커 경로)."""
+
+    def test_creates_evaluation_from_params_and_runs(self):
+        """파라미터로부터 evaluation을 생성하고 실행한다."""
+        journal = _make_mock_journal()
+        mock_eval = _make_mock_evaluator("circuit_breaker", passed=True)
+        service = ShadowEvaluatorService(journal_repo=journal, evaluators=[mock_eval])
+
+        result = service.execute_from_params(
+            evaluation_id="test-id-123",
+            config_type="circuit_breaker",
+            baseline_config={"failure_threshold": 5},
+            candidate_config={"failure_threshold": 3},
+            service_name="payment",
+        )
+
+        assert result.evaluation_id == "test-id-123"
+        assert result.status == EvaluationStatus.COMPLETED
+        assert result.report is not None
+        assert result.report.passed is True
+
+    def test_unknown_config_type_returns_failed(self):
+        """매칭 evaluator 없으면 FAILED."""
+        journal = _make_mock_journal()
+        mock_eval = _make_mock_evaluator("circuit_breaker")
+        service = ShadowEvaluatorService(journal_repo=journal, evaluators=[mock_eval])
+
+        result = service.execute_from_params(
+            evaluation_id="test-id",
+            config_type="unknown",
+            baseline_config={},
+            candidate_config={},
+        )
+
+        assert result.status == EvaluationStatus.FAILED
+        assert "No evaluator for config_type: unknown" in result.error_message
+
+
+class TestEvaluationIdFormat:
+    """evaluation_id 형식 검증."""
+
+    @patch("selfhealing.adapters.celery.tasks.config_shadow.run_shadow_evaluation")
+    def test_evaluation_id_is_12_hex_chars(self, mock_task):
+        """evaluation_id는 12자리 hex 문자열이다."""
+        mock_task.delay = MagicMock()
+        journal = _make_mock_journal()
+        service = ShadowEvaluatorService(journal_repo=journal)
+
+        result = service.submit_evaluation(
+            config_type="circuit_breaker",
+            baseline_config={},
+            candidate_config={},
+        )
+
+        assert len(result.evaluation_id) == 12
+        int(result.evaluation_id, 16)  # valid hex
 
 
 class TestGetEvaluationBehavior:

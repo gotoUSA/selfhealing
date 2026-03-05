@@ -21,6 +21,11 @@ class ConfigEvaluator(Protocol):
         """Evaluator 이름 (예: "circuit_breaker")."""
         ...
 
+    @property
+    def event_types(self) -> list[str]:
+        """이 Evaluator가 처리하는 이벤트 타입 리스트."""
+        ...
+
     def evaluate(
         self,
         events: list[JournalEntry],

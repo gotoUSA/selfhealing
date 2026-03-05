@@ -46,6 +46,11 @@ class TestErrorBudgetEvaluatorContract:
         evaluator = ErrorBudgetEvaluator()
         assert evaluator.name == "error_budget"
 
+    def test_event_types_contains_error_budget_critical(self):
+        """event_types: ['error_budget_critical']."""
+        evaluator = ErrorBudgetEvaluator()
+        assert evaluator.event_types == ["error_budget_critical"]
+
     def test_confidence_below_5_events_is_0_2(self):
         """budget 이벤트 5개 미만: 신뢰도 0.2."""
         evaluator = ErrorBudgetEvaluator()
@@ -169,6 +174,43 @@ class TestErrorBudgetSimulationBehavior:
         ]
         result = evaluator._simulate(events, {"critical_threshold_percent": 10})
         assert result.max_burn_rate_1h == pytest.approx(3.0)
+
+    def test_burn_rate_fast_critical_triggers_episode(self):
+        """burn_rate >= burn_rate_fast_critical 시 critical_episodes 증가."""
+        evaluator = ErrorBudgetEvaluator()
+        events = [
+            _make_entry(
+                "error_budget_critical",
+                context={
+                    "budget_remaining_percent": 50,
+                    "burn_rate_1h": 15.0,
+                    "drain_amount": 1.0,
+                },
+            ),
+        ]
+        # burn_rate_fast_critical=14.4 (default) → 15.0 >= 14.4 → critical
+        result = evaluator._simulate(events, {"critical_threshold_percent": 10})
+        assert result.critical_episodes == 1
+
+    def test_burn_rate_fast_critical_configurable(self):
+        """burn_rate_fast_critical 설정으로 임계값을 조정할 수 있다."""
+        evaluator = ErrorBudgetEvaluator()
+        events = [
+            _make_entry(
+                "error_budget_critical",
+                context={
+                    "budget_remaining_percent": 50,
+                    "burn_rate_1h": 15.0,
+                    "drain_amount": 1.0,
+                },
+            ),
+        ]
+        # burn_rate_fast_critical=20 → 15.0 < 20 → no critical
+        result = evaluator._simulate(
+            events,
+            {"critical_threshold_percent": 10, "burn_rate_fast_critical": 20},
+        )
+        assert result.critical_episodes == 0
 
     def test_missing_context_fields_default_to_zero(self):
         """context에 값이 없으면 기본값(0/100)으로 처리."""

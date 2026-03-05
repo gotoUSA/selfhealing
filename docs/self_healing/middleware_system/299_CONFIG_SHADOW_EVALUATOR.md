@@ -286,6 +286,11 @@ class ConfigEvaluator(Protocol):
         """Evaluator 이름 (예: "circuit_breaker")."""
         ...
 
+    @property
+    def event_types(self) -> list[str]:
+        """이 Evaluator가 처리하는 이벤트 타입 리스트."""
+        ...
+
     def evaluate(
         self,
         events: list[JournalEntry],
@@ -499,30 +504,19 @@ def _simulate(
     open_count = 0
     total_open_seconds = 0.0
     recovery_durations: list[float] = []
-    initialized = False
 
     for event in events:
-        # ── Cold Start 보정 ──────────────────────────────────
-        # 시뮬레이션 시작 시점(time_window 시작)의 실제 CB 상태는 알 수 없다.
-        # 14일 범위에서 초기 수 분의 오차가 전체에 미치는 영향은 0.001% 미만이므로
-        # Warm-up 기간(추가 데이터 fetch)은 ROI가 낮다.
-        # 대신 첫 번째 CB 이벤트의 context 스냅샷으로 경량 보정한다.
-        # Journal의 context에는 failure_count, failure_rate_percent 등
-        # 당시 CB 상태 스냅샷이 포함된다 (services/event_journal/subscriber.py:111-123).
-        if not initialized and event.event_type.startswith("circuit_breaker_"):
-            snapshot_failures = event.context.get("failure_count", 0)
-            if snapshot_failures > 0:
-                for _ in range(min(snapshot_failures, sliding_window_size)):
-                    failure_window.append(True)
-            initialized = True
         if state == "open":
             # recovery_timeout 경과 확인 — service.py:245-248 로직
             if opened_at and (event.timestamp - opened_at).total_seconds() >= recovery_timeout:
                 state = "half_open"
 
         if event.event_type == "circuit_breaker_opened":
-            # 실패 이벤트: failure_window에 추가
-            failure_window.append(True)
+            # context.failure_count로 실제 실패 수를 반영한다.
+            # Journal에 개별 실패 이벤트가 없으므로 CB 이벤트의 context snapshot을 활용.
+            event_failures = event.context.get("failure_count", 1)
+            for _ in range(min(event_failures, sliding_window_size)):
+                failure_window.append(True)
 
             if state == "closed":
                 total_calls = len(failure_window)
@@ -710,6 +704,7 @@ def _simulate(
 
     # 설정값 — settings/error_budget.py 및 settings/error_budget_gate.py 참조
     critical_threshold = config.get("critical_threshold_percent", 10)
+    burn_rate_fast_critical = config.get("burn_rate_fast_critical", 14.4)
     total_drain = 0.0
     critical_episodes = 0
     max_burn_rate_1h = 0.0
@@ -721,6 +716,8 @@ def _simulate(
 
             # 임계값 기반 판정 — error_budget_gate.py의 로직
             if budget_pct < critical_threshold:
+                critical_episodes += 1
+            elif burn_rate >= burn_rate_fast_critical:
                 critical_episodes += 1
 
             max_burn_rate_1h = max(max_burn_rate_1h, burn_rate)
@@ -817,7 +814,7 @@ class ShadowEvaluatorService:
             PENDING 상태의 ShadowEvaluation (evaluation_id 포함)
         """
         evaluation = ShadowEvaluation(
-            evaluation_id=str(uuid4())[:8],
+            evaluation_id=uuid4().hex[:12],
             rollout_id=rollout_id,
             status=EvaluationStatus.PENDING,
             created_at=utc_now(),
@@ -830,29 +827,71 @@ class ShadowEvaluatorService:
         )
         self._evaluations[evaluation.evaluation_id] = evaluation
 
-        # Celery task 디스패치 (6.3 참조)
-        run_shadow_evaluation.delay(evaluation_id=evaluation.evaluation_id)
+        # Celery task 디스패치 — 전체 파라미터를 전달하여 워커 독립 실행 보장
+        run_shadow_evaluation.delay(
+            evaluation_id=evaluation.evaluation_id,
+            config_type=config_type,
+            baseline_config=baseline_config,
+            candidate_config=candidate_config,
+            service_name=service_name,
+            time_window_hours=time_window_hours,
+            region=region,
+            rollout_id=rollout_id,
+        )
 
         return evaluation
 
     def execute_evaluation(self, evaluation_id: str) -> ShadowEvaluation:
-        """
-        실제 시뮬레이션 실행. Celery 워커에서 호출된다.
-
-        submit_evaluation()에서 생성된 evaluation의 상태를 RUNNING → COMPLETED/FAILED로 전이.
-        """
+        """인프로세스 시뮬레이션 실행. 로컬 dict에서 evaluation을 조회한다."""
         evaluation = self._evaluations.get(evaluation_id)
         if evaluation is None:
             raise ValueError(f"Unknown evaluation_id: {evaluation_id}")
+        return self._run_evaluation(evaluation)
 
+    def execute_from_params(
+        self,
+        evaluation_id: str,
+        config_type: str,
+        baseline_config: dict[str, Any],
+        candidate_config: dict[str, Any],
+        service_name: str = "",
+        time_window_hours: int = 336,
+        region: str = "",
+        rollout_id: str | None = None,
+    ) -> ShadowEvaluation:
+        """Celery 워커에서 호출. 파라미터로부터 evaluation을 생성하고 실행한다."""
+        evaluation = ShadowEvaluation(
+            evaluation_id=evaluation_id,
+            rollout_id=rollout_id,
+            status=EvaluationStatus.PENDING,
+            created_at=utc_now(),
+            config_type=config_type,
+            baseline_config=baseline_config,
+            candidate_config=candidate_config,
+            service_name=service_name,
+            time_window_hours=time_window_hours,
+            region=region,
+        )
+        return self._run_evaluation(evaluation)
+
+    def _run_evaluation(self, evaluation: ShadowEvaluation) -> ShadowEvaluation:
+        """실제 시뮬레이션 로직. submit/execute/execute_from_params에서 호출."""
         evaluation.status = EvaluationStatus.RUNNING
 
         try:
-            # 1. EventJournal에서 이벤트 조회
+            # 1. 해당 config_type의 Evaluator 찾기
+            evaluator = self._find_evaluator(evaluation.config_type)
+            if evaluator is None:
+                evaluation.status = EvaluationStatus.FAILED
+                evaluation.error_message = f"No evaluator for config_type: {evaluation.config_type}"
+                return evaluation
+
+            # 2. EventJournal에서 이벤트 조회 (evaluator의 event_types로 필터링)
             end_time = utc_now()
             start_time = end_time - timedelta(hours=evaluation.time_window_hours)
 
             query_filter = JournalQueryFilter(
+                event_types=evaluator.event_types,
                 service_name=evaluation.service_name or None,
                 start_time=start_time,
                 end_time=end_time,
@@ -860,13 +899,6 @@ class ShadowEvaluatorService:
             )
             query_result = self._journal_repo.query(query_filter)
             events = query_result.entries
-
-            # 2. 해당 config_type의 Evaluator 찾기
-            evaluator = self._find_evaluator(evaluation.config_type)
-            if evaluator is None:
-                evaluation.status = EvaluationStatus.FAILED
-                evaluation.error_message = f"No evaluator for config_type: {evaluation.config_type}"
-                return evaluation
 
             # 3. 시뮬레이션 실행
             result = evaluator.evaluate(
@@ -926,16 +958,45 @@ from celery import shared_task
     default_retry_delay=30,
     acks_late=True,
 )
-def run_shadow_evaluation(self, evaluation_id: str) -> dict:
-    """Shadow Evaluation을 비동기로 실행한다."""
+def run_shadow_evaluation(
+    self,
+    evaluation_id: str,
+    config_type: str = "",
+    baseline_config: dict | None = None,
+    candidate_config: dict | None = None,
+    service_name: str = "",
+    time_window_hours: int = 336,
+    region: str = "",
+    rollout_id: str | None = None,
+) -> dict:
+    """Shadow Evaluation을 비동기로 실행한다.
+
+    submit_evaluation()에서 전체 파라미터를 받아 워커 프로세스에서
+    독립적으로 evaluation을 생성·실행한다.
+    """
     try:
         service = get_shadow_evaluator_service()
-        evaluation = service.execute_evaluation(evaluation_id)
+        evaluation = service.execute_from_params(
+            evaluation_id=evaluation_id,
+            config_type=config_type,
+            baseline_config=baseline_config or {},
+            candidate_config=candidate_config or {},
+            service_name=service_name,
+            time_window_hours=time_window_hours,
+            region=region,
+            rollout_id=rollout_id,
+        )
         return {
             "evaluation_id": evaluation.evaluation_id,
             "status": evaluation.status.value,
             "passed": evaluation.report.passed if evaluation.report else None,
         }
+    except self.MaxRetriesExceededError:
+        logger.error(
+            "config_shadow.task_max_retries_exceeded",
+            evaluation_id=evaluation_id,
+        )
+        raise
     except Exception as exc:
         logger.error(
             "config_shadow.task_failed",
@@ -954,11 +1015,11 @@ evaluation = service.submit_evaluation(
     candidate_config={"failure_threshold": 10},
     service_name="payment_gateway",
 )
-# → {"evaluation_id": "a1b2c3d4", "status": "pending"}
+# → {"evaluation_id": "a1b2c3d4e5f6", "status": "pending"}
 
-# GET /api/shadow-evaluations/a1b2c3d4/ → HTTP 200
-evaluation = service.get_evaluation("a1b2c3d4")
-# → {"evaluation_id": "a1b2c3d4", "status": "completed", "report": {...}}
+# GET /api/shadow-evaluations/a1b2c3d4e5f6/ → HTTP 200
+evaluation = service.get_evaluation("a1b2c3d4e5f6")
+# → {"evaluation_id": "a1b2c3d4e5f6", "status": "completed", "report": {...}}
 ```
 
 ### 6.4 싱글톤 패턴
@@ -966,13 +1027,18 @@ evaluation = service.get_evaluation("a1b2c3d4")
 기존 서비스 싱글톤 패턴(`services/replay_service/service.py:764-770`)을 따른다:
 
 ```python
+import threading
+
 _service: ShadowEvaluatorService | None = None
+_lock = threading.Lock()
 
 
 def get_shadow_evaluator_service() -> ShadowEvaluatorService:
     global _service
     if _service is None:
-        _service = ShadowEvaluatorService()
+        with _lock:
+            if _service is None:
+                _service = ShadowEvaluatorService()
     return _service
 ```
 

@@ -81,7 +81,7 @@ class ShadowEvaluatorService:
             PENDING 상태의 ShadowEvaluation (evaluation_id 포함)
         """
         evaluation = ShadowEvaluation(
-            evaluation_id=str(uuid4())[:8],
+            evaluation_id=uuid4().hex[:12],
             rollout_id=rollout_id,
             status=EvaluationStatus.PENDING,
             created_at=utc_now(),
@@ -98,35 +98,57 @@ class ShadowEvaluatorService:
             run_shadow_evaluation,
         )
 
-        run_shadow_evaluation.delay(evaluation_id=evaluation.evaluation_id)
+        run_shadow_evaluation.delay(
+            evaluation_id=evaluation.evaluation_id,
+            config_type=config_type,
+            baseline_config=baseline_config,
+            candidate_config=candidate_config,
+            service_name=service_name,
+            time_window_hours=time_window_hours,
+            region=region,
+            rollout_id=rollout_id,
+        )
 
         return evaluation
 
     def execute_evaluation(self, evaluation_id: str) -> ShadowEvaluation:
-        """실제 시뮬레이션 실행. Celery 워커에서 호출된다.
-
-        submit_evaluation()에서 생성된 evaluation의 상태를
-        RUNNING -> COMPLETED/FAILED로 전이.
-        """
+        """인프로세스 시뮬레이션 실행. 로컬 dict에서 evaluation을 조회한다."""
         evaluation = self._evaluations.get(evaluation_id)
         if evaluation is None:
             raise ValueError(f"Unknown evaluation_id: {evaluation_id}")
+        return self._run_evaluation(evaluation)
 
+    def execute_from_params(
+        self,
+        evaluation_id: str,
+        config_type: str,
+        baseline_config: dict[str, Any],
+        candidate_config: dict[str, Any],
+        service_name: str = "",
+        time_window_hours: int = 336,
+        region: str = "",
+        rollout_id: str | None = None,
+    ) -> ShadowEvaluation:
+        """Celery 워커에서 호출. 파라미터로부터 evaluation을 생성하고 실행한다."""
+        evaluation = ShadowEvaluation(
+            evaluation_id=evaluation_id,
+            rollout_id=rollout_id,
+            status=EvaluationStatus.PENDING,
+            created_at=utc_now(),
+            config_type=config_type,
+            baseline_config=baseline_config,
+            candidate_config=candidate_config,
+            service_name=service_name,
+            time_window_hours=time_window_hours,
+            region=region,
+        )
+        return self._run_evaluation(evaluation)
+
+    def _run_evaluation(self, evaluation: ShadowEvaluation) -> ShadowEvaluation:
+        """실제 시뮬레이션 로직. submit/execute/execute_from_params에서 호출."""
         evaluation.status = EvaluationStatus.RUNNING
 
         try:
-            end_time = utc_now()
-            start_time = end_time - timedelta(hours=evaluation.time_window_hours)
-
-            query_filter = JournalQueryFilter(
-                service_name=evaluation.service_name or None,
-                start_time=start_time,
-                end_time=end_time,
-                region=evaluation.region or None,
-            )
-            query_result = self._journal_repo.query(query_filter)
-            events = query_result.entries
-
             evaluator = self._find_evaluator(evaluation.config_type)
             if evaluator is None:
                 evaluation.status = EvaluationStatus.FAILED
@@ -134,6 +156,19 @@ class ShadowEvaluatorService:
                     f"No evaluator for config_type: {evaluation.config_type}"
                 )
                 return evaluation
+
+            end_time = utc_now()
+            start_time = end_time - timedelta(hours=evaluation.time_window_hours)
+
+            query_filter = JournalQueryFilter(
+                event_types=evaluator.event_types,
+                service_name=evaluation.service_name or None,
+                start_time=start_time,
+                end_time=end_time,
+                region=evaluation.region or None,
+            )
+            query_result = self._journal_repo.query(query_filter)
+            events = query_result.entries
 
             result = evaluator.evaluate(
                 events,

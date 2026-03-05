@@ -67,19 +67,33 @@ class TestRunShadowEvaluationBehavior:
         )
 
         mock_service = MagicMock(spec=ShadowEvaluatorService)
-        mock_service.execute_evaluation.return_value = mock_evaluation
+        mock_service.execute_from_params.return_value = mock_evaluation
         mock_get_service.return_value = mock_service
 
-        # bind=True 태스크이므로 run()을 호출해 self를 자동 주입
         with patch.object(run_shadow_evaluation, "retry", side_effect=RuntimeError):
-            result = run_shadow_evaluation.run(evaluation_id="abc123")
+            result = run_shadow_evaluation.run(
+                evaluation_id="abc123",
+                config_type="circuit_breaker",
+                baseline_config={"failure_threshold": 5},
+                candidate_config={"failure_threshold": 3},
+                service_name="payment",
+            )
 
         assert result == {
             "evaluation_id": "abc123",
             "status": "completed",
             "passed": True,
         }
-        mock_service.execute_evaluation.assert_called_once_with("abc123")
+        mock_service.execute_from_params.assert_called_once_with(
+            evaluation_id="abc123",
+            config_type="circuit_breaker",
+            baseline_config={"failure_threshold": 5},
+            candidate_config={"failure_threshold": 3},
+            service_name="payment",
+            time_window_hours=336,
+            region="",
+            rollout_id=None,
+        )
 
     @patch("selfhealing.services.config_shadow.get_shadow_evaluator_service")
     def test_exception_triggers_retry(self, mock_get_service):
@@ -107,11 +121,16 @@ class TestRunShadowEvaluationBehavior:
         )
 
         mock_service = MagicMock(spec=ShadowEvaluatorService)
-        mock_service.execute_evaluation.return_value = mock_evaluation
+        mock_service.execute_from_params.return_value = mock_evaluation
         mock_get_service.return_value = mock_service
 
         with patch.object(run_shadow_evaluation, "retry", side_effect=RuntimeError):
-            result = run_shadow_evaluation.run(evaluation_id="abc123")
+            result = run_shadow_evaluation.run(
+                evaluation_id="abc123",
+                config_type="circuit_breaker",
+                baseline_config={},
+                candidate_config={},
+            )
 
         assert result["passed"] is None
         assert result["status"] == "failed"

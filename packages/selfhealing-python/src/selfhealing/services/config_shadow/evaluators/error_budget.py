@@ -23,6 +23,10 @@ class ErrorBudgetEvaluator:
     def name(self) -> str:
         return "error_budget"
 
+    @property
+    def event_types(self) -> list[str]:
+        return ["error_budget_critical"]
+
     def evaluate(
         self,
         events: list[JournalEntry],
@@ -66,6 +70,7 @@ class ErrorBudgetEvaluator:
     ) -> BudgetSimulationResult:
         """Error Budget 이벤트를 기반으로 예산 소모를 시뮬레이션한다."""
         critical_threshold = config.get("critical_threshold_percent", 10)
+        burn_rate_fast_critical = config.get("burn_rate_fast_critical", 14.4)
         total_drain = 0.0
         critical_episodes = 0
         max_burn_rate_1h = 0.0
@@ -76,6 +81,8 @@ class ErrorBudgetEvaluator:
                 burn_rate = event.context.get("burn_rate_1h", 0)
 
                 if budget_pct < critical_threshold:
+                    critical_episodes += 1
+                elif burn_rate >= burn_rate_fast_critical:
                     critical_episodes += 1
 
                 max_burn_rate_1h = max(max_burn_rate_1h, burn_rate)

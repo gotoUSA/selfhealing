@@ -66,6 +66,14 @@ class TestCircuitBreakerEvaluatorContract:
         evaluator = CircuitBreakerEvaluator()
         assert evaluator.name == "circuit_breaker"
 
+    def test_event_types_contains_opened_and_closed(self):
+        """event_types: circuit_breaker_opened, circuit_breaker_closed."""
+        evaluator = CircuitBreakerEvaluator()
+        assert evaluator.event_types == [
+            "circuit_breaker_opened",
+            "circuit_breaker_closed",
+        ]
+
     def test_confidence_below_5_events_is_0_2(self):
         """CB 이벤트 5개 미만: 신뢰도 0.2."""
         evaluator = CircuitBreakerEvaluator()
@@ -236,8 +244,8 @@ class TestCircuitBreakerSimulationBehavior:
         result = evaluator._simulate(events, config)
         assert result.open_count == 1
 
-    def test_cold_start_correction_loads_snapshot(self):
-        """cold start 보정: 첫 CB 이벤트의 context.failure_count로 윈도우를 초기화."""
+    def test_context_failure_count_populates_window(self):
+        """context.failure_count로 failure window를 채운다."""
         evaluator = CircuitBreakerEvaluator()
         t = datetime(2026, 1, 1, tzinfo=timezone.utc)
         config = {
@@ -247,14 +255,28 @@ class TestCircuitBreakerSimulationBehavior:
             "sliding_window_size": 100,
         }
 
-        # snapshot에 failure_count=4, 이벤트 1개 추가 → 5개 도달 → open
+        # failure_count=5 → 5개 도달 → open
         events = [
             _make_entry(
                 "circuit_breaker_opened",
                 t,
-                context={"failure_count": 4},
+                context={"failure_count": 5},
             ),
         ]
+        result = evaluator._simulate(events, config)
+        assert result.open_count == 1
+
+    def test_context_failure_count_default_is_1(self):
+        """context에 failure_count가 없으면 1로 처리."""
+        evaluator = CircuitBreakerEvaluator()
+        t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        config = {
+            "failure_threshold": 1,
+            "minimum_calls": 1,
+            "recovery_timeout": 60,
+        }
+
+        events = [_make_entry("circuit_breaker_opened", t)]
         result = evaluator._simulate(events, config)
         assert result.open_count == 1
 
