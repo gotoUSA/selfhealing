@@ -48,6 +48,8 @@ CANARY_ACTIONS = [
     "force_promote",  # 강제 프로모션 (메트릭 무시)
     "governance_blocked",  # 거버넌스 체크로 차단됨
     "governance_bypass",  # Break Glass로 거버넌스 우회함 (PIR 필수)
+    "shadow_evaluation_bypass",  # Shadow Evaluation 실패 bypass
+    "shadow_evaluation_low_confidence",  # Shadow Evaluation 저신뢰도 경고
 ]
 
 
@@ -96,7 +98,9 @@ def log_canary_action(
         "new_version_hash": new_hash,
         # 상태 정보
         "state": rollout.state.value,
-        "current_stage": (rollout.current_stage.name if rollout.current_stage else None),
+        "current_stage": (
+            rollout.current_stage.name if rollout.current_stage else None
+        ),
         "current_stage_index": rollout.current_stage_index,
         "affected_clusters": rollout.affected_clusters,
         # 메타데이터
@@ -205,7 +209,8 @@ def log_canary_metrics_check(
     logger.log(
         log_level,
         f"[CanaryAudit] Metrics check: rollout={rollout_id}, "  # noqa: G003
-        f"stage={stage_name}, passed={passed}" + (f", reason={failure_reason}" if failure_reason else ""),
+        f"stage={stage_name}, passed={passed}"
+        + (f", reason={failure_reason}" if failure_reason else ""),
     )
 
     try:

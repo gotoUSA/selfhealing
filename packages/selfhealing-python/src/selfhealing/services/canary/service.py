@@ -40,9 +40,10 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -65,6 +66,21 @@ if TYPE_CHECKING:
     from selfhealing.services.config_history import ConfigVersion
 
 logger = structlog.get_logger()
+
+
+def _config_hash(config: dict) -> str:
+    """설정 딕셔너리의 결정론적 해시를 생성한다."""
+
+    def _sanitize(obj):
+        if isinstance(obj, dict):
+            return {k: _sanitize(v) for k, v in sorted(obj.items())}
+        if isinstance(obj, (list, tuple)):
+            return [_sanitize(v) for v in obj]
+        if isinstance(obj, (int, float, bool, str, type(None))):
+            return obj
+        return str(obj)
+
+    return hashlib.sha256(json.dumps(_sanitize(config)).encode()).hexdigest()[:16]
 
 
 class CanaryRolloutService:
@@ -205,7 +221,8 @@ class CanaryRolloutService:
         if self.config_lock and self.config_lock.is_locked(config_type):
             current_owner = self.config_lock.get_lock_owner(config_type)
             raise ConfigLockError(
-                f"Config '{config_type}' is already in rollout. " f"Current rollout: {current_owner}",
+                f"Config '{config_type}' is already in rollout. "
+                f"Current rollout: {current_owner}",
                 config_type=config_type,
                 current_owner=current_owner,
             )
@@ -273,6 +290,8 @@ class CanaryRolloutService:
         self,
         rollout_id: str,
         force_during_chaos: bool = False,
+        bypass_shadow: bool = False,
+        bypass_shadow_reason: str = "",
     ) -> bool:
         """
         Canary 롤아웃 시작 (첫 번째 단계 적용).
@@ -280,6 +299,8 @@ class CanaryRolloutService:
         Args:
             rollout_id: 롤아웃 ID
             force_during_chaos: 카오스 실험 중에도 강제 진행
+            bypass_shadow: Shadow Evaluation 실패 시 bypass 여부
+            bypass_shadow_reason: bypass 시 사유 (최소 10자)
 
         Returns:
             성공 여부
@@ -311,6 +332,15 @@ class CanaryRolloutService:
                 "canary_rollout.start_blocked_chaos_guard",
                 chaos_result=chaos_result.warning_message,
             )
+            return False
+
+        # Shadow Evaluation Gate
+        shadow_check = self._check_shadow_evaluation(
+            rollout=rollout,
+            bypass_shadow=bypass_shadow,
+            bypass_shadow_reason=bypass_shadow_reason,
+        )
+        if shadow_check is not None and not shadow_check:
             return False
 
         # 첫 번째 단계 클러스터에 적용 (안전한 클러스터만)
@@ -935,6 +965,156 @@ class CanaryRolloutService:
         return self._collect_stage_metrics(rollout)
 
     # =========================================================================
+    # Private Methods - Shadow Evaluation Gate
+    # =========================================================================
+
+    def _check_shadow_evaluation(
+        self,
+        rollout: CanaryRollout,
+        bypass_shadow: bool,
+        bypass_shadow_reason: str,
+    ) -> bool | None:
+        """Shadow Evaluation 결과를 확인한다.
+
+        Returns:
+            True: 통과 (시작 가능)
+            False: 차단 (시작 불가)
+            None: Shadow Evaluation 미실행 또는 비활성화 (체크 생략)
+        """
+        try:
+            from selfhealing.settings.config_shadow import get_config_shadow_settings
+
+            settings = get_config_shadow_settings()
+            if not settings.gate_enabled:
+                return None
+        except ImportError:
+            return None
+
+        try:
+            from selfhealing.services.config_shadow import get_shadow_evaluator_service
+
+            service = get_shadow_evaluator_service()
+            evaluation = service.get_latest_for_rollout(rollout.id)
+        except ImportError:
+            logger.debug("canary_rollout.shadow_evaluator_not_available")
+            return None
+        except Exception as e:
+            logger.warning("canary_rollout.shadow_check_error", error=e)
+            return None
+
+        if evaluation is None:
+            if settings.require_evaluation:
+                logger.warning(
+                    "canary_rollout.shadow_evaluation_required_not_found",
+                    rollout_id=rollout.id,
+                )
+                return False
+            return None
+
+        from selfhealing.services.config_shadow.models import EvaluationStatus
+
+        if evaluation.status in (EvaluationStatus.PENDING, EvaluationStatus.RUNNING):
+            logger.warning(
+                "canary_rollout.shadow_evaluation_in_progress",
+                rollout_id=rollout.id,
+                evaluation_id=evaluation.evaluation_id,
+                status=evaluation.status.value,
+            )
+            return False
+
+        if evaluation.completed_at:
+            age = datetime.now(timezone.utc) - evaluation.completed_at
+            max_age = timedelta(hours=settings.evaluation_ttl_hours)
+            if age > max_age:
+                logger.warning(
+                    "canary_rollout.shadow_evaluation_stale",
+                    evaluation_id=evaluation.evaluation_id,
+                    age_hours=age.total_seconds() / 3600,
+                    max_age_hours=settings.evaluation_ttl_hours,
+                )
+                return False
+
+        if evaluation.candidate_config and hasattr(rollout, "candidate_config"):
+            eval_hash = _config_hash(evaluation.candidate_config)
+            current_hash = _config_hash(rollout.candidate_config)
+            if eval_hash != current_hash:
+                logger.warning(
+                    "canary_rollout.shadow_config_mismatch",
+                    evaluation_id=evaluation.evaluation_id,
+                    evaluation_hash=eval_hash,
+                    current_hash=current_hash,
+                )
+                return False
+
+        if evaluation.report and evaluation.report.passed:
+            if evaluation.report.confidence_score < settings.min_confidence:
+                logger.warning(
+                    "canary_rollout.shadow_evaluation_low_confidence",
+                    evaluation_id=evaluation.evaluation_id,
+                    confidence=evaluation.report.confidence_score,
+                    min_confidence=settings.min_confidence,
+                )
+                log_canary_action(
+                    action="shadow_evaluation_low_confidence",
+                    rollout=rollout,
+                    safety_check_result={
+                        "evaluation_id": evaluation.evaluation_id,
+                        "confidence_score": evaluation.report.confidence_score,
+                        "min_confidence": settings.min_confidence,
+                    },
+                )
+                if settings.block_on_low_confidence:
+                    return False
+            logger.info(
+                "canary_rollout.shadow_evaluation_passed",
+                evaluation_id=evaluation.evaluation_id,
+                confidence=evaluation.report.confidence_score,
+            )
+            return True
+
+        if bypass_shadow:
+            if (
+                not bypass_shadow_reason
+                or len(bypass_shadow_reason) < settings.bypass_min_reason_length
+            ):
+                logger.error(
+                    "canary_rollout.shadow_bypass_reason_required",
+                    min_chars=settings.bypass_min_reason_length,
+                )
+                return False
+
+            log_canary_action(
+                action="shadow_evaluation_bypass",
+                rollout=rollout,
+                safety_check_result={
+                    "evaluation_id": evaluation.evaluation_id,
+                    "bypass_reason": bypass_shadow_reason,
+                    "evaluation_summary": evaluation.report.summary
+                    if evaluation.report
+                    else "",
+                    "confidence_score": evaluation.report.confidence_score
+                    if evaluation.report
+                    else 0,
+                },
+            )
+
+            logger.warning(
+                "canary_rollout.shadow_evaluation_bypassed",
+                rollout_id=rollout.id,
+                evaluation_id=evaluation.evaluation_id,
+                bypass_reason=bypass_shadow_reason,
+            )
+            return True
+
+        logger.warning(
+            "canary_rollout.shadow_evaluation_failed_blocking",
+            rollout_id=rollout.id,
+            evaluation_id=evaluation.evaluation_id,
+            summary=evaluation.report.summary if evaluation.report else "",
+        )
+        return False
+
+    # =========================================================================
     # Private Methods - Redis Operations
     # =========================================================================
 
@@ -1123,7 +1303,9 @@ class CanaryRolloutService:
             "created_by": rollout.created_by,
             "created_at": rollout.created_at.isoformat(),
             "reason": rollout.reason,
-            "completed_at": (rollout.completed_at.isoformat() if rollout.completed_at else None),
+            "completed_at": (
+                rollout.completed_at.isoformat() if rollout.completed_at else None
+            ),
             "rollback_reason": rollout.rollback_reason,
             # pause 관련 필드
             "pause_reason": rollout.pause_reason,
@@ -1155,12 +1337,20 @@ class CanaryRolloutService:
             created_by=data["created_by"],
             created_at=datetime.fromisoformat(data["created_at"]),
             reason=data["reason"],
-            completed_at=(datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None),
+            completed_at=(
+                datetime.fromisoformat(data["completed_at"])
+                if data.get("completed_at")
+                else None
+            ),
             rollback_reason=data.get("rollback_reason"),
             # 하위 호환성: pause 관련 필드 (없으면 None)
             pause_reason=data.get("pause_reason"),
             pause_triggered_by=data.get("pause_triggered_by"),
-            paused_at=(datetime.fromisoformat(data["paused_at"]) if data.get("paused_at") else None),
+            paused_at=(
+                datetime.fromisoformat(data["paused_at"])
+                if data.get("paused_at")
+                else None
+            ),
         )
 
 

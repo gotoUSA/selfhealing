@@ -180,6 +180,9 @@ class BlockReason(str, Enum):
     MANUALLY_BLOCKED = "manually_blocked"
     """관리자에 의해 수동 차단됨."""
 
+    SHADOW_EVALUATION_FAILED = "shadow_evaluation_failed"
+    """Shadow Evaluation 시뮬레이션 결과 부적격."""
+
 
 @dataclass
 class GovernanceCheckResult:
@@ -225,6 +228,23 @@ class GovernanceCheckResult:
             block_reason=BlockReason.EMERGENCY_MODE,
             block_message=message or f"Emergency mode {level_name} is active",
             emergency_level=level_name,
+        )
+
+    @classmethod
+    def blocked_by_shadow_evaluation(
+        cls,
+        evaluation_id: str,
+        summary: str,
+        confidence_score: float,
+    ) -> GovernanceCheckResult:
+        """Shadow Evaluation 실패로 차단된 결과."""
+        return cls(
+            allowed=False,
+            block_reason=BlockReason.SHADOW_EVALUATION_FAILED,
+            block_message=(
+                f"Shadow evaluation failed (id={evaluation_id}, "
+                f"confidence={confidence_score:.2f}): {summary}"
+            ),
         )
 
     @classmethod
@@ -562,7 +582,9 @@ def check_all_governance(
 
     # 3. Error Budget
     if check_error_budget:
-        is_blocked, budget_pct, threshold_pct = is_error_budget_blocking(tier_id=tier_id, region=region)
+        is_blocked, budget_pct, threshold_pct = is_error_budget_blocking(
+            tier_id=tier_id, region=region
+        )
         if is_blocked:
             logger.warning(
                 "governance_checks.blocked_error_budget",
@@ -765,7 +787,9 @@ def require_governance(
                 logger.warning(
                     "governance_checks.blocked",
                     func=func.__name__,
-                    block_reason=result.block_reason.value if result.block_reason else "unknown",
+                    block_reason=result.block_reason.value
+                    if result.block_reason
+                    else "unknown",
                 )
                 return result
             return func(*args, **kwargs)

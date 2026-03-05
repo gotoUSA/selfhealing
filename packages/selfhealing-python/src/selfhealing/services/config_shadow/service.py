@@ -54,6 +54,7 @@ class ShadowEvaluatorService:
         self._evaluators = evaluators or self._default_evaluators()
         self._metrics_provider = metrics_provider
         self._evaluations: dict[str, ShadowEvaluation] = {}
+        self._rollout_evaluations: dict[str, ShadowEvaluation] = {}
 
     def _default_evaluators(self) -> list[ConfigEvaluator]:
         return [
@@ -224,6 +225,37 @@ class ShadowEvaluatorService:
             )
             results.append(result)
         return results
+
+    def evaluate_for_rollout(
+        self,
+        rollout_id: str,
+        config_type: str,
+        baseline_config: dict[str, Any],
+        candidate_config: dict[str, Any],
+        service_name: str = "",
+        time_window_hours: int = 336,
+    ) -> ShadowEvaluation:
+        """Canary rollout에 연결된 Shadow Evaluation을 실행한다.
+
+        evaluate()와 동일하되 rollout_id를 연결하고 결과를 캐시한다.
+        이후 start_rollout()의 _check_shadow_evaluation()에서 조회된다.
+        """
+        evaluation = self.submit_evaluation(
+            config_type=config_type,
+            baseline_config=baseline_config,
+            candidate_config=candidate_config,
+            service_name=service_name,
+            time_window_hours=time_window_hours,
+            rollout_id=rollout_id,
+        )
+
+        self._rollout_evaluations[rollout_id] = evaluation
+
+        return evaluation
+
+    def get_latest_for_rollout(self, rollout_id: str) -> ShadowEvaluation | None:
+        """rollout에 연결된 최신 Shadow Evaluation을 반환한다."""
+        return self._rollout_evaluations.get(rollout_id)
 
     def _find_evaluator(self, config_type: str) -> ConfigEvaluator | None:
         for evaluator in self._evaluators:
