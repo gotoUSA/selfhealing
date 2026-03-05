@@ -7,15 +7,14 @@ InMemoryMeshOverrideStore 단위 테스트.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-
 import pytest
 
-from selfhealing.services.circuit_mesh import ThresholdOverride
 from selfhealing.services.circuit_mesh.store import (
     InMemoryMeshOverrideStore,
     MeshOverrideStore,
 )
+
+from .conftest import make_override as _make_override
 
 # =============================================================================
 # Fixtures
@@ -26,24 +25,6 @@ from selfhealing.services.circuit_mesh.store import (
 def store():
     """InMemoryMeshOverrideStore 인스턴스."""
     return InMemoryMeshOverrideStore()
-
-
-def _make_override(
-    service_name: str = "svc-upstream",
-    expires_in_seconds: int = 600,
-    renewal_count: int = 0,
-) -> ThresholdOverride:
-    """테스트용 ThresholdOverride 생성 헬퍼."""
-    return ThresholdOverride(
-        service_name=service_name,
-        original_failure_threshold=5,
-        adjusted_failure_threshold=10,
-        original_recovery_timeout=60,
-        adjusted_recovery_timeout=180,
-        reason="downstream:svc-down OPEN (depth=1)",
-        expires_at=datetime.now(timezone.utc) + timedelta(seconds=expires_in_seconds),
-        renewal_count=renewal_count,
-    )
 
 
 # =============================================================================

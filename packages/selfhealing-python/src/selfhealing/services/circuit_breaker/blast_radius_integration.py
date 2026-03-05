@@ -269,6 +269,16 @@ class ServiceDependencyGraph:
                     service=service_id,
                     dependent=dependent,
                 )
+                try:
+                    from selfhealing.metrics.prometheus import get_metrics
+
+                    metrics = get_metrics()
+                    if metrics._initialized and hasattr(
+                        metrics, "mesh_circular_dependency_detected_total"
+                    ):
+                        metrics.mesh_circular_dependency_detected_total.inc()
+                except Exception:
+                    pass
                 continue
             results.append((dependent, _current_depth + 1))
             results.extend(

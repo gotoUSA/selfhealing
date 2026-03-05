@@ -277,7 +277,7 @@ class MeshCoordinator:
 
     def __init__(
         self,
-        dependency_graph: DependencyGraph,
+        dependency_graph: ServiceDependencyGraph,
         cb_service: CircuitBreakerService,
         override_store: MeshOverrideStore,
         settings: CircuitMeshSettings,
@@ -382,7 +382,7 @@ def _check_downstream_health(self, service_name: str) -> bool:
                 (self._settings.recovery_timeout_multiplier - 1.0) * damping
             )
 
-            current_config = self._cb.get_config(upstream)
+            current_config = self._cb.get_effective_config(upstream)
             override = ThresholdOverride(
                 service_name=upstream,
                 original_failure_threshold=current_config.failure_threshold,
@@ -627,7 +627,7 @@ def register_downstream_checker(
     self._downstream_checkers.append(checker)
 
 def apply_threshold_override(
-    self, service_name: str, override: ThresholdOverride
+    self, service_name: str, override: Any
 ) -> None:
     """
     메쉬 코디네이터가 설정한 임계치 오버라이드 적용.
@@ -711,8 +711,8 @@ class TwoTierMeshOverrideStore:
 
     def __init__(
         self,
-        cache: CacheProvider,
-        event_bus: EventBus,
+        cache: CacheProviderInterface,
+        event_bus: SelfHealingEventBus,
     ):
         self._l1: dict[str, ThresholdOverride] = {}   # 로컬 인메모리
         self._cache = cache                             # L2 Redis
@@ -824,8 +824,13 @@ class CircuitMeshSettings(BaseSettings):
     # 최대 동시 오버라이드 수 (안전장치)
     max_concurrent_overrides: int = 20
 
-    class Config:
-        env_prefix = "SELFHEALING_CIRCUIT_MESH_"
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_CIRCUIT_MESH_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+    )
 ```
 
 ---
