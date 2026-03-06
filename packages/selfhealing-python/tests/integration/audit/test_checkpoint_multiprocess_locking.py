@@ -57,7 +57,7 @@ class TestFileCheckpointStorageMultiprocessLocking:
                 try:
                     storage.save("{namespace}", UnifiedCheckpointData(wal_sequence=seq))
                 except Exception:
-                    pass  # BlockingIOError on lock contention is expected
+                    pass  # Timeout on prolonged lock contention is acceptable
 
             print("OK")
         """)

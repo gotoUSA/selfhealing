@@ -32,7 +32,7 @@ import sys
 import tempfile
 import threading
 import time
-import warnings  # noqa: F401
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO

@@ -54,20 +54,54 @@ logger = structlog.get_logger()
 # Cross-Platform File Locking
 # =============================================================================
 
-_CHECKPOINT_SAVE_FAILURES: Any = None
-_CHECKPOINT_LOAD_FAILURES: Any = None
+_UNINITIALIZED: Any = object()
+_CHECKPOINT_SAVE_FAILURES: Any = _UNINITIALIZED
+_CHECKPOINT_LOAD_FAILURES: Any = _UNINITIALIZED
 
 
-def _lock_file(f: BinaryIO) -> None:
-    """크로스 플랫폼 파일 락 획득."""
+_FILE_LOCK_TIMEOUT_SECONDS = 5.0
+_FILE_LOCK_RETRY_INTERVAL = 0.05
+
+
+def _lock_file(f: BinaryIO, *, blocking: bool = True) -> None:
+    """크로스 플랫폼 파일 락 획득.
+
+    Args:
+        f: 락 대상 파일 핸들
+        blocking: True이면 timeout까지 재시도, False이면 즉시 실패
+    """
     if sys.platform == "win32":
         import msvcrt
 
-        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        if not blocking:
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+            return
+
+        deadline = time.monotonic() + _FILE_LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+                return
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(_FILE_LOCK_RETRY_INTERVAL)
     else:
         import fcntl
 
-        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if not blocking:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+
+        deadline = time.monotonic() + _FILE_LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except OSError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(_FILE_LOCK_RETRY_INTERVAL)
 
 
 def _unlock_file(f: BinaryIO) -> None:
@@ -85,7 +119,7 @@ def _unlock_file(f: BinaryIO) -> None:
 def _get_save_failures_counter():
     """체크포인트 save 실패 Counter 싱글톤."""
     global _CHECKPOINT_SAVE_FAILURES
-    if _CHECKPOINT_SAVE_FAILURES is None:
+    if _CHECKPOINT_SAVE_FAILURES is _UNINITIALIZED:
         try:
             from prometheus_client import Counter
 
@@ -95,14 +129,14 @@ def _get_save_failures_counter():
                 ["storage_type"],
             )
         except ImportError:
-            pass
+            _CHECKPOINT_SAVE_FAILURES = None
     return _CHECKPOINT_SAVE_FAILURES
 
 
 def _get_load_failures_counter():
     """체크포인트 load 실패 Counter 싱글톤."""
     global _CHECKPOINT_LOAD_FAILURES
-    if _CHECKPOINT_LOAD_FAILURES is None:
+    if _CHECKPOINT_LOAD_FAILURES is _UNINITIALIZED:
         try:
             from prometheus_client import Counter
 
@@ -112,7 +146,7 @@ def _get_load_failures_counter():
                 ["storage_type"],
             )
         except ImportError:
-            pass
+            _CHECKPOINT_LOAD_FAILURES = None
     return _CHECKPOINT_LOAD_FAILURES
 
 
@@ -400,12 +434,6 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
                     data=data.wal_sequence,
                 )
 
-            except (BlockingIOError, OSError) as e:
-                logger.warning(
-                    "file_checkpoint.lock_contention_skipping_save",
-                    error=e,
-                )
-
             except Exception as e:
                 try:
                     tmp_path.unlink(missing_ok=True)
@@ -431,7 +459,7 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
         try:
             with open(lock_file_path, "wb") as lock_f:
                 try:
-                    _lock_file(lock_f)
+                    _lock_file(lock_f, blocking=False)
 
                     # double-check after lock
                     if not legacy_path.exists() or target_path.exists():
