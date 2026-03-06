@@ -101,11 +101,17 @@ class SpikeClassifier:
         sensitivity_multiplier: float = 1.0,
     ):
         if error_rate_threshold <= 0:
-            raise ValueError(f"error_rate_threshold는 양수여야 합니다: {error_rate_threshold}")
+            raise ValueError(
+                f"error_rate_threshold는 양수여야 합니다: {error_rate_threshold}"
+            )
         if acceleration_threshold <= 0:
-            raise ValueError(f"acceleration_threshold는 양수여야 합니다: {acceleration_threshold}")
+            raise ValueError(
+                f"acceleration_threshold는 양수여야 합니다: {acceleration_threshold}"
+            )
         if sensitivity_multiplier <= 0:
-            raise ValueError(f"sensitivity_multiplier는 양수여야 합니다: {sensitivity_multiplier}")
+            raise ValueError(
+                f"sensitivity_multiplier는 양수여야 합니다: {sensitivity_multiplier}"
+            )
 
         self._error_rate_threshold = error_rate_threshold
         self._acceleration_threshold = acceleration_threshold
@@ -116,19 +122,22 @@ class SpikeClassifier:
         rps_history: list[float],
         error_rate_history: list[float],
         latency_history: list[float],
+        context: dict[str, Any] | None = None,
     ) -> SpikeType:
         """
         멀티-시그널 기반 스파이크 유형 분류.
 
         분류 로직:
-        1. error_rate 급등 (최근 delta > threshold / sensitivity) → ANOMALOUS_SPIKE
-        2. RPS 가속도 > threshold / sensitivity & error_rate 안정 → HEALTHY_SURGE
-        3. 느린 기울기의 지속 상승 → GRADUAL_DEGRADATION
+        1. context.scheduled_event=True이고 error_rate 안정 → HEALTHY_SURGE
+        2. error_rate 급등 (최근 delta > threshold / sensitivity) → ANOMALOUS_SPIKE
+        3. RPS 가속도 > threshold / sensitivity & error_rate 안정 → HEALTHY_SURGE
+        4. 느린 기울기의 지속 상승 → GRADUAL_DEGRADATION
 
         Args:
             rps_history: 최근 RPS(초당 요청) 히스토리.
             error_rate_history: 최근 에러율 히스토리.
             latency_history: 최근 레이턴시 히스토리.
+            context: 추가 메타데이터. scheduled_event=True이면 예정 이벤트 기간.
 
         Returns:
             SpikeType 분류 결과.
@@ -138,7 +147,14 @@ class SpikeClassifier:
 
         # 에러율 변화량 (최근 5개 구간의 delta)
         error_delta = error_rate_history[-1] - error_rate_history[-5]
-        adjusted_error_threshold = self._error_rate_threshold / self._sensitivity_multiplier
+        adjusted_error_threshold = (
+            self._error_rate_threshold / self._sensitivity_multiplier
+        )
+
+        # 예정 이벤트 기간: error_rate가 안정적이면 HEALTHY_SURGE로 분류
+        if context and context.get("scheduled_event"):
+            if error_delta <= adjusted_error_threshold:
+                return SpikeType.HEALTHY_SURGE
 
         if error_delta > adjusted_error_threshold:
             return SpikeType.ANOMALOUS_SPIKE
@@ -149,7 +165,9 @@ class SpikeClassifier:
             older_slope = rps_history[-5] - rps_history[-10]
             acceleration = recent_slope - older_slope if older_slope != 0 else 0
 
-            adjusted_accel_threshold = self._acceleration_threshold / self._sensitivity_multiplier
+            adjusted_accel_threshold = (
+                self._acceleration_threshold / self._sensitivity_multiplier
+            )
 
             if abs(acceleration) > adjusted_accel_threshold:
                 if error_delta <= adjusted_error_threshold:
@@ -175,7 +193,7 @@ class SpikeClassifier:
                 - rps_history: 쉼표 구분 RPS 히스토리 문자열
                 - error_rate_history: 쉼표 구분 에러율 히스토리 문자열
                 - latency_history: 쉼표 구분 레이턴시 히스토리 문자열
-            context: 추가 메타데이터 (무시)
+            context: 추가 메타데이터. scheduled_event=True 등 이벤트 컨텍스트 전달.
 
         Returns:
             (spike_type_label, confidence) 튜플.
@@ -184,7 +202,7 @@ class SpikeClassifier:
         error_rate = self._parse_history(features.get("error_rate_history", ""))
         latency = self._parse_history(features.get("latency_history", ""))
 
-        spike_type = self.classify(rps, error_rate, latency)
+        spike_type = self.classify(rps, error_rate, latency, context=context)
 
         # 규칙 기반 분류의 신뢰도 — 입력 데이터 충분성에 비례
         min_len = min(len(rps), len(error_rate), len(latency))
@@ -367,7 +385,9 @@ class ProactiveActionTrigger:
             return None
 
         # LearningService 블랙리스트 확인
-        if not self.should_take_action("predictive_forecaster", parameter, str(current_value)):
+        if not self.should_take_action(
+            "predictive_forecaster", parameter, str(current_value)
+        ):
             return None
 
         # 조정값 계산 (현재값에서 intensity 비율만큼 조정)

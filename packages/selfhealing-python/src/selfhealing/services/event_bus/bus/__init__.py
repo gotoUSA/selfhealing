@@ -800,6 +800,43 @@ from ._throttle_handlers import (  # noqa: E402
     _on_kill_switch_activated_throttle,
 )
 
+# =============================================================================
+# Capacity Reservation Stub Handlers (ML integration point)
+# =============================================================================
+
+
+def _on_scheduled_event_started(event: SelfHealingEvent):
+    """
+    예정 이벤트 시작 시 ML 컨텍스트 주입 핸들러.
+
+    ML(SpikeClassifier, PredictiveForecaster) 연동 시
+    이 핸들러에서 context.scheduled_event=True를 전파한다.
+    현재는 로그만 기록하는 stub이며, ML 구현 후 실제 로직을 추가한다.
+    """
+    event_id = event.data.get("event_id", "unknown")
+    name = event.data.get("name", "")
+    logger.info(
+        "event_handler.scheduled_event_started",
+        event_id=event_id,
+        name=name,
+        expected_rps_multiplier=event.data.get("expected_rps_multiplier"),
+        tags=event.data.get("tags", []),
+    )
+
+
+def _on_scheduled_event_ended(event: SelfHealingEvent):
+    """
+    예정 이벤트 종료 시 ML 컨텍스트 해제 핸들러.
+
+    ML 연동 시 이 핸들러에서 context.scheduled_event 플래그를 해제한다.
+    현재는 로그만 기록하는 stub이며, ML 구현 후 실제 로직을 추가한다.
+    """
+    event_id = event.data.get("event_id", "unknown")
+    logger.info(
+        "event_handler.scheduled_event_ended",
+        event_id=event_id,
+    )
+
 
 def register_default_handlers():
     """
@@ -934,6 +971,22 @@ def register_default_handlers():
         EventType.KILL_SWITCH_ACTIVATED,
         _on_kill_switch_activated_throttle,
         priority=EventPriority.CRITICAL,
+    )
+
+    # =========================================================================
+    # Capacity Reservation Event Handlers (ML integration stub)
+    # =========================================================================
+
+    bus.subscribe(
+        EventType.SCHEDULED_EVENT_STARTED,
+        _on_scheduled_event_started,
+        priority=EventPriority.NORMAL,
+    )
+
+    bus.subscribe(
+        EventType.SCHEDULED_EVENT_ENDED,
+        _on_scheduled_event_ended,
+        priority=EventPriority.NORMAL,
     )
 
     bus._handlers_registered = True

@@ -590,9 +590,10 @@ class PreWarmer:
         try:
             from selfhealing.services.event_bus.bus import EventType
 
-            self._event_bus.publish(
+            self._event_bus.emit(
                 EventType.SCHEDULED_EVENT_STARTED,
                 event.to_event_context(),
+                source="capacity_reservation",
             )
         except Exception as exc:
             errors.append(f"EventBus publish STARTED failed: {exc}")
@@ -607,9 +608,10 @@ class PreWarmer:
         try:
             from selfhealing.services.event_bus.bus import EventType
 
-            self._event_bus.publish(
+            self._event_bus.emit(
                 EventType.SCHEDULED_EVENT_ENDED,
                 {"event_id": event.event_id},
+                source="capacity_reservation",
             )
         except Exception as exc:
             errors.append(f"EventBus publish ENDED failed: {exc}")
