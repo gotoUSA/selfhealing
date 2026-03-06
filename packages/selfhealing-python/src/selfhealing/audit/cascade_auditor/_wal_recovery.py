@@ -2,12 +2,11 @@
 Cascade Auditor - WAL/Load Shedding 모듈.
 
 로컬 WAL 저장, Load Shedding, 복구 관련 책임을 담당합니다.
-중복되던 WAL 파일 쓰기 패턴을 _append_to_wal()로 통합합니다.
+JSONLWriter를 통해 스레드 안전한 JSONL WAL 쓰기를 수행합니다.
 """
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -16,6 +15,7 @@ import structlog
 
 from selfhealing.audit.cascade_auditor._helpers import get_index_ids
 from selfhealing.audit.cascade_event import CascadeEvent, ExternalTraceContext
+from selfhealing.audit.wal._jsonl import JSONLWriter
 
 logger = structlog.get_logger()
 
@@ -24,21 +24,23 @@ LOCAL_CASCADE_WAL_DIR = "/var/log/selfhealing/cascade_wal"
 LOCAL_CASCADE_WAL_PATH = f"{LOCAL_CASCADE_WAL_DIR}/cascade_audit_wal.jsonl"
 LOCAL_CASCADE_FALLBACK_PATH = LOCAL_CASCADE_WAL_PATH
 
+# 모듈 수준 JSONLWriter (fsync=False — Redis가 1차 복구 수단, 로컬 WAL은 best-effort fallback)
+_wal_writer = JSONLWriter(
+    file_path=Path(LOCAL_CASCADE_WAL_PATH),
+    fsync=False,
+)
+
 
 def _append_to_wal(data: dict) -> None:
     """
     WAL 파일에 데이터를 JSONL 형식으로 추가.
 
-    기존 _save_to_local_wal, _record_dropped_to_wal에서 반복되던
-    Path.mkdir + open("a") + json.dumps 패턴을 통합합니다.
+    JSONLWriter를 통해 스레드 안전하게 기록합니다.
 
     Args:
         data: 저장할 딕셔너리 데이터
     """
-    wal_path = Path(LOCAL_CASCADE_WAL_PATH)
-    wal_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(wal_path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(data) + "\n")
+    _wal_writer.append(data)
 
 
 class WALRecoveryMixin:
@@ -212,14 +214,11 @@ class WALRecoveryMixin:
         entries = []
 
         # WAL 파일에서 해당 네임스페이스 이벤트 읽기
-        with open(wal_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    entry = json.loads(line.strip())
-                    if entry.get("namespace") == namespace and entry.get("type") != "dropped":
-                        entries.append(entry)
-                except json.JSONDecodeError:
-                    continue
+        from selfhealing.audit.wal._jsonl import JSONLReader
+
+        for entry in JSONLReader.iter_entries(wal_path):
+            if entry.get("namespace") == namespace and entry.get("type") != "dropped":
+                entries.append(entry)
 
         if dry_run:
             logger.info(
@@ -274,27 +273,9 @@ class WALRecoveryMixin:
 
     def _remove_namespace_from_wal(self, namespace: str) -> None:
         """WAL 파일에서 특정 네임스페이스 엔트리 제거."""
-        wal_path = Path(LOCAL_CASCADE_WAL_PATH)
+        from selfhealing.audit.wal._cleanup import cleanup_by_namespace
 
-        if not wal_path.exists():
-            return
-
-        remaining = []
-
-        with open(wal_path, encoding="utf-8") as f:
-            for line in f:
-                try:
-                    entry = json.loads(line.strip())
-                    if entry.get("namespace") != namespace:
-                        remaining.append(line)
-                except json.JSONDecodeError:
-                    remaining.append(line)
-
-        if remaining:
-            with open(wal_path, "w", encoding="utf-8") as f:
-                f.writelines(remaining)
-        else:
-            wal_path.unlink(missing_ok=True)
+        cleanup_by_namespace(Path(LOCAL_CASCADE_WAL_PATH), namespace)
 
     # 하위 호환성
     _remove_namespace_from_fallback = _remove_namespace_from_wal

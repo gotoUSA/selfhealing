@@ -269,6 +269,11 @@ wal_last_sequence = _get_or_create_gauge(
     "Last WAL sequence number written",
 )
 
+wal_corrupted_lines_total = _get_or_create_counter(
+    f"{METRIC_PREFIX}_wal_corrupted_lines_total",
+    "Total JSONL WAL corrupted lines skipped during read",
+)
+
 
 # =============================================================================
 # ShadowLogger Metrics - L2 동기화 실패 추적
@@ -510,6 +515,12 @@ def update_wal_last_sequence(seq: int) -> None:
         wal_last_sequence.set(seq)
 
 
+def record_wal_corrupted_line() -> None:
+    """Record a JSONL WAL corrupted line skipped during read."""
+    if wal_corrupted_lines_total is not None:
+        wal_corrupted_lines_total.inc()
+
+
 # =============================================================================
 # ShadowLogger Helper Functions
 # =============================================================================
@@ -646,6 +657,8 @@ __all__ = [
     "record_wal_rotation",
     "update_wal_sync_lag",
     "update_wal_last_sequence",
+    "wal_corrupted_lines_total",
+    "record_wal_corrupted_line",
     # ShadowLogger
     "shadow_log_sync_failures_total",
     "shadow_log_unsynced_count",

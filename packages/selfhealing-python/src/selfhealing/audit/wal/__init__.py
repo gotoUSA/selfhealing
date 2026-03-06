@@ -78,7 +78,7 @@ class WriteAheadLog(
     VERSION = 1
     HEADER_SIZE = 8
     RECORD_HEADER_SIZE = 12
-    RECORD_MAGIC = b"\xAB\xCD"
+    RECORD_MAGIC = b"\xab\xcd"
     RECORD_MAGIC_HEADER_SIZE = 14
 
     def __init__(
@@ -202,7 +202,9 @@ class WriteAheadLog(
                 self._cleanup_old_files()
 
             finally:
-                self._state = old_state if old_state != WALState.ROTATING else WALState.ACTIVE
+                self._state = (
+                    old_state if old_state != WALState.ROTATING else WALState.ACTIVE
+                )
 
     def _cleanup_old_files(self) -> None:
         """오래된 WAL 파일 정리."""
@@ -229,7 +231,9 @@ class WriteAheadLog(
                 except Exception:
                     pass
 
-            total_files = len(list(self._wal_dir.glob(f"{self._config.file_prefix}_*.wal")))
+            total_files = len(
+                list(self._wal_dir.glob(f"{self._config.file_prefix}_*.wal"))
+            )
 
             return WALStats(
                 state=self._state,
@@ -347,6 +351,14 @@ def create_wal(
     return WriteAheadLog(config=config)
 
 
+from selfhealing.audit.wal._cleanup import (
+    atomic_rewrite,
+    cleanup_by_age,
+    cleanup_by_namespace,
+    cleanup_by_sequence,
+)
+from selfhealing.audit.wal._jsonl import CommitMarker, JSONLReader, JSONLWriter
+
 __all__ = [
     "WriteAheadLog",
     "WALEntry",
@@ -356,4 +368,11 @@ __all__ = [
     "WALCorruptionError",
     "WALState",
     "create_wal",
+    "JSONLWriter",
+    "JSONLReader",
+    "CommitMarker",
+    "atomic_rewrite",
+    "cleanup_by_sequence",
+    "cleanup_by_age",
+    "cleanup_by_namespace",
 ]

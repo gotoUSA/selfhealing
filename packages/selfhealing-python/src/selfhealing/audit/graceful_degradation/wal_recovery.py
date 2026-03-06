@@ -8,11 +8,10 @@ Contains:
 
 from __future__ import annotations
 
-import json
 import os
 import threading
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -68,9 +67,9 @@ class HashChainWALRecovery:
         self._key_prefix = key_prefix
         self._lock = threading.RLock()
 
-        # WAL file management
-        self._current_wal_file: Path | None = None
-        self._wal_handle = None
+        # WAL file management (writer created lazily per date)
+        self._writer = None
+        self._writer_date: str | None = None
         self._wal_sequence = 0
 
         # Recovery state
@@ -80,6 +79,19 @@ class HashChainWALRecovery:
 
         # Ensure WAL directory exists
         self._wal_dir.mkdir(parents=True, exist_ok=True)
+
+    def _get_or_create_writer(self):
+        """Get or create a JSONLWriter for today's date."""
+        from selfhealing.audit.wal._jsonl import JSONLWriter
+
+        date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+        if self._writer is None or self._writer_date != date_str:
+            if self._writer is not None:
+                self._writer.close()
+            wal_file = self._wal_dir / f"hash_chain_wal_{date_str}.jsonl"
+            self._writer = JSONLWriter(file_path=wal_file, fsync=True)
+            self._writer_date = date_str
+        return self._writer
 
     def write_wal_entry(
         self,
@@ -112,35 +124,20 @@ class HashChainWALRecovery:
                 "committed": False,
             }
 
-            self._write_to_wal_file(wal_entry)
+            self._get_or_create_writer().append(wal_entry)
             return wal_seq
 
     def mark_wal_committed(self, wal_sequence: int) -> None:
         """Mark WAL entry as committed (successfully written to Redis)."""
         with self._lock:
-            # Write commit marker
-            commit_entry = {
-                "wal_sequence": wal_sequence,
-                "operation": "COMMIT",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-            self._write_to_wal_file(commit_entry)
-
-    def _write_to_wal_file(self, entry: dict[str, Any]) -> None:
-        """Write entry to WAL file with fsync."""
-        self._ensure_wal_file_open()
-
-        line = json.dumps(entry, default=str, ensure_ascii=False)
-        self._wal_handle.write(line + "\n")
-        self._wal_handle.flush()
-        os.fsync(self._wal_handle.fileno())
-
-    def _ensure_wal_file_open(self) -> None:
-        """Ensure WAL file is open."""
-        if self._wal_handle is None:
-            date_str = datetime.now(timezone.utc).strftime("%Y%m%d")
-            self._current_wal_file = self._wal_dir / f"hash_chain_wal_{date_str}.jsonl"
-            self._wal_handle = open(self._current_wal_file, "a", encoding="utf-8")
+            self._get_or_create_writer().append(
+                {
+                    "_marker": "COMMIT",
+                    "wal_sequence": wal_sequence,
+                    "operation": "COMMIT",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
     def recover_on_startup(self) -> dict[str, Any]:
         """
@@ -162,11 +159,10 @@ class HashChainWALRecovery:
             "entries_recovered": 0,
             "entries_failed": 0,
             "entries_already_committed": 0,
-            "idempotency_skipped": 0,  # 1차 방어 (IdempotencyKey) 중복 스킵
+            "idempotency_skipped": 0,
         }
 
         try:
-            # Find all WAL files
             wal_files = sorted(self._wal_dir.glob("hash_chain_wal_*.jsonl"))
             result["wal_files_scanned"] = len(wal_files)
 
@@ -176,7 +172,9 @@ class HashChainWALRecovery:
                 result["entries_recovered"] += file_result["recovered"]
                 result["entries_failed"] += file_result["failed"]
                 result["entries_already_committed"] += file_result["already_committed"]
-                result["idempotency_skipped"] += file_result.get("idempotency_skipped", 0)
+                result["idempotency_skipped"] += file_result.get(
+                    "idempotency_skipped", 0
+                )
 
             self._recovery_done = True
             self._recovered_count = result["entries_recovered"]
@@ -199,45 +197,35 @@ class HashChainWALRecovery:
 
     def _recover_from_wal_file(self, wal_file: Path) -> dict[str, int]:
         """Recover entries from a single WAL file."""
+        from selfhealing.audit.wal._jsonl import JSONLReader
+
         result = {
             "found": 0,
             "recovered": 0,
             "failed": 0,
             "already_committed": 0,
-            "idempotency_skipped": 0,  # 1차 방어 (Redis) 중복 스킵
+            "idempotency_skipped": 0,
         }
 
-        # Read all entries
         entries: dict[int, dict[str, Any]] = {}
-        committed_sequences: set = set()
+        committed_sequences: set[int] = set()
 
         try:
-            with open(wal_file, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
+            for entry in JSONLReader.iter_entries(wal_file):
+                wal_seq = entry.get("wal_sequence")
+                operation = entry.get("operation")
 
-                    try:
-                        entry = json.loads(line)
-                        wal_seq = entry.get("wal_sequence")
-                        operation = entry.get("operation")
+                if operation == "COMMIT" or entry.get("_marker") == "COMMIT":
+                    committed_sequences.add(wal_seq)
+                elif operation in ("add_integrity", "write"):
+                    entries[wal_seq] = entry
+                    result["found"] += 1
 
-                        if operation == "COMMIT":
-                            committed_sequences.add(wal_seq)
-                        elif operation in ("add_integrity", "write"):
-                            entries[wal_seq] = entry
-                            result["found"] += 1
-                    except json.JSONDecodeError:
-                        continue
-
-            # Find uncommitted entries
             for wal_seq, entry in entries.items():
                 if wal_seq in committed_sequences:
                     result["already_committed"] += 1
                     continue
 
-                # 1차 방어: IdempotencyKey를 사용한 중복 체크 (Redis)
                 if self._is_duplicate_via_idempotency(wal_seq, "redis_replay"):
                     result["idempotency_skipped"] += 1
                     logger.debug(
@@ -246,10 +234,8 @@ class HashChainWALRecovery:
                     )
                     continue
 
-                # Attempt to replay
                 if self._replay_entry(entry):
                     result["recovered"] += 1
-                    # 복구 성공 시 멱등성 키 등록
                     self._mark_as_processed_idempotency(wal_seq, "redis_replay")
                 else:
                     result["failed"] += 1
@@ -392,41 +378,27 @@ class HashChainWALRecovery:
 
     def cleanup_old_wal_files(self, max_age_days: int = 7) -> int:
         """Remove WAL files older than specified days."""
-        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
-        removed = 0
+        from selfhealing.audit.wal._cleanup import cleanup_by_age
 
-        for wal_file in self._wal_dir.glob("hash_chain_wal_*.jsonl"):
-            try:
-                # Extract date from filename
-                date_str = wal_file.stem.split("_")[-1]
-                file_date = datetime.strptime(date_str, "%Y%m%d").replace(tzinfo=timezone.utc)
-
-                if file_date < cutoff:
-                    wal_file.unlink()
-                    removed += 1
-                    logger.debug(
-                        "hash_chain_wal.removed_old_wal_file",
-                        wal_file=wal_file.name,
-                    )
-            except Exception:
-                continue
-
-        return removed
+        return cleanup_by_age(self._wal_dir, "hash_chain_wal_*.jsonl", max_age_days)
 
     def close(self) -> None:
         """Close WAL file handle."""
-        if self._wal_handle:
-            self._wal_handle.close()
-            self._wal_handle = None
+        if self._writer is not None:
+            self._writer.close()
+            self._writer = None
 
     def get_stats(self) -> dict[str, Any]:
         """Get recovery statistics."""
+        current_file = None
+        if self._writer is not None:
+            current_file = str(self._writer.path)
         return {
             "recovery_done": self._recovery_done,
             "recovered_count": self._recovered_count,
             "failed_count": self._failed_count,
             "wal_sequence": self._wal_sequence,
-            "current_wal_file": (str(self._current_wal_file) if self._current_wal_file else None),
+            "current_wal_file": current_file,
         }
 
 

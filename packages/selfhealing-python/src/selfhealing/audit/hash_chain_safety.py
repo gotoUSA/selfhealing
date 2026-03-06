@@ -162,7 +162,9 @@ class MonotonicTimestamp:
                 if current <= self._last_timestamp:
                     # Clock went backward - adjust to maintain monotonicity
                     self._monotonic_offset += 0.001  # Add 1ms
-                    current = self._last_timestamp + timedelta(seconds=self._monotonic_offset)
+                    current = self._last_timestamp + timedelta(
+                        seconds=self._monotonic_offset
+                    )
                     logger.warning(
                         "monotonic_timestamp.clock_skew_detected_adjusted",
                         monotonic_offset=self._monotonic_offset,
@@ -178,7 +180,9 @@ class MonotonicTimestamp:
         """Get statistics about clock adjustments."""
         return {
             "total_offset_seconds": self._monotonic_offset,
-            "last_timestamp": (self._last_timestamp.isoformat() if self._last_timestamp else None),
+            "last_timestamp": (
+                self._last_timestamp.isoformat() if self._last_timestamp else None
+            ),
         }
 
 
@@ -248,15 +252,17 @@ class HashChainWAL:
             max_file_size_mb: Max size before rotation
             sync_on_write: Whether to fsync after each write
         """
+        from selfhealing.audit.wal._jsonl import JSONLWriter
+
         self._wal_dir = Path(wal_dir)
         self._wal_dir.mkdir(parents=True, exist_ok=True)
-        self._current_file: Path | None = None
-        self._file_handle = None
-        self._lock = threading.RLock()
         self._sequence = 0
-        self._max_size = max_file_size_mb * 1024 * 1024
-        self._sync_on_write = sync_on_write
         self._timestamp_gen = MonotonicTimestamp()
+        self._writer = JSONLWriter(
+            file_path=self._get_wal_file(),
+            fsync=sync_on_write,
+            max_size_bytes=max_file_size_mb * 1024 * 1024,
+        )
 
         # Load state
         self._load_sequence()
@@ -267,32 +273,18 @@ class HashChainWAL:
 
     def _load_sequence(self) -> None:
         """Load last sequence from WAL file."""
-        wal_file = self._get_wal_file()
-        if not wal_file.exists():
-            return
+        from selfhealing.audit.wal._jsonl import JSONLReader
 
         try:
-            with open(wal_file, encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        entry = json.loads(line.strip())
-                        seq = entry.get("seq", 0)
-                        if seq > self._sequence:
-                            self._sequence = seq
-                    except json.JSONDecodeError:
-                        continue
+            for entry in JSONLReader.iter_entries(self._get_wal_file()):
+                seq = entry.get("seq", 0)
+                if seq > self._sequence:
+                    self._sequence = seq
         except Exception as e:
             logger.warning(
                 "hash_chain_wal.failed_load_sequence",
                 error=e,
             )
-
-    def _ensure_file_open(self) -> None:
-        """Ensure WAL file is open for writing."""
-        if self._file_handle is None:
-            wal_file = self._get_wal_file()
-            self._file_handle = open(wal_file, "a", encoding="utf-8")
-            self._current_file = wal_file
 
     def write_pending(
         self,
@@ -311,7 +303,7 @@ class HashChainWAL:
         Returns:
             WAL sequence number
         """
-        with self._lock:
+        with self._writer.lock:
             self._sequence += 1
 
             wal_entry = HashChainSafetyWALEntry(
@@ -323,14 +315,7 @@ class HashChainWAL:
                 status="PENDING",
             )
 
-            self._ensure_file_open()
-            line = json.dumps(wal_entry.to_dict(), default=str) + "\n"
-            self._file_handle.write(line)
-
-            if self._sync_on_write:
-                self._file_handle.flush()
-                os.fsync(self._file_handle.fileno())
-
+            self._writer.append(wal_entry.to_dict())
             return self._sequence
 
     def mark_committed(self, sequence: int) -> bool:
@@ -340,44 +325,28 @@ class HashChainWAL:
         Instead of modifying the entry, appends a COMMITTED marker.
         Recovery will scan for uncommitted entries.
         """
-        with self._lock:
-            self._ensure_file_open()
-
-            commit_marker = {
+        self._writer.append(
+            {
+                "_marker": "COMMIT",
                 "seq": sequence,
+                "wal_sequence": sequence,
                 "status": "COMMITTED",
-                "committed_at": self._timestamp_gen.now(),
+                "timestamp": self._timestamp_gen.now(),
             }
-
-            line = json.dumps(commit_marker) + "\n"
-            self._file_handle.write(line)
-
-            if self._sync_on_write:
-                self._file_handle.flush()
-                os.fsync(self._file_handle.fileno())
-
-            return True
+        )
+        return True
 
     def mark_aborted(self, sequence: int, reason: str) -> bool:
         """Mark a WAL entry as aborted."""
-        with self._lock:
-            self._ensure_file_open()
-
-            abort_marker = {
+        self._writer.append(
+            {
                 "seq": sequence,
                 "status": "ABORTED",
                 "reason": reason,
                 "aborted_at": self._timestamp_gen.now(),
             }
-
-            line = json.dumps(abort_marker) + "\n"
-            self._file_handle.write(line)
-
-            if self._sync_on_write:
-                self._file_handle.flush()
-                os.fsync(self._file_handle.fileno())
-
-            return True
+        )
+        return True
 
     def get_uncommitted_entries(self) -> list[HashChainSafetyWALEntry]:
         """
@@ -388,37 +357,28 @@ class HashChainWAL:
         Returns:
             List of uncommitted entries, oldest first
         """
+        from selfhealing.audit.wal._jsonl import JSONLReader
+
         wal_file = self._get_wal_file()
         if not wal_file.exists():
             return []
 
-        # Track status by sequence
         entries: dict[int, HashChainSafetyWALEntry] = {}
-        committed_seqs: set = set()
-        aborted_seqs: set = set()
+        committed_seqs: set[int] = set()
+        aborted_seqs: set[int] = set()
 
         try:
-            with open(wal_file, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
+            for data in JSONLReader.iter_entries(wal_file):
+                seq = data.get("seq", 0)
+                status = data.get("status", "")
 
-                    try:
-                        data = json.loads(line)
-                        seq = data.get("seq", 0)
-                        status = data.get("status", "")
+                if status == "COMMITTED" or data.get("_marker") == "COMMIT":
+                    committed_seqs.add(seq)
+                elif status == "ABORTED":
+                    aborted_seqs.add(seq)
+                elif "op" in data:
+                    entries[seq] = HashChainSafetyWALEntry.from_dict(data)
 
-                        if status == "COMMITTED":
-                            committed_seqs.add(seq)
-                        elif status == "ABORTED":
-                            aborted_seqs.add(seq)
-                        elif "op" in data:  # Full entry
-                            entries[seq] = HashChainSafetyWALEntry.from_dict(data)
-                    except json.JSONDecodeError:
-                        continue
-
-            # Filter uncommitted
             uncommitted = []
             for seq, entry in sorted(entries.items()):
                 if seq not in committed_seqs and seq not in aborted_seqs:
@@ -443,51 +403,21 @@ class HashChainWAL:
         Returns:
             Number of entries removed
         """
-        with self._lock:
-            wal_file = self._get_wal_file()
-            if not wal_file.exists():
-                return 0
+        from selfhealing.audit.wal._cleanup import cleanup_by_sequence
 
-            # Read and filter
-            kept_lines = []
-            removed_count = 0
-
-            with open(wal_file, encoding="utf-8") as f:
-                for line in f:
-                    try:
-                        data = json.loads(line.strip())
-                        seq = data.get("seq", 0)
-
-                        if seq > keep_sequences_after:
-                            kept_lines.append(line)
-                        else:
-                            removed_count += 1
-                    except json.JSONDecodeError:
-                        # Keep malformed lines for safety
-                        kept_lines.append(line)
-
-            # Close current file
-            if self._file_handle:
-                self._file_handle.close()
-                self._file_handle = None
-
-            # Rewrite file
-            with open(wal_file, "w", encoding="utf-8") as f:
-                f.writelines(kept_lines)
-
-            logger.info(
-                "hash_chain_wal.compacted_removed_entries",
-                removed_count=removed_count,
-            )
-            return removed_count
+        with self._writer.lock:
+            self._writer.close()
+            removed = cleanup_by_sequence(self._get_wal_file(), keep_sequences_after)
+            if removed > 0:
+                logger.info(
+                    "hash_chain_wal.compacted_removed_entries",
+                    removed_count=removed,
+                )
+            return removed
 
     def close(self) -> None:
         """Close WAL file."""
-        with self._lock:
-            if self._file_handle:
-                self._file_handle.flush()
-                self._file_handle.close()
-                self._file_handle = None
+        self._writer.close()
 
 
 # =============================================================================
@@ -539,8 +469,16 @@ class AtomicMergeSwap:
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._timeout = timeout_seconds if timeout_seconds is not None else _get_merge_swap_timeout()
-        self._blocking_timeout = blocking_timeout if blocking_timeout is not None else _get_merge_swap_blocking_timeout()
+        self._timeout = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else _get_merge_swap_timeout()
+        )
+        self._blocking_timeout = (
+            blocking_timeout
+            if blocking_timeout is not None
+            else _get_merge_swap_blocking_timeout()
+        )
         self._lock_token: str | None = None
         self.acquired = False
 
@@ -668,8 +606,14 @@ class ShardedDateLock:
         self._redis = redis_client
         self._date = date
         self._key_prefix = key_prefix
-        self._timeout = timeout_seconds if timeout_seconds is not None else _get_date_lock_timeout()
-        self._blocking_timeout = blocking_timeout if blocking_timeout is not None else _get_date_lock_blocking_timeout()
+        self._timeout = (
+            timeout_seconds if timeout_seconds is not None else _get_date_lock_timeout()
+        )
+        self._blocking_timeout = (
+            blocking_timeout
+            if blocking_timeout is not None
+            else _get_date_lock_blocking_timeout()
+        )
         self._lock_token: str | None = None
         self.acquired = False
 
@@ -804,7 +748,11 @@ class IntegrityAuditTrail:
         self._redis = redis_client
         self._log_dir = Path(log_dir) if log_dir else None
         self._key_prefix = key_prefix
-        self._max_redis_entries = max_redis_entries if max_redis_entries is not None else _get_integrity_trail_max_entries()
+        self._max_redis_entries = (
+            max_redis_entries
+            if max_redis_entries is not None
+            else _get_integrity_trail_max_entries()
+        )
         self._lock = threading.Lock()
 
         if self._log_dir:
@@ -843,7 +791,9 @@ class IntegrityAuditTrail:
             "details": details or {},
             "severity": severity,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "hostname": os.environ.get("HOSTNAME", os.environ.get("POD_NAME", "unknown")),
+            "hostname": os.environ.get(
+                "HOSTNAME", os.environ.get("POD_NAME", "unknown")
+            ),
         }
 
         with self._lock:
