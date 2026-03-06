@@ -93,7 +93,88 @@ class PoolRecoveryHandler(ABC):
 
 **활용**: 이미 `expand_pool()` 추상 메서드가 존재한다.
 PreWarmer가 이벤트 시작 전 이 메서드를 호출하여 Pool을 사전 확장한다.
-`_try_shrink()` 로직은 이벤트 종료 후 자연스럽게 축소를 처리한다.
+
+**shrink 억제 — Callback Guard 패턴**:
+
+PoolWatchdog은 이미 `alert_callback: Callable | None`을 생성자에서 받는 패턴을 사용한다
+(`core/pool_watchdog.py:87`). 동일한 패턴으로 `shrink_guard`를 추가하여,
+이벤트 기간 중 `_try_shrink()`를 억제한다.
+
+시그니처는 `RecoveryGate.check_recovery_allowed() -> tuple[bool, str]`
+(`services/emergency_mode/recovery_gate.py:53-89`)의 reason 패턴을 따르되,
+bool과 reason이 분리되어 모순 상태가 가능한 tuple 대신
+`Optional[str]` (None=허용, str=억제 사유)로 단순화한다:
+
+```python
+# core/pool_watchdog.py — 변경
+
+def __init__(
+    self,
+    monitor: ConnectionPoolMonitor,
+    recovery_handler: PoolRecoveryHandler | None = None,
+    alert_callback: Callable[[str, PoolHealthStatus], None] | None = None,
+    auto_close_leaked: bool = True,
+    auto_expand: bool = False,
+    max_expansion: int = 10,
+    shrink_guard: Callable[[], str | None] | None = None,
+):
+    """
+    Args:
+        shrink_guard: Optional guard for shrink suppression.
+            Returns None to allow shrink, or a reason string to suppress.
+            Contract: MUST be non-blocking (O(1), in-memory only, no I/O).
+            Invoked on every check_and_recover() cycle.
+    """
+    # ... 기존 코드
+    self._shrink_guard = shrink_guard
+
+def _try_shrink(self, stats: PoolStats) -> PoolRecoveryResult:
+    """Try to shrink pool back to normal if healthy"""
+    if self._shrink_guard:
+        suppress_reason = self._shrink_guard()
+        if suppress_reason:
+            return PoolRecoveryResult(
+                action=PoolRecoveryAction.NONE,
+                success=True,
+                message=f"Shrink suppressed: {suppress_reason}",
+                timestamp=datetime.now(timezone.utc),
+            )
+    if stats.usage_percent < 50 and self._recovery_handler:
+        # ... 기존 shrink 로직 그대로
+```
+
+```python
+# service.py — 호출 측에서 guard 주입
+
+def _shrink_guard() -> str | None:
+    """Non-blocking guard: 인메모리만 조회. I/O 금지."""
+    if calendar.is_event_period():
+        return "ScheduledEvent"
+    if emergency_manager.is_active():
+        return "EmergencyMode"
+    return None
+
+watchdog = PoolWatchdog(
+    monitor=monitor,
+    recovery_handler=handler,
+    shrink_guard=_shrink_guard,
+)
+```
+
+**설계 근거**:
+
+| 기준 | 평가 | 이유 |
+|------|------|------|
+| 성능 | O(1) | guard 내부는 인메모리만 조회. Non-blocking 계약 필수 |
+| 결합도 | 제로 | PoolWatchdog은 이벤트/캘린더/EventBus를 전혀 모름 |
+| 패턴 정합 | `alert_callback`과 동일 | PoolWatchdog 자체 패턴의 자연 확장 |
+| 확장성 | guard 내부에서 조건 자유 합성 | 이벤트 + 긴급모드 + 카나리 등 조합 가능 |
+| Observability | `Optional[str]` reason | `PoolRecoveryResult.message`에 억제 사유 전파 |
+
+**Non-blocking 계약**: guard 콜백 내부는 반드시 인메모리(O(1))만 조회해야 한다.
+Redis/DB I/O는 백그라운드 스레드(EventBus 구독 등)에서 로컬 변수로 동기화하고,
+guard는 그 로컬 변수만 읽는다. `EventCalendar.is_event_period()`는 이미 이 계약을 준수한다
+(`event_calendar.py:163-174` — `self._events` dict 순회만 수행).
 
 ### 2.3 Bulkhead — 동적 permit 확장 가능
 
@@ -131,6 +212,72 @@ class FeaturePriority(IntEnum):
 **활용**: 이벤트 기간 동안 `update_level(BackpressureLevel.NONE)`을 강제하여
 비필수 기능이 자동 비활성화되지 않도록 한다.
 예: 이벤트 중 알림/통계 기능이 꺼지면 운영 가시성이 감소하므로 억제한다.
+
+**Safety Valve — Degradation 억제의 조건부 해제**:
+
+이벤트 기간이라도 예측 실패(예상 3배 → 실제 10배)나 DDoS 공격이 겹칠 경우,
+Degradation 억제를 무조건 유지하면 시스템이 과부하로 죽을 수 있다.
+기존 `RecoveryGate` (`services/emergency_mode/recovery_gate.py:53-89`)와 동일한 패턴으로
+**하드 리밋 초과 시 즉시 방어 모드로 강제 전환**하는 Safety Valve를 적용한다.
+
+```
+상태 전이:
+
+SCHEDULED_MODE ──[Safety Valve 발동]──→ SAFETY_OVERRIDE (CRITICAL)
+  (NONE 고정)    cpu > threshold OR        (즉시 방어 모드)
+                 error_rate > threshold          │
+                                    ┌────────────┘
+                                    │ min_hold_seconds 경과
+                                    │ + RecoveryGate.check_recovery_allowed() == True
+                                    ▼
+                              SCHEDULED_MODE 복귀
+                              (실패 시 SAFETY_OVERRIDE 유지)
+```
+
+Safety Valve 임계치는 Settings로 외부화하여 런타임 조정이 가능하도록 한다:
+
+```python
+# settings/capacity_reservation.py에 추가
+safety_valve_cpu_threshold: float = Field(
+    default=0.95, ge=0.5, le=1.0,
+    description="Safety Valve 발동 CPU 임계치",
+)
+safety_valve_error_rate_threshold: float = Field(
+    default=0.10, ge=0.01, le=1.0,
+    description="Safety Valve 발동 Error Rate 임계치",
+)
+safety_valve_min_hold_seconds: int = Field(
+    default=120, ge=30, le=600,
+    description="Safety Valve 발동 후 최소 유지 시간 (Flapping 방지)",
+)
+```
+
+PreWarmer의 스케줄러 루프에서 Safety Valve를 주기적으로 체크한다:
+
+```python
+class PreWarmer:
+    def check_safety_valve(self) -> bool:
+        """하드 리밋 초과 시 True 반환. 스케줄러가 매 주기 호출."""
+        cpu = self._metrics_provider.get_cpu_usage()
+        error_rate = self._metrics_provider.get_error_rate()
+        return (
+            cpu > self._settings.safety_valve_cpu_threshold
+            or error_rate > self._settings.safety_valve_error_rate_threshold
+        )
+
+    def emergency_override(self) -> None:
+        """Safety Valve 발동 — 이벤트 모드를 즉시 해제하고 CRITICAL 전환."""
+        self._degradation.update_level(BackpressureLevel.CRITICAL)
+        self._safety_valve_activated_at = time.monotonic()
+
+    def check_safety_valve_recovery(self) -> bool:
+        """min_hold_seconds 경과 + RecoveryGate 통과 시 이벤트 모드 복귀."""
+        elapsed = time.monotonic() - self._safety_valve_activated_at
+        if elapsed < self._settings.safety_valve_min_hold_seconds:
+            return False
+        allowed, _ = self._recovery_gate.check_recovery_allowed()
+        return allowed
+```
 
 ### 2.5 SpikeClassifier — ML과의 Decision Authority Conflict
 
@@ -265,10 +412,112 @@ class EventCalendar:
 
     def is_event_period(self) -> bool:
         """현재 시각이 이벤트 기간인지 여부. ML context 주입에 사용."""
+
+    def get_effective_multipliers(self) -> EffectiveMultipliers:
+        """활성 이벤트들의 MAX 배율 계산 (겹침 병합)."""
 ```
 
-**데이터 저장**: 인메모리 dict + 선택적 Redis 영속화 (ProviderRegistry 패턴).
-이벤트 수가 많지 않으므로 (일 수십 건 이하) 인메모리가 기본이다.
+**이벤트 겹침(Overlapping) 병합 전략 — MAX**:
+
+시간대가 겹치는 이벤트가 동시에 진행될 경우, **가장 큰 값(MAX)**을 채택한다.
+AWS Auto Scaling, K8s HPA 등 선언적 용량 관리 시스템의 표준 접근과 동일하다.
+
+| 병합 전략 | 예시 (A=2x, B=3x) | 채택 여부 | 이유 |
+|-----------|-------------------|-----------|------|
+| **MAX** | **3x** | **✅ 채택** | 가장 보수적이면서 안전 |
+| SUM | 5x | ❌ | 과도한 확장 위험 |
+| 곱연산 | 6x | ❌ | 지수적 폭발 위험 |
+
+MAX 결과에 Settings의 `max_rate_multiplier`, `max_pool_multiplier` 상한을 추가 적용한다:
+
+```python
+@dataclass
+class EffectiveMultipliers:
+    rate_multiplier: float
+    pool_multiplier: float
+    bulkhead_extra_permits: int
+    suppress_degradation: bool
+    source_event_ids: list[str]
+
+class EventCalendar:
+    def get_effective_multipliers(self) -> EffectiveMultipliers:
+        """활성 이벤트 중 MAX 배율 계산 + Settings cap 적용."""
+        active = self.get_active()
+        if not active:
+            return EffectiveMultipliers(1.0, 1.0, 0, False, [])
+
+        return EffectiveMultipliers(
+            rate_multiplier=min(
+                max(e.expected_rps_multiplier for e in active),
+                self._settings.max_rate_multiplier,
+            ),
+            pool_multiplier=min(
+                max(e.pool_multiplier for e in active),
+                self._settings.max_pool_multiplier,
+            ),
+            bulkhead_extra_permits=min(
+                max(e.bulkhead_extra_permits for e in active),
+                self._settings.max_bulkhead_extra_permits,
+            ),
+            suppress_degradation=any(e.suppress_degradation for e in active),
+            source_event_ids=[e.event_id for e in active],
+        )
+```
+
+**데이터 저장**: 인메모리 dict + StateBackend 영속화 (Pull + Push 하이브리드).
+이벤트 수가 많지 않으므로 (일 수십 건 이하) 인메모리가 런타임 캐시이고,
+StateBackend(Redis/File)가 SSOT(단일 진실 공급원)이다.
+
+**다중 Pod 동기화 — Late Joiner 문제 해결**:
+
+HPA에 의해 이벤트 도중 신규 Pod가 스케일 아웃되면, 해당 Pod는 과거의
+`SCHEDULED_EVENT_STARTED` EventBus 메시지를 수신하지 못한다.
+평시 용량으로 서비스하다가 트래픽을 맞고 Cascading Failure를 유발할 수 있다.
+
+이를 방지하기 위해 `GracefulDegradationManager`의 Pull + Push 패턴을 따른다
+(`services/emergency_mode/manager.py:94-143` 참조):
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Pull (Initialize)                                      │
+│  - Pod 기동 시 StateBackend에서 활성 이벤트 목록 로드    │
+│  - 활성 이벤트가 있으면 즉시 warm_up 상태로 시작         │
+│                                                         │
+│  Push (Runtime)                                         │
+│  - 리더 Pod가 스케줄러를 실행하여 EventBus로 브로드캐스트 │
+│  - 다른 Pod는 EventBus 구독으로 실시간 동기화            │
+│                                                         │
+│  Check-on-Use (Drift Detection)                         │
+│  - TTL 기반 캐시 유효성 검증                             │
+│  - 인메모리 vs StateBackend 상태 비교로 drift 감지       │
+└─────────────────────────────────────────────────────────┘
+```
+
+```python
+class EventCalendar:
+    def __init__(self, state_backend: StateBackend | None = None):
+        self._events: dict[str, ScheduledEvent] = {}
+        self._state_backend = state_backend
+        self._cache_ttl_seconds: int = 30
+        self._last_load_time: float | None = None
+
+    def initialize(self) -> None:
+        """Pod 기동 시 StateBackend에서 활성 이벤트 로드 (Pull)."""
+        if self._state_backend:
+            saved = self._state_backend.load("capacity_reservation:events")
+            if saved:
+                self._events = self._deserialize(saved)
+                self._last_load_time = time.monotonic()
+
+    def register(self, event: ScheduledEvent) -> None:
+        """이벤트 등록 후 StateBackend에 영속화."""
+        # ... 기존 로직
+        if self._state_backend:
+            self._state_backend.save(
+                "capacity_reservation:events",
+                self._serialize(self._events),
+            )
+```
 
 ### 3.3 PreWarmer
 
@@ -290,22 +539,105 @@ class PreWarmer:
     def cool_down(self, event: ScheduledEvent) -> CoolDownResult:
         """
         이벤트 종료 시 호출.
-        임시 설정을 원래 값으로 복원한다.
-        축소는 기존 모듈의 자연 메커니즘에 위임한다.
+        **이벤트별 원복이 아닌, 선언적 재계산(Re-evaluation)을 수행한다.**
+        K8s Controller의 Reconciliation Loop 패턴과 동일하다.
         """
-        # 1. RateController: min_rate 원복
-        # 2. Bulkhead: max_concurrent 원복
-        # 3. GracefulDegradation: 억제 해제
-        # 4. EventBus: SCHEDULED_EVENT_ENDED 발행
-        # 5. Pool 축소는 PoolWatchdog._try_shrink()에 위임 (즉시 축소하지 않음)
+        # 1. 종료된 이벤트를 활성 목록에서 제거
+        # 2. 남은 활성 이벤트가 있는가?
+        #    YES → get_effective_multipliers()로 MAX 재계산 후 적용
+        #    NO  → Global Baseline으로 완전 복원
+        # 3. EventBus: SCHEDULED_EVENT_ENDED 발행
+        # 4. Pool 축소는 PoolWatchdog._try_shrink()에 위임 (즉시 축소하지 않음)
+
+    def _reconcile_settings(self) -> None:
+        """
+        활성 이벤트 기반 설정 재계산 (Reconciliation Loop).
+        이벤트 추가/종료 시마다 현재 상태를 '선언적'으로 재계산한다.
+        이벤트별 원복이 아닌 전체 재계산이므로, 겹침 타이밍 이슈가 원천 차단된다.
+        """
+        # effective = self._calendar.get_effective_multipliers()
+        # self._apply_if_changed(effective)
 ```
 
 **설계 원칙**:
 - PreWarmer는 **새 로직을 구현하지 않는다**. 기존 모듈의 public API만 호출한다.
-- 각 조정마다 원래 값을 `_original_settings` dict에 저장하여 rollback을 보장한다.
+- `cool_down()`은 이벤트별 원복이 아닌 **선언적 재계산(Re-evaluation)**을 수행한다.
+  이벤트가 종료될 때마다 남은 활성 이벤트들의 MAX를 재계산하여 적용하므로,
+  겹치는 이벤트 A가 먼저 끝나도 이벤트 B의 설정이 유지된다.
+- Global Baseline은 이벤트별이 아닌 **단일 스냅샷**으로 관리한다 (3.5절 참조).
 - 조정 실패 시 이미 적용된 조정을 부분 rollback한다 (트랜잭션 시맨틱).
 
-### 3.4 CapacityReservationService
+### 3.4 Global Baseline — 상태 영속화 및 복원
+
+PreWarmer가 기존 모듈의 설정을 변경하기 전, **평시 원본값을 단일 스냅샷(Global Baseline)으로
+StateBackend에 영속화**한다. `GracefulDegradationManager`의 Before Mutation Snapshot 패턴
+(`services/emergency_mode/manager.py:286-307`)을 따른다.
+
+**핵심 원칙**: 이벤트별(`event_id`별)이 아닌, **글로벌 단일 베이스라인**으로 관리한다.
+
+```
+이벤트 A 시작 (최초)  →  현재 설정 캡처 → Redis 저장 (global_baseline)
+이벤트 B 시작 (겹침)  →  베이스라인 이미 존재 → 저장 건너뜀 (덮어쓰지 않음)
+이벤트 A 종료          →  활성 이벤트 남아있음 → Re-evaluation만 수행
+이벤트 B 종료 (마지막) →  활성 이벤트 0개 → global_baseline 복원 + Redis 삭제
+```
+
+```python
+class PreWarmer:
+    _global_baseline: dict[str, Any] | None = None
+
+    def warm_up(self, event: ScheduledEvent) -> WarmUpResult:
+        # 최초 이벤트일 때만 베이스라인 캡처
+        if self._global_baseline is None:
+            self._global_baseline = self._capture_current_settings()
+            if self._state_backend:
+                self._state_backend.save(
+                    "capacity_reservation:global_baseline",
+                    self._global_baseline,
+                    ttl=self._calculate_max_event_horizon() + 3600,
+                )
+        # Re-evaluation: 활성 이벤트 MAX 기반 설정 적용
+        self._reconcile_settings()
+
+    def cool_down(self, event: ScheduledEvent) -> CoolDownResult:
+        remaining = self._calendar.get_active()
+        if not remaining:
+            # 모든 이벤트 종료 → 베이스라인 복원
+            self._restore_from_baseline()
+            self._global_baseline = None
+            if self._state_backend:
+                self._state_backend.delete("capacity_reservation:global_baseline")
+        else:
+            # 아직 활성 이벤트 있음 → MAX 재계산만
+            self._reconcile_settings()
+```
+
+**프로세스 재시작 시 초기화 훅**:
+
+```python
+class PreWarmer:
+    def initialize(self) -> None:
+        """시스템 기동 시 고아 베이스라인 검출 및 복원."""
+        if not self._state_backend:
+            return
+        saved_baseline = self._state_backend.load(
+            "capacity_reservation:global_baseline"
+        )
+        active_events = self._calendar.get_active()
+
+        if saved_baseline and not active_events:
+            # 고아 베이스라인: 활성 이벤트 없는데 원본값이 남아있음
+            # → 이전 프로세스가 cool_down 전에 종료된 것
+            self._restore_from(saved_baseline)
+            self._state_backend.delete("capacity_reservation:global_baseline")
+            logger.warning("capacity_reservation.orphan_baseline_restored")
+        elif saved_baseline and active_events:
+            # 이벤트 진행 중 재시작 → 베이스라인 유지 + Re-evaluation
+            self._global_baseline = saved_baseline
+            self._reconcile_settings()
+```
+
+### 3.5 CapacityReservationService
 
 ```python
 class CapacityReservationService:
@@ -470,6 +802,26 @@ class CapacityReservationSettings(BaseSettings):
         default=True,
         description="True이면 로그만 기록, 실제 조정 미수행",
     )
+
+    # --- Safety Valve (하드 리밋 방어) ---
+
+    safety_valve_cpu_threshold: float = Field(
+        default=0.95,
+        ge=0.5, le=1.0,
+        description="Safety Valve 발동 CPU 임계치. 이벤트 모드라도 이 값 초과 시 즉시 CRITICAL 전환",
+    )
+
+    safety_valve_error_rate_threshold: float = Field(
+        default=0.10,
+        ge=0.01, le=1.0,
+        description="Safety Valve 발동 Error Rate 임계치",
+    )
+
+    safety_valve_min_hold_seconds: int = Field(
+        default=120,
+        ge=30, le=600,
+        description="Safety Valve 발동 후 최소 유지 시간 (Flapping 방지)",
+    )
 ```
 
 ---
@@ -495,12 +847,14 @@ selfhealing_capacity_pool_multiplier        # Gauge: 현재 적용 중인 Pool �
 | `EventType` (event_bus) | enum 추가 | `SCHEDULED_EVENT_STARTED`, `SCHEDULED_EVENT_ENDED` 2개 추가 |
 | `SpikeClassifier` | 시그니처 확장 | `classify()`에 `context` 파라미터 추가 (기본값 None, 하위 호환) |
 | `RateController` | **변경 없음** | `_settings.min_rate_per_second` 동적 변경으로 충분 |
-| `PoolWatchdog` | **변경 없음** | 기존 `expand_pool()` API 사용 |
+| `PoolWatchdog` | 파라미터 추가 | `shrink_guard: Callable[[], str \| None]` 생성자 파라미터 1개 추가 (기본값 None, 하위 호환). 기존 `alert_callback` 패턴과 동일 |
 | `Bulkhead` | **변경 없음** | `max_concurrent` 직접 조정 |
-| `GracefulDegradation` | **변경 없음** | 기존 `update_level()` API 사용 |
+| `GracefulDegradation` | **변경 없음** | 기존 `update_level()` API 사용. Safety Valve는 PreWarmer 내부에서 호출 |
 | `HPAMetricsExporter` | **변경 없음** | 기존 메트릭 export 활용 |
+| `StateBackend` (core) | **사용** (변경 없음) | EventCalendar 영속화 + Global Baseline 저장에 기존 StateBackend 활용 |
+| `RecoveryGate` (emergency_mode) | **사용** (변경 없음) | Safety Valve 복구 판단에 기존 RecoveryGate 활용 |
 
-**총 기존 코드 변경**: EventType enum 2줄 + SpikeClassifier 파라미터 1개.
+**총 기존 코드 변경**: EventType enum 2줄 + SpikeClassifier 파라미터 1개 + PoolWatchdog 파라미터 1개.
 나머지는 기존 public API 호출만으로 구현한다.
 
 ---
@@ -511,9 +865,9 @@ selfhealing_capacity_pool_multiplier        # Gauge: 현재 적용 중인 Pool �
 
 | 테스트 파일 | 대상 | 핵심 케이스 |
 |------------|------|------------|
-| `test_event_calendar.py` | EventCalendar | 등록/취소/조회, 과거 시간 거부, 중복 ID 거부, 겹치는 이벤트 경고 |
-| `test_pre_warmer.py` | PreWarmer | warm_up/cool_down 정상 동작, 부분 실패 시 rollback, 원래 값 복원 검증 |
-| `test_service.py` | CapacityReservationService | 싱글톤, 스케줄러 동작, dry-run 모드 |
+| `test_event_calendar.py` | EventCalendar | 등록/취소/조회, 과거 시간 거부, 중복 ID 거부, 겹치는 이벤트 경고, MAX 배율 계산, StateBackend 영속화 |
+| `test_pre_warmer.py` | PreWarmer | warm_up/cool_down 정상 동작, Re-evaluation, Global Baseline 저장/복원, Safety Valve 발동/복구 |
+| `test_service.py` | CapacityReservationService | 싱글톤, 스케줄러 동작, dry-run 모드, 초기화 훅 (고아 베이스라인 복원) |
 | `test_ml_integration.py` | ML 연동 | SCHEDULED_EVENT_STARTED 발행 시 SpikeClassifier가 HEALTHY_SURGE 반환 확인 |
 
 ### 8.2 핵심 테스트 시나리오
@@ -522,7 +876,14 @@ selfhealing_capacity_pool_multiplier        # Gauge: 현재 적용 중인 Pool �
 2. **ML 충돌 방지**: 이벤트 기간 중 RPS 급증 시 SpikeClassifier가 ANOMALOUS_SPIKE가 아닌 HEALTHY_SURGE 반환
 3. **이벤트 취소**: 워밍 진행 중 취소 → rollback 완료 검증
 4. **dry-run 모드**: 로그만 기록되고 실제 설정은 변경되지 않음 검증
-5. **설정 복원 보장**: 프로세스 비정상 종료 후 재시작 시 임시 설정이 원복되는지 검증
+5. **설정 복원 보장**: 프로세스 비정상 종료 후 재시작 시 초기화 훅이 고아 Global Baseline을 감지하여 원복
+6. **이벤트 겹침 (Re-evaluation)**: 이벤트 A(2x) + B(3x) 동시 진행 → MAX=3x 적용 → A 종료 → B의 3x 유지 → B 종료 → Baseline 복원
+7. **Safety Valve**: 이벤트 중 CPU 95% 초과 → CRITICAL 강제 전환 → min_hold 경과 + 메트릭 안정 → 이벤트 모드 복귀
+8. **Safety Valve Flapping 방지**: 발동 후 min_hold_seconds 내 메트릭 안정화 → 복귀 차단 확인
+9. **Late Joiner**: 이벤트 진행 중 신규 Pod 기동 → StateBackend에서 활성 이벤트 Pull → 즉시 warm_up 상태 확인
+10. **shrink_guard 억제**: 이벤트 기간 중 `_try_shrink()` 호출 → guard가 "ScheduledEvent" 반환 → shrink 미수행 + reason이 message에 포함
+11. **shrink_guard 복합 조건**: 이벤트 + 긴급모드 동시 활성 → guard가 첫 번째 매칭 사유 반환 → 올바른 억제 확인
+12. **shrink_guard None (평시)**: guard가 None 반환 → 기존 shrink 로직 정상 동작 확인
 
 ---
 
@@ -530,17 +891,20 @@ selfhealing_capacity_pool_multiplier        # Gauge: 현재 적용 중인 Pool �
 
 | 위험 | 영향 | 완화 |
 |------|------|------|
-| PreWarmer 실행 중 프로세스 종료 | 임시 설정이 영구화 | 시작 시 `_original_settings` Redis 복원 체크, 없으면 기본값 사용 |
+| PreWarmer 실행 중 프로세스 종료 | 임시 설정이 영구화 | 초기화 훅에서 StateBackend의 Global Baseline을 감지하여 자동 복원 (3.4절) |
 | 이벤트 시간 오등록 (3시간 빠름 등) | 불필요한 리소스 확장 | `max_rate_multiplier`, `max_pool_multiplier` 상한 설정으로 피해 제한 |
-| 다수 이벤트 동시 진행 | 리소스 과다 확장 | 동시 진행 이벤트 수 상한(기본 3개) + 배율 합산 상한 |
-| PoolWatchdog shrink가 warm_up 직후 발동 | 사전 확장 무효화 | SCHEDULED_EVENT_STARTED 이벤트 구독 시 shrink 억제 |
+| 다수 이벤트 동시 진행 | 리소스 과다 확장 | MAX 병합 전략 + Settings cap 적용 (3.2절). 동시 진행 이벤트 수 상한(기본 3개) |
+| PoolWatchdog shrink가 warm_up 직후 발동 | 사전 확장 무효화 | `shrink_guard` Callback Guard로 이벤트 기간 중 shrink 억제 (2.2절) |
 | ML 학습 데이터 오염 | 이벤트 기간 데이터로 모델 편향 | `ForecastDataPoint.has_adjustment=True` 마킹 |
+| 이벤트 겹침 시 원복 타이밍 오류 | 이벤트 A 종료가 B 설정을 원복 | Re-evaluation 패턴으로 원천 차단. cool_down은 이벤트별 원복이 아닌 전체 재계산 (3.3절) |
+| 이벤트 중 예상 초과 트래픽/DDoS | Degradation 억제로 시스템 과부하 | Safety Valve가 하드 리밋 초과 시 즉시 CRITICAL 전환 (2.4절). Flapping 방지용 min_hold 적용 |
+| HPA 신규 Pod가 이벤트 컨텍스트 미수신 | Late Joiner가 평시 용량으로 서비스 | Pull+Push 하이브리드: Pod 기동 시 StateBackend에서 활성 이벤트 즉시 로드 (3.2절) |
 
 ---
 
 ## 10. 구현 순서
 
-1. **Phase 1**: `settings/capacity_reservation.py` + `event_calendar.py` + 단위 테스트
-2. **Phase 2**: `pre_warmer.py` + 기존 모듈 연동 + 단위 테스트
-3. **Phase 3**: `service.py` (스케줄러, 싱글톤) + EventBus 이벤트 추가 + 통합 테스트
+1. **Phase 1**: `settings/capacity_reservation.py` (Safety Valve 설정 포함) + `event_calendar.py` (MAX 병합 + StateBackend 영속화) + 단위 테스트
+2. **Phase 2**: `pre_warmer.py` (Global Baseline + Re-evaluation + Safety Valve) + 기존 모듈 연동 + 단위 테스트
+3. **Phase 3**: `service.py` (스케줄러, 싱글톤, 초기화 훅) + EventBus 이벤트 추가 + PoolWatchdog `shrink_guard` 연동 + 통합 테스트
 4. **Phase 4**: SpikeClassifier context 확장 + ML 연동 테스트
