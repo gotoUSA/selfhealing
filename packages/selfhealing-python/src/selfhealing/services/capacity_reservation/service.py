@@ -2,7 +2,8 @@
 CapacityReservationService — Capacity Reservation 서비스 싱글톤.
 
 백그라운드 스케줄러가 EventCalendar을 주기적으로 확인하여
-워밍/쿨다운을 자동 실행한다.
+워밍/쿨다운을 자동 실행한다. Safety Valve를 매 주기 체크하여
+하드 리밋 초과 시 즉시 CRITICAL 전환한다.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from selfhealing.services.capacity_reservation.event_calendar import (
 )
 from selfhealing.services.capacity_reservation.pre_warmer import (
     PreWarmer,
+    SafetyValveMetricsProvider,
 )
 from selfhealing.settings.capacity_reservation import (
     CapacityReservationSettings,
@@ -48,25 +50,38 @@ class CapacityReservationService:
         bulkhead: Any | None = None,
         graceful_degradation: Any | None = None,
         event_bus: Any | None = None,
+        metrics_provider: SafetyValveMetricsProvider | None = None,
+        recovery_gate: Any | None = None,
+        state_backend: Any | None = None,
         settings: CapacityReservationSettings | None = None,
     ) -> None:
-        """초기화. EventCalendar + PreWarmer 생성."""
+        """초기화. EventCalendar + PreWarmer 생성, StateBackend 기반 복원."""
         if self._initialized:
             return
 
         self._settings = settings or get_capacity_reservation_settings()
-        self._calendar = EventCalendar()
+        self._calendar = EventCalendar(
+            state_backend=state_backend,
+            settings=self._settings,
+        )
         self._pre_warmer = PreWarmer(
+            calendar=self._calendar,
             rate_controller=rate_controller,
             pool_watchdog=pool_watchdog,
             bulkhead=bulkhead,
             graceful_degradation=graceful_degradation,
             event_bus=event_bus,
+            metrics_provider=metrics_provider,
+            recovery_gate=recovery_gate,
+            state_backend=state_backend,
             settings=self._settings,
         )
         self._scheduler_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._initialized = True
+
+        self._calendar.initialize()
+        self._pre_warmer.initialize()
 
         logger.info(
             "capacity_reservation.service_initialized",
@@ -121,6 +136,7 @@ class CapacityReservationService:
                 for e in self._calendar.get_active()
             ],
             "active_adjustments": self._pre_warmer.get_active_adjustments(),
+            "safety_valve_active": self._pre_warmer.safety_valve_active,
         }
 
     @property
@@ -181,6 +197,7 @@ class CapacityReservationService:
         while not self._stop_event.is_set():
             try:
                 self._process_events()
+                self._check_safety_valve()
             except Exception as exc:
                 logger.error(
                     "capacity_reservation.scheduler_error",
@@ -210,6 +227,16 @@ class CapacityReservationService:
             self._calendar.update_status(event.event_id, EventStatus.COMPLETED)
 
         self._calendar.remove_completed()
+
+    def _check_safety_valve(self) -> None:
+        """Safety Valve 매 주기 체크."""
+        if not self._calendar.is_event_period():
+            return
+
+        if self._pre_warmer.safety_valve_active:
+            self._pre_warmer.check_safety_valve_recovery()
+        elif self._pre_warmer.check_safety_valve():
+            self._pre_warmer.emergency_override()
 
     def _ensure_initialized(self) -> None:
         if not self._initialized:

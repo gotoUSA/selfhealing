@@ -7,6 +7,7 @@ Capacity Reservation — 예정 이벤트 기반 사전 용량 확보.
 """
 
 from selfhealing.services.capacity_reservation.event_calendar import (
+    EffectiveMultipliers,
     EventCalendar,
     EventStatus,
     ScheduledEvent,
@@ -15,6 +16,7 @@ from selfhealing.services.capacity_reservation.pre_warmer import (
     AdjustmentRecord,
     CoolDownResult,
     PreWarmer,
+    SafetyValveMetricsProvider,
     WarmUpResult,
 )
 from selfhealing.services.capacity_reservation.service import (
@@ -25,9 +27,11 @@ __all__ = [
     "AdjustmentRecord",
     "CapacityReservationService",
     "CoolDownResult",
+    "EffectiveMultipliers",
     "EventCalendar",
     "EventStatus",
     "PreWarmer",
+    "SafetyValveMetricsProvider",
     "ScheduledEvent",
     "WarmUpResult",
 ]

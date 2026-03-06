@@ -361,6 +361,43 @@ class SelfHealingMetrics:
             "Self-healing system information",
         )
 
+        # =============================================================================
+        # Capacity Reservation Metrics
+        # =============================================================================
+
+        self.capacity_warmup_total = Counter(
+            f"{prefix}_capacity_warmup_total",
+            "Total warm-up executions",
+            ["event_id", "outcome"],
+        )
+
+        self.capacity_warmup_duration_seconds = Histogram(
+            f"{prefix}_capacity_warmup_duration_seconds",
+            "Warm-up execution duration in seconds",
+            buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0],
+        )
+
+        self.capacity_cooldown_total = Counter(
+            f"{prefix}_capacity_cooldown_total",
+            "Total cool-down executions",
+            ["event_id", "outcome"],
+        )
+
+        self.capacity_active_events = Gauge(
+            f"{prefix}_capacity_active_events",
+            "Currently active scheduled events",
+        )
+
+        self.capacity_rate_multiplier = Gauge(
+            f"{prefix}_capacity_rate_multiplier",
+            "Currently applied rate multiplier",
+        )
+
+        self.capacity_pool_multiplier = Gauge(
+            f"{prefix}_capacity_pool_multiplier",
+            "Currently applied pool multiplier",
+        )
+
         self._initialized = True
 
     # =========================================================================

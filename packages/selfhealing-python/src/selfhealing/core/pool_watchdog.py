@@ -88,7 +88,15 @@ class PoolWatchdog:
         auto_close_leaked: bool = True,
         auto_expand: bool = False,
         max_expansion: int = 10,
+        shrink_guard: Callable[[], str | None] | None = None,
     ):
+        """
+        Args:
+            shrink_guard: Optional guard for shrink suppression.
+                Returns None to allow shrink, or a reason string to suppress.
+                Contract: MUST be non-blocking (O(1), in-memory only, no I/O).
+                Invoked on every check_and_recover() cycle when shrink is attempted.
+        """
         self._monitor = monitor
         self._recovery_handler = recovery_handler
         self._alert_callback = alert_callback
@@ -96,6 +104,7 @@ class PoolWatchdog:
         self._auto_expand = auto_expand
         self._max_expansion = max_expansion
         self._expanded_by = 0
+        self._shrink_guard = shrink_guard
 
     def check_and_recover(self) -> PoolRecoveryResult:
         """
@@ -224,6 +233,15 @@ class PoolWatchdog:
 
     def _try_shrink(self, stats: PoolStats) -> PoolRecoveryResult:
         """Try to shrink pool back to normal if healthy"""
+        if self._shrink_guard:
+            suppress_reason = self._shrink_guard()
+            if suppress_reason:
+                return PoolRecoveryResult(
+                    action=PoolRecoveryAction.NONE,
+                    success=True,
+                    message=f"Shrink suppressed: {suppress_reason}",
+                    timestamp=datetime.now(timezone.utc),
+                )
         if stats.usage_percent < 50 and self._recovery_handler:
             target = stats.max_connections - self._expanded_by
             if self._recovery_handler.shrink_pool(target):

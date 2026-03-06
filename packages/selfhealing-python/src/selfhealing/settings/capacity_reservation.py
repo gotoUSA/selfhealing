@@ -92,6 +92,27 @@ class CapacityReservationSettings(BaseSettings):
         description="True이면 로그만 기록, 실제 조정 미수행",
     )
 
+    safety_valve_cpu_threshold: float = Field(
+        default=0.95,
+        ge=0.5,
+        le=1.0,
+        description="Safety Valve 발동 CPU 임계치. 이벤트 모드라도 이 값 초과 시 즉시 CRITICAL 전환",
+    )
+
+    safety_valve_error_rate_threshold: float = Field(
+        default=0.10,
+        ge=0.01,
+        le=1.0,
+        description="Safety Valve 발동 Error Rate 임계치",
+    )
+
+    safety_valve_min_hold_seconds: int = Field(
+        default=120,
+        ge=30,
+        le=600,
+        description="Safety Valve 발동 후 최소 유지 시간 (Flapping 방지)",
+    )
+
 
 @lru_cache(maxsize=1)
 def get_capacity_reservation_settings() -> CapacityReservationSettings:
