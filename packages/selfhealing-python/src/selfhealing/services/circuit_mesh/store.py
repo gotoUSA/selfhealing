@@ -35,6 +35,8 @@ class MeshOverrideStore(Protocol):
     def set(self, service_name: str, override: ThresholdOverride) -> None: ...
     def remove(self, service_name: str) -> None: ...
     def get_all(self) -> dict[str, ThresholdOverride]: ...
+    def clear_l1(self) -> None: ...
+    def hydrate_from_l2(self) -> int: ...
 
 
 class InMemoryMeshOverrideStore:
@@ -65,6 +67,14 @@ class InMemoryMeshOverrideStore:
         for k in expired:
             self._store.pop(k, None)
         return dict(self._store)
+
+    def clear_l1(self) -> None:
+        """L1 전체 제거 (인메모리이므로 _store 자체가 L1)."""
+        self._store.clear()
+
+    def hydrate_from_l2(self) -> int:
+        """L2 없음 — 항상 0 반환."""
+        return 0
 
 
 class TwoTierMeshOverrideStore:
@@ -207,8 +217,8 @@ class TwoTierMeshOverrideStore:
                 original_recovery_timeout=data["original_recovery_timeout"],
                 adjusted_recovery_timeout=data["adjusted_recovery_timeout"],
                 reason=data["reason"],
-                expires_at=datetime.fromisoformat(data["expires_at"]).replace(
-                    tzinfo=timezone.utc
+                expires_at=datetime.fromisoformat(data["expires_at"]).astimezone(
+                    timezone.utc
                 )
                 if data["expires_at"]
                 else now(),

@@ -76,13 +76,14 @@ class MeshCoordinator:
 
     def set_hydrating(self, hydrating: bool) -> None:
         """Hydration 상태 설정. False로 전환 시 큐잉된 이벤트를 flush."""
+        queued: list[tuple[Any, Any]] = []
         with self._lock:
             self._hydrating = hydrating
             if not hydrating:
                 queued = list(self._hydration_queue)
                 self._hydration_queue.clear()
 
-        if not hydrating and queued:
+        if queued:
             for event_handler, event in queued:
                 try:
                     event_handler(event)
@@ -255,9 +256,14 @@ class MeshCoordinator:
                 return
             self._downstream_open_set.discard(downstream)
 
+        max_depth = (
+            self._settings.propagation_max_depth
+            if self._settings.enable_damped_propagation
+            else 1
+        )
         affected = self._graph.get_dependents_recursive(
             downstream,
-            max_depth=self._settings.propagation_max_depth,
+            max_depth=max_depth,
         )
 
         for upstream, depth in affected:
