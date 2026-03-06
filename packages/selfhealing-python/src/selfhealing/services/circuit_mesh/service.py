@@ -95,7 +95,7 @@ class CircuitMeshService:
             event_bus=event_bus,
         )
         self._coordinator = MeshCoordinator(
-            dependency_graph=br_integration._dependency_graph,
+            dependency_graph=br_integration.dependency_graph,
             cb_service=cb_service,
             override_store=override_store,
             settings=self._settings,

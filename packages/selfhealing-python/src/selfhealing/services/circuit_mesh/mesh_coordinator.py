@@ -30,7 +30,7 @@ from selfhealing.services.circuit_breaker.config import CircuitState
 from selfhealing.services.circuit_mesh import ThresholdOverride
 
 if TYPE_CHECKING:
-    from selfhealing.services.circuit_breaker.blast_radius_integration import (
+    from selfhealing.core.dependency_graph import (
         ServiceDependencyGraph,
     )
     from selfhealing.services.circuit_breaker.service import CircuitBreakerService

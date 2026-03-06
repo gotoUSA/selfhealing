@@ -6,7 +6,6 @@ Test Coverage:
 - 통합 테스트: ServiceConfig + BlastRadius 연동
 """
 
-
 from selfhealing.services.circuit_breaker.models import (
     ServiceConfig,
 )
@@ -95,8 +94,12 @@ class TestBlastRadiusIntegration:
 
         # payment-api에 2개 서비스 의존
         integration.register_dependency("payment-api", criticality="critical")
-        integration.register_dependency("order-api", depends_on=["payment-api"], criticality="high")
-        integration.register_dependency("cart-api", depends_on=["payment-api"], criticality="medium")
+        integration.register_dependency(
+            "order-api", depends_on=["payment-api"], criticality="high"
+        )
+        integration.register_dependency(
+            "cart-api", depends_on=["payment-api"], criticality="medium"
+        )
 
         assessment = integration.assess_impact(
             trigger_service="payment-api",
@@ -172,7 +175,9 @@ class TestBlastRadiusIntegration:
 
         # payment-api(critical)가 db-api에 의존
         integration.register_dependency("db-api", criticality="high")
-        integration.register_dependency("payment-api", depends_on=["db-api"], criticality="critical")
+        integration.register_dependency(
+            "payment-api", depends_on=["db-api"], criticality="critical"
+        )
 
         assessment = integration.assess_impact(
             trigger_service="db-api",
@@ -268,7 +273,7 @@ class TestServiceDependencyGraph:
 
     def test_get_dependents(self):
         """의존하는 서비스 조회."""
-        from selfhealing.services.circuit_breaker.blast_radius_integration import (
+        from selfhealing.core.dependency_graph import (
             ServiceDependencyGraph,
         )
 
@@ -285,7 +290,7 @@ class TestServiceDependencyGraph:
 
     def test_get_cascading_affected(self):
         """연쇄적으로 영향받는 서비스 조회."""
-        from selfhealing.services.circuit_breaker.blast_radius_integration import (
+        from selfhealing.core.dependency_graph import (
             ServiceDependencyGraph,
         )
 
@@ -304,7 +309,7 @@ class TestServiceDependencyGraph:
 
     def test_get_cascading_affected_prevents_cycles(self):
         """순환 의존성 방지."""
-        from selfhealing.services.circuit_breaker.blast_radius_integration import (
+        from selfhealing.core.dependency_graph import (
             ServiceDependencyGraph,
         )
 
@@ -323,14 +328,18 @@ class TestServiceDependencyGraph:
 
     def test_get_critical_dependents(self):
         """critical 의존 서비스 조회."""
-        from selfhealing.services.circuit_breaker.blast_radius_integration import (
+        from selfhealing.core.dependency_graph import (
             ServiceDependencyGraph,
         )
 
         graph = ServiceDependencyGraph()
         graph.register_service("db-api", depends_on=[], criticality="high")
-        graph.register_service("payment-api", depends_on=["db-api"], criticality="critical")
-        graph.register_service("analytics-api", depends_on=["db-api"], criticality="low")
+        graph.register_service(
+            "payment-api", depends_on=["db-api"], criticality="critical"
+        )
+        graph.register_service(
+            "analytics-api", depends_on=["db-api"], criticality="low"
+        )
 
         critical = graph.get_critical_dependents("db-api")
 
@@ -383,9 +392,15 @@ class TestCascadePreventionIntegration:
         config_manager = get_service_config_manager()
         config_manager.register_services(
             [
-                ServiceConfig(service_id="payment-api", criticality="critical", shed_priority=0),
-                ServiceConfig(service_id="order-api", criticality="high", shed_priority=1),
-                ServiceConfig(service_id="review-api", criticality="low", shed_priority=10),
+                ServiceConfig(
+                    service_id="payment-api", criticality="critical", shed_priority=0
+                ),
+                ServiceConfig(
+                    service_id="order-api", criticality="high", shed_priority=1
+                ),
+                ServiceConfig(
+                    service_id="review-api", criticality="low", shed_priority=10
+                ),
             ]
         )
 
@@ -398,8 +413,12 @@ class TestCascadePreventionIntegration:
             )
 
         # 의존성 추가
-        integration.register_dependency("order-api", depends_on=["payment-api"], criticality="high")
-        integration.register_dependency("review-api", depends_on=["order-api"], criticality="low")
+        integration.register_dependency(
+            "order-api", depends_on=["payment-api"], criticality="high"
+        )
+        integration.register_dependency(
+            "review-api", depends_on=["order-api"], criticality="low"
+        )
 
         # payment-api OPEN 시 영향 평가
         assessment = integration.assess_impact("payment-api")
@@ -421,9 +440,15 @@ class TestCascadePreventionIntegration:
         config_manager = get_service_config_manager()
         config_manager.register_services(
             [
-                ServiceConfig(service_id="payment-api", criticality="critical", shed_priority=0),
-                ServiceConfig(service_id="review-api", criticality="low", shed_priority=10),
-                ServiceConfig(service_id="recommend-api", criticality="low", shed_priority=5),
+                ServiceConfig(
+                    service_id="payment-api", criticality="critical", shed_priority=0
+                ),
+                ServiceConfig(
+                    service_id="review-api", criticality="low", shed_priority=10
+                ),
+                ServiceConfig(
+                    service_id="recommend-api", criticality="low", shed_priority=5
+                ),
             ]
         )
 
@@ -435,13 +460,18 @@ class TestCascadePreventionIntegration:
         # 각 Shedding 대상의 Blast Radius 평가
         integration = get_blast_radius_integration()
         for target in shedding_targets:
-            integration.register_dependency(target.service_id, criticality=target.criticality)
+            integration.register_dependency(
+                target.service_id, criticality=target.criticality
+            )
 
         # low criticality 서비스는 영향이 작음
         for target in shedding_targets:
             assessment = integration.assess_impact(target.service_id)
             # low 서비스는 보통 MINIMAL 영향
-            assert assessment.level in [BlastRadiusLevel.MINIMAL, BlastRadiusLevel.MODERATE]
+            assert assessment.level in [
+                BlastRadiusLevel.MINIMAL,
+                BlastRadiusLevel.MODERATE,
+            ]
 
     def test_critical_service_protection(self):
         """critical 서비스 보호 확인."""
@@ -457,7 +487,9 @@ class TestCascadePreventionIntegration:
         config_manager = get_service_config_manager()
         config_manager.register_services(
             [
-                ServiceConfig(service_id="payment-api", criticality="critical", shed_priority=0),
+                ServiceConfig(
+                    service_id="payment-api", criticality="critical", shed_priority=0
+                ),
                 ServiceConfig(service_id="db-api", criticality="high", shed_priority=0),
             ]
         )
@@ -469,7 +501,9 @@ class TestCascadePreventionIntegration:
         # critical 서비스에 영향주면 CRITICAL 레벨
         integration = get_blast_radius_integration()
         integration.register_dependency("db-api", criticality="high")
-        integration.register_dependency("payment-api", depends_on=["db-api"], criticality="critical")
+        integration.register_dependency(
+            "payment-api", depends_on=["db-api"], criticality="critical"
+        )
 
         assessment = integration.assess_impact("db-api")
 
@@ -556,7 +590,9 @@ class TestModuleLevelConvenienceFunctions:
 
         # 의존성 등록
         register_service_dependency("payment-api", criticality="critical")
-        register_service_dependency("order-api", depends_on=["payment-api"], criticality="high")
+        register_service_dependency(
+            "order-api", depends_on=["payment-api"], criticality="high"
+        )
 
         # 영향 평가
         assessment = assess_cb_open_impact("payment-api", "test event")

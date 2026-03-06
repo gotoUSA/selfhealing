@@ -134,8 +134,14 @@ _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # blast_radius_integration
     "BlastRadiusLevel": (".blast_radius_integration", "BlastRadiusLevel"),
     "BlastRadiusAssessment": (".blast_radius_integration", "BlastRadiusAssessment"),
-    "ServiceDependencyNode": (".blast_radius_integration", "ServiceDependencyNode"),
-    "ServiceDependencyGraph": (".blast_radius_integration", "ServiceDependencyGraph"),
+    "ServiceDependencyNode": (
+        "selfhealing.core.dependency_graph",
+        "ServiceDependencyNode",
+    ),
+    "ServiceDependencyGraph": (
+        "selfhealing.core.dependency_graph",
+        "ServiceDependencyGraph",
+    ),
     "BlastRadiusIntegration": (".blast_radius_integration", "BlastRadiusIntegration"),
     "BlastRadiusConfig": (".blast_radius_integration", "BlastRadiusConfig"),
     "get_blast_radius_integration": (
@@ -261,7 +267,9 @@ def __getattr__(name: str) -> object:
             _loaded_symbols[name] = getattr(module, attr_name)
         return _loaded_symbols[name]
 
-    raise AttributeError(f"module 'selfhealing.services.circuit_breaker' has no attribute '{name}'")
+    raise AttributeError(
+        f"module 'selfhealing.services.circuit_breaker' has no attribute '{name}'"
+    )
 
 
 def __dir__() -> list[str]:
@@ -271,6 +279,11 @@ def __dir__() -> list[str]:
 
 # TYPE_CHECKING block for IDE support
 if TYPE_CHECKING:
+    from selfhealing.core.dependency_graph import (
+        ServiceDependencyGraph,
+        ServiceDependencyNode,
+    )
+
     from .adaptive_threshold import (
         AdaptiveThresholdManager,
         AdjustedThreshold,
@@ -283,8 +296,6 @@ if TYPE_CHECKING:
         BlastRadiusConfig,
         BlastRadiusIntegration,
         BlastRadiusLevel,
-        ServiceDependencyGraph,
-        ServiceDependencyNode,
         assess_cb_open_impact,
         get_blast_radius_integration,
         register_service_dependency,

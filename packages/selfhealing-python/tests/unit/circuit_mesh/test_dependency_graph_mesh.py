@@ -1,7 +1,7 @@
 """
 ServiceDependencyGraph 메쉬 확장 메서드 단위 테스트.
 
-테스트 대상: services/circuit_breaker/blast_radius_integration.py
+테스트 대상: core/dependency_graph.py
   - get_dependencies()
   - get_dependents_recursive()
   - topological_sort_subset()
@@ -11,9 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from selfhealing.services.circuit_breaker.blast_radius_integration import (
-    ServiceDependencyGraph,
-)
+from selfhealing.core.dependency_graph import ServiceDependencyGraph
 
 # =============================================================================
 # Fixtures
