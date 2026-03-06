@@ -19,6 +19,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, TypeVar
 
+import structlog
+
 from selfhealing.resilience.policies.composer import PolicyComposer, compose
 from selfhealing.resilience.policies.fallback import FallbackPolicy
 from selfhealing.resilience.policies.guards import (
@@ -27,6 +29,8 @@ from selfhealing.resilience.policies.guards import (
 )
 from selfhealing.resilience.policies.hooks import AuditHook, MetricsHook
 from selfhealing.resilience.policies.sinks import DLQSink
+
+logger = structlog.get_logger()
 
 T = TypeVar("T")
 
@@ -119,7 +123,11 @@ def standard_pipeline(
         policies.append(fallback_policy)
 
     return (
-        compose(*policies).add_guard(KillSwitchGuard()).add_guard(ErrorBudgetGuard()).add_hook(AuditHook()).add_sink(DLQSink())
+        compose(*policies)
+        .add_guard(KillSwitchGuard())
+        .add_guard(ErrorBudgetGuard())
+        .add_hook(AuditHook())
+        .add_sink(DLQSink())
     )
 
 
@@ -225,4 +233,141 @@ def ha_pipeline(
         .add_hook(AuditHook())
         .add_hook(MetricsHook())
         .add_sink(DLQSink())
+    )
+
+
+def minimal_pipeline(
+    service_name: str,
+    audit_sampling_rate: float = 1.0,
+) -> PolicyComposer:
+    """
+    경량 resilience 파이프라인 -- CB 체크 + 선택적 감사만 수행.
+
+    Guard(ErrorBudget Redis 호출)와 Sink(DLQ 저장)를 제거하여
+    오버헤드를 최소화한다. 읽기 전용/비필수 요청에 적합하다.
+
+    감사 로깅:
+    - audit_sampling_rate=1.0 (기본값): 100% 감사 (AuditHook)
+    - audit_sampling_rate < 1.0: 샘플링 감사 (SampledAuditHook)
+    - audit_sampling_rate=0.0: 감사 미수행
+
+    Args:
+        service_name: CB가 보호하는 서비스 식별자
+        audit_sampling_rate: 감사 샘플링 비율 (1.0=100%)
+
+    Returns:
+        PolicyComposer 인스턴스
+
+    Usage::
+
+        pipeline = minimal_pipeline("product_api")
+        result = pipeline.execute(lambda: get_product(id))
+
+        pipeline = minimal_pipeline("search_api", audit_sampling_rate=0.01)
+        result = pipeline.execute(lambda: search(query))
+    """
+    from selfhealing.services.circuit_breaker.policy import CircuitBreakerPolicy
+
+    composer = compose(CircuitBreakerPolicy(service_name=service_name))
+
+    if audit_sampling_rate >= 1.0:
+        composer.add_hook(AuditHook())
+    elif audit_sampling_rate > 0.0:
+        composer.add_hook(SampledAuditHook(sample_rate=audit_sampling_rate))
+
+    return composer
+
+
+def adaptive_pipeline(
+    service_name: str,
+    tier_id: str | None = None,
+    # --- standard_pipeline 파라미터 ---
+    max_retries: int = 3,
+    domain: str = "default",
+    # --- Fallback 선택적 파라미터 ---
+    fallback_chain: list[Callable[[], Any]] | None = None,
+    fallback_fn: Callable[[], Any] | None = None,
+    fallback_default: Any = None,
+) -> PolicyComposer:
+    """
+    적응형 파이프라인 -- tier_id와 시스템 부하에 따라 자동 선택.
+
+    동작 모드:
+    1. adaptive_enabled=False (기본값): 항상 standard_pipeline 반환
+    2. adaptive_enabled=True:
+       - GracefulDegradation이 full_guards를 비활성화하면 minimal 반환
+       - tier_id가 hot_path_tiers에 포함되면 minimal 반환
+       - 그 외: standard_pipeline 반환
+
+    Args:
+        service_name: 서비스 식별자
+        tier_id: 요청 tier ("critical" | "standard" | "non_essential")
+        max_retries: standard_pipeline 최대 재시도 횟수
+        domain: standard_pipeline 도메인
+        fallback_chain: standard_pipeline fallback 체인
+        fallback_fn: standard_pipeline fallback 함수
+        fallback_default: standard_pipeline fallback 기본값
+
+    Returns:
+        PolicyComposer 인스턴스
+
+    Usage::
+
+        pipeline = adaptive_pipeline("product_api", tier_id="non_essential")
+        result = pipeline.execute(lambda: get_product(id))
+
+        pipeline = adaptive_pipeline(
+            "payment_api",
+            tier_id="critical",
+            fallback_default={"status": "degraded"},
+        )
+        result = pipeline.execute(lambda: process_payment(data))
+    """
+    from selfhealing.settings.pipeline import get_pipeline_settings
+
+    settings = get_pipeline_settings()
+
+    if not settings.adaptive_enabled:
+        return standard_pipeline(
+            service_name=service_name,
+            max_retries=max_retries,
+            domain=domain,
+            fallback_chain=fallback_chain,
+            fallback_fn=fallback_fn,
+            fallback_default=fallback_default,
+        )
+
+    # GracefulDegradation 연동: full_guards 비활성화 여부 확인
+    degradation_active = False
+    try:
+        from selfhealing.scaling.graceful_degradation import (
+            get_graceful_degradation,
+        )
+
+        degradation = get_graceful_degradation()
+        if not degradation.is_enabled("full_guards"):
+            degradation_active = True
+    except ImportError:
+        pass
+
+    # minimal 파이프라인 반환 조건:
+    # 1. GracefulDegradation이 full_guards를 비활성화함
+    # 2. tier_id가 hot_path_tiers에 포함됨
+    use_minimal = degradation_active or (
+        tier_id is not None and tier_id in settings.hot_path_tiers
+    )
+
+    if use_minimal:
+        return minimal_pipeline(
+            service_name=service_name,
+            audit_sampling_rate=settings.audit_sampling_rate,
+        )
+
+    return standard_pipeline(
+        service_name=service_name,
+        max_retries=max_retries,
+        domain=domain,
+        fallback_chain=fallback_chain,
+        fallback_fn=fallback_fn,
+        fallback_default=fallback_default,
     )

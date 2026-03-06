@@ -1,0 +1,89 @@
+"""
+Adaptive Pipeline Settings - Pydantic v2.
+
+부하 적응형 파이프라인 설정.
+GracefulDegradation 연동으로 시스템 부하에 따라 자동으로 파이프라인을 전환한다.
+
+Environment Variables:
+    SELFHEALING_PIPELINE_ADAPTIVE_ENABLED=false
+    SELFHEALING_PIPELINE_HOT_PATH_TIERS=["non_essential"]
+    SELFHEALING_PIPELINE_AUDIT_SAMPLING_RATE=1.0
+"""
+
+import structlog
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = structlog.get_logger()
+
+
+class PipelineSettings(BaseSettings):
+    """
+    적응형 파이프라인 설정.
+
+    adaptive_enabled=False(기본값)이면 항상 standard_pipeline을 사용한다.
+    adaptive_enabled=True이면 요청의 tier_id와 시스템 부하에 따라
+    minimal/standard/ha 파이프라인을 자동 선택한다.
+
+    Attributes:
+        adaptive_enabled: 적응형 파이프라인 활성화 여부
+        hot_path_tiers: minimal 파이프라인을 적용할 tier 목록
+        audit_sampling_rate: minimal 파이프라인의 감사 샘플링 비율 (1.0=100%)
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_PIPELINE_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+    )
+
+    adaptive_enabled: bool = Field(
+        default=False,
+        description="적응형 파이프라인 활성화 여부. False면 항상 standard 사용",
+    )
+
+    hot_path_tiers: list[str] = Field(
+        default=["non_essential"],
+        description="minimal 파이프라인을 적용할 tier 목록",
+    )
+
+    audit_sampling_rate: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="minimal 파이프라인의 감사 샘플링 비율 (1.0=100%, 0.01=1%)",
+    )
+
+    @field_validator("audit_sampling_rate")
+    @classmethod
+    def validate_audit_sampling_rate(cls, v: float) -> float:
+        """샘플링 비율이 극단적이면 경고."""
+        if 0.0 < v < 0.01:
+            logger.warning(
+                "pipeline_settings.very_low_audit_sampling",
+                setting_value=v,
+            )
+        return v
+
+
+# =============================================================================
+# Singleton Pattern
+# =============================================================================
+
+_settings: PipelineSettings | None = None
+
+
+def get_pipeline_settings() -> PipelineSettings:
+    """캐시된 PipelineSettings 인스턴스 반환."""
+    global _settings
+    if _settings is None:
+        _settings = PipelineSettings()
+    return _settings
+
+
+def reset_pipeline_settings() -> None:
+    """캐시된 설정 초기화 (테스트용)."""
+    global _settings
+    _settings = None
