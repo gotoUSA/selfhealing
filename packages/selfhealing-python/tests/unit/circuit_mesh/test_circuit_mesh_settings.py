@@ -242,3 +242,58 @@ class TestCircuitMeshSettingsSingletonBehavior:
         reset_circuit_mesh_settings()
         second = get_circuit_mesh_settings()
         assert first is not second
+
+
+# =============================================================================
+# 계약 검증 (Contract) — Feature Flags & Cross-Region
+# =============================================================================
+
+
+class TestCircuitMeshSettingsFeatureFlagContract:
+    """303 Feature Flag 및 cross_region_dependencies 계약값 검증."""
+
+    def test_enable_damped_propagation_default_is_true(self):
+        """enable_damped_propagation 기본값: True."""
+        settings = CircuitMeshSettings()
+        assert settings.enable_damped_propagation is True
+
+    def test_enable_preemptive_fallback_default_is_true(self):
+        """enable_preemptive_fallback 기본값: True."""
+        settings = CircuitMeshSettings()
+        assert settings.enable_preemptive_fallback is True
+
+    def test_enable_fast_recovery_default_is_true(self):
+        """enable_fast_recovery 기본값: True."""
+        settings = CircuitMeshSettings()
+        assert settings.enable_fast_recovery is True
+
+    def test_enable_ttl_heartbeat_default_is_true(self):
+        """enable_ttl_heartbeat 기본값: True."""
+        settings = CircuitMeshSettings()
+        assert settings.enable_ttl_heartbeat is True
+
+    def test_cross_region_dependencies_default_is_empty(self):
+        """cross_region_dependencies 기본값: 빈 리스트."""
+        settings = CircuitMeshSettings()
+        assert settings.cross_region_dependencies == []
+
+    def test_cross_region_dependencies_accepts_list(self):
+        """cross_region_dependencies는 서비스명 리스트를 받는다."""
+        settings = CircuitMeshSettings(
+            cross_region_dependencies=["region-b:svc-x", "region-c:svc-y"]
+        )
+        assert len(settings.cross_region_dependencies) == 2
+        assert "region-b:svc-x" in settings.cross_region_dependencies
+
+    def test_feature_flags_accept_false(self):
+        """Feature flag들은 False로 설정 가능하다."""
+        settings = CircuitMeshSettings(
+            enable_damped_propagation=False,
+            enable_preemptive_fallback=False,
+            enable_fast_recovery=False,
+            enable_ttl_heartbeat=False,
+        )
+        assert settings.enable_damped_propagation is False
+        assert settings.enable_preemptive_fallback is False
+        assert settings.enable_fast_recovery is False
+        assert settings.enable_ttl_heartbeat is False

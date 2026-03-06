@@ -260,3 +260,143 @@ class TestTwoTierStoreDriftBehavior:
         result = store.check_drift()
         assert result["drift_detected"] is False
         assert result["drift_count"] == 0
+
+
+# =============================================================================
+# 동작 검증 (Behavior) — clear_l1
+# =============================================================================
+
+
+class TestTwoTierStoreClearL1Behavior:
+    """clear_l1() 동작 검증."""
+
+    def test_clear_l1_removes_all_entries(self, store):
+        """clear_l1은 L1의 모든 항목을 제거한다."""
+        store.set("svc-a", _make_override("svc-a"))
+        store.set("svc-b", _make_override("svc-b"))
+        store.clear_l1()
+        assert store.get_all() == {}
+
+    def test_clear_l1_does_not_touch_l2(self, store, mock_cache):
+        """clear_l1은 L2(Redis)를 건드리지 않는다."""
+        store.set("svc-a", _make_override("svc-a"))
+        mock_cache.reset_mock()
+        store.clear_l1()
+        mock_cache.delete.assert_not_called()
+
+    def test_clear_l1_on_empty_store_is_safe(self, store):
+        """빈 스토어에서 clear_l1 호출 시 예외 없음."""
+        store.clear_l1()
+        assert store.get_all() == {}
+
+    def test_clear_l1_idempotent(self, store):
+        """clear_l1 연속 호출은 동일 결과."""
+        store.set("svc-a", _make_override("svc-a"))
+        store.clear_l1()
+        store.clear_l1()
+        assert store.get_all() == {}
+
+
+# =============================================================================
+# 동작 검증 (Behavior) — hydrate_from_l2
+# =============================================================================
+
+
+class TestTwoTierStoreHydrateFromL2Behavior:
+    """hydrate_from_l2() 동작 검증."""
+
+    def test_hydrate_restores_valid_overrides(self, store, mock_cache):
+        """hydrate_from_l2는 만료되지 않은 오버라이드를 L1에 복원한다."""
+        from datetime import timedelta
+
+        future_time = (datetime.now(timezone.utc) + timedelta(seconds=600)).isoformat()
+        override_data = json.dumps(
+            {
+                "service_name": "svc-a",
+                "original_failure_threshold": 5,
+                "adjusted_failure_threshold": 10,
+                "original_recovery_timeout": 60,
+                "adjusted_recovery_timeout": 180,
+                "reason": "test",
+                "expires_at": future_time,
+                "renewal_count": 0,
+            }
+        )
+
+        mock_cache.keys.return_value = [
+            f"{TwoTierMeshOverrideStore.REDIS_KEY_PREFIX}svc-a"
+        ]
+        mock_cache.get.return_value = override_data
+
+        restored = store.hydrate_from_l2()
+        assert restored == 1
+        assert store.get("svc-a") is not None
+        assert store.get("svc-a").adjusted_failure_threshold == 10
+
+    def test_hydrate_skips_expired_overrides(self, store, mock_cache):
+        """hydrate_from_l2는 만료된 오버라이드를 복원하지 않는다."""
+        from datetime import timedelta
+
+        past_time = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+        override_data = json.dumps(
+            {
+                "service_name": "svc-expired",
+                "original_failure_threshold": 5,
+                "adjusted_failure_threshold": 10,
+                "original_recovery_timeout": 60,
+                "adjusted_recovery_timeout": 180,
+                "reason": "test",
+                "expires_at": past_time,
+                "renewal_count": 0,
+            }
+        )
+
+        mock_cache.keys.return_value = [
+            f"{TwoTierMeshOverrideStore.REDIS_KEY_PREFIX}svc-expired"
+        ]
+        mock_cache.get.return_value = override_data
+
+        restored = store.hydrate_from_l2()
+        assert restored == 0
+
+    def test_hydrate_returns_zero_when_no_keys(self, store, mock_cache):
+        """L2에 키가 없으면 0을 반환한다."""
+        mock_cache.keys.return_value = []
+        restored = store.hydrate_from_l2()
+        assert restored == 0
+
+    def test_hydrate_failure_returns_zero_gracefully(self, store, mock_cache):
+        """L2 접근 실패 시 0을 반환한다 (graceful degradation)."""
+        mock_cache.keys.side_effect = Exception("Redis connection error")
+        restored = store.hydrate_from_l2()
+        assert restored == 0
+
+    def test_hydrate_restores_multiple_overrides(self, store, mock_cache):
+        """hydrate_from_l2는 여러 오버라이드를 모두 복원한다."""
+        from datetime import timedelta
+
+        future_time = (datetime.now(timezone.utc) + timedelta(seconds=600)).isoformat()
+
+        def mock_get(key):
+            svc_name = key.removeprefix(TwoTierMeshOverrideStore.REDIS_KEY_PREFIX)
+            return json.dumps(
+                {
+                    "service_name": svc_name,
+                    "original_failure_threshold": 5,
+                    "adjusted_failure_threshold": 10,
+                    "original_recovery_timeout": 60,
+                    "adjusted_recovery_timeout": 180,
+                    "reason": "test",
+                    "expires_at": future_time,
+                    "renewal_count": 0,
+                }
+            )
+
+        prefix = TwoTierMeshOverrideStore.REDIS_KEY_PREFIX
+        mock_cache.keys.return_value = [f"{prefix}svc-a", f"{prefix}svc-b"]
+        mock_cache.get.side_effect = mock_get
+
+        restored = store.hydrate_from_l2()
+        assert restored == 2
+        assert store.get("svc-a") is not None
+        assert store.get("svc-b") is not None

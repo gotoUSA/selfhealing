@@ -593,3 +593,325 @@ class TestMeshCoordinatorSingletonBehavior:
         set_mesh_coordinator(MagicMock())
         reset_mesh_coordinator()
         assert get_mesh_coordinator() is None
+
+
+# =============================================================================
+# 동작 검증 (Behavior) — Hydration
+# =============================================================================
+
+
+class TestMeshCoordinatorHydrationBehavior:
+    """set_hydrating / hydrate_from_store 동작 검증."""
+
+    def test_events_queued_during_hydration(self, coordinator):
+        """Hydration 중 수신된 OPENED 이벤트가 큐잉된다."""
+        coordinator.set_hydrating(True)
+        event = _make_event("svc-down")
+        coordinator.on_downstream_opened(event)
+
+        assert "svc-down" not in coordinator._downstream_open_set
+        assert len(coordinator._hydration_queue) == 1
+
+    def test_queued_events_flushed_on_hydration_end(self, coordinator, mock_graph):
+        """Hydration 종료 시 큐잉된 이벤트가 flush된다."""
+        coordinator.set_hydrating(True)
+        event = _make_event("svc-down")
+        coordinator.on_downstream_opened(event)
+
+        coordinator.set_hydrating(False)
+
+        assert "svc-down" in coordinator._downstream_open_set
+        assert len(coordinator._hydration_queue) == 0
+
+    def test_closed_events_queued_during_hydration(self, coordinator):
+        """Hydration 중 CLOSED 이벤트도 큐잉된다."""
+        coordinator._downstream_open_set.add("svc-down")
+        coordinator.set_hydrating(True)
+        event = _make_event("svc-down")
+        coordinator.on_downstream_closed(event)
+
+        assert "svc-down" in coordinator._downstream_open_set
+        assert len(coordinator._hydration_queue) == 1
+
+    def test_hydrate_from_store_applies_overrides_to_cb(
+        self, coordinator, mock_cb_service
+    ):
+        """hydrate_from_store는 store의 오버라이드를 CB에 적용한다."""
+        override = make_override(service_name="svc-up-1")
+        mock_store = MagicMock()
+        mock_store.hydrate_from_l2.return_value = 1
+        mock_store.get_all.return_value = {"svc-up-1": override}
+        coordinator._store = mock_store
+
+        coordinator.hydrate_from_store()
+
+        mock_cb_service.apply_threshold_override.assert_called_once_with(
+            "svc-up-1", override
+        )
+
+    def test_hydrate_from_store_populates_open_set(self, coordinator, mock_cb_service):
+        """hydrate_from_store는 reason에서 downstream을 추출하여 open_set에 추가."""
+        override = make_override(
+            service_name="svc-up-1",
+            reason="downstream:svc-down OPEN (depth=1)",
+        )
+        mock_store = MagicMock()
+        mock_store.hydrate_from_l2.return_value = 1
+        mock_store.get_all.return_value = {"svc-up-1": override}
+        coordinator._store = mock_store
+
+        coordinator.hydrate_from_store()
+
+        assert "svc-down" in coordinator._downstream_open_set
+
+    def test_set_hydrating_false_with_empty_queue_is_noop(self, coordinator):
+        """큐가 비어있을 때 set_hydrating(False)는 정상 처리."""
+        coordinator.set_hydrating(True)
+        coordinator.set_hydrating(False)
+        assert coordinator._hydrating is False
+        assert len(coordinator._hydration_queue) == 0
+
+
+# =============================================================================
+# 동작 검증 (Behavior) — Manual Control
+# =============================================================================
+
+
+class TestMeshCoordinatorForceReleaseBehavior:
+    """force_release / release_all_overrides 동작 검증."""
+
+    def test_force_release_removes_override(self, coordinator, mock_cb_service, store):
+        """force_release는 오버라이드를 제거한다."""
+        store.set("svc-up-1", make_override(service_name="svc-up-1"))
+
+        result = coordinator.force_release("svc-up-1", reason="manual")
+
+        assert result is True
+        assert store.get("svc-up-1") is None
+        mock_cb_service.remove_threshold_override.assert_called_once_with("svc-up-1")
+
+    def test_force_release_nonexistent_returns_false(self, coordinator):
+        """존재하지 않는 서비스의 force_release는 False 반환."""
+        result = coordinator.force_release("nonexistent")
+        assert result is False
+
+    def test_release_all_clears_all_overrides(
+        self, coordinator, mock_cb_service, store
+    ):
+        """release_all_overrides는 모든 오버라이드를 제거한다."""
+        store.set("svc-a", make_override(service_name="svc-a"))
+        store.set("svc-b", make_override(service_name="svc-b"))
+        coordinator._downstream_open_set.add("svc-down")
+        coordinator._recovery_queue.append("svc-down")
+
+        released = coordinator.release_all_overrides(reason="emergency")
+
+        assert released == 2
+        assert store.get("svc-a") is None
+        assert store.get("svc-b") is None
+        assert len(coordinator._downstream_open_set) == 0
+        assert len(coordinator._recovery_queue) == 0
+
+    def test_release_all_returns_zero_when_empty(self, coordinator):
+        """오버라이드 없을 때 0 반환."""
+        assert coordinator.release_all_overrides() == 0
+
+
+# =============================================================================
+# 동작 검증 (Behavior) — Dry-Run Simulation
+# =============================================================================
+
+
+class TestMeshCoordinatorSimulateBehavior:
+    """simulate_downstream_open 동작 검증."""
+
+    def test_returns_expected_overrides_without_applying(
+        self, coordinator, mock_graph, mock_cb_service, store
+    ):
+        """시뮬레이션 결과를 반환하되 실제 적용하지 않는다."""
+        mock_graph.get_dependents_recursive.return_value = [("svc-up-1", 1)]
+
+        results = coordinator.simulate_downstream_open("svc-down")
+
+        assert len(results) == 1
+        assert results[0].service_name == "svc-up-1"
+        assert "SIMULATION" in results[0].reason
+        assert store.get("svc-up-1") is None
+        mock_cb_service.apply_threshold_override.assert_not_called()
+
+    def test_simulation_uses_damping_at_depth_2(
+        self, coordinator, mock_graph, mock_cb_service, settings
+    ):
+        """시뮬레이션이 depth=2에서 감쇠 배율을 적용한다."""
+        mock_graph.get_dependents_recursive.return_value = [
+            ("svc-up-1", 1),
+            ("svc-up-2", 2),
+        ]
+
+        results = coordinator.simulate_downstream_open("svc-down")
+
+        assert len(results) == 2
+        assert results[0].adjusted_failure_threshold == int(5 * 2.0)
+        assert results[1].adjusted_failure_threshold == int(5 * 1.5)
+
+    def test_simulation_returns_empty_for_no_dependents(self, coordinator, mock_graph):
+        """의존성 없으면 빈 리스트 반환."""
+        mock_graph.get_dependents_recursive.return_value = []
+        assert coordinator.simulate_downstream_open("unknown") == []
+
+
+# =============================================================================
+# 동작 검증 (Behavior) — Feature Flags
+# =============================================================================
+
+
+class TestMeshCoordinatorFeatureFlagBehavior:
+    """Feature Flag 비활성화 시 동작 검증."""
+
+    def test_preemptive_fallback_disabled_skips_checker_registration(
+        self, mock_graph, mock_cb_service, store
+    ):
+        """enable_preemptive_fallback=False면 downstream checker 미등록."""
+        settings = CircuitMeshSettings(enable_preemptive_fallback=False)
+        coord = MeshCoordinator(
+            dependency_graph=mock_graph,
+            cb_service=mock_cb_service,
+            override_store=store,
+            settings=settings,
+        )
+        coord.initialize()
+        mock_cb_service.register_downstream_checker.assert_not_called()
+
+    def test_damped_propagation_disabled_limits_depth_to_1(
+        self, mock_graph, mock_cb_service, store
+    ):
+        """enable_damped_propagation=False면 depth=1로 제한."""
+        settings = CircuitMeshSettings(
+            enable_damped_propagation=False,
+            propagation_max_depth=3,
+        )
+        coord = MeshCoordinator(
+            dependency_graph=mock_graph,
+            cb_service=mock_cb_service,
+            override_store=store,
+            settings=settings,
+        )
+        mock_graph.get_dependents_recursive.return_value = [("svc-up-1", 1)]
+
+        coord.on_downstream_opened(_make_event("svc-down"))
+
+        mock_graph.get_dependents_recursive.assert_called_once_with(
+            "svc-down", max_depth=1
+        )
+
+    def test_fast_recovery_disabled_removes_override_directly(
+        self, mock_graph, mock_cb_service, store
+    ):
+        """enable_fast_recovery=False면 CLOSED 시 오버라이드 즉시 제거."""
+        settings = CircuitMeshSettings(enable_fast_recovery=False)
+        coord = MeshCoordinator(
+            dependency_graph=mock_graph,
+            cb_service=mock_cb_service,
+            override_store=store,
+            settings=settings,
+        )
+        store.set("svc-up-1", make_override(service_name="svc-up-1"))
+        mock_graph.get_dependents_recursive.return_value = [("svc-up-1", 1)]
+
+        coord.on_downstream_closed(_make_event("svc-down"))
+
+        assert store.get("svc-up-1") is None
+        mock_cb_service.remove_threshold_override.assert_called_once_with("svc-up-1")
+
+    def test_ttl_heartbeat_disabled_returns_early(
+        self, mock_graph, mock_cb_service, store
+    ):
+        """enable_ttl_heartbeat=False면 check_override_renewals 즉시 반환."""
+        settings = CircuitMeshSettings(enable_ttl_heartbeat=False)
+        coord = MeshCoordinator(
+            dependency_graph=mock_graph,
+            cb_service=mock_cb_service,
+            override_store=store,
+            settings=settings,
+        )
+        store.set(
+            "svc-up-1",
+            make_override(service_name="svc-up-1", expires_in_seconds=30),
+        )
+
+        result = coord.check_override_renewals()
+
+        assert result == {
+            "success": True,
+            "renewed": 0,
+            "expired": 0,
+            "escalated": 0,
+            "total_overrides": 0,
+        }
+
+
+# =============================================================================
+# 동작 검증 (Behavior) — _is_processable
+# =============================================================================
+
+
+class TestMeshCoordinatorIsProcessableBehavior:
+    """_is_processable 동작 검증."""
+
+    def test_returns_true_when_service_has_dependents(self, coordinator, mock_graph):
+        """dependents가 있는 서비스는 처리 대상."""
+        mock_graph.get_dependents.return_value = ["svc-up"]
+        assert coordinator._is_processable("svc-down") is True
+
+    def test_returns_true_when_service_has_dependencies(self, coordinator, mock_graph):
+        """dependencies가 있는 서비스는 처리 대상."""
+        mock_graph.get_dependents.return_value = []
+        mock_graph.get_dependencies.return_value = ["svc-dep"]
+        assert coordinator._is_processable("svc-up") is True
+
+    def test_returns_true_for_cross_region_dependency(
+        self, mock_graph, mock_cb_service, store
+    ):
+        """cross_region_dependencies에 포함된 서비스는 처리 대상."""
+        settings = CircuitMeshSettings(
+            cross_region_dependencies=["auth_global"],
+        )
+        coord = MeshCoordinator(
+            dependency_graph=mock_graph,
+            cb_service=mock_cb_service,
+            override_store=store,
+            settings=settings,
+        )
+        mock_graph.get_dependents.return_value = []
+        mock_graph.get_dependencies.return_value = []
+        assert coord._is_processable("auth_global") is True
+
+    def test_returns_false_for_unknown_service(self, coordinator, mock_graph):
+        """그래프에 없고 cross_region에도 없는 서비스는 대상 아님."""
+        mock_graph.get_dependents.return_value = []
+        mock_graph.get_dependencies.return_value = []
+        assert coordinator._is_processable("unknown") is False
+
+    def test_unprocessable_event_is_ignored(
+        self, coordinator, mock_graph, mock_cb_service
+    ):
+        """_is_processable가 False인 이벤트는 무시된다."""
+        mock_graph.get_dependents.return_value = []
+        mock_graph.get_dependencies.return_value = []
+
+        coordinator.on_downstream_opened(_make_event("unknown_service"))
+
+        assert "unknown_service" not in coordinator._downstream_open_set
+
+
+# =============================================================================
+# 동작 검증 (Behavior) — override_store property
+# =============================================================================
+
+
+class TestMeshCoordinatorOverrideStorePropertyBehavior:
+    """override_store 프로퍼티 동작 검증."""
+
+    def test_override_store_returns_store_instance(self, coordinator, store):
+        """override_store 프로퍼티가 저장소 인스턴스를 반환한다."""
+        assert coordinator.override_store is store
