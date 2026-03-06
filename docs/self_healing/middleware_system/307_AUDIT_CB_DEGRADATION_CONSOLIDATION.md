@@ -182,8 +182,7 @@ class CircuitBreaker(CircuitBreakerBase):
 
     # DR-6: Observability 훅 — AuditMetrics 연동
     def _on_state_changed(self, old: CircuitState, new: CircuitState) -> None:
-        AuditMetrics.record_cb_transition(self._name, old, new)
-        AuditMetrics.set_cb_state(self._name, new)
+        AuditMetrics.get_instance().set_circuit_state(self._name, new.value)
 
 # graceful_degradation/circuit_breaker.py
 class HashChainCircuitBreaker(CircuitBreakerBase):
@@ -192,7 +191,7 @@ class HashChainCircuitBreaker(CircuitBreakerBase):
         super().__init__(config.failure_threshold, ...)
         self._lock = threading.RLock()  # DR-5: Sync 전용 락
         self._degradation_manager = degradation_manager
-        self._half_open_requests = config.half_open_requests
+        self._half_open_max_requests = config.half_open_requests
 
     # DR-5: 동시성 제어 — threading.RLock으로 래핑
     def can_execute(self) -> bool:
@@ -203,25 +202,26 @@ class HashChainCircuitBreaker(CircuitBreakerBase):
         with self._lock:
             self._record_success_impl()
 
-    def record_failure(self) -> None:
+    def record_failure(self, error=None) -> None:
         with self._lock:
             self._record_failure_impl()
-
-    def _on_open(self) -> None:
-        if self._degradation_manager:
-            self._degradation_manager.on_redis_failure(...)
+            # on_redis_failure는 error 인자 전달을 위해 record_failure() 내부에서 호출
+            if self._degradation_manager and self._state == CircuitState.OPEN:
+                self._degradation_manager.on_redis_failure(error)
 
     def _on_close(self) -> None:
         if self._degradation_manager:
             self._degradation_manager.on_redis_recovery()
 
     def _can_attempt_half_open(self) -> bool:
-        return self._half_open_attempts < self._half_open_requests
+        if self._half_open_requests < self._half_open_max_requests:
+            self._half_open_requests += 1
+            return True
+        return False
 
     # DR-6: Observability 훅
     def _on_state_changed(self, old: CircuitState, new: CircuitState) -> None:
-        AuditMetrics.record_cb_transition("redis_hashchain", old, new)
-        AuditMetrics.set_cb_state("redis_hashchain", new)
+        AuditMetrics.get_instance().set_circuit_state("redis_hashchain", new.value)
 ```
 
 ---

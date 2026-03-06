@@ -195,7 +195,8 @@ class TestCircuitBreakerBaseStateTransitionBehavior:
         cb.record_failure()
         assert cb._state == CircuitState.OPEN
 
-        time.sleep(0.06)
+        # Simulate timeout elapsed (no time.sleep — §6.3)
+        cb._last_failure_mono -= 0.06
         cb.can_execute()
         assert cb._state == CircuitState.HALF_OPEN
 
@@ -203,7 +204,7 @@ class TestCircuitBreakerBaseStateTransitionBehavior:
         """HALF_OPEN allows execution (default _can_attempt_half_open returns True)."""
         cb = self._make_cb(failure_threshold=1, timeout_seconds=0.01)
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         assert cb.can_execute() is True
         assert cb._state == CircuitState.HALF_OPEN
 
@@ -213,7 +214,7 @@ class TestCircuitBreakerBaseStateTransitionBehavior:
             failure_threshold=1, success_threshold=2, timeout_seconds=0.01
         )
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()
 
         cb.record_success()
@@ -225,7 +226,7 @@ class TestCircuitBreakerBaseStateTransitionBehavior:
         """HALF_OPEN -> OPEN on any failure."""
         cb = self._make_cb(failure_threshold=1, timeout_seconds=0.01)
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()
         assert cb._state == CircuitState.HALF_OPEN
 
@@ -238,7 +239,7 @@ class TestCircuitBreakerBaseStateTransitionBehavior:
             failure_threshold=1, success_threshold=1, timeout_seconds=0.01
         )
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()
         cb.record_success()
 
@@ -250,7 +251,7 @@ class TestCircuitBreakerBaseStateTransitionBehavior:
         """Transition to HALF_OPEN resets success_count."""
         cb = self._make_cb(failure_threshold=1, timeout_seconds=0.01)
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()
 
         assert cb._state == CircuitState.HALF_OPEN
@@ -306,7 +307,7 @@ class TestCircuitBreakerBaseCountersBehavior:
             timeout_seconds=0.01,
         )
         cb.record_failure()  # CLOSED -> OPEN (+1)
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()  # OPEN -> HALF_OPEN (+1)
         cb.record_success()  # HALF_OPEN -> CLOSED (+1)
         assert cb._state_changes == 3
@@ -336,7 +337,7 @@ class TestCircuitBreakerBaseObservabilityHookBehavior:
             timeout_seconds=0.01,
         )
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()
 
         assert cb.state_change_log[-1] == (CircuitState.OPEN, CircuitState.HALF_OPEN)
@@ -350,7 +351,7 @@ class TestCircuitBreakerBaseObservabilityHookBehavior:
             timeout_seconds=0.01,
         )
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()
         cb.record_success()
 
@@ -440,7 +441,7 @@ class TestCircuitBreakerSyncBehavior:
         cb.record_failure()
         assert cb.state == CircuitState.OPEN
 
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         assert cb.state == CircuitState.HALF_OPEN
 
     @patch("selfhealing.audit.resilience.metrics.AuditMetrics", autospec=True)

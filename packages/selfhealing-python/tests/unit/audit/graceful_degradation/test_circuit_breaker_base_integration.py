@@ -7,7 +7,6 @@ _can_attempt_half_open limiting, _on_close recovery notification,
 and DegradationBroadcaster integration in HashChainDegradationManager.
 """
 
-import time
 from unittest.mock import MagicMock, patch
 
 from selfhealing.audit.graceful_degradation.circuit_breaker import (
@@ -49,7 +48,7 @@ class TestHashChainCircuitBreakerBaseIntegrationBehavior:
         )
         cb = HashChainCircuitBreaker(config=config)
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
 
         assert cb.can_execute() is True
         assert cb.can_execute() is True
@@ -67,14 +66,14 @@ class TestHashChainCircuitBreakerBaseIntegrationBehavior:
 
         # First cycle: CLOSED -> OPEN -> HALF_OPEN -> CLOSED
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()
         cb.record_success()
         assert cb.state == CircuitState.CLOSED
 
         # Second cycle: CLOSED -> OPEN -> HALF_OPEN
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
 
         # Should allow request again (counter was reset)
         assert cb.can_execute() is True
@@ -90,7 +89,7 @@ class TestHashChainCircuitBreakerBaseIntegrationBehavior:
         cb = HashChainCircuitBreaker(config=config, degradation_manager=mock_dm)
 
         cb.record_failure()
-        time.sleep(0.02)
+        cb._last_failure_mono -= 0.02
         cb.can_execute()
         cb.record_success()
 

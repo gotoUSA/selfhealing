@@ -26,9 +26,11 @@ class TestDegradationStatusContract:
         with (
             patch(
                 "selfhealing.audit.resilience.degraded_mode.DegradedModeManager",
+                autospec=True,
             ) as mock_dmm_cls,
             patch(
                 "selfhealing.audit.graceful_degradation.degradation_manager.HashChainDegradationManager",
+                autospec=True,
             ) as mock_hcdm_cls,
         ):
             mock_dmm_instance = MagicMock()
@@ -168,9 +170,11 @@ class TestDegradationStatusBehavior:
         with (
             patch(
                 "selfhealing.audit.resilience.degraded_mode.DegradedModeManager",
+                autospec=True,
             ) as mock_dmm,
             patch(
                 "selfhealing.audit.graceful_degradation.degradation_manager.HashChainDegradationManager",
+                autospec=True,
             ) as mock_hcdm,
         ):
             mock_dmm.get_instance.return_value.get_status.return_value = {
@@ -191,9 +195,11 @@ class TestDegradationStatusBehavior:
         with (
             patch(
                 "selfhealing.audit.resilience.degraded_mode.DegradedModeManager",
+                autospec=True,
             ) as mock_dmm,
             patch(
                 "selfhealing.audit.graceful_degradation.degradation_manager.HashChainDegradationManager",
+                autospec=True,
             ) as mock_hcdm,
         ):
             mock_dmm.get_instance.return_value.get_status.return_value = {
@@ -209,9 +215,11 @@ class TestDegradationStatusBehavior:
         with (
             patch(
                 "selfhealing.audit.resilience.degraded_mode.DegradedModeManager",
+                autospec=True,
             ) as mock_dmm,
             patch(
                 "selfhealing.audit.graceful_degradation.degradation_manager.HashChainDegradationManager",
+                autospec=True,
             ) as mock_hcdm,
         ):
             mock_dmm.get_instance.return_value.get_status.return_value = {
@@ -231,9 +239,11 @@ class TestDegradationStatusBehavior:
         with (
             patch(
                 "selfhealing.audit.resilience.degraded_mode.DegradedModeManager",
+                autospec=True,
             ) as mock_dmm,
             patch(
                 "selfhealing.audit.graceful_degradation.degradation_manager.HashChainDegradationManager",
+                autospec=True,
             ) as mock_hcdm,
         ):
             mock_dmm.get_instance.return_value.get_status.return_value = {
