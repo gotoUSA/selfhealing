@@ -32,6 +32,7 @@ import sys
 import tempfile
 import threading
 import time
+import warnings  # noqa: F401
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
@@ -104,16 +105,12 @@ class CheckpointManager:
     """
     WAL 처리 시퀀스 관리자.
 
+    .. deprecated::
+        Use ``CheckpointStorageStrategy`` from ``checkpoint_strategy.py`` instead.
+        This class will be removed in the next major version.
+
     마지막 처리된 WAL 시퀀스를 디스크에 영속화하여
     프로세스 재시작 시 정확한 복구 지점 제공.
-
-    특징:
-    - Thread-safe
-    - 멀티 프로세스 파일 락 지원
-    - fsync로 디스크 영속화 보장
-    - 원자적 쓰기 (임시 파일 사용)
-    - JSON 형식으로 사람이 읽기 가능
-    - 환경변수 기반 경로 설정 지원
     """
 
     DEFAULT_CHECKPOINT_DIR = "/var/log/audit"
@@ -137,13 +134,12 @@ class CheckpointManager:
         checkpoint_path: str | Path | None = None,
         sync_on_write: bool = True,
     ):
-        """
-        CheckpointManager 초기화.
-
-        Args:
-            checkpoint_path: 체크포인트 파일 경로 (None이면 기본값 사용)
-            sync_on_write: 쓰기 시 fsync 수행 여부
-        """
+        warnings.warn(
+            "CheckpointManager is deprecated, use CheckpointStorageStrategy from "
+            "selfhealing.audit.checkpoint_strategy instead",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         if checkpoint_path is None:
             checkpoint_path = self._get_default_path()
 
@@ -153,7 +149,9 @@ class CheckpointManager:
 
         # 권한 체크 및 폴백
         if not self._verify_write_permission():
-            fallback_path = Path(tempfile.gettempdir()) / "selfhealing" / "checkpoint.json"
+            fallback_path = (
+                Path(tempfile.gettempdir()) / "selfhealing" / "checkpoint.json"
+            )
             logger.warning(
                 "checkpoint_manager.no_write_permission_falling",
                 path=self._path,
@@ -221,7 +219,9 @@ class CheckpointManager:
                         # 디렉토리 fsync (선택적, Linux에서 권장)
                         if self._sync_on_write:
                             try:
-                                dir_fd = os.open(str(self._path.parent), os.O_RDONLY | os.O_DIRECTORY)
+                                dir_fd = os.open(
+                                    str(self._path.parent), os.O_RDONLY | os.O_DIRECTORY
+                                )
                                 try:
                                     os.fsync(dir_fd)
                                 finally:
@@ -355,14 +355,15 @@ def get_checkpoint_manager(
     """
     기본 CheckpointManager 인스턴스 반환.
 
-    싱글톤 패턴으로 동일 인스턴스 재사용.
-
-    Args:
-        checkpoint_path: 체크포인트 파일 경로 (첫 호출 시에만 적용)
-
-    Returns:
-        CheckpointManager 인스턴스
+    .. deprecated::
+        Use ``get_default_checkpoint_strategy()`` from ``checkpoint_strategy.py`` instead.
     """
+    warnings.warn(
+        "get_checkpoint_manager() is deprecated, use "
+        "get_default_checkpoint_strategy() from selfhealing.audit.checkpoint_strategy instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     global _default_checkpoint_manager
 
     with _default_lock:

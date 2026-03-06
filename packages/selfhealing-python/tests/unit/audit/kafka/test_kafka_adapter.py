@@ -129,7 +129,9 @@ class TestKafkaAuditAdapter:
             assert b"order:123" in call_kwargs["key"]
             assert b"TEST_ACTION" in call_kwargs["value"]
 
-    def test_log_includes_schema_version(self, adapter, mock_producer, mock_confluent_kafka):
+    def test_log_includes_schema_version(
+        self, adapter, mock_producer, mock_confluent_kafka
+    ):
         """로그에 schema_version이 포함되는지 확인."""
         import json
 
@@ -278,7 +280,9 @@ class TestKafkaAuditAdapter:
         assert adapter._error_count == 1
         assert adapter._pending_count == 0
 
-    def test_headers_include_causation(self, adapter, mock_producer, mock_confluent_kafka):
+    def test_headers_include_causation(
+        self, adapter, mock_producer, mock_confluent_kafka
+    ):
         """Causation 헤더가 포함되는지 확인."""
         from selfhealing.context.causation_context import CausationContext
         from selfhealing.interfaces.audit_adapter import AuditEntry
@@ -315,7 +319,9 @@ class TestKafkaAuditAdapterSingleton:
 
         reset_kafka_audit_adapter()
 
-        with patch("selfhealing.adapters.audit.kafka_adapter.KafkaAuditAdapter._create_producer") as mock:
+        with patch(
+            "selfhealing.adapters.audit.kafka_adapter.KafkaAuditAdapter._create_producer"
+        ) as mock:
             mock.return_value = MagicMock()
 
             adapter1 = get_kafka_audit_adapter()
@@ -326,105 +332,88 @@ class TestKafkaAuditAdapterSingleton:
         reset_kafka_audit_adapter()
 
 
-class TestKafkaCheckpointManager:
-    """KafkaCheckpointManager 테스트."""
+class TestCheckpointStorageStrategy:
+    """FileCheckpointStorage 체크포인트 테스트 (KafkaCheckpointManager 대체)."""
 
     @pytest.fixture
-    def temp_file_path(self, tmp_path):
-        """임시 파일 경로."""
-        return tmp_path / "checkpoint.json"
+    def storage(self, tmp_path):
+        """FileCheckpointStorage 인스턴스."""
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
 
-    def test_save_and_load_checkpoint(self, temp_file_path):
+        return FileCheckpointStorage(base_path=tmp_path)
+
+    def test_save_and_load_checkpoint(self, storage):
         """체크포인트 저장 및 로드 테스트."""
-        from selfhealing.audit.kafka_checkpoint import KafkaCheckpointManager
+        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
-        manager = KafkaCheckpointManager(
-            storage="file",
-            file_path=temp_file_path,
-        )
-
-        manager.save_checkpoint(
-            namespace="test",
+        data = UnifiedCheckpointData(
             wal_sequence=100,
             kafka_topic="test.topic",
             kafka_partition=3,
             kafka_offset=5000,
             checksum="abc123",
         )
+        storage.save("test", data)
 
-        data = manager.get_last_checkpoint("test")
+        loaded = storage.load("test")
 
-        assert data is not None
-        assert data.wal_sequence == 100
-        assert data.kafka_topic == "test.topic"
-        assert data.kafka_partition == 3
-        assert data.kafka_offset == 5000
-        assert data.checksum == "abc123"
+        assert loaded is not None
+        assert loaded.wal_sequence == 100
+        assert loaded.kafka_topic == "test.topic"
+        assert loaded.kafka_partition == 3
+        assert loaded.kafka_offset == 5000
+        assert loaded.checksum == "abc123"
 
-    def test_get_wal_sequence(self, temp_file_path):
+    def test_get_wal_sequence(self, storage):
         """WAL 시퀀스 조회 테스트."""
-        from selfhealing.audit.kafka_checkpoint import KafkaCheckpointManager
+        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
-        manager = KafkaCheckpointManager(
-            storage="file",
-            file_path=temp_file_path,
+        assert storage.get_wal_sequence("nonexistent") == 0
+
+        storage.save(
+            "test",
+            UnifiedCheckpointData(
+                wal_sequence=200,
+                kafka_topic="test.topic",
+                kafka_partition=0,
+                kafka_offset=0,
+                checksum="xyz",
+            ),
         )
 
-        # 체크포인트가 없으면 0 반환
-        assert manager.get_wal_sequence("nonexistent") == 0
+        assert storage.get_wal_sequence("test") == 200
 
-        manager.save_checkpoint(
-            namespace="test",
-            wal_sequence=200,
-            kafka_topic="test.topic",
-            kafka_partition=0,
-            kafka_offset=0,
-            checksum="xyz",
-        )
-
-        assert manager.get_wal_sequence("test") == 200
-
-    def test_delete_checkpoint(self, temp_file_path):
+    def test_delete_checkpoint(self, storage):
         """체크포인트 삭제 테스트."""
-        from selfhealing.audit.kafka_checkpoint import KafkaCheckpointManager
+        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
-        manager = KafkaCheckpointManager(
-            storage="file",
-            file_path=temp_file_path,
+        storage.save(
+            "test",
+            UnifiedCheckpointData(
+                wal_sequence=100,
+                kafka_topic="test.topic",
+                kafka_partition=0,
+                kafka_offset=0,
+                checksum="abc",
+            ),
         )
 
-        manager.save_checkpoint(
-            namespace="test",
-            wal_sequence=100,
-            kafka_topic="test.topic",
-            kafka_partition=0,
-            kafka_offset=0,
-            checksum="abc",
-        )
+        assert storage.load("test") is not None
 
-        assert manager.get_last_checkpoint("test") is not None
-
-        result = manager.delete_checkpoint("test")
+        result = storage.delete("test")
 
         assert result is True
-        assert manager.get_last_checkpoint("test") is None
-
-    def test_redis_storage_requires_client(self):
-        """Redis 저장소는 클라이언트 필요."""
-        from selfhealing.audit.kafka_checkpoint import KafkaCheckpointManager
-
-        with pytest.raises(ValueError, match="redis_client is required"):
-            KafkaCheckpointManager(storage="redis", redis_client=None)
+        assert storage.load("test") is None
 
 
-class TestKafkaCheckpointData:
-    """KafkaCheckpointData 테스트."""
+class TestUnifiedCheckpointData:
+    """UnifiedCheckpointData 테스트."""
 
     def test_to_dict_and_from_dict(self):
         """직렬화/역직렬화 테스트."""
-        from selfhealing.audit.kafka_checkpoint import KafkaCheckpointData
+        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
-        data = KafkaCheckpointData(
+        data = UnifiedCheckpointData(
             wal_sequence=100,
             kafka_topic="test.topic",
             kafka_partition=5,
@@ -434,7 +423,7 @@ class TestKafkaCheckpointData:
         )
 
         data_dict = data.to_dict()
-        restored = KafkaCheckpointData.from_dict(data_dict)
+        restored = UnifiedCheckpointData.from_dict(data_dict)
 
         assert restored.wal_sequence == data.wal_sequence
         assert restored.kafka_topic == data.kafka_topic
@@ -460,11 +449,6 @@ class TestSyncWalToKafkaWithCheckpoint:
     """sync_wal_to_kafka_with_checkpoint 함수 테스트."""
 
     @pytest.fixture
-    def temp_checkpoint_path(self, tmp_path):
-        """임시 체크포인트 파일 경로."""
-        return tmp_path / "checkpoint.json"
-
-    @pytest.fixture
     def mock_wal(self):
         """Mock WAL 인스턴스."""
         mock = MagicMock()
@@ -481,20 +465,18 @@ class TestSyncWalToKafkaWithCheckpoint:
         return mock
 
     @pytest.fixture
-    def checkpoint_manager(self, temp_checkpoint_path):
-        """테스트용 KafkaCheckpointManager."""
-        from selfhealing.audit.kafka_checkpoint import KafkaCheckpointManager
+    def checkpoint_strategy(self, tmp_path):
+        """FileCheckpointStorage 인스턴스."""
+        from selfhealing.audit.checkpoint_strategy import FileCheckpointStorage
 
-        return KafkaCheckpointManager(
-            storage="file",
-            file_path=temp_checkpoint_path,
-        )
+        return FileCheckpointStorage(base_path=tmp_path)
 
-    def test_sync_with_new_kafka_producer(self, mock_wal, mock_kafka_producer, checkpoint_manager):
+    def test_sync_with_new_kafka_producer(
+        self, mock_wal, mock_kafka_producer, checkpoint_strategy
+    ):
         """KafkaAuditProducer를 사용한 동기화 테스트."""
         from selfhealing.audit.kafka_checkpoint import sync_wal_to_kafka_with_checkpoint
 
-        # Mock WAL 엔트리 설정
         mock_entry1 = MagicMock()
         mock_entry1.sequence = 1
         mock_entry1.data = {"event_type": "test", "data": "entry1"}
@@ -505,42 +487,44 @@ class TestSyncWalToKafkaWithCheckpoint:
         mock_entry2.data = {"event_type": "test", "data": "entry2"}
         mock_entry2.checksum = "checksum2"
 
-        mock_wal.recover_unprocessed = MagicMock(return_value=[mock_entry1, mock_entry2])
+        mock_wal.recover_unprocessed = MagicMock(
+            return_value=[mock_entry1, mock_entry2]
+        )
 
-        # 동기화 수행
         synced = sync_wal_to_kafka_with_checkpoint(
             wal=mock_wal,
             producer=mock_kafka_producer,
-            checkpoint=checkpoint_manager,
+            checkpoint_strategy=checkpoint_strategy,
             namespace="test",
         )
 
-        # 결과 검증
         assert synced == 2
         assert mock_kafka_producer.publish_audit_event.call_count == 2
         assert mock_kafka_producer.flush.call_count == 2
 
-        # 체크포인트가 저장되었는지 확인
-        last_cp = checkpoint_manager.get_last_checkpoint("test")
+        last_cp = checkpoint_strategy.load("test")
         assert last_cp is not None
         assert last_cp.wal_sequence == 2
         assert last_cp.kafka_topic == "selfhealing.audit.events"
 
-    def test_sync_resumes_from_checkpoint(self, mock_wal, mock_kafka_producer, checkpoint_manager):
+    def test_sync_resumes_from_checkpoint(
+        self, mock_wal, mock_kafka_producer, checkpoint_strategy
+    ):
         """체크포인트부터 재개되는지 테스트."""
+        from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
         from selfhealing.audit.kafka_checkpoint import sync_wal_to_kafka_with_checkpoint
 
-        # 기존 체크포인트 저장
-        checkpoint_manager.save_checkpoint(
-            namespace="test",
-            wal_sequence=5,
-            kafka_topic="old.topic",
-            kafka_partition=0,
-            kafka_offset=0,
-            checksum="old",
+        checkpoint_strategy.save(
+            "test",
+            UnifiedCheckpointData(
+                wal_sequence=5,
+                kafka_topic="old.topic",
+                kafka_partition=0,
+                kafka_offset=0,
+                checksum="old",
+            ),
         )
 
-        # Mock WAL 엔트리 설정 (시퀀스 6 이후만 반환)
         mock_entry = MagicMock()
         mock_entry.sequence = 6
         mock_entry.data = {"event_type": "test", "data": "entry6"}
@@ -548,23 +532,22 @@ class TestSyncWalToKafkaWithCheckpoint:
 
         mock_wal.recover_unprocessed = MagicMock(return_value=[mock_entry])
 
-        # 동기화 수행
         synced = sync_wal_to_kafka_with_checkpoint(
             wal=mock_wal,
             producer=mock_kafka_producer,
-            checkpoint=checkpoint_manager,
+            checkpoint_strategy=checkpoint_strategy,
             namespace="test",
         )
 
-        # WAL이 마지막 시퀀스 5 이후부터 조회되었는지 확인
         mock_wal.recover_unprocessed.assert_called_once_with(last_processed_seq=5)
         assert synced == 1
 
-    def test_sync_stops_on_publish_failure(self, mock_wal, mock_kafka_producer, checkpoint_manager):
+    def test_sync_stops_on_publish_failure(
+        self, mock_wal, mock_kafka_producer, checkpoint_strategy
+    ):
         """발행 실패 시 동기화 중단 테스트."""
         from selfhealing.audit.kafka_checkpoint import sync_wal_to_kafka_with_checkpoint
 
-        # Mock 설정: 첫 번째는 성공, 두 번째는 실패
         mock_kafka_producer.publish_audit_event = MagicMock(side_effect=[True, False])
 
         mock_entry1 = MagicMock()
@@ -577,25 +560,26 @@ class TestSyncWalToKafkaWithCheckpoint:
         mock_entry2.data = {"event_type": "test"}
         mock_entry2.checksum = "checksum2"
 
-        mock_wal.recover_unprocessed = MagicMock(return_value=[mock_entry1, mock_entry2])
+        mock_wal.recover_unprocessed = MagicMock(
+            return_value=[mock_entry1, mock_entry2]
+        )
 
-        # 동기화 수행
         synced = sync_wal_to_kafka_with_checkpoint(
             wal=mock_wal,
             producer=mock_kafka_producer,
-            checkpoint=checkpoint_manager,
+            checkpoint_strategy=checkpoint_strategy,
             namespace="test",
         )
 
-        # 첫 번째만 동기화됨
         assert synced == 1
 
-        # 체크포인트는 첫 번째까지만 저장
-        last_cp = checkpoint_manager.get_last_checkpoint("test")
+        last_cp = checkpoint_strategy.load("test")
         assert last_cp is not None
         assert last_cp.wal_sequence == 1
 
-    def test_sync_with_empty_wal(self, mock_wal, mock_kafka_producer, checkpoint_manager):
+    def test_sync_with_empty_wal(
+        self, mock_wal, mock_kafka_producer, checkpoint_strategy
+    ):
         """빈 WAL 동기화 테스트."""
         from selfhealing.audit.kafka_checkpoint import sync_wal_to_kafka_with_checkpoint
 
@@ -604,18 +588,17 @@ class TestSyncWalToKafkaWithCheckpoint:
         synced = sync_wal_to_kafka_with_checkpoint(
             wal=mock_wal,
             producer=mock_kafka_producer,
-            checkpoint=checkpoint_manager,
+            checkpoint_strategy=checkpoint_strategy,
             namespace="test",
         )
 
         assert synced == 0
         assert mock_kafka_producer.publish_audit_event.call_count == 0
 
-    def test_sync_with_legacy_adapter(self, mock_wal, checkpoint_manager):
+    def test_sync_with_legacy_adapter(self, mock_wal, checkpoint_strategy):
         """기존 KafkaAuditAdapter와의 하위 호환성 테스트."""
         from selfhealing.audit.kafka_checkpoint import sync_wal_to_kafka_with_checkpoint
 
-        # 기존 어댑터 Mock (publish_audit_event 없음)
         mock_adapter = MagicMock(spec=["log", "flush", "_settings"])
         mock_adapter.log = MagicMock()
         mock_adapter.flush = MagicMock()
@@ -624,17 +607,19 @@ class TestSyncWalToKafkaWithCheckpoint:
 
         mock_entry = MagicMock()
         mock_entry.sequence = 1
-        # AuditEntry에 맞는 필드 사용
-        mock_entry.data = {"action": "dlq_store", "target_type": "dlq_entry", "target_id": "test123"}
+        mock_entry.data = {
+            "action": "dlq_store",
+            "target_type": "dlq_entry",
+            "target_id": "test123",
+        }
         mock_entry.checksum = "checksum1"
 
         mock_wal.recover_unprocessed = MagicMock(return_value=[mock_entry])
 
-        # 동기화 수행
         synced = sync_wal_to_kafka_with_checkpoint(
             wal=mock_wal,
-            producer=mock_adapter,  # 기존 어댑터
-            checkpoint=checkpoint_manager,
+            producer=mock_adapter,
+            checkpoint_strategy=checkpoint_strategy,
             namespace="test",
         )
 
@@ -642,15 +627,18 @@ class TestSyncWalToKafkaWithCheckpoint:
         assert mock_adapter.log.call_count == 1
         assert mock_adapter.flush.call_count == 1
 
-        # 체크포인트 확인
-        last_cp = checkpoint_manager.get_last_checkpoint("test")
+        last_cp = checkpoint_strategy.load("test")
         assert last_cp.kafka_topic == "legacy.topic"
 
-    def test_sync_stops_on_exception(self, mock_wal, mock_kafka_producer, checkpoint_manager):
+    def test_sync_stops_on_exception(
+        self, mock_wal, mock_kafka_producer, checkpoint_strategy
+    ):
         """예외 발생 시 동기화 중단 테스트."""
         from selfhealing.audit.kafka_checkpoint import sync_wal_to_kafka_with_checkpoint
 
-        mock_kafka_producer.publish_audit_event = MagicMock(side_effect=Exception("Kafka connection error"))
+        mock_kafka_producer.publish_audit_event = MagicMock(
+            side_effect=Exception("Kafka connection error")
+        )
 
         mock_entry = MagicMock()
         mock_entry.sequence = 1
@@ -659,11 +647,10 @@ class TestSyncWalToKafkaWithCheckpoint:
 
         mock_wal.recover_unprocessed = MagicMock(return_value=[mock_entry])
 
-        # 동기화 수행 (예외가 발생해도 함수는 정상 종료)
         synced = sync_wal_to_kafka_with_checkpoint(
             wal=mock_wal,
             producer=mock_kafka_producer,
-            checkpoint=checkpoint_manager,
+            checkpoint_strategy=checkpoint_strategy,
             namespace="test",
         )
 

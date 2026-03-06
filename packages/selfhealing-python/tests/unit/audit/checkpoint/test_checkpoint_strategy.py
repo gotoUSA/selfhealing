@@ -897,9 +897,9 @@ class TestAuditSyncWorkerCheckpointStrategyMigration:
         assert loaded is not None
         assert loaded.wal_sequence == 12345
 
-    def test_save_checkpoint_falls_back_to_legacy(self, monkeypatch):
-        """Strategy 없으면 레거시 CheckpointManager 사용."""
-        from unittest.mock import MagicMock, patch
+    def test_save_checkpoint_logs_warning_when_no_strategy(self, monkeypatch):
+        """Strategy 없으면 경고 로그 후 워커 계속 실행."""
+        from unittest.mock import MagicMock
 
         from selfhealing.audit.sync_worker import AuditSyncWorker
 
@@ -909,15 +909,5 @@ class TestAuditSyncWorkerCheckpointStrategyMigration:
         worker = AuditSyncWorker(wal=mock_wal, central_adapter=mock_adapter)
         worker._last_processed_seq = 999
 
-        # CheckpointStrategyRegistry.get_default()가 None 반환하도록 설정
-        mock_checkpoint_manager = MagicMock()
-
-        with patch(
-            "selfhealing.audit.checkpoint_manager.get_checkpoint_manager",
-            return_value=mock_checkpoint_manager,
-        ):
-            # Strategy 없이 저장 시도
-            worker._save_checkpoint()
-
-            # 레거시 매니저가 호출되었는지 확인
-            mock_checkpoint_manager.save.assert_called_once_with(last_sequence=999)
+        # Strategy 없이 저장 시도 — 예외 없이 경고 로그만 출력
+        worker._save_checkpoint()

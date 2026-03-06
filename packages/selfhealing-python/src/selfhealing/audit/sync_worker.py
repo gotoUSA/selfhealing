@@ -85,14 +85,26 @@ class SyncWorkerConfig:
 
         s = settings or get_audit_sync_settings()
         return cls(
-            sync_interval_seconds=overrides.get("sync_interval_seconds", s.sync_interval_seconds),
+            sync_interval_seconds=overrides.get(
+                "sync_interval_seconds", s.sync_interval_seconds
+            ),
             batch_size=overrides.get("batch_size", s.batch_size),
             max_retries=overrides.get("max_retries", s.max_retries),
-            retry_delay_seconds=overrides.get("retry_delay_seconds", s.retry_delay_seconds),
-            retry_backoff_multiplier=overrides.get("retry_backoff_multiplier", s.retry_backoff_multiplier),
-            max_retry_delay_seconds=overrides.get("max_retry_delay_seconds", s.max_retry_delay_seconds),
-            cleanup_after_seconds=overrides.get("cleanup_after_seconds", s.cleanup_after_seconds),
-            metrics_interval_seconds=overrides.get("metrics_interval_seconds", s.metrics_interval_seconds),
+            retry_delay_seconds=overrides.get(
+                "retry_delay_seconds", s.retry_delay_seconds
+            ),
+            retry_backoff_multiplier=overrides.get(
+                "retry_backoff_multiplier", s.retry_backoff_multiplier
+            ),
+            max_retry_delay_seconds=overrides.get(
+                "max_retry_delay_seconds", s.max_retry_delay_seconds
+            ),
+            cleanup_after_seconds=overrides.get(
+                "cleanup_after_seconds", s.cleanup_after_seconds
+            ),
+            metrics_interval_seconds=overrides.get(
+                "metrics_interval_seconds", s.metrics_interval_seconds
+            ),
             checkpoint_save_interval_batches=overrides.get(
                 "checkpoint_save_interval_batches",
                 getattr(s, "checkpoint_save_interval_batches", 10),
@@ -143,7 +155,9 @@ class SyncStats:
         # 최근 100개만 유지
         if len(self._sync_durations) > 100:
             self._sync_durations = self._sync_durations[-100:]
-        self.avg_sync_duration_ms = sum(self._sync_durations) / len(self._sync_durations)
+        self.avg_sync_duration_ms = sum(self._sync_durations) / len(
+            self._sync_durations
+        )
 
     def to_dict(self) -> dict[str, Any]:
         """딕셔너리 변환."""
@@ -355,7 +369,9 @@ class AuditSyncWorker:
             # 다음 사이클까지 대기
             self._stop_event.wait(timeout=self._config.sync_interval_seconds)
 
-    def _process_batch_entries(self, adapter: Any, batch: list, synced_count: int, failed_count: int) -> tuple[int, int]:
+    def _process_batch_entries(
+        self, adapter: Any, batch: list, synced_count: int, failed_count: int
+    ) -> tuple[int, int]:
         """배치 엔트리들을 순회하며 동기화."""
         for entry in batch:
             try:
@@ -387,15 +403,19 @@ class AuditSyncWorker:
 
         self._batches_since_checkpoint += 1
         should_save = (
-            self._batches_since_checkpoint >= self._config.checkpoint_save_interval_batches
-            or time.time() - self._last_checkpoint_time >= self._config.checkpoint_save_interval_seconds
+            self._batches_since_checkpoint
+            >= self._config.checkpoint_save_interval_batches
+            or time.time() - self._last_checkpoint_time
+            >= self._config.checkpoint_save_interval_seconds
         )
         if should_save:
             self._save_checkpoint()
             self._batches_since_checkpoint = 0
             self._last_checkpoint_time = time.time()
 
-    def _update_sync_stats(self, synced_count: int, failed_count: int, duration_ms: float) -> None:
+    def _update_sync_stats(
+        self, synced_count: int, failed_count: int, duration_ms: float
+    ) -> None:
         """동기화 통계 업데이트 및 콜백 호출."""
         with self._lock:
             self._stats.total_synced += synced_count
@@ -435,7 +455,9 @@ class AuditSyncWorker:
             with self._lock:
                 self._stats.current_lag_entries = len(entries)
 
-            synced_count, failed_count = self._process_batch_entries(adapter, batch, synced_count, failed_count)
+            synced_count, failed_count = self._process_batch_entries(
+                adapter, batch, synced_count, failed_count
+            )
             self._post_sync_cleanup(synced_count, wal)
 
             duration_ms = (time.time() - start_time) * 1000
@@ -553,7 +575,9 @@ class AuditSyncWorker:
                 stats = self._stats.to_dict()
 
             # 커스텀 메트릭 기록
-            metrics.record_write("sync_worker", success=True, duration_ms=stats["avg_sync_duration_ms"])
+            metrics.record_write(
+                "sync_worker", success=True, duration_ms=stats["avg_sync_duration_ms"]
+            )
 
             logger.debug(
                 "audit_sync_worker.metrics",
@@ -591,34 +615,22 @@ class AuditSyncWorker:
         """체크포인트 즉시 저장 (CheckpointStorageStrategy 사용)."""
         strategy = self._get_checkpoint_strategy()
         if strategy is None:
-            # Fallback: 기존 CheckpointManager 사용
-            try:
-                from selfhealing.audit.checkpoint_manager import get_checkpoint_manager
-
-                checkpoint = get_checkpoint_manager()
-                checkpoint.save(last_sequence=self._last_processed_seq)
-                logger.debug(
-                    "audit_sync_worker.checkpoint_saved_via_legacy",
-                    last_processed_seq=self._last_processed_seq,
-                )
-            except Exception as e:
-                logger.warning(
-                    "audit_sync_worker.legacy_checkpoint_save_failed",
-                    error=e,
-                )
+            logger.warning(
+                "audit_sync_worker.no_checkpoint_strategy_available",
+                last_processed_seq=self._last_processed_seq,
+            )
             return
 
         try:
-
             from selfhealing.audit.checkpoint_strategy import UnifiedCheckpointData
 
             checkpoint_data = UnifiedCheckpointData(
                 wal_sequence=self._last_processed_seq,
             )
             strategy.save("sync_worker", checkpoint_data)
-            strategy.commit()  # 영속적 저장 보장
+            strategy.commit("sync_worker")
             logger.debug(
-                "audit_sync_worker.checkpoint_saved_via_strategy",
+                "audit_sync_worker.checkpoint_saved",
                 last_processed_seq=self._last_processed_seq,
             )
         except Exception as e:

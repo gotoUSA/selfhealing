@@ -188,10 +188,12 @@ def startup_async_audit_system() -> bool:
 def _load_checkpoint() -> int:
     """체크포인트에서 마지막 처리 시퀀스 로드."""
     try:
-        from selfhealing.audit.checkpoint_manager import get_checkpoint_manager
+        from selfhealing.audit.checkpoint_strategy import (
+            get_default_checkpoint_strategy,
+        )
 
-        checkpoint = get_checkpoint_manager()
-        return checkpoint.load()
+        strategy = get_default_checkpoint_strategy()
+        return strategy.get_wal_sequence("default")
     except Exception as e:
         logger.debug(
             "async_audit_lifecycle.checkpoint_load_failed",
@@ -369,14 +371,16 @@ def _shutdown_wal() -> None:
 def _save_final_checkpoint() -> None:
     """마지막 체크포인트 저장."""
     try:
-        from selfhealing.audit.checkpoint_manager import get_checkpoint_manager
+        from selfhealing.audit.checkpoint_strategy import (
+            UnifiedCheckpointData,
+            get_default_checkpoint_strategy,
+        )
 
-        # SyncWorker에서 마지막 처리 시퀀스 가져오기
         last_seq = _get_last_processed_sequence()
 
         if last_seq > 0:
-            checkpoint = get_checkpoint_manager()
-            checkpoint.save(last_sequence=last_seq)
+            strategy = get_default_checkpoint_strategy()
+            strategy.save("default", UnifiedCheckpointData(wal_sequence=last_seq))
             logger.info(
                 "graceful_shutdown.checkpoint_saved",
                 last_seq=last_seq,

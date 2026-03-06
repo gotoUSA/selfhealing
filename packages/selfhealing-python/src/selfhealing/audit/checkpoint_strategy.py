@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -39,7 +40,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, BinaryIO
 
 import structlog
 
@@ -47,6 +48,72 @@ if TYPE_CHECKING:
     import redis
 
 logger = structlog.get_logger()
+
+
+# =============================================================================
+# Cross-Platform File Locking
+# =============================================================================
+
+_CHECKPOINT_SAVE_FAILURES: Any = None
+_CHECKPOINT_LOAD_FAILURES: Any = None
+
+
+def _lock_file(f: BinaryIO) -> None:
+    """크로스 플랫폼 파일 락 획득."""
+    if sys.platform == "win32":
+        import msvcrt
+
+        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _unlock_file(f: BinaryIO) -> None:
+    """크로스 플랫폼 파일 락 해제."""
+    if sys.platform == "win32":
+        import msvcrt
+
+        msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
+def _get_save_failures_counter():
+    """체크포인트 save 실패 Counter 싱글톤."""
+    global _CHECKPOINT_SAVE_FAILURES
+    if _CHECKPOINT_SAVE_FAILURES is None:
+        try:
+            from prometheus_client import Counter
+
+            _CHECKPOINT_SAVE_FAILURES = Counter(
+                "selfhealing_checkpoint_save_failures_total",
+                "Number of checkpoint save failures",
+                ["storage_type"],
+            )
+        except ImportError:
+            pass
+    return _CHECKPOINT_SAVE_FAILURES
+
+
+def _get_load_failures_counter():
+    """체크포인트 load 실패 Counter 싱글톤."""
+    global _CHECKPOINT_LOAD_FAILURES
+    if _CHECKPOINT_LOAD_FAILURES is None:
+        try:
+            from prometheus_client import Counter
+
+            _CHECKPOINT_LOAD_FAILURES = Counter(
+                "selfhealing_checkpoint_load_failures_total",
+                "Number of checkpoint load failures",
+                ["storage_type"],
+            )
+        except ImportError:
+            pass
+    return _CHECKPOINT_LOAD_FAILURES
 
 
 # =============================================================================
@@ -67,7 +134,9 @@ class UnifiedCheckpointData:
     wal_sequence: int
     """마지막 처리된 WAL 시퀀스."""
 
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    timestamp: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     """체크포인트 시간 (ISO 8601)."""
 
     version: int = 1
@@ -285,21 +354,45 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
         return self._base_path / f"checkpoint.{namespace}.json"
 
     def save(self, namespace: str, data: UnifiedCheckpointData) -> None:
-        """체크포인트 저장 (원자적)."""
+        """체크포인트 저장 (원자적, cross-process 파일 락 보호)."""
         with self._lock:
             file_path = self._get_file_path(namespace)
             tmp_path = file_path.with_suffix(".tmp")
+            lock_file_path = file_path.with_suffix(".lock")
 
             try:
-                with open(tmp_path, "w", encoding="utf-8") as f:
-                    json.dump(data.to_dict(), f, indent=2)
+                with open(lock_file_path, "wb") as lock_f:
+                    try:
+                        _lock_file(lock_f)
 
-                    if self._sync_on_write:
-                        f.flush()
-                        os.fsync(f.fileno())
+                        with open(tmp_path, "w", encoding="utf-8") as f:
+                            json.dump(data.to_dict(), f, indent=2)
 
-                # 원자적 rename
-                tmp_path.replace(file_path)
+                            if self._sync_on_write:
+                                f.flush()
+                                os.fsync(f.fileno())
+
+                        # 원자적 rename
+                        tmp_path.replace(file_path)
+
+                        # 디렉토리 fsync (Linux)
+                        if self._sync_on_write:
+                            try:
+                                dir_fd = os.open(
+                                    str(file_path.parent), os.O_RDONLY | os.O_DIRECTORY
+                                )
+                                try:
+                                    os.fsync(dir_fd)
+                                finally:
+                                    os.close(dir_fd)
+                            except (OSError, AttributeError):
+                                pass
+
+                    finally:
+                        try:
+                            _unlock_file(lock_f)
+                        except Exception:
+                            pass
 
                 logger.debug(
                     "file_checkpoint.saved",
@@ -307,16 +400,69 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
                     data=data.wal_sequence,
                 )
 
+            except (BlockingIOError, OSError) as e:
+                logger.warning(
+                    "file_checkpoint.lock_contention_skipping_save",
+                    error=e,
+                )
+
             except Exception as e:
                 try:
                     tmp_path.unlink(missing_ok=True)
                 except Exception:
                     pass
+                counter = _get_save_failures_counter()
+                if counter:
+                    counter.labels(storage_type="file").inc()
                 raise CheckpointError(f"Failed to save checkpoint: {e}") from e
 
+    def _migrate_legacy_file(self, namespace: str) -> None:
+        """레거시 checkpoint.json → checkpoint.{namespace}.json 마이그레이션 (파일 락 보호)."""
+        if namespace != "default":
+            return
+
+        legacy_path = self._base_path / "checkpoint.json"
+        target_path = self._get_file_path(namespace)
+
+        if not legacy_path.exists() or target_path.exists():
+            return
+
+        lock_file_path = legacy_path.with_suffix(".lock")
+        try:
+            with open(lock_file_path, "wb") as lock_f:
+                try:
+                    _lock_file(lock_f)
+
+                    # double-check after lock
+                    if not legacy_path.exists() or target_path.exists():
+                        return
+
+                    legacy_path.rename(target_path)
+                    logger.info(
+                        "file_checkpoint.legacy_migrated",
+                        legacy_path=str(legacy_path),
+                        target_path=str(target_path),
+                    )
+
+                finally:
+                    try:
+                        _unlock_file(lock_f)
+                    except Exception:
+                        pass
+        except (BlockingIOError, OSError):
+            pass
+        except Exception as e:
+            logger.warning(
+                "file_checkpoint.legacy_migration_failed",
+                error=e,
+            )
+
     def load(self, namespace: str) -> UnifiedCheckpointData | None:
-        """체크포인트 로드."""
+        """체크포인트 로드 (레거시 마이그레이션 포함)."""
         with self._lock:
+            # 레거시 checkpoint.json → checkpoint.default.json 마이그레이션
+            self._migrate_legacy_file(namespace)
+
             file_path = self._get_file_path(namespace)
             if not file_path.exists():
                 return None
@@ -325,9 +471,14 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
                 with open(file_path, encoding="utf-8") as f:
                     raw_data = json.load(f)
 
-                # 레거시 형식 지원
+                # 레거시 형식 변환 + write-back
                 if "last_sequence" in raw_data and "wal_sequence" not in raw_data:
-                    return UnifiedCheckpointData.from_legacy_checkpoint_data(raw_data)
+                    data = UnifiedCheckpointData.from_legacy_checkpoint_data(raw_data)
+                    try:
+                        self.save(namespace, data)
+                    except Exception:
+                        pass
+                    return data
 
                 return UnifiedCheckpointData.from_dict(raw_data)
 
@@ -336,6 +487,9 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
                     "file_checkpoint.load_failed",
                     error=e,
                 )
+                counter = _get_load_failures_counter()
+                if counter:
+                    counter.labels(storage_type="file").inc()
                 return None
 
     def commit(self, namespace: str) -> None:
@@ -355,6 +509,23 @@ class FileCheckpointStorage(CheckpointStorageStrategy):
     def exists(self, namespace: str) -> bool:
         """체크포인트 존재 여부."""
         return self._get_file_path(namespace).exists()
+
+    def get_age_seconds(self, namespace: str) -> float | None:
+        """
+        체크포인트 경과 시간 (초).
+
+        Returns:
+            마지막 저장 후 경과 시간 또는 None
+        """
+        data = self.load(namespace)
+        if data is None:
+            return None
+
+        try:
+            ts = datetime.fromisoformat(data.timestamp)
+            return (datetime.now(timezone.utc) - ts).total_seconds()
+        except (ValueError, TypeError):
+            return None
 
 
 # =============================================================================
@@ -449,7 +620,9 @@ class RedisCheckpointStorage(CheckpointStorageStrategy):
                 finally:
                     lock.release(namespace, session_id)
             else:
-                raise CheckpointError(f"Failed to acquire distributed lock for namespace: {namespace}")
+                raise CheckpointError(
+                    f"Failed to acquire distributed lock for namespace: {namespace}"
+                )
 
         except ImportError:
             # DistributedRecoveryLock 없으면 일반 저장
@@ -640,7 +813,9 @@ class KafkaRedisCheckpointStorage(CheckpointStorageStrategy):
         if env_path:
             return Path(env_path) / "kafka_checkpoint_backup"
         if os.name == "nt":
-            return Path(tempfile.gettempdir()) / "selfhealing" / "kafka_checkpoint_backup"
+            return (
+                Path(tempfile.gettempdir()) / "selfhealing" / "kafka_checkpoint_backup"
+            )
         return Path("/var/log/audit/kafka_checkpoint_backup")
 
     def _get_key(self, namespace: str) -> str:
@@ -1110,7 +1285,9 @@ class CheckpointStrategyRegistry:
     _lock = threading.Lock()
 
     @classmethod
-    def register(cls, name: str, strategy_class: type[CheckpointStorageStrategy]) -> None:
+    def register(
+        cls, name: str, strategy_class: type[CheckpointStorageStrategy]
+    ) -> None:
         """
         전략 등록.
 
@@ -1186,6 +1363,20 @@ class CheckpointStrategyRegistry:
 
 
 # =============================================================================
+# K8s 환경 감지
+# =============================================================================
+
+
+def _is_k8s_environment() -> bool:
+    """K8s 환경 여부 감지."""
+    return bool(
+        os.environ.get("KUBERNETES_SERVICE_HOST")
+        or os.environ.get("KUBERNETES_PORT")
+        or Path("/var/run/secrets/kubernetes.io").exists()
+    )
+
+
+# =============================================================================
 # 팩토리 함수
 # =============================================================================
 
@@ -1232,10 +1423,27 @@ def get_checkpoint_strategy(
     if storage_type is None:
         storage_type = os.environ.get("SELFHEALING_CHECKPOINT_STORAGE", "file").lower()
 
+    # K8s 환경에서 file 모드 사용 시 경고
+    if storage_type == "file" and _is_k8s_environment():
+        logger.warning(
+            "checkpoint_strategy.file_storage_in_k8s",
+            message="FileCheckpointStorage is not recommended in multi-pod K8s environments. "
+            "Use SELFHEALING_CHECKPOINT_STORAGE=redis or composite for cross-pod consistency.",
+        )
+
     # 환경변수에서 옵션 로드
-    enable_notification = os.environ.get("SELFHEALING_CHECKPOINT_ENABLE_NOTIFICATION", "TRUE").upper() == "TRUE"
-    use_distributed_lock = os.environ.get("SELFHEALING_CHECKPOINT_USE_DISTRIBUTED_LOCK", "TRUE").upper() == "TRUE"
-    enable_file_backup = os.environ.get("SELFHEALING_CHECKPOINT_ENABLE_FILE_BACKUP", "TRUE").upper() == "TRUE"
+    enable_notification = (
+        os.environ.get("SELFHEALING_CHECKPOINT_ENABLE_NOTIFICATION", "TRUE").upper()
+        == "TRUE"
+    )
+    use_distributed_lock = (
+        os.environ.get("SELFHEALING_CHECKPOINT_USE_DISTRIBUTED_LOCK", "TRUE").upper()
+        == "TRUE"
+    )
+    enable_file_backup = (
+        os.environ.get("SELFHEALING_CHECKPOINT_ENABLE_FILE_BACKUP", "TRUE").upper()
+        == "TRUE"
+    )
 
     if storage_type == "file":
         return FileCheckpointStorage(
@@ -1249,7 +1457,9 @@ def get_checkpoint_strategy(
         return RedisCheckpointStorage(
             redis_client=redis_client,
             ttl_seconds=kwargs.get("ttl_seconds"),
-            use_distributed_lock=kwargs.get("use_distributed_lock", use_distributed_lock),
+            use_distributed_lock=kwargs.get(
+                "use_distributed_lock", use_distributed_lock
+            ),
             enable_notification=kwargs.get("enable_notification", enable_notification),
         )
 
@@ -1270,7 +1480,9 @@ def get_checkpoint_strategy(
 
         if primary_type == "redis":
             if redis_client is None:
-                raise ValueError("redis_client is required for composite with redis primary")
+                raise ValueError(
+                    "redis_client is required for composite with redis primary"
+                )
             primary = RedisCheckpointStorage(
                 redis_client=redis_client,
                 use_distributed_lock=use_distributed_lock,
@@ -1326,7 +1538,9 @@ def get_default_checkpoint_strategy() -> CheckpointStorageStrategy:
                 try:
                     import redis
 
-                    redis_url = os.environ.get("SELFHEALING_REDIS_URL", "redis://localhost:6379/0")
+                    redis_url = os.environ.get(
+                        "SELFHEALING_REDIS_URL", "redis://localhost:6379/0"
+                    )
                     redis_client = redis.from_url(redis_url)
                     _default_strategy = get_checkpoint_strategy(
                         storage_type=storage_type,
