@@ -232,6 +232,15 @@ class EventType(str, Enum):
     RUNBOOK_EXECUTION_FAILED = "runbook_execution_failed"
     """런북 전체 실행 실패 (Recorder가 기록 후 발행)."""
 
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Capacity Reservation Events
+    # ═══════════════════════════════════════════════════════════════════════════
+    SCHEDULED_EVENT_STARTED = "scheduled_event_started"
+    """예정 이벤트 시작 — 사전 워밍 완료 (event_id, start_time, end_time, expected_rps_multiplier, tags 포함)."""
+
+    SCHEDULED_EVENT_ENDED = "scheduled_event_ended"
+    """예정 이벤트 종료 — 설정 원복 시작 (event_id 포함)."""
+
 
 class EventPriority(IntEnum):
     """이벤트 처리 우선순위."""
@@ -370,7 +379,11 @@ class SelfHealingEventBus:
                 self._subscriptions[event_type] = []
 
             # 중복 구독 방지
-            existing = [s for s in self._subscriptions[event_type] if s.handler_name == handler_name]
+            existing = [
+                s
+                for s in self._subscriptions[event_type]
+                if s.handler_name == handler_name
+            ]
             if not existing:
                 self._subscriptions[event_type].append(subscription)
                 # 우선순위로 정렬 (높은 것 먼저)
@@ -416,7 +429,11 @@ class SelfHealingEventBus:
                 return False
 
             original_count = len(self._subscriptions[event_type])
-            self._subscriptions[event_type] = [s for s in self._subscriptions[event_type] if s.handler_name != handler_name]
+            self._subscriptions[event_type] = [
+                s
+                for s in self._subscriptions[event_type]
+                if s.handler_name != handler_name
+            ]
 
             removed = original_count > len(self._subscriptions[event_type])
             if removed:
@@ -646,7 +663,9 @@ class SelfHealingEventBus:
     def get_stats(self) -> dict[str, Any]:
         """이벤트 버스 통계."""
         with self._subscription_lock:
-            subscriptions_count = sum(len(subs) for subs in self._subscriptions.values())
+            subscriptions_count = sum(
+                len(subs) for subs in self._subscriptions.values()
+            )
             event_types_with_subs = len(self._subscriptions)
 
         with self._history_lock:
