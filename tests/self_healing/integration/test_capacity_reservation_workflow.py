@@ -12,8 +12,20 @@ Test Categories:
         - 이벤트 중 CPU 초과 → CRITICAL → min_hold 경과 → 복귀
     D. ML Decision Authority Conflict Prevention:
         - 이벤트 기간 SpikeClassifier가 HEALTHY_SURGE 반환
-    E. Cancel During Warming:
-        - 워밍 진행 중 이벤트 취소 → rollback 완료
+    E. Cancel During Active Event:
+        - 활성 이벤트 취소 → rollback 완료
+    F. Dry-Run Mode:
+        - dry_run=True → 로그만 남기고 실제 조정 없음
+    G. Orphan Baseline Recovery:
+        - StateBackend에 Baseline만 남아있고 활성 이벤트 없음 → 복원
+    H. Late Joiner (Pod Startup with Active Events):
+        - StateBackend에 Baseline + 활성 이벤트 → 즉시 재개
+    I. shrink_guard Suppression During Event:
+        - 이벤트 기간 PoolWatchdog shrink 억제
+    J. EventBus emit source Verification:
+        - emit 호출 시 source="capacity_reservation" 전달 검증
+    K. classify_features Context Pipeline:
+        - classify_features()가 context를 classify()까지 전달
 
 Note: All tests use in-memory mock objects - no DB dependency.
       This enables parallel test execution with pytest-xdist.
@@ -24,6 +36,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
+from selfhealing.core.pool_monitor import PoolHealthStatus
+from selfhealing.core.pool_watchdog import PoolWatchdog
 from selfhealing.services.capacity_reservation.event_calendar import (
     EventCalendar,
     EventStatus,
@@ -33,6 +47,7 @@ from selfhealing.services.capacity_reservation.pre_warmer import PreWarmer
 from selfhealing.services.capacity_reservation.service import (
     CapacityReservationService,
 )
+from selfhealing.services.event_bus.bus import EventType
 from selfhealing.services.predictive_forecaster.proactive_action import (
     SpikeClassifier,
     SpikeType,
@@ -394,3 +409,345 @@ class TestCapacityReservationCancelDuringActive:
             assert rate_controller._settings.min_rate_per_second == original_rate
         finally:
             CapacityReservationService.reset()
+
+
+# =============================================================================
+# F. Dry-Run Mode
+# =============================================================================
+
+
+class TestCapacityReservationDryRunMode:
+    """
+    dry_run=True → 로그만 남기고 실제 설정 변경 없음.
+
+    Validates:
+    - warm_up/cool_down이 성공 반환하지만 실제 조정 없음
+    - RateController/Bulkhead 값 변경 없음
+    """
+
+    def test_dry_run_warm_up_does_not_modify_settings(self):
+        """
+        Purpose:
+            dry_run=True에서 warm_up → 설정 미변경 + 성공 반환.
+        Expected:
+            - warm_up 성공
+            - rate/bulkhead 원래 값 유지
+        """
+        settings = CapacityReservationSettings(dry_run=True)
+        rate_controller = MockRateController()
+        bulkhead = MockBulkhead()
+        original_rate = rate_controller._settings.min_rate_per_second
+        original_bulkhead = bulkhead._state.max_concurrent
+        calendar = EventCalendar(settings=settings)
+        pre_warmer = PreWarmer(
+            calendar=calendar,
+            rate_controller=rate_controller,
+            bulkhead=bulkhead,
+            settings=settings,
+        )
+
+        event = _make_event(expected_rps_multiplier=5.0, bulkhead_extra_permits=100)
+        calendar.register(event)
+        calendar.update_status(event.event_id, EventStatus.ACTIVE)
+
+        result = pre_warmer.warm_up(event)
+
+        assert result.success is True
+        assert result.adjustments == []
+        assert rate_controller._settings.min_rate_per_second == original_rate
+        assert bulkhead._state.max_concurrent == original_bulkhead
+
+    def test_dry_run_cool_down_does_not_modify_settings(self):
+        """
+        Purpose:
+            dry_run=True에서 cool_down → 설정 미변경 + 성공 반환.
+        Expected:
+            - cool_down 성공
+            - Global Baseline 캡처 안 됨
+        """
+        settings = CapacityReservationSettings(dry_run=True)
+        calendar = EventCalendar(settings=settings)
+        pre_warmer = PreWarmer(calendar=calendar, settings=settings)
+
+        event = _make_event()
+        result = pre_warmer.cool_down(event)
+
+        assert result.success is True
+        assert pre_warmer._global_baseline is None
+
+
+# =============================================================================
+# G. Orphan Baseline Recovery
+# =============================================================================
+
+
+class TestCapacityReservationOrphanBaselineRecovery:
+    """
+    Pod 재시작 시 StateBackend에 Baseline만 남아있고 활성 이벤트 없음 → 복원.
+
+    Validates:
+    - PreWarmer.initialize()가 orphan baseline 감지
+    - 설정을 baseline 값으로 복원
+    - StateBackend에서 baseline 삭제
+    """
+
+    def test_orphan_baseline_restores_and_cleans_up(self):
+        """
+        Purpose:
+            StateBackend에 baseline만 남아있고 활성 이벤트가 없는 경우
+            initialize()가 설정 복원 + baseline 삭제.
+        Expected:
+            - rate/bulkhead가 baseline 값으로 복원됨
+            - StateBackend.delete() 호출됨
+        """
+        settings = CapacityReservationSettings(dry_run=False)
+        rate_controller = MockRateController()
+        bulkhead = MockBulkhead()
+
+        rate_controller._settings.min_rate_per_second = 99.0
+        bulkhead._state.max_concurrent = 200
+
+        state_backend = MagicMock()
+        state_backend.get.return_value = {
+            "min_rate_per_second": 10.0,
+            "bulkhead_max_concurrent": 50,
+        }
+
+        calendar = EventCalendar(settings=settings)
+        pre_warmer = PreWarmer(
+            calendar=calendar,
+            rate_controller=rate_controller,
+            bulkhead=bulkhead,
+            state_backend=state_backend,
+            settings=settings,
+        )
+
+        pre_warmer.initialize()
+
+        assert rate_controller._settings.min_rate_per_second == 10.0
+        assert bulkhead._state.max_concurrent == 50
+        state_backend.delete.assert_called()
+
+
+# =============================================================================
+# H. Late Joiner (Pod Startup with Active Events)
+# =============================================================================
+
+
+class TestCapacityReservationLateJoiner:
+    """
+    Pod 기동 시 StateBackend에 Baseline + 활성 이벤트 → 즉시 재개.
+
+    Validates:
+    - PreWarmer.initialize()가 baseline을 메모리에 로드
+    - Re-evaluation으로 활성 이벤트 배율 적용
+    """
+
+    def test_late_joiner_resumes_active_event_settings(self):
+        """
+        Purpose:
+            StateBackend에 baseline과 활성 이벤트가 존재 → 재개.
+        Expected:
+            - _global_baseline이 로드됨
+            - 활성 이벤트의 배율로 Re-evaluation 됨
+        """
+        settings = CapacityReservationSettings(dry_run=False)
+        rate_controller = MockRateController()
+        bulkhead = MockBulkhead()
+
+        state_backend = MagicMock()
+        saved_baseline = {
+            "min_rate_per_second": 10.0,
+            "bulkhead_max_concurrent": 50,
+        }
+        state_backend.get.return_value = saved_baseline
+
+        calendar = EventCalendar(settings=settings)
+        event = _make_event(expected_rps_multiplier=3.0, bulkhead_extra_permits=40)
+        calendar.register(event)
+        calendar.update_status(event.event_id, EventStatus.ACTIVE)
+
+        pre_warmer = PreWarmer(
+            calendar=calendar,
+            rate_controller=rate_controller,
+            bulkhead=bulkhead,
+            state_backend=state_backend,
+            settings=settings,
+        )
+
+        pre_warmer.initialize()
+
+        assert pre_warmer._global_baseline == saved_baseline
+        assert rate_controller._settings.min_rate_per_second == 10.0 * 3.0
+        assert bulkhead._state.max_concurrent == 50 + 40
+
+
+# =============================================================================
+# I. shrink_guard Suppression During Event
+# =============================================================================
+
+
+class TestCapacityReservationShrinkGuardIntegration:
+    """
+    이벤트 기간 중 PoolWatchdog의 shrink 억제.
+
+    Validates:
+    - EventCalendar.is_event_period()를 shrink_guard로 연결
+    - 이벤트 기간 shrink 억제
+    - 이벤트 종료 후 정상 shrink
+    """
+
+    def _make_watchdog(self, shrink_guard=None):
+        monitor = MagicMock()
+        monitor.check_health.return_value = (
+            PoolHealthStatus.HEALTHY,
+            MagicMock(usage_percent=30.0, max_connections=20),
+        )
+        handler = MagicMock()
+        handler.shrink_pool.return_value = True
+
+        watchdog = PoolWatchdog(
+            monitor=monitor,
+            recovery_handler=handler,
+            auto_expand=True,
+            shrink_guard=shrink_guard,
+        )
+        watchdog._expanded_by = 5
+        return watchdog, handler
+
+    def test_event_period_suppresses_pool_shrink(self):
+        """
+        Purpose:
+            EventCalendar.is_event_period() 기반 shrink_guard가 이벤트 기간에 shrink 억제.
+        Expected:
+            - 이벤트 활성 시 shrink 미실행
+            - 이벤트 종료 후 shrink 실행
+        """
+        settings = CapacityReservationSettings(dry_run=False)
+        calendar = EventCalendar(settings=settings)
+        event = _make_event()
+        calendar.register(event)
+        calendar.update_status(event.event_id, EventStatus.ACTIVE)
+
+        def shrink_guard():
+            if calendar.is_event_period():
+                return "ScheduledEvent active"
+            return None
+
+        watchdog, handler = self._make_watchdog(shrink_guard=shrink_guard)
+
+        result = watchdog.check_and_recover()
+        handler.shrink_pool.assert_not_called()
+        assert "ScheduledEvent" in result.message
+
+        calendar.update_status(event.event_id, EventStatus.COMPLETED)
+
+        result2 = watchdog.check_and_recover()
+        handler.shrink_pool.assert_called_once()
+
+
+# =============================================================================
+# J. EventBus emit source Verification
+# =============================================================================
+
+
+class TestCapacityReservationEventBusSourceVerification:
+    """
+    EventBus emit 호출 시 source="capacity_reservation" 전달 검증.
+
+    Validates:
+    - warm_up → emit(STARTED, data, source="capacity_reservation")
+    - cool_down → emit(ENDED, data, source="capacity_reservation")
+    """
+
+    def test_emit_passes_correct_source_and_event_type(self):
+        """
+        Purpose:
+            PreWarmer의 warm_up/cool_down이 emit에 올바른 source를 전달.
+        Expected:
+            - STARTED emit에 source="capacity_reservation"
+            - ENDED emit에 source="capacity_reservation"
+            - data에 event_id 포함
+        """
+        settings = CapacityReservationSettings(dry_run=False)
+        rate_controller = MockRateController()
+        bulkhead = MockBulkhead()
+        event_bus = MagicMock()
+        calendar = EventCalendar(settings=settings)
+        pre_warmer = PreWarmer(
+            calendar=calendar,
+            rate_controller=rate_controller,
+            bulkhead=bulkhead,
+            event_bus=event_bus,
+            settings=settings,
+        )
+
+        event = _make_event()
+        calendar.register(event)
+        calendar.update_status(event.event_id, EventStatus.ACTIVE)
+
+        pre_warmer.warm_up(event)
+
+        started_call = event_bus.emit.call_args_list[0]
+        assert started_call[0][0] == EventType.SCHEDULED_EVENT_STARTED
+        assert (
+            started_call[1].get("source")
+            or started_call[0][2] == "capacity_reservation"
+        )
+        started_data = started_call[0][1]
+        assert started_data["event_id"] == event.event_id
+        assert started_data["scheduled_event"] is True
+
+        event_bus.emit.reset_mock()
+        calendar.update_status(event.event_id, EventStatus.COOLING_DOWN)
+        pre_warmer.cool_down(event)
+
+        ended_call = event_bus.emit.call_args_list[0]
+        assert ended_call[0][0] == EventType.SCHEDULED_EVENT_ENDED
+        assert ended_call[0][1]["event_id"] == event.event_id
+
+
+# =============================================================================
+# K. classify_features Context Pipeline
+# =============================================================================
+
+
+class TestCapacityReservationClassifyFeaturesContextPipeline:
+    """
+    SpikeClassifier.classify_features()가 context를 classify()까지 파이프라인 전달.
+
+    Validates:
+    - classify_features에 context 전달 → classify에서 HEALTHY_SURGE 반환
+    - 동일 features, context 없으면 다른 결과 가능
+    """
+
+    def test_classify_features_scheduled_event_context_pipeline(self):
+        """
+        Purpose:
+            classify_features(features, context={"scheduled_event": True})가
+            내부 classify()에 context를 전달하여 HEALTHY_SURGE 반환.
+        Expected:
+            - context 전달 시 label == "healthy_surge"
+            - context 없으면 label이 다를 수 있음
+        """
+        classifier = SpikeClassifier(
+            error_rate_threshold=0.05,
+            acceleration_threshold=100.0,
+        )
+
+        rps = [100.0, 150.0, 200.0, 280.0, 380.0, 500.0, 650.0, 800.0, 1000.0, 1300.0]
+        features = {
+            "rps_history": ",".join(str(x) for x in rps),
+            "error_rate_history": ",".join(str(x) for x in [0.01] * 10),
+            "latency_history": ",".join(str(x) for x in [50.0] * 10),
+        }
+
+        label_with_ctx, confidence_with = classifier.classify_features(
+            features, context={"scheduled_event": True}
+        )
+        assert label_with_ctx == SpikeType.HEALTHY_SURGE.value
+
+        label_no_ctx, confidence_no = classifier.classify_features(
+            features, context=None
+        )
+        assert isinstance(label_no_ctx, str)

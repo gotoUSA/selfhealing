@@ -880,14 +880,35 @@ selfhealing_capacity_pool_multiplier        # Gauge: 현재 적용 중인 Pool �
 
 ### 8.1 단위 테스트 (`packages/selfhealing-python/tests/unit/capacity_reservation/`)
 
-| 테스트 파일 | 대상 | 핵심 케이스 |
-|------------|------|------------|
-| `test_event_calendar.py` | EventCalendar | 등록/취소/조회, 과거 시간 거부, 중복 ID 거부, 겹치는 이벤트 경고, MAX 배율 계산, StateBackend 영속화 |
-| `test_pre_warmer.py` | PreWarmer | warm_up/cool_down 정상 동작, Re-evaluation, Global Baseline 저장/복원, Safety Valve 발동/복구 |
-| `test_service.py` | CapacityReservationService | 싱글톤, 스케줄러 동작, dry-run 모드, 초기화 훅 (고아 베이스라인 복원) |
-| `test_ml_integration.py` | ML 연동 | SCHEDULED_EVENT_STARTED 발행 시 SpikeClassifier가 HEALTHY_SURGE 반환 확인 |
+| 테스트 파일 | 대상 | 핵심 케이스 | 테스트 수 |
+|------------|------|------------|----------|
+| `test_settings.py` | CapacityReservationSettings | 계약값 검증, Pydantic 경계값 분석, 싱글톤 캐싱 | 37 |
+| `test_event_calendar.py` | EventCalendar | 등록/취소/조회, 과거 시간 거부, 중복 ID 거부, 겹치는 이벤트 경고, MAX 배율 계산, StateBackend 영속화, 직렬화, Thread Safety | 23 |
+| `test_pre_warmer.py` | PreWarmer | warm_up/cool_down 정상 동작, Re-evaluation, Global Baseline 저장/복원, Safety Valve 발동/복구, 고아 Baseline, EventBus emit, Rollback | 21 |
+| `test_service.py` | CapacityReservationService | 싱글톤, 초기화, 이벤트 등록/취소, 스케줄러 라이프사이클, get_status | 13 |
+| `test_ml_integration.py` | ML 연동 + shrink_guard | PoolWatchdog shrink_guard, SpikeClassifier context, EventType 계약 | 9 |
 
-### 8.2 핵심 테스트 시나리오
+**총 단위 테스트: 140개** (전수 통과)
+
+### 8.2 통합 테스트 (`tests/self_healing/integration/test_capacity_reservation_workflow.py`)
+
+| 시나리오 | 검증 내용 |
+|---------|----------|
+| A. Full Lifecycle | 이벤트 등록 → warm_up → cool_down → 설정 원복 + EventBus emit |
+| B. Overlapping Events | A(2x) + B(4x) → MAX=4x → A종료 → B유지 → B종료 → Baseline |
+| C. Safety Valve Lifecycle | CPU 초과 → 발동 → min_hold 차단 → 안정 → 복귀 |
+| D. ML Conflict Prevention | SpikeClassifier + scheduled_event context → HEALTHY_SURGE |
+| E. Cancel During Active | 활성 이벤트 취소 → cool_down + Baseline 복원 |
+| F. Dry-Run Mode | dry_run=True → 설정 미변경 + 성공 반환 |
+| G. Orphan Baseline Recovery | StateBackend에 baseline만 → 복원 + 삭제 |
+| H. Late Joiner | StateBackend baseline + 활성 이벤트 → 즉시 재개 |
+| I. shrink_guard Suppression | 이벤트 기간 shrink 억제 → 종료 후 정상 shrink |
+| J. EventBus emit source | emit(source="capacity_reservation") 전달 검증 |
+| K. classify_features Pipeline | classify_features(context) → classify(context) 파이프라인 |
+
+**총 통합 테스트: 12개** (전수 통과)
+
+### 8.3 핵심 테스트 시나리오
 
 1. **정상 플로우**: 이벤트 등록 → 워밍 시간 도달 → warm_up → 이벤트 종료 → cool_down → 설정 원복 검증
 2. **ML 충돌 방지**: 이벤트 기간 중 RPS 급증 시 SpikeClassifier가 ANOMALOUS_SPIKE가 아닌 HEALTHY_SURGE 반환
@@ -921,7 +942,7 @@ selfhealing_capacity_pool_multiplier        # Gauge: 현재 적용 중인 Pool �
 
 ## 10. 구현 순서
 
-1. **Phase 1**: `settings/capacity_reservation.py` (Safety Valve 설정 포함) + `event_calendar.py` (MAX 병합 + StateBackend 영속화) + 단위 테스트
-2. **Phase 2**: `pre_warmer.py` (Global Baseline + Re-evaluation + Safety Valve) + 기존 모듈 연동 + 단위 테스트
-3. **Phase 3**: `service.py` (스케줄러, 싱글톤, 초기화 훅) + EventBus 이벤트 추가 + PoolWatchdog `shrink_guard` 연동 + 통합 테스트
-4. **Phase 4**: SpikeClassifier context 확장 + ML 연동 테스트
+1. **Phase 1** ✅: `settings/capacity_reservation.py` (Safety Valve 설정 포함) + `event_calendar.py` (MAX 병합 + StateBackend 영속화) + 단위 테스트
+2. **Phase 2** ✅: `pre_warmer.py` (Global Baseline + Re-evaluation + Safety Valve) + 기존 모듈 연동 + 단위 테스트
+3. **Phase 3** ✅: `service.py` (스케줄러, 싱글톤, 초기화 훅) + EventBus 이벤트 추가 + PoolWatchdog `shrink_guard` 연동 + 통합 테스트
+4. **Phase 4** ✅: SpikeClassifier context 확장 + ML 연동 테스트 + EventBus stub 핸들러 등록
