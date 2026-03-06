@@ -234,13 +234,14 @@ class EventCalendar:
             ]
 
     def get_needs_cooldown(self) -> list[ScheduledEvent]:
-        """종료 시각에 도달한 ACTIVE 이벤트 조회."""
+        """종료 시각 + 유예 시간(cooldown_grace_period_seconds) 경과한 ACTIVE 이벤트 조회."""
         now = datetime.now(timezone.utc)
+        grace = timedelta(seconds=self._settings.cooldown_grace_period_seconds)
         with self._lock:
             return [
                 e
                 for e in self._events.values()
-                if e.status == EventStatus.ACTIVE and e.end_time <= now
+                if e.status == EventStatus.ACTIVE and e.end_time + grace <= now
             ]
 
     def get_active(self) -> list[ScheduledEvent]:

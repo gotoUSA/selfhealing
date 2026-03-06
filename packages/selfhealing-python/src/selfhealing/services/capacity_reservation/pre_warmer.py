@@ -29,6 +29,9 @@ logger = structlog.get_logger()
 
 STATE_KEY_GLOBAL_BASELINE = "capacity_reservation:global_baseline"
 
+POOL_EXPANSION_BASE_CONNECTIONS = 10
+"""pool_multiplier 1x당 추가할 기본 커넥션 수. 예: 1.5x → 15개, 3.0x → 30개."""
+
 
 @runtime_checkable
 class SafetyValveMetricsProvider(Protocol):
@@ -458,7 +461,9 @@ class PreWarmer:
                 event.pool_multiplier,
                 self._settings.max_pool_multiplier,
             )
-            additional = max(1, int(capped_multiplier * 10))
+            additional = max(
+                1, int(capped_multiplier * POOL_EXPANSION_BASE_CONNECTIONS)
+            )
 
             handler = getattr(self._pool_watchdog, "_recovery_handler", None)
             if handler is not None:
@@ -498,6 +503,12 @@ class PreWarmer:
             try:
                 state = self._bulkhead.get_state()
                 baseline["bulkhead_max_concurrent"] = state.max_concurrent
+            except Exception:
+                pass
+
+        if self._graceful_degradation is not None:
+            try:
+                baseline["graceful_degradation_suppressed"] = True
             except Exception:
                 pass
 
@@ -572,8 +583,13 @@ class PreWarmer:
             except Exception as exc:
                 errors.append(f"bulkhead restore failed: {exc}")
 
-        if self._graceful_degradation is not None:
+        if self._graceful_degradation is not None and baseline.get(
+            "graceful_degradation_suppressed"
+        ):
             try:
+                from selfhealing.settings.backpressure import BackpressureLevel
+
+                self._graceful_degradation.update_level(BackpressureLevel.NONE)
                 restored.append("graceful_degradation.level")
             except Exception as exc:
                 errors.append(f"graceful_degradation restore failed: {exc}")

@@ -200,7 +200,21 @@ class TestEventCalendarSchedulingBehavior:
         assert cal.get_needs_warmup() == []
 
     def test_get_needs_cooldown_returns_ended_active_events(self):
-        """종료 시각이 도달한 ACTIVE 이벤트를 반환."""
+        """종료 시각 + grace period 경과한 ACTIVE 이벤트를 반환."""
+        cal = _make_calendar()
+        grace = cal._settings.cooldown_grace_period_seconds
+        event = _make_event(
+            start_time=datetime.now(timezone.utc) - timedelta(hours=1),
+            end_time=datetime.now(timezone.utc) - timedelta(seconds=grace + 60),
+        )
+        event.status = EventStatus.PENDING
+        cal._events[event.event_id] = event
+        cal.update_status(event.event_id, EventStatus.ACTIVE)
+        result = cal.get_needs_cooldown()
+        assert len(result) == 1
+
+    def test_get_needs_cooldown_respects_grace_period(self):
+        """종료 직후(grace period 미경과) ACTIVE 이벤트는 반환하지 않음."""
         cal = _make_calendar()
         event = _make_event(
             start_time=datetime.now(timezone.utc) - timedelta(hours=1),
@@ -210,7 +224,7 @@ class TestEventCalendarSchedulingBehavior:
         cal._events[event.event_id] = event
         cal.update_status(event.event_id, EventStatus.ACTIVE)
         result = cal.get_needs_cooldown()
-        assert len(result) == 1
+        assert len(result) == 0
 
     def test_get_active_includes_warming_and_active(self):
         """ACTIVE와 WARMING 상태 모두 반환."""

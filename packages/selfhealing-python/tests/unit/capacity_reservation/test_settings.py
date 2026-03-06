@@ -54,11 +54,6 @@ class TestCapacityReservationSettingsContract:
         settings = CapacityReservationSettings()
         assert settings.max_bulkhead_extra_permits == 100
 
-    def test_cooldown_grace_period_seconds_contract(self):
-        """cooldown_grace_period_seconds 기본값: 300."""
-        settings = CapacityReservationSettings()
-        assert settings.cooldown_grace_period_seconds == 300
-
     def test_max_concurrent_events_contract(self):
         """max_concurrent_events 기본값: 3."""
         settings = CapacityReservationSettings()
@@ -90,6 +85,11 @@ class TestCapacityReservationSettingsContract:
             CapacityReservationSettings.model_config["env_prefix"]
             == "SELFHEALING_CAPACITY_RESERVATION_"
         )
+
+    def test_cooldown_grace_period_seconds_contract(self):
+        """cooldown_grace_period_seconds 기본값: 300."""
+        settings = CapacityReservationSettings()
+        assert settings.cooldown_grace_period_seconds == 300
 
     def test_field_count_contract(self):
         """설정 필드 수: 12개."""
@@ -189,23 +189,6 @@ class TestCapacityReservationSettingsBoundaryContract:
         with pytest.raises(ValidationError):
             CapacityReservationSettings(max_bulkhead_extra_permits=1001)
 
-    # --- cooldown_grace_period_seconds: ge=60, le=3600 ---
-
-    def test_cooldown_grace_below_minimum_raises(self):
-        """cooldown_grace_period_seconds < 60 → ValidationError."""
-        with pytest.raises(ValidationError):
-            CapacityReservationSettings(cooldown_grace_period_seconds=59)
-
-    def test_cooldown_grace_at_minimum_accepted(self):
-        """cooldown_grace_period_seconds == 60 → 성공."""
-        s = CapacityReservationSettings(cooldown_grace_period_seconds=60)
-        assert s.cooldown_grace_period_seconds == 60
-
-    def test_cooldown_grace_above_maximum_raises(self):
-        """cooldown_grace_period_seconds > 3600 → ValidationError."""
-        with pytest.raises(ValidationError):
-            CapacityReservationSettings(cooldown_grace_period_seconds=3601)
-
     # --- safety_valve_cpu_threshold: ge=0.5, le=1.0 ---
 
     def test_cpu_threshold_below_minimum_raises(self):
@@ -251,6 +234,23 @@ class TestCapacityReservationSettingsBoundaryContract:
         """safety_valve_min_hold_seconds > 600 → ValidationError."""
         with pytest.raises(ValidationError):
             CapacityReservationSettings(safety_valve_min_hold_seconds=601)
+
+    # --- cooldown_grace_period_seconds: ge=60, le=3600 ---
+
+    def test_cooldown_grace_below_minimum_raises(self):
+        """cooldown_grace_period_seconds < 60 → ValidationError."""
+        with pytest.raises(ValidationError):
+            CapacityReservationSettings(cooldown_grace_period_seconds=59)
+
+    def test_cooldown_grace_at_minimum_accepted(self):
+        """cooldown_grace_period_seconds == 60 → 성공."""
+        s = CapacityReservationSettings(cooldown_grace_period_seconds=60)
+        assert s.cooldown_grace_period_seconds == 60
+
+    def test_cooldown_grace_above_maximum_raises(self):
+        """cooldown_grace_period_seconds > 3600 → ValidationError."""
+        with pytest.raises(ValidationError):
+            CapacityReservationSettings(cooldown_grace_period_seconds=3601)
 
     # --- max_concurrent_events: ge=1, le=10 ---
 
