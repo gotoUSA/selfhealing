@@ -4,6 +4,14 @@ FileCheckpointStorage Multiprocess File Locking Integration Test.
 2-3개 프로세스가 동시에 FileCheckpointStorage에 접근할 때
 파일 락이 정상 동작하여 데이터 손상이 발생하지 않는지 검증.
 
+Test Categories:
+    A. Two-process concurrent save:
+        - 2개 프로세스 동시 save 시 파일 무결성
+    B. Three-process concurrent save:
+        - 3개 프로세스 동시 save 시 파일 무결성
+    C. Concurrent read-write:
+        - 1 writer + 1 reader 동시 실행 시 crash 없음
+
 Note: subprocess.Popen 기반 — Docker 불필요, 로컬 직접 실행.
 """
 

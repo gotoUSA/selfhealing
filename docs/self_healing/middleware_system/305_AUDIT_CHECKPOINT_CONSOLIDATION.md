@@ -158,7 +158,8 @@ checkpoint_strategy.py FileCheckpointStorage에:
   3. get_age_seconds() 추가 (CheckpointManager 고유 메서드)
   4. save()/load() 실패 시 Prometheus 카운터 증가 로직 추가
 
-settings/ 에 K8s 환경 storage_type validation 추가:
+checkpoint_strategy.py get_checkpoint_strategy()에 K8s 환경 validation 추가:
+  _is_k8s_environment() 헬퍼로 KUBERNETES_SERVICE_HOST/PORT/secrets 경로 감지
   SELFHEALING_CHECKPOINT_STORAGE=file 일 때 K8s 환경 감지 시 경고 로그 출력
   멀티 파드 환경에서는 redis 또는 composite 사용을 강제하는 가이드 제공
 ```
@@ -202,7 +203,7 @@ kafka_checkpoint.py:
 
 ```
 checkpoint_manager.py:
-  CheckpointManager 클래스에 @deprecated 데코레이터 추가
+  CheckpointManager.__init__()에 warnings.warn(DeprecationWarning) 추가
   get_checkpoint_manager()에 deprecation warning 추가
   audit/__init__.py에서 export 유지 (하위호환)
   다음 메이저 버전에서 완전 삭제
@@ -237,5 +238,5 @@ checkpoint_manager.py:
 | `async_audit_lifecycle.py` | import 변경 |
 | `sync_worker.py` | 폴백 분기 제거 |
 | `audit/__init__.py` | deprecated re-export 유지 |
-| `settings/` | K8s 환경 checkpoint storage validation 추가 |
+| `checkpoint_strategy.py` | K8s 환경 감지 + file storage 경고 (get_checkpoint_strategy 내) |
 | 테스트 | 동시성 테스트 추가 (스레드 + 멀티프로세스) |

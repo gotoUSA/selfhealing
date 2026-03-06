@@ -332,8 +332,8 @@ class TestKafkaAuditAdapterSingleton:
         reset_kafka_audit_adapter()
 
 
-class TestCheckpointStorageStrategy:
-    """FileCheckpointStorage 체크포인트 테스트 (KafkaCheckpointManager 대체)."""
+class TestCheckpointStorageBehavior:
+    """FileCheckpointStorage 체크포인트 동작 검증 (KafkaCheckpointManager 대체)."""
 
     @pytest.fixture
     def storage(self, tmp_path):
@@ -406,8 +406,8 @@ class TestCheckpointStorageStrategy:
         assert storage.load("test") is None
 
 
-class TestUnifiedCheckpointData:
-    """UnifiedCheckpointData 테스트."""
+class TestUnifiedCheckpointDataSerializationBehavior:
+    """UnifiedCheckpointData 직렬화 왕복 동작 검증."""
 
     def test_to_dict_and_from_dict(self):
         """직렬화/역직렬화 테스트."""
@@ -433,8 +433,8 @@ class TestUnifiedCheckpointData:
         assert restored.checksum == data.checksum
 
 
-class TestSerializationFormat:
-    """SerializationFormat 테스트."""
+class TestSerializationFormatContract:
+    """SerializationFormat 열거형 설계 계약값 검증."""
 
     def test_serialization_format_enum(self):
         """직렬화 포맷 열거형 테스트."""
@@ -445,8 +445,8 @@ class TestSerializationFormat:
         assert SerializationFormat.PROTOBUF.value == "protobuf"
 
 
-class TestSyncWalToKafkaWithCheckpoint:
-    """sync_wal_to_kafka_with_checkpoint 함수 테스트."""
+class TestSyncWalToKafkaWithCheckpointBehavior:
+    """sync_wal_to_kafka_with_checkpoint 함수 동작 검증."""
 
     @pytest.fixture
     def mock_wal(self):
