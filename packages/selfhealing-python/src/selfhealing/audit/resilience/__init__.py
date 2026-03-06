@@ -39,10 +39,16 @@ from .buffer import (
 from .circuit_breaker import (
     AuditCircuitBreakerConfig,
     CircuitBreaker,
+    CircuitBreakerBase,
     CircuitBreakerRegistry,
     CircuitBreakerSnapshot,
     CircuitState,
     get_circuit_breaker,
+)
+from .degradation_protocol import (
+    DegradationBroadcaster,
+    DegradationObserver,
+    DegradationStatus,
 )
 from .degraded_mode import (
     DegradedModeManager,
@@ -63,6 +69,7 @@ __all__ = [
     "CircuitState",
     "AuditCircuitBreakerConfig",
     "CircuitBreakerSnapshot",
+    "CircuitBreakerBase",
     "CircuitBreaker",
     "CircuitBreakerRegistry",
     "get_circuit_breaker",
@@ -73,6 +80,10 @@ __all__ = [
     "SyslogFallback",
     "get_syslog_fallback",
     "log_critical_to_syslog",
+    # Degradation Protocol
+    "DegradationObserver",
+    "DegradationBroadcaster",
+    "DegradationStatus",
     # Degraded Mode
     "DegradedModeManager",
     "get_degraded_mode_manager",

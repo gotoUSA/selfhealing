@@ -82,7 +82,9 @@ class HashChainDegradationManager:
         self._state_lock = threading.RLock()
 
         # Current state
-        self._level = DegradationLevel.NORMAL if redis_client else DegradationLevel.DEGRADED
+        self._level = (
+            DegradationLevel.NORMAL if redis_client else DegradationLevel.DEGRADED
+        )
         self._level_changed_at = datetime.now(timezone.utc).isoformat()
         self._failure_count = 0
         self._recovery_attempts = 0
@@ -133,6 +135,18 @@ class HashChainDegradationManager:
 
             # Record in Redis if available
             self._record_level_change(old_level, level, reason)
+
+            # Broadcast state change
+            from selfhealing.audit.resilience.degradation_protocol import (
+                DegradationBroadcaster,
+            )
+
+            DegradationBroadcaster.notify(
+                "redis_hashchain",
+                level != DegradationLevel.NORMAL,
+                level.value,
+                reason,
+            )
 
             # Notify callbacks
             if level == DegradationLevel.NORMAL:
@@ -246,11 +260,15 @@ class HashChainDegradationManager:
         """Handle filesystem failure event."""
         self.set_level(DegradationLevel.EMERGENCY, "filesystem_failure")
 
-    def register_on_degradation(self, callback: Callable[[DegradationLevel], None]) -> None:
+    def register_on_degradation(
+        self, callback: Callable[[DegradationLevel], None]
+    ) -> None:
         """Register callback for degradation events."""
         self._on_degradation_callbacks.append(callback)
 
-    def register_on_recovery(self, callback: Callable[[DegradationLevel], None]) -> None:
+    def register_on_recovery(
+        self, callback: Callable[[DegradationLevel], None]
+    ) -> None:
         """Register callback for recovery events."""
         self._on_recovery_callbacks.append(callback)
 

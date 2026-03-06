@@ -84,6 +84,16 @@ class DegradedModeManager:
                     message=f"Audit entered degraded mode: {reason}",
                 )
 
+                # Broadcast state change
+                from .degradation_protocol import DegradationBroadcaster
+
+                DegradationBroadcaster.notify(
+                    "external_backends",
+                    True,
+                    None,
+                    reason,
+                )
+
     def exit_degraded_mode(self) -> None:
         """Exit degraded mode."""
         with self._manager_lock:
@@ -103,6 +113,16 @@ class DegradedModeManager:
                 logger.info(
                     "degraded_mode.exited_degraded_mode_after",
                     duration=duration,
+                )
+
+                # Broadcast state change
+                from .degradation_protocol import DegradationBroadcaster
+
+                DegradationBroadcaster.notify(
+                    "external_backends",
+                    False,
+                    None,
+                    "recovered",
                 )
 
     def check_and_update(self) -> None:

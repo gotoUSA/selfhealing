@@ -1,21 +1,26 @@
 """
 Circuit Breaker for Audit Backends.
 
-Prevents slow/failing external services from blocking the main application.
+Provides CircuitBreakerBase (shared state machine) and CircuitBreaker
+(sync implementation for external audit backends).
+
+Import order note:
+    CircuitBreakerBase is defined before importing CircuitState from
+    graceful_degradation.enums to avoid circular import. With
+    `from __future__ import annotations`, type annotations are strings
+    and method bodies are not executed at class definition time.
 """
 
 from __future__ import annotations
 
 import threading
+import time
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 import structlog
-
-# CircuitState: 단일 소스는 graceful_degradation/enums.py (Item 2 중복 제거)
-# str, Enum 으로 통일하여 JSON 직렬화 호환
-from selfhealing.audit.graceful_degradation.enums import CircuitState  # noqa: F401
 
 logger = structlog.get_logger()
 
@@ -30,6 +35,183 @@ class AuditCircuitBreakerConfig:
     call_timeout_seconds: float = 5.0  # Timeout for individual calls
 
 
+class CircuitBreakerBase(ABC):
+    """Audit Circuit Breaker shared state machine.
+
+    Design principles:
+    - State transition logic (_*_impl) and concurrency control (lock) are separated
+      so that async subclasses can reuse logic by swapping only the lock.
+    - Timeout calculation uses time.monotonic() uniformly (immune to NTP/leap seconds).
+    - datetime is used only for observation/logging/stats.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        failure_threshold: int,
+        success_threshold: int,
+        timeout_seconds: float,
+    ):
+        self._name = name
+        self._state = CircuitState.CLOSED
+        self._failure_count = 0
+        self._success_count = 0
+        self._total_requests = 0
+        self._total_failures = 0
+        self._total_successes = 0
+        self._state_changes = 0
+
+        self._failure_threshold = failure_threshold
+        self._success_threshold = success_threshold
+        self._timeout_seconds = timeout_seconds
+
+        # DR-1: Monotonic time for duration calculation (NTP/leap-second immune)
+        self._last_failure_mono: float = 0.0
+        # Observation/logging absolute time (used only in stats API and log output)
+        self._last_failure_time: datetime | None = None
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    # --- State transition logic (lock-free pure logic) ---
+
+    def _can_execute_impl(self) -> bool:
+        self._total_requests += 1
+        self._check_timeout_impl()
+
+        if self._state == CircuitState.CLOSED:
+            return True
+
+        if self._state == CircuitState.HALF_OPEN:
+            return self._can_attempt_half_open()
+
+        # OPEN
+        return False
+
+    def _record_success_impl(self) -> None:
+        self._total_successes += 1
+
+        if self._state == CircuitState.HALF_OPEN:
+            self._success_count += 1
+            if self._success_count >= self._success_threshold:
+                self._transition_to(CircuitState.CLOSED)
+        elif self._state == CircuitState.CLOSED:
+            self._failure_count = 0
+
+    def _record_failure_impl(self) -> None:
+        self._failure_count += 1
+        self._total_failures += 1
+        self._last_failure_mono = time.monotonic()
+        self._last_failure_time = datetime.now(timezone.utc)
+
+        if self._state == CircuitState.HALF_OPEN:
+            self._transition_to(CircuitState.OPEN)
+            self._on_open()
+        elif self._state == CircuitState.CLOSED:
+            if self._failure_count >= self._failure_threshold:
+                self._transition_to(CircuitState.OPEN)
+                self._on_open()
+
+    def _check_timeout_impl(self) -> None:
+        if self._state != CircuitState.OPEN:
+            return
+        if self._last_failure_mono == 0.0:
+            return
+        if self._get_elapsed_seconds() >= self._timeout_seconds:
+            self._transition_to(CircuitState.HALF_OPEN)
+
+    # --- Subclass required: concurrency control wrapping ---
+
+    @abstractmethod
+    def can_execute(self) -> bool: ...
+
+    @abstractmethod
+    def record_success(self) -> None: ...
+
+    @abstractmethod
+    def record_failure(self, error: Exception | None = None) -> None: ...
+
+    # --- Common internal methods ---
+
+    def _get_elapsed_seconds(self) -> float:
+        """DR-1: Concrete method — time.monotonic() based, not abstract."""
+        return time.monotonic() - self._last_failure_mono
+
+    def _transition_to(self, new_state: CircuitState) -> None:
+        old_state = self._state
+        self._state = new_state
+        self._state_changes += 1
+
+        if new_state == CircuitState.CLOSED:
+            self._failure_count = 0
+            self._success_count = 0
+        elif new_state == CircuitState.HALF_OPEN:
+            self._success_count = 0
+
+        logger.warning(
+            "circuitbreaker_state_transition",
+            name=self._name,
+            old_state=old_state.value,
+            new_state=new_state.value,
+        )
+
+        # DR-6: Observability hook on state transition
+        self._on_state_changed(old_state, new_state)
+
+    def force_open(self) -> None:
+        """Force circuit to OPEN state."""
+        ...  # Subclass provides lock wrapper
+
+    def reset(self) -> None:
+        """Reset circuit breaker to CLOSED state."""
+        ...
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get circuit breaker statistics (base fields)."""
+        return {
+            "name": self._name,
+            "state": self._state.value,
+            "failure_count": self._failure_count,
+            "success_count": self._success_count,
+            "total_requests": self._total_requests,
+            "total_failures": self._total_failures,
+            "total_successes": self._total_successes,
+            "state_changes": self._state_changes,
+            "last_failure_time": (
+                self._last_failure_time.isoformat() if self._last_failure_time else None
+            ),
+        }
+
+    # --- Subclass hooks (optional override) ---
+
+    def _on_open(self) -> None:
+        """Called on OPEN transition (subclass override)."""
+
+    def _on_close(self) -> None:
+        """Called on CLOSED transition (subclass override)."""
+
+    def _can_attempt_half_open(self) -> bool:
+        """Whether to allow requests in HALF_OPEN (subclass override)."""
+        return True  # Default: unlimited
+
+    def _on_state_changed(self, old: CircuitState, new: CircuitState) -> None:
+        """DR-6: State transition metrics hook (subclass override).
+        Default is no-op. Subclass integrates with AuditMetrics."""
+
+
+# ---------------------------------------------------------------------------
+# CircuitState import — placed after CircuitBreakerBase to break circular
+# import chain (resilience.circuit_breaker → graceful_degradation.enums →
+# graceful_degradation.__init__ → graceful_degradation.circuit_breaker →
+# resilience.circuit_breaker.CircuitBreakerBase).
+# By this point CircuitBreakerBase is already defined and importable.
+# ---------------------------------------------------------------------------
+from selfhealing.audit.graceful_degradation.enums import (
+    CircuitState,  # noqa: E402, F401
+)
+
+
 @dataclass
 class CircuitBreakerSnapshot:
     """Snapshot of a circuit breaker's current state."""
@@ -38,177 +220,96 @@ class CircuitBreakerSnapshot:
     failure_count: int = 0
     success_count: int = 0
     last_failure_time: datetime | None = None
-    last_state_change: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_state_change: datetime = field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
     total_failures: int = 0
     total_successes: int = 0
 
 
-class CircuitBreaker:
-    """
-    Circuit Breaker for audit backends.
-
-    Prevents slow/failing external services from blocking the main application.
-
-    States:
-    - CLOSED: Normal operation, calls go through
-    - OPEN: Backend is failing, calls are rejected immediately
-    - HALF_OPEN: Testing if backend recovered with limited calls
-
-    Usage:
-        cb = CircuitBreaker("cloudwatch")
-
-        if cb.can_execute():
-            try:
-                result = external_call()
-                cb.record_success()
-            except Exception:
-                cb.record_failure()
-        else:
-            # Use fallback
-            local_log(entry)
-    """
+class CircuitBreaker(CircuitBreakerBase):
+    """Circuit Breaker for external audit backends (Sync)."""
 
     def __init__(
         self,
         name: str,
         config: AuditCircuitBreakerConfig | None = None,
     ):
-        """
-        Initialize circuit breaker.
-
-        Args:
-            name: Name of the protected resource
-            config: Circuit breaker configuration
-        """
-        self.name = name
-        self.config = config or AuditCircuitBreakerConfig()
-        self._state = CircuitBreakerSnapshot()
+        cfg = config or AuditCircuitBreakerConfig()
+        super().__init__(
+            name=name,
+            failure_threshold=cfg.failure_threshold,
+            success_threshold=cfg.success_threshold,
+            timeout_seconds=cfg.timeout_seconds,
+        )
+        self.config = cfg
+        # DR-5: Sync-only lock
         self._lock = threading.RLock()
+
+        # Backward-compatible snapshot for last_state_change
+        self._last_state_change = datetime.now(timezone.utc)
 
     @property
     def state(self) -> CircuitState:
         """Get current circuit state."""
         with self._lock:
-            self._check_timeout()
-            return self._state.state
+            self._check_timeout_impl()
+            return self._state
 
+    # DR-5: Concurrency control — threading.RLock wrapping
     def can_execute(self) -> bool:
-        """
-        Check if a call can be executed.
-
-        Returns:
-            True if call should proceed, False if circuit is open
-        """
         with self._lock:
-            self._check_timeout()
-
-            if self._state.state == CircuitState.CLOSED:
-                return True
-            elif self._state.state == CircuitState.HALF_OPEN:
-                # Allow limited calls in half-open
-                return True
-            else:  # OPEN
-                return False
+            return self._can_execute_impl()
 
     def record_success(self) -> None:
-        """Record a successful call."""
         with self._lock:
-            self._state.total_successes += 1
+            self._record_success_impl()
 
-            if self._state.state == CircuitState.HALF_OPEN:
-                self._state.success_count += 1
-                if self._state.success_count >= self.config.success_threshold:
-                    self._transition_to(CircuitState.CLOSED)
-            elif self._state.state == CircuitState.CLOSED:
-                # Reset failure count on success
-                self._state.failure_count = 0
-
-    def record_failure(self) -> None:
-        """Record a failed call."""
+    def record_failure(self, error: Exception | None = None) -> None:
         with self._lock:
-            self._state.failure_count += 1
-            self._state.total_failures += 1
-            self._state.last_failure_time = datetime.now(timezone.utc)
-
-            if self._state.state == CircuitState.HALF_OPEN:
-                # Any failure in half-open reopens circuit
-                self._transition_to(CircuitState.OPEN)
-            elif self._state.state == CircuitState.CLOSED:
-                if self._state.failure_count >= self.config.failure_threshold:
-                    self._transition_to(CircuitState.OPEN)
-
-    def _check_timeout(self) -> None:
-        """Check if open circuit should transition to half-open."""
-        if self._state.state == CircuitState.OPEN:
-            time_since_change = (datetime.now(timezone.utc) - self._state.last_state_change).total_seconds()
-
-            if time_since_change >= self.config.timeout_seconds:
-                self._transition_to(CircuitState.HALF_OPEN)
-
-    def _transition_to(self, new_state: CircuitState) -> None:
-        """Transition to a new state."""
-        old_state = self._state.state
-        self._state.state = new_state
-        self._state.last_state_change = datetime.now(timezone.utc)
-
-        if new_state == CircuitState.CLOSED:
-            self._state.failure_count = 0
-            self._state.success_count = 0
-        elif new_state == CircuitState.HALF_OPEN:
-            self._state.success_count = 0
-
-        logger.warning(
-            "circuitbreaker_state_transition",
-            name=self.name,
-            old_state=old_state.value,
-            new_state=new_state.value,
-        )
+            self._record_failure_impl()
 
     def reset(self) -> None:
-        """Manually reset circuit breaker to closed state."""
         with self._lock:
             self._transition_to(CircuitState.CLOSED)
             logger.info(
                 "circuitbreaker_manually_reset",
-                name=self.name,
+                name=self._name,
             )
 
     def force_open(self) -> None:
-        """Manually open circuit breaker."""
         with self._lock:
             self._transition_to(CircuitState.OPEN)
             logger.warning(
                 "circuitbreaker_manually_opened",
-                name=self.name,
+                name=self._name,
             )
 
+    def _transition_to(self, new_state: CircuitState) -> None:
+        super()._transition_to(new_state)
+        self._last_state_change = datetime.now(timezone.utc)
+
+    # DR-6: Observability hook — AuditMetrics integration
+    def _on_state_changed(self, old: CircuitState, new: CircuitState) -> None:
+        from .metrics import AuditMetrics
+
+        AuditMetrics.get_instance().set_circuit_state(self._name, new.value)
+
     def get_stats(self) -> dict[str, Any]:
-        """Get circuit breaker statistics."""
         with self._lock:
-            return {
-                "name": self.name,
-                "state": self._state.state.value,
-                "failure_count": self._state.failure_count,
-                "success_count": self._state.success_count,
-                "total_failures": self._state.total_failures,
-                "total_successes": self._state.total_successes,
-                "last_failure_time": (self._state.last_failure_time.isoformat() if self._state.last_failure_time else None),
-                "last_state_change": self._state.last_state_change.isoformat(),
-                "config": {
-                    "failure_threshold": self.config.failure_threshold,
-                    "success_threshold": self.config.success_threshold,
-                    "timeout_seconds": self.config.timeout_seconds,
-                    "call_timeout_seconds": self.config.call_timeout_seconds,
-                },
+            stats = super().get_stats()
+            stats["last_state_change"] = self._last_state_change.isoformat()
+            stats["config"] = {
+                "failure_threshold": self.config.failure_threshold,
+                "success_threshold": self.config.success_threshold,
+                "timeout_seconds": self.config.timeout_seconds,
+                "call_timeout_seconds": self.config.call_timeout_seconds,
             }
+            return stats
 
 
 class CircuitBreakerRegistry:
-    """
-    Registry for managing multiple circuit breakers.
-
-    Provides centralized access to all audit backend circuit breakers.
-    """
+    """Registry for managing multiple circuit breakers."""
 
     _instance: CircuitBreakerRegistry | None = None
     _lock = threading.Lock()
@@ -256,7 +357,11 @@ class CircuitBreakerRegistry:
     def get_open_circuits(self) -> list[str]:
         """Get names of all open circuits."""
         with self._registry_lock:
-            return [name for name, cb in self._breakers.items() if cb.state == CircuitState.OPEN]
+            return [
+                name
+                for name, cb in self._breakers.items()
+                if cb.state == CircuitState.OPEN
+            ]
 
 
 def get_circuit_breaker(name: str) -> CircuitBreaker:
@@ -268,6 +373,7 @@ __all__ = [
     "CircuitState",
     "AuditCircuitBreakerConfig",
     "CircuitBreakerSnapshot",
+    "CircuitBreakerBase",
     "CircuitBreaker",
     "CircuitBreakerRegistry",
     "get_circuit_breaker",

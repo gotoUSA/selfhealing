@@ -8,10 +8,11 @@ Redis instance and allowing recovery time.
 from __future__ import annotations
 
 import threading
-import time
 from typing import TYPE_CHECKING, Any
 
 import structlog
+
+from selfhealing.audit.resilience.circuit_breaker import CircuitBreakerBase
 
 from .enums import CircuitState, HashChainCircuitBreakerConfig
 
@@ -22,9 +23,9 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 
-class HashChainCircuitBreaker:
+class HashChainCircuitBreaker(CircuitBreakerBase):
     """
-    Circuit breaker for hash chain Redis operations.
+    Circuit breaker for hash chain Redis operations (Sync).
 
     Prevents cascading failures by stopping requests to a failing
     Redis instance and allowing recovery time.
@@ -33,9 +34,6 @@ class HashChainCircuitBreaker:
     - CLOSED: Normal operation, requests pass through
     - OPEN: Failures exceeded threshold, requests rejected
     - HALF_OPEN: Testing if Redis has recovered
-
-    Pattern source:
-        services/circuit_breaker/service.py
 
     Usage:
         cb = HashChainCircuitBreaker()
@@ -48,7 +46,6 @@ class HashChainCircuitBreaker:
                 cb.record_failure()
                 raise
         else:
-            # Use fallback
             result = fallback_operation()
     """
 
@@ -58,164 +55,94 @@ class HashChainCircuitBreaker:
         config: HashChainCircuitBreakerConfig | None = None,
         degradation_manager: HashChainDegradationManager | None = None,
     ):
-        """
-        Initialize circuit breaker.
-
-        Args:
-            name: Circuit breaker name
-            config: Configuration
-            degradation_manager: Optional degradation manager for integration
-        """
-        self._name = name
-        self._config = config or HashChainCircuitBreakerConfig()
+        cfg = config or HashChainCircuitBreakerConfig()
+        super().__init__(
+            name=name,
+            failure_threshold=cfg.failure_threshold,
+            success_threshold=cfg.success_threshold,
+            timeout_seconds=cfg.recovery_timeout_seconds,
+        )
+        self._config = cfg
         self._degradation_manager = degradation_manager
+        # DR-5: Sync-only lock
         self._lock = threading.RLock()
 
-        # State
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._success_count = 0
-        self._last_failure_time: float | None = None
+        # Half-open request limiting
         self._half_open_requests = 0
-
-        # Stats
-        self._total_requests = 0
-        self._total_failures = 0
-        self._total_successes = 0
-        self._state_changes = 0
+        self._half_open_max_requests = cfg.half_open_requests
 
     @property
     def state(self) -> CircuitState:
         """Get current circuit state."""
         with self._lock:
-            self._maybe_transition_to_half_open()
+            self._check_timeout_impl()
             return self._state
 
+    # DR-5: Concurrency control — threading.RLock wrapping
     def can_execute(self) -> bool:
-        """
-        Check if request can be executed.
-
-        Returns:
-            True if circuit allows execution
-        """
         with self._lock:
-            self._total_requests += 1
-            self._maybe_transition_to_half_open()
-
-            if self._state == CircuitState.CLOSED:
-                return True
-
-            if self._state == CircuitState.HALF_OPEN:
-                if self._half_open_requests < self._config.half_open_requests:
-                    self._half_open_requests += 1
-                    return True
-                return False
-
-            # OPEN
-            return False
+            return self._can_execute_impl()
 
     def record_success(self) -> None:
-        """Record successful operation."""
         with self._lock:
-            self._total_successes += 1
-
-            if self._state == CircuitState.HALF_OPEN:
-                self._success_count += 1
-                if self._success_count >= self._config.success_threshold:
-                    self._transition_to_closed()
-            elif self._state == CircuitState.CLOSED:
-                self._failure_count = 0  # Reset on success
+            self._record_success_impl()
 
     def record_failure(self, error: Exception | None = None) -> None:
-        """Record failed operation."""
         with self._lock:
-            self._failure_count += 1
-            self._total_failures += 1
-            self._last_failure_time = time.monotonic()
-
-            if self._state == CircuitState.HALF_OPEN:
-                self._transition_to_open()
-            elif self._state == CircuitState.CLOSED:
-                if self._failure_count >= self._config.failure_threshold:
-                    self._transition_to_open()
-
-            # Notify degradation manager
+            self._record_failure_impl()
             if self._degradation_manager and self._state == CircuitState.OPEN:
                 self._degradation_manager.on_redis_failure(error)
 
-    def _maybe_transition_to_half_open(self) -> None:
-        """Transition from OPEN to HALF_OPEN if timeout expired."""
-        if self._state != CircuitState.OPEN:
-            return
+    def force_open(self) -> None:
+        """Force circuit to OPEN state."""
+        with self._lock:
+            self._transition_to(CircuitState.OPEN)
 
-        if self._last_failure_time is None:
-            return
-
-        elapsed = time.monotonic() - self._last_failure_time
-        if elapsed >= self._config.recovery_timeout_seconds:
-            self._state = CircuitState.HALF_OPEN
+    def force_closed(self) -> None:
+        """Force circuit to CLOSED state."""
+        with self._lock:
+            self._transition_to(CircuitState.CLOSED)
             self._half_open_requests = 0
-            self._success_count = 0
-            self._state_changes += 1
-            logger.info(
-                "circuitbreaker_open",
-                name=self._name,
-            )
 
-    def _transition_to_open(self) -> None:
-        """Transition to OPEN state."""
-        self._state = CircuitState.OPEN
-        self._state_changes += 1
-        logger.warning(
-            "circuitbreaker_open_failures",
-            name=self._name,
-            failure_count=self._failure_count,
-        )
+    def _on_open(self) -> None:
+        """Notify degradation manager on OPEN (already called within lock)."""
+        # Note: degradation_manager notification for record_failure is handled
+        # in record_failure() itself to pass the error argument.
 
-    def _transition_to_closed(self) -> None:
-        """Transition to CLOSED state."""
-        self._state = CircuitState.CLOSED
-        self._failure_count = 0
-        self._success_count = 0
-        self._half_open_requests = 0
-        self._state_changes += 1
-        logger.info(
-            "circuitbreaker_closed_recovered",
-            name=self._name,
-        )
-        # Notify degradation manager
+    def _on_close(self) -> None:
         if self._degradation_manager:
             self._degradation_manager.on_redis_recovery()
 
-    def force_open(self) -> None:
-        """Force circuit to OPEN state (for testing/manual intervention)."""
-        with self._lock:
-            self._transition_to_open()
+    def _can_attempt_half_open(self) -> bool:
+        if self._half_open_requests < self._half_open_max_requests:
+            self._half_open_requests += 1
+            return True
+        return False
 
-    def force_closed(self) -> None:
-        """Force circuit to CLOSED state (for testing/manual intervention)."""
-        with self._lock:
-            self._transition_to_closed()
+    def _transition_to(self, new_state: CircuitState) -> None:
+        super()._transition_to(new_state)
+        if new_state == CircuitState.HALF_OPEN:
+            self._half_open_requests = 0
+        elif new_state == CircuitState.CLOSED:
+            self._half_open_requests = 0
+            self._on_close()
+
+    # DR-6: Observability hook — AuditMetrics integration
+    def _on_state_changed(self, old: CircuitState, new: CircuitState) -> None:
+        from selfhealing.audit.resilience.metrics import AuditMetrics
+
+        AuditMetrics.get_instance().set_circuit_state("redis_hashchain", new.value)
 
     def get_stats(self) -> dict[str, Any]:
-        """Get circuit breaker statistics."""
         with self._lock:
-            return {
-                "name": self._name,
-                "state": self._state.value,
-                "failure_count": self._failure_count,
-                "success_count": self._success_count,
-                "total_requests": self._total_requests,
-                "total_failures": self._total_failures,
-                "total_successes": self._total_successes,
-                "state_changes": self._state_changes,
-                "config": {
-                    "failure_threshold": self._config.failure_threshold,
-                    "recovery_timeout_seconds": self._config.recovery_timeout_seconds,
-                    "half_open_requests": self._config.half_open_requests,
-                    "success_threshold": self._config.success_threshold,
-                },
+            stats = super().get_stats()
+            stats["config"] = {
+                "failure_threshold": self._config.failure_threshold,
+                "recovery_timeout_seconds": self._config.recovery_timeout_seconds,
+                "half_open_requests": self._config.half_open_requests,
+                "success_threshold": self._config.success_threshold,
             }
+            return stats
 
 
 __all__ = ["HashChainCircuitBreaker"]
