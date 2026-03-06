@@ -504,7 +504,7 @@ class EventCalendar:
     def initialize(self) -> None:
         """Pod 기동 시 StateBackend에서 활성 이벤트 로드 (Pull)."""
         if self._state_backend:
-            saved = self._state_backend.load("capacity_reservation:events")
+            saved = self._state_backend.get("capacity_reservation:events")
             if saved:
                 self._events = self._deserialize(saved)
                 self._last_load_time = time.monotonic()
@@ -513,7 +513,7 @@ class EventCalendar:
         """이벤트 등록 후 StateBackend에 영속화."""
         # ... 기존 로직
         if self._state_backend:
-            self._state_backend.save(
+            self._state_backend.set(
                 "capacity_reservation:events",
                 self._serialize(self._events),
             )
@@ -591,7 +591,7 @@ class PreWarmer:
         if self._global_baseline is None:
             self._global_baseline = self._capture_current_settings()
             if self._state_backend:
-                self._state_backend.save(
+                self._state_backend.set(
                     "capacity_reservation:global_baseline",
                     self._global_baseline,
                     ttl=self._calculate_max_event_horizon() + 3600,
@@ -620,7 +620,7 @@ class PreWarmer:
         """시스템 기동 시 고아 베이스라인 검출 및 복원."""
         if not self._state_backend:
             return
-        saved_baseline = self._state_backend.load(
+        saved_baseline = self._state_backend.get(
             "capacity_reservation:global_baseline"
         )
         active_events = self._calendar.get_active()
@@ -644,17 +644,28 @@ class CapacityReservationService:
     """Capacity Reservation 서비스 — 싱글톤."""
 
     _instance: CapacityReservationService | None = None
-    _lock = Lock()
+    _singleton_lock = Lock()
 
     def __new__(cls) -> CapacityReservationService:
-        with cls._lock:
+        with cls._singleton_lock:
             if cls._instance is None:
                 cls._instance = super().__new__(cls)
                 cls._instance._initialized = False
             return cls._instance
 
-    def initialize(self, config=None):
-        """초기화. EventCalendar + PreWarmer 생성, 스케줄러 시작."""
+    def initialize(
+        self,
+        rate_controller=None,
+        pool_watchdog=None,
+        bulkhead=None,
+        graceful_degradation=None,
+        event_bus=None,
+        metrics_provider=None,
+        recovery_gate=None,
+        state_backend=None,
+        settings=None,
+    ):
+        """초기화. EventCalendar + PreWarmer 생성, StateBackend 기반 복원."""
 
     def register_event(self, event: ScheduledEvent) -> None:
         """이벤트 등록 + 워밍 스케줄 등록."""
@@ -796,6 +807,12 @@ class CapacityReservationSettings(BaseSettings):
         default=300,
         ge=60, le=3600,
         description="이벤트 종료 후 설정 복원까지 유예 시간 (초)",
+    )
+
+    max_concurrent_events: int = Field(
+        default=3,
+        ge=1, le=10,
+        description="동시 진행 가능한 최대 이벤트 수",
     )
 
     dry_run: bool = Field(
