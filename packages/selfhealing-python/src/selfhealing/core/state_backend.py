@@ -186,20 +186,13 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                     error=e,
                 )
                 # Clean up orphan .tmp to avoid stale data on next read
-                try:
-                    if temp_file.exists():
-                        temp_file.unlink()
-                except OSError:
-                    pass
+                safe_unlink(temp_file)
                 raise
 
     def delete(self, key: str) -> bool:
         file_path = self._get_file_path(key)
         with self._lock:
-            if file_path.exists():
-                file_path.unlink()
-                return True
-        return False
+            return safe_unlink(file_path)
 
     def exists(self, key: str) -> bool:
         return self._get_file_path(key).exists()

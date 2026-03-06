@@ -27,8 +27,8 @@ from selfhealing.audit.integrity import HashChainManager, HashChainVerifier
 from selfhealing.interfaces.audit_adapter import AuditAction
 
 
-class TestAuditConfig:
-    """AuditConfig 테스트."""
+class TestAuditConfigContract:
+    """AuditConfig 설계 계약값 검증."""
 
     def test_default_config_development(self):
         """개발 환경에서 기본 설정 로드."""
@@ -130,8 +130,8 @@ class TestAuditConfig:
             assert config_dict["retention_days"] == 365
 
 
-class TestComplianceRetention:
-    """규정별 보존 기간 테스트."""
+class TestComplianceRetentionContract:
+    """규정별 보존 기간 설계 계약값 검증."""
 
     def test_retention_days_constants(self):
         """규정별 보존 기간 상수 확인."""
@@ -156,8 +156,8 @@ class TestComplianceRetention:
         assert get_recommended_retention(["UNKNOWN"]) == 365
 
 
-class TestContinuousAuditRecorder:
-    """ContinuousAuditRecorder 테스트."""
+class TestContinuousAuditRecorderBehavior:
+    """ContinuousAuditRecorder 동작 검증."""
 
     @pytest.fixture
     def temp_log_file(self):
@@ -398,8 +398,8 @@ class TestContinuousAuditRecorder:
         assert alerts[0][1]["parameter"] == "timeout_ms"
 
 
-class TestHashChainIntegrity:
-    """해시 체인 무결성 테스트."""
+class TestHashChainIntegrityBehavior:
+    """해시 체인 무결성 동작 검증."""
 
     def test_hash_chain_manager_adds_integrity(self):
         """HashChainManager가 무결성 정보를 추가."""
@@ -486,8 +486,8 @@ class TestHashChainIntegrity:
         assert "Missing" in error or "sequence" in error
 
 
-class TestAuditActionExtensions:
-    """AuditAction 확장 테스트."""
+class TestAuditActionExtensionsContract:
+    """AuditAction 확장 설계 계약값 검증."""
 
     def test_auto_tuning_actions_exist(self):
         """자율 조정 관련 액션 존재."""

@@ -213,8 +213,8 @@ class FakePipeline:
         return results
 
 
-class TestAuditBatchLuaScripts:
-    """AuditBatchLuaScripts 테스트."""
+class TestAuditBatchLuaScriptsBehavior:
+    """AuditBatchLuaScripts 동작 검증."""
 
     @pytest.fixture
     def fake_redis(self) -> FakeRedisWithLua:
@@ -301,8 +301,8 @@ class TestAuditBatchLuaScripts:
         assert orphaned[0][0] == "audit:{old}:processing"
 
 
-class TestRedisAuditBufferV2:
-    """RedisAuditBuffer v2.0 기능 테스트."""
+class TestRedisAuditBufferV2Behavior:
+    """RedisAuditBuffer v2.0 기능 동작 검증."""
 
     @pytest.fixture
     def fake_redis(self) -> FakeRedisWithLua:
@@ -433,8 +433,8 @@ class TestRedisAuditBufferV2:
         assert len(buffer._fallback_buffer) == 0
 
 
-class TestAuditBufferMetrics:
-    """Audit Buffer 메트릭 테스트."""
+class TestAuditBufferMetricsBehavior:
+    """Audit Buffer 메트릭 동작 검증."""
 
     def test_metrics_module_imports(self) -> None:
         """메트릭 모듈 임포트 확인."""
@@ -473,8 +473,8 @@ class TestAuditBufferMetrics:
         record_safety_ltrim(domain="test", dropped_count=100)
 
 
-class TestCeleryAuditFlushTasks:
-    """Celery 플러시 태스크 테스트."""
+class TestCeleryAuditFlushTasksContract:
+    """Celery 플러시 태스크 설계 계약값 검증."""
 
     def test_flush_task_imports(self) -> None:
         """태스크 임포트 확인."""

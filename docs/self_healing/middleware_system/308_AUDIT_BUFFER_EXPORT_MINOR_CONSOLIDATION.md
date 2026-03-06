@@ -192,18 +192,25 @@ JSONL/CSV 내보내기 로직이 3곳에서 각각 구현:
 
 ### 3. 리팩터링 계획
 
-#### Phase 1: AuditExporter를 canonical 구현으로 지정
+#### Phase 1: AuditExporter를 canonical CLI 구현으로 분리
 
 ```
+AuditExporter (export.py):
+  - CLI/HTTP/S3 대상 내보내기 전담
+  - NDJSON chunked POST, max_entries_json_format 상한 적용
 continuous_audit.py의 export_jsonl()/export_csv_compatible():
-  -> AuditExporter에 위임 (래퍼 메서드로 유지, 하위호환)
+  - ContinuousAuditRecorder 내부 독립 구현 유지 (서비스 레이어)
+  - offset 기반 페이지네이션으로 스트리밍
 continuous_audit_api.py의 ExportJSONLView/ExportCSVView:
-  -> AuditExporter.export_to_stream() 사용
+  - recorder.export_jsonl()/export_csv_compatible() 사용
 ```
 
-#### Phase 2: Cursor 기반 페이지네이션
+> **참고**: 원래 계획은 AuditExporter에 위임하는 래퍼 패턴이었으나,
+> 서비스 레이어(recorder)와 CLI(exporter)의 관심사가 다르므로 독립 구현을 유지한다.
 
-`export_jsonl()`의 `limit=10000` 고정값을 cursor 기반 반복으로 변경:
+#### Phase 2: Offset 기반 페이지네이션
+
+`export_jsonl()`의 `limit=10000` 고정값을 offset 기반 반복으로 변경:
 
 ```python
 def export_jsonl(
@@ -211,18 +218,23 @@ def export_jsonl(
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     action_filter: list[AuditAction] | None = None,
+    page_size: int = 1000,
 ) -> Iterator[str]:
-    cursor = None
+    offset = 0
     while True:
-        batch = self.query_page(cursor=cursor, page_size=1000,
-                                start_time=start_time, end_time=end_time)
-        if not batch.entries:
+        batch = self.query(start_time=start_time, end_time=end_time,
+                           limit=page_size)
+        if not batch:
             break
-        for entry in batch.entries:
-            if action_filter and not _matches_filter(entry, action_filter):
-                continue
+        for entry in batch:
+            if action_filter:
+                entry_action = entry.get("action", "")
+                if not any(a.value == entry_action for a in action_filter):
+                    continue
             yield json.dumps(entry, default=str)
-        cursor = batch.next_cursor
+        if len(batch) < page_size:
+            break
+        offset += page_size
 ```
 
 #### Phase 3: CSV View 스트리밍 전환
@@ -486,7 +498,7 @@ class AtomicStateQuery:
 | `wal/_disk_manager.py` | :94, :132 | 디스크 풀 긴급 퍼지 | X | X |
 | `wal/_reader.py` | :282 | 처리 완료 WAL 삭제 | X | X |
 | `retention_cleaner.py` | :115, :127 | 보존 기간 만료 삭제 | X | X |
-| `core/state_backend.py` | :118, :185, :194 | 상태 파일 삭제 (threading.Lock만) | X | 프로세스간 X |
+| `core/state_backend.py` | :120, :188, :196 | 상태 파일 삭제 (threading.Lock만) | X | 프로세스간 X |
 | `critical_path_fallback.py` | :385, :387 | 비상 상태 클리어 | X | X |
 
 #### MEDIUM 위험 지점

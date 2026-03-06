@@ -7,7 +7,7 @@ Atomic sequence operations via Lua scripts.
 from .conftest import MockRedisClient
 
 
-class TestLuaAtomicHashChain:
+class TestLuaAtomicHashChainBehavior:
     """Tests for LuaAtomicHashChain."""
 
     def test_reserve_sequence_atomic(self):

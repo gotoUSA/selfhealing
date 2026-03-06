@@ -27,8 +27,8 @@ from selfhealing.audit.checksum import (
 )
 
 
-class TestComputeCRC32:
-    """CRC32 체크섬 계산 테스트."""
+class TestComputeCRC32Behavior:
+    """CRC32 체크섬 계산 동작 검증."""
 
     def test_bytes_input(self):
         """bytes 입력."""
@@ -66,8 +66,8 @@ class TestComputeCRC32:
         assert result1 != result2
 
 
-class TestVerifyCRC32:
-    """CRC32 검증 테스트."""
+class TestVerifyCRC32Behavior:
+    """CRC32 검증 동작 검증."""
 
     def test_verify_valid(self):
         """유효한 체크섬 검증."""
@@ -97,8 +97,8 @@ class TestVerifyCRC32:
         assert result_lower.is_valid
 
 
-class TestComputeSHA256:
-    """SHA256 체크섬 계산 테스트."""
+class TestComputeSHA256Behavior:
+    """SHA256 체크섬 계산 동작 검증."""
 
     def test_full_length(self):
         """전체 길이 (64자)."""
@@ -128,8 +128,8 @@ class TestComputeSHA256:
         assert result1 == result2
 
 
-class TestVerifySHA256:
-    """SHA256 검증 테스트."""
+class TestVerifySHA256Behavior:
+    """SHA256 검증 동작 검증."""
 
     def test_verify_valid_full(self):
         """전체 길이 검증."""
@@ -162,8 +162,8 @@ class TestVerifySHA256:
         assert not result.is_valid
 
 
-class TestGenericChecksum:
-    """범용 체크섬 함수 테스트."""
+class TestGenericChecksumBehavior:
+    """범용 체크섬 함수 동작 검증."""
 
     def test_compute_crc32(self):
         """compute_checksum with crc32."""
@@ -204,8 +204,8 @@ class TestGenericChecksum:
         assert result.is_valid
 
 
-class TestChecksumDict:
-    """checksum_dict 테스트."""
+class TestChecksumDictBehavior:
+    """checksum_dict 동작 검증."""
 
     def test_default_sha256_16(self):
         """기본 설정: SHA256, 16자."""
@@ -224,8 +224,8 @@ class TestChecksumDict:
         assert len(result) == 16
 
 
-class TestChecksumFile:
-    """파일 체크섬 테스트."""
+class TestChecksumFileBehavior:
+    """파일 체크섬 동작 검증."""
 
     def test_file_checksum(self):
         """파일 체크섬 계산."""
@@ -277,8 +277,8 @@ class TestChecksumFile:
             Path(filepath).unlink()
 
 
-class TestChecksumResult:
-    """ChecksumResult 테스트."""
+class TestChecksumResultContract:
+    """ChecksumResult dataclass 구조 계약 검증."""
 
     def test_dataclass_fields(self):
         """dataclass 필드 확인."""
@@ -294,8 +294,8 @@ class TestChecksumResult:
         assert result.algorithm == "crc32"
 
 
-class TestEdgeCases:
-    """엣지 케이스 테스트."""
+class TestChecksumEdgeCaseBehavior:
+    """체크섬 엣지 케이스 동작 검증."""
 
     def test_empty_string(self):
         """빈 문자열."""
