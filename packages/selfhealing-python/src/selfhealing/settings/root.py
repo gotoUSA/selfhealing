@@ -7,11 +7,28 @@ All sub-settings are composed here for single-point access.
 """
 
 import os
+from enum import Enum
 from typing import Any
 
 import structlog
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class FallbackPolicy(str, Enum):
+    """DI fallback policy for in-memory adapter usage.
+
+    Controls how services behave when ProviderRegistry is unavailable.
+
+    - ALLOW: InMemory fallback silently (dev/test)
+    - WARN_AND_ALLOW: Fallback with metrics + warning (staging)
+    - FAIL_FAST: Crash immediately for K8s pod restart (production)
+    """
+
+    ALLOW = "allow"
+    WARN_AND_ALLOW = "warn"
+    FAIL_FAST = "fail_fast"
+
 
 from selfhealing.settings.chaos import ChaosSettings
 from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
@@ -153,6 +170,10 @@ class SelfHealingSettings(BaseSettings):
         default=False,
         description="Enable debug mode",
     )
+    fallback_policy: FallbackPolicy = Field(
+        default=FallbackPolicy.ALLOW,
+        description="DI fallback policy: allow (dev), warn (staging), fail_fast (prod)",
+    )
 
     # ==========================================================================
     # Site configuration
@@ -199,7 +220,9 @@ class SelfHealingSettings(BaseSettings):
     # ==========================================================================
     # Convenience methods for backward compatibility
     # ==========================================================================
-    def get_circuit_breaker_config(self, domain: str | None = None) -> CircuitBreakerSettings:
+    def get_circuit_breaker_config(
+        self, domain: str | None = None
+    ) -> CircuitBreakerSettings:
         """Get circuit breaker config, with optional domain overrides."""
         if domain and domain in self.domain_configs:
             domain_cb = self.domain_configs[domain].get("circuit_breaker", {})

@@ -189,11 +189,41 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
     @property
     def repository(self) -> CircuitBreakerStateRepository:
-        """Get the repository using ProviderRegistry (Redis by default)."""
+        """Get the repository using ProviderRegistry with fallback policy."""
         if self._repository is None:
-            from selfhealing.factory import ProviderRegistry
+            try:
+                from selfhealing.factory import ProviderRegistry
 
-            self._repository = ProviderRegistry.get_circuit_breaker_repo()
+                self._repository = ProviderRegistry.get_circuit_breaker_repo()
+            except (ImportError, ValueError) as exc:
+                from selfhealing.settings import FallbackPolicy, get_config
+
+                policy = get_config().fallback_policy
+                if policy == FallbackPolicy.FAIL_FAST:
+                    raise RuntimeError(
+                        f"ProviderRegistry unavailable in production: {exc}"
+                    ) from exc
+                from selfhealing.adapters.memory import (
+                    InMemoryCircuitBreakerStateRepository,
+                )
+
+                self._repository = InMemoryCircuitBreakerStateRepository()
+                logger.warning(
+                    "service.fallback_adapter",
+                    adapter="InMemoryCircuitBreakerStateRepository",
+                    service=self.__class__.__name__,
+                )
+                try:
+                    from selfhealing.metrics.prometheus import get_metrics
+
+                    metrics = get_metrics()
+                    if hasattr(metrics, "di_fallback_total"):
+                        metrics.di_fallback_total.labels(
+                            service=self.__class__.__name__,
+                            adapter="InMemoryCircuitBreakerStateRepository",
+                        ).inc()
+                except Exception:
+                    pass
         return self._repository
 
     @property

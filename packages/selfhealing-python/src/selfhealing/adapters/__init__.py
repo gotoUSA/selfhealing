@@ -36,86 +36,110 @@ Usage:
         SyncTaskAdapter,
     )
 
-플러거블 인터페이스의 구체적 구현체 모음.
-
 NOTE: Django and SQLAlchemy adapters have been removed in v2.0.0.
       Use Redis adapters (with ResilientStorageBackend fallback) instead.
 """
 
+from __future__ import annotations
+
+import importlib
+from typing import TYPE_CHECKING
+
 # =============================================================================
-# Repository Adapters - Redis (Production)
+# TYPE_CHECKING block for IDE autocomplete and MyPy support
 # =============================================================================
-try:
+if TYPE_CHECKING:
+    from selfhealing.adapters.cache import InMemoryCacheAdapter, RedisCacheAdapter
+    from selfhealing.adapters.health_checker import (
+        HealthCheckStrategy,
+        LinuxTCPInfoStrategy,
+        PortableHealthChecker,
+        TTLCacheStrategy,
+    )
+    from selfhealing.adapters.memory import (
+        InMemoryCircuitBreakerStateRepository,
+        InMemoryFailedOperationRepository,
+        InMemorySecurityIncidentRepository,
+    )
+    from selfhealing.adapters.queues import CeleryTaskAdapter, SyncTaskAdapter
     from selfhealing.adapters.redis import (
         RedisCircuitBreakerStateRepository,
         RedisDLQRepository,
     )
-except ImportError:
-    RedisCircuitBreakerStateRepository = None
-    RedisDLQRepository = None
 
 # =============================================================================
-# Cache Adapters
+# Lazy Loading via __getattr__
 # =============================================================================
-from selfhealing.adapters.cache import (
-    InMemoryCacheAdapter,
-    RedisCacheAdapter,
-)
 
-# =============================================================================
-# Health Checker Adapters (Platinum SLA Optimization)
-# =============================================================================
-from selfhealing.adapters.health_checker import (
-    HealthCheckStrategy,
-    LinuxTCPInfoStrategy,
-    PortableHealthChecker,
-    TTLCacheStrategy,
-)
-
-# =============================================================================
-# Repository Adapters - InMemory (Testing)
-# =============================================================================
-from selfhealing.adapters.memory import (
-    InMemoryCircuitBreakerStateRepository,
-    InMemoryFailedOperationRepository,
-    InMemorySecurityIncidentRepository,
-)
-
-# =============================================================================
-# Task Queue Adapters
-# =============================================================================
-from selfhealing.adapters.queues import (
-    CeleryTaskAdapter,
-    SyncTaskAdapter,
-)
-
-__all__ = [
-    # =========================================================================
+_LAZY_IMPORTS: dict[str, tuple[str, str]] = {
     # Repository Adapters - Redis (Production)
-    # =========================================================================
-    "RedisCircuitBreakerStateRepository",
-    "RedisDLQRepository",
-    # =========================================================================
+    "RedisCircuitBreakerStateRepository": (
+        "selfhealing.adapters.redis",
+        "RedisCircuitBreakerStateRepository",
+    ),
+    "RedisDLQRepository": (
+        "selfhealing.adapters.redis",
+        "RedisDLQRepository",
+    ),
     # Repository Adapters - InMemory (Testing)
-    # =========================================================================
-    "InMemoryFailedOperationRepository",
-    "InMemoryCircuitBreakerStateRepository",
-    "InMemorySecurityIncidentRepository",
-    # =========================================================================
+    "InMemoryFailedOperationRepository": (
+        "selfhealing.adapters.memory",
+        "InMemoryFailedOperationRepository",
+    ),
+    "InMemoryCircuitBreakerStateRepository": (
+        "selfhealing.adapters.memory",
+        "InMemoryCircuitBreakerStateRepository",
+    ),
+    "InMemorySecurityIncidentRepository": (
+        "selfhealing.adapters.memory",
+        "InMemorySecurityIncidentRepository",
+    ),
     # Cache Adapters
-    # =========================================================================
-    "RedisCacheAdapter",
-    "InMemoryCacheAdapter",
-    # =========================================================================
+    "RedisCacheAdapter": (
+        "selfhealing.adapters.cache",
+        "RedisCacheAdapter",
+    ),
+    "InMemoryCacheAdapter": (
+        "selfhealing.adapters.cache",
+        "InMemoryCacheAdapter",
+    ),
     # Task Queue Adapters
-    # =========================================================================
-    "CeleryTaskAdapter",
-    "SyncTaskAdapter",
-    # =========================================================================
-    # Health Checker Adapters (Platinum SLA Optimization)
-    # =========================================================================
-    "HealthCheckStrategy",
-    "TTLCacheStrategy",
-    "LinuxTCPInfoStrategy",
-    "PortableHealthChecker",
-]
+    "CeleryTaskAdapter": (
+        "selfhealing.adapters.queues",
+        "CeleryTaskAdapter",
+    ),
+    "SyncTaskAdapter": (
+        "selfhealing.adapters.queues",
+        "SyncTaskAdapter",
+    ),
+    # Health Checker Adapters
+    "HealthCheckStrategy": (
+        "selfhealing.adapters.health_checker",
+        "HealthCheckStrategy",
+    ),
+    "TTLCacheStrategy": (
+        "selfhealing.adapters.health_checker",
+        "TTLCacheStrategy",
+    ),
+    "LinuxTCPInfoStrategy": (
+        "selfhealing.adapters.health_checker",
+        "LinuxTCPInfoStrategy",
+    ),
+    "PortableHealthChecker": (
+        "selfhealing.adapters.health_checker",
+        "PortableHealthChecker",
+    ),
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_IMPORTS:
+        module_path, attr_name = _LAZY_IMPORTS[name]
+        module = importlib.import_module(module_path)
+        value = getattr(module, attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = list(_LAZY_IMPORTS.keys())

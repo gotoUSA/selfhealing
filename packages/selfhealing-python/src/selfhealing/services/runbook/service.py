@@ -70,6 +70,13 @@ class RunbookService:
             return cls._instance
 
     def __init__(self) -> None:
+        """Initialize RunbookService.
+
+        Note: Uses lazy internal dependency getters (not ProviderRegistry).
+        Runbook components are internal orchestration modules with no external
+        persistence requirements. See 309_ARCHITECTURE_PATTERN_CONSISTENCY.md
+        §3.2.3 Option B.
+        """
         if self._initialized:
             return
 

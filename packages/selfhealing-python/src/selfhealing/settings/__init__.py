@@ -280,11 +280,6 @@ from selfhealing.settings.rate_limit import (
     get_rate_limit_settings,
     reset_rate_limit_settings,
 )
-from selfhealing.settings.runbook import (
-    RunbookSettings,
-    get_runbook_settings,
-    reset_runbook_settings,
-)
 
 # Week 1 CRITICAL Settings (92_CONFIG_IMPLEMENTATION_GUIDE.md)
 from selfhealing.settings.recovery_circuit_breaker import (
@@ -344,6 +339,7 @@ from selfhealing.settings.retry import (
 
 # Root Settings (SelfHealingSettings)
 from selfhealing.settings.root import (  # Convenience getters; Legacy function aliases
+    FallbackPolicy,
     SelfHealingSettings,
     configure,
     get_circuit_breaker_config,
@@ -363,6 +359,11 @@ from selfhealing.settings.root import (  # Convenience getters; Legacy function 
     reload_config,
     reset_config,
     set_config,
+)
+from selfhealing.settings.runbook import (
+    RunbookSettings,
+    get_runbook_settings,
+    reset_runbook_settings,
 )
 
 # Core Module Settings (103_HARDCODED_CONFIG_CORE_REFACTORING.md Step 1, 2)

@@ -86,20 +86,41 @@ class ReplayService:
 
     @property
     def repository(self) -> FailedOperationRepository:
-        """Get the repository, creating InMemory adapter if needed."""
+        """Get the repository using ProviderRegistry with fallback policy."""
         if self._repository is None:
-            # Try to use ProviderRegistry from selfhealing package first
             try:
                 from selfhealing.factory import ProviderRegistry
 
                 self._repository = ProviderRegistry.get_failed_operation_repo()
-            except (ImportError, ValueError):
-                # Fallback to in-memory adapter
+            except (ImportError, ValueError) as exc:
+                from selfhealing.settings import FallbackPolicy
+
+                policy = get_config().fallback_policy
+                if policy == FallbackPolicy.FAIL_FAST:
+                    raise RuntimeError(
+                        f"ProviderRegistry unavailable in production: {exc}"
+                    ) from exc
                 from selfhealing.adapters.memory import (
                     InMemoryFailedOperationRepository,
                 )
 
                 self._repository = InMemoryFailedOperationRepository()
+                logger.warning(
+                    "service.fallback_adapter",
+                    adapter="InMemoryFailedOperationRepository",
+                    service=self.__class__.__name__,
+                )
+                try:
+                    from selfhealing.metrics.prometheus import get_metrics
+
+                    metrics = get_metrics()
+                    if hasattr(metrics, "di_fallback_total"):
+                        metrics.di_fallback_total.labels(
+                            service=self.__class__.__name__,
+                            adapter="InMemoryFailedOperationRepository",
+                        ).inc()
+                except Exception:
+                    pass
         return self._repository
 
     def _load_config(self) -> dict[str, Any]:
@@ -168,7 +189,9 @@ class ReplayService:
             if existing is None:
                 return ReplayResult.failed(dlq_id, "DLQ entry not found")
             elif existing.status != "pending":
-                return ReplayResult.failed(dlq_id, f"Cannot replay: status is '{existing.status}'")
+                return ReplayResult.failed(
+                    dlq_id, f"Cannot replay: status is '{existing.status}'"
+                )
             else:
                 return ReplayResult.failed(dlq_id, "max_replays_exceeded")
 
@@ -202,7 +225,9 @@ class ReplayService:
             id=dlq_id,
             success=result.success,
             resolution_type="auto_replay" if result.success else "",
-            note=(result.message if result.success else (result.error or "Replay failed")),
+            note=(
+                result.message if result.success else (result.error or "Replay failed")
+            ),
         )
 
         if result.success:
@@ -523,7 +548,9 @@ class ReplayService:
 
                 # Get domain-specific max_retries if configured
                 domain_max = self._get_domain_max_retries(domain)
-                effective_max_retries = domain_max if domain_max is not None else max_replays
+                effective_max_retries = (
+                    domain_max if domain_max is not None else max_replays
+                )
 
                 entries = self.repository.get_pending_entries(
                     domain=domain,
@@ -586,7 +613,9 @@ class ReplayService:
             return AdaptiveReplayConfig(
                 min_items=config.get("adaptive_min_items", 10),
                 max_items=config.get("adaptive_max_items", 100),
-                initial_items=config.get("track2_max_items", 50),  # Use track2 as initial
+                initial_items=config.get(
+                    "track2_max_items", 50
+                ),  # Use track2 as initial
                 failure_threshold=config.get("adaptive_failure_threshold", 0.2),
             )
         except Exception as e:
@@ -611,7 +640,9 @@ class ReplayService:
             if existing is None:
                 return ReplayResult.failed(dlq_id, "DLQ entry not found")
             elif existing.status != "pending":
-                return ReplayResult.failed(dlq_id, f"Cannot replay: status is '{existing.status}'")
+                return ReplayResult.failed(
+                    dlq_id, f"Cannot replay: status is '{existing.status}'"
+                )
             else:
                 return ReplayResult.failed(dlq_id, "max_replays_exceeded")
 
@@ -642,7 +673,9 @@ class ReplayService:
             id=dlq_id,
             success=result.success,
             resolution_type="auto_replay" if result.success else "",
-            note=(result.message if result.success else (result.error or "Replay failed")),
+            note=(
+                result.message if result.success else (result.error or "Replay failed")
+            ),
         )
 
         if result.success:

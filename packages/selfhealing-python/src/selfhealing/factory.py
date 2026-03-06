@@ -21,6 +21,8 @@ Usage:
 
 from __future__ import annotations
 
+import threading
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -29,6 +31,7 @@ if TYPE_CHECKING:
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
     from selfhealing.interfaces.event_journal import EventJournalRepository
+    from selfhealing.interfaces.notification import NotificationAdapter
     from selfhealing.interfaces.repositories import (
         CircuitBreakerStateRepository,
         FailedOperationRepository,
@@ -46,22 +49,26 @@ class ProviderRegistry:
     Central registry for all pluggable components.
 
     Allows runtime registration and lookup of adapters.
-    Thread-safe for read operations.
+    Thread-safe singleton creation via Double-Checked Locking.
     """
 
+    _lock: threading.Lock = threading.Lock()
+
     # Provider registries
-    _cache_providers: dict[str, type] = {}
-    _task_queues: dict[str, type] = {}
-    _failed_op_repos: dict[str, type] = {}
-    _circuit_breaker_repos: dict[str, type] = {}
-    _security_repos: dict[str, type] = {}
-    _audit_adapters: dict[str, type] = {}  # Audit adapters
-    _traffic_routing_adapters: dict[str, type] = {}  # Traffic routing adapters
-    _correlation_strategies: dict[str, type] = {}  # Correlation ML strategies
-    _root_cause_strategies: dict[str, type] = {}  # Root cause analysis strategies
-    _event_journal_repos: dict[str, type] = {}  # Event Journal repositories
-    _graph_build_strategies: dict[str, type] = {}  # Graph build strategies
-    _mesh_override_stores: dict[str, type] = {}  # Mesh override stores
+    _cache_providers: dict[str, type | Callable] = {}
+    _task_queues: dict[str, type | Callable] = {}
+    _failed_op_repos: dict[str, type | Callable] = {}
+    _circuit_breaker_repos: dict[str, type | Callable] = {}
+    _security_repos: dict[str, type | Callable] = {}
+    _audit_adapters: dict[str, type | Callable] = {}
+    _traffic_routing_adapters: dict[str, type | Callable] = {}
+    _correlation_strategies: dict[str, type] = {}
+    _root_cause_strategies: dict[str, type] = {}
+    _event_journal_repos: dict[str, type | Callable] = {}
+    _graph_build_strategies: dict[str, type] = {}
+    _mesh_override_stores: dict[str, type] = {}
+    _notifications: dict[str, type | Callable] = {}
+    _notification_instances: dict[str, NotificationAdapter] = {}
 
     # Statistics adapter (singleton, registered by app)
     _statistics_adapter: StatisticsRepositoryInterface | None = None
@@ -73,8 +80,9 @@ class ProviderRegistry:
     _default_cache: str = "memory"
     _default_queue: str = "sync"
     _default_repo: str = "redis"
-    _default_audit: str = "file"  # Default audit adapter
-    _default_traffic_routing: str = "logging"  # Default traffic routing adapter
+    _default_audit: str = "file"
+    _default_traffic_routing: str = "logging"
+    _default_notification: str = "logging"
 
     # Singleton instances (for reuse)
     _instances: dict[str, object] = {}
@@ -154,6 +162,12 @@ class ProviderRegistry:
             "cell_registry.bulkheads_registered",
             factory_name=name,
         )
+
+    @classmethod
+    def register_notification(cls, name: str, adapter_class: type | Callable) -> None:
+        """Register a notification adapter."""
+        cls._notifications[name] = adapter_class
+        logger.debug("registry.notification_registered", name=name)
 
     @classmethod
     def register_correlation_strategy(cls, name: str, strategy_class: type) -> None:
@@ -303,7 +317,7 @@ class ProviderRegistry:
         return instance
 
     # =========================================================================
-    # Provider Getters
+    # Provider Getters (with Double-Checked Locking for singleton creation)
     # =========================================================================
 
     @classmethod
@@ -328,19 +342,24 @@ class ProviderRegistry:
             key = f"cache:{name}"
             if key in cls._instances:
                 return cls._instances[key]
+            with cls._lock:
+                if key in cls._instances:
+                    return cls._instances[key]
+                if name not in cls._cache_providers:
+                    raise ValueError(
+                        f"Unknown cache provider: {name}. "
+                        f"Available: {list(cls._cache_providers.keys())}"
+                    )
+                instance = cls._cache_providers[name]()
+                cls._instances[key] = instance
+                return instance
 
         if name not in cls._cache_providers:
             raise ValueError(
                 f"Unknown cache provider: {name}. "
                 f"Available: {list(cls._cache_providers.keys())}"
             )
-
-        instance = cls._cache_providers[name]()
-
-        if singleton:
-            cls._instances[key] = instance
-
-        return instance
+        return cls._cache_providers[name]()
 
     @classmethod
     def get_queue(
@@ -364,19 +383,24 @@ class ProviderRegistry:
             key = f"queue:{name}"
             if key in cls._instances:
                 return cls._instances[key]
+            with cls._lock:
+                if key in cls._instances:
+                    return cls._instances[key]
+                if name not in cls._task_queues:
+                    raise ValueError(
+                        f"Unknown task queue: {name}. "
+                        f"Available: {list(cls._task_queues.keys())}"
+                    )
+                instance = cls._task_queues[name]()
+                cls._instances[key] = instance
+                return instance
 
         if name not in cls._task_queues:
             raise ValueError(
                 f"Unknown task queue: {name}. "
                 f"Available: {list(cls._task_queues.keys())}"
             )
-
-        instance = cls._task_queues[name]()
-
-        if singleton:
-            cls._instances[key] = instance
-
-        return instance
+        return cls._task_queues[name]()
 
     @classmethod
     def get_failed_operation_repo(
@@ -391,19 +415,24 @@ class ProviderRegistry:
             key = f"repo:failed_op:{name}"
             if key in cls._instances:
                 return cls._instances[key]
+            with cls._lock:
+                if key in cls._instances:
+                    return cls._instances[key]
+                if name not in cls._failed_op_repos:
+                    raise ValueError(
+                        f"Unknown repository: {name}. "
+                        f"Available: {list(cls._failed_op_repos.keys())}"
+                    )
+                instance = cls._failed_op_repos[name]()
+                cls._instances[key] = instance
+                return instance
 
         if name not in cls._failed_op_repos:
             raise ValueError(
                 f"Unknown repository: {name}. "
                 f"Available: {list(cls._failed_op_repos.keys())}"
             )
-
-        instance = cls._failed_op_repos[name]()
-
-        if singleton:
-            cls._instances[key] = instance
-
-        return instance
+        return cls._failed_op_repos[name]()
 
     @classmethod
     def get_circuit_breaker_repo(
@@ -418,19 +447,24 @@ class ProviderRegistry:
             key = f"repo:circuit_breaker:{name}"
             if key in cls._instances:
                 return cls._instances[key]
+            with cls._lock:
+                if key in cls._instances:
+                    return cls._instances[key]
+                if name not in cls._circuit_breaker_repos:
+                    raise ValueError(
+                        f"Unknown repository: {name}. "
+                        f"Available: {list(cls._circuit_breaker_repos.keys())}"
+                    )
+                instance = cls._circuit_breaker_repos[name]()
+                cls._instances[key] = instance
+                return instance
 
         if name not in cls._circuit_breaker_repos:
             raise ValueError(
                 f"Unknown repository: {name}. "
                 f"Available: {list(cls._circuit_breaker_repos.keys())}"
             )
-
-        instance = cls._circuit_breaker_repos[name]()
-
-        if singleton:
-            cls._instances[key] = instance
-
-        return instance
+        return cls._circuit_breaker_repos[name]()
 
     @classmethod
     def get_security_repo(
@@ -445,19 +479,24 @@ class ProviderRegistry:
             key = f"repo:security:{name}"
             if key in cls._instances:
                 return cls._instances[key]
+            with cls._lock:
+                if key in cls._instances:
+                    return cls._instances[key]
+                if name not in cls._security_repos:
+                    raise ValueError(
+                        f"Unknown repository: {name}. "
+                        f"Available: {list(cls._security_repos.keys())}"
+                    )
+                instance = cls._security_repos[name]()
+                cls._instances[key] = instance
+                return instance
 
         if name not in cls._security_repos:
             raise ValueError(
                 f"Unknown repository: {name}. "
                 f"Available: {list(cls._security_repos.keys())}"
             )
-
-        instance = cls._security_repos[name]()
-
-        if singleton:
-            cls._instances[key] = instance
-
-        return instance
+        return cls._security_repos[name]()
 
     @classmethod
     def get_event_journal_repo(
@@ -475,19 +514,24 @@ class ProviderRegistry:
             key = f"repo:event_journal:{name}"
             if key in cls._instances:
                 return cls._instances[key]
+            with cls._lock:
+                if key in cls._instances:
+                    return cls._instances[key]
+                if name not in cls._event_journal_repos:
+                    raise ValueError(
+                        f"Unknown event journal repository: {name}. "
+                        f"Available: {list(cls._event_journal_repos.keys())}"
+                    )
+                instance = cls._event_journal_repos[name]()
+                cls._instances[key] = instance
+                return instance
 
         if name not in cls._event_journal_repos:
             raise ValueError(
                 f"Unknown event journal repository: {name}. "
                 f"Available: {list(cls._event_journal_repos.keys())}"
             )
-
-        instance = cls._event_journal_repos[name]()
-
-        if singleton:
-            cls._instances[key] = instance
-
-        return instance
+        return cls._event_journal_repos[name]()
 
     # =========================================================================
     # Statistics Repository (Hybrid Storage)
@@ -669,6 +713,62 @@ class ProviderRegistry:
             pass
 
     # =========================================================================
+    # Notification Adapter
+    # =========================================================================
+
+    @classmethod
+    def get_notification(
+        cls,
+        name: str | None = None,
+    ) -> NotificationAdapter:
+        """Get notification adapter instance.
+
+        Args:
+            name: Adapter name (e.g., 'logging', 'stdout')
+
+        Returns:
+            NotificationAdapter instance
+        """
+        name = name or cls._default_notification
+
+        if name in cls._notification_instances:
+            return cls._notification_instances[name]
+
+        with cls._lock:
+            if name in cls._notification_instances:
+                return cls._notification_instances[name]
+
+            if name not in cls._notifications:
+                cls._auto_register_notification_adapters()
+
+            if name not in cls._notifications:
+                raise ValueError(
+                    f"Unknown notification adapter: {name}. "
+                    f"Available: {list(cls._notifications.keys())}"
+                )
+
+            factory = cls._notifications[name]
+            instance = factory()
+            cls._notification_instances[name] = instance
+            return instance
+
+    @classmethod
+    def _auto_register_notification_adapters(cls) -> None:
+        """Auto-register default notification adapters."""
+        try:
+            from selfhealing.interfaces.notification import (
+                LoggingNotificationAdapter,
+                StdoutNotificationAdapter,
+            )
+
+            if "logging" not in cls._notifications:
+                cls.register_notification("logging", LoggingNotificationAdapter)
+            if "stdout" not in cls._notifications:
+                cls.register_notification("stdout", StdoutNotificationAdapter)
+        except ImportError:
+            pass
+
+    # =========================================================================
     # Correlation Engine Strategy Getters
     # =========================================================================
 
@@ -766,6 +866,7 @@ class ProviderRegistry:
             "audit_adapter": list(cls._audit_adapters.keys()),
             "traffic_routing": list(cls._traffic_routing_adapters.keys()),
             "event_journal_repo": list(cls._event_journal_repos.keys()),
+            "notification": list(cls._notifications.keys()),
             "statistics_adapter": (
                 type(cls._statistics_adapter).__name__
                 if cls._statistics_adapter
@@ -781,6 +882,7 @@ class ProviderRegistry:
         For testing only. Use to reset singleton instances between tests.
         """
         cls._instances.clear()
+        cls._notification_instances.clear()
         logger.debug("registry")
 
     @classmethod
@@ -802,13 +904,16 @@ class ProviderRegistry:
         cls._root_cause_strategies.clear()
         cls._graph_build_strategies.clear()
         cls._event_journal_repos.clear()
-        cls._statistics_adapter = None  # Reset statistics adapter
-        cls._postmortem_model = None  # Reset postmortem model
+        cls._notifications.clear()
+        cls._notification_instances.clear()
+        cls._statistics_adapter = None
+        cls._postmortem_model = None
         cls._default_cache = "memory"
         cls._default_queue = "sync"
-        cls._default_repo = "redis"  # Changed from "django" to "redis"
+        cls._default_repo = "redis"
         cls._default_audit = "file"
         cls._default_traffic_routing = "logging"
+        cls._default_notification = "logging"
         logger.debug("registry")
 
     # =========================================================================
@@ -957,7 +1062,7 @@ def _auto_register_adapters() -> None:
     except ImportError:
         pass
 
-    # Layered repository (L1=Memory + L2=Redis) — 프로덕션 권장 (#227 §7.4)
+    # Layered repository (L1=Memory + L2=Redis)
     try:
         from selfhealing.adapters.memory.layered_repository import (
             LayeredCircuitBreakerStateRepository,
@@ -1017,6 +1122,23 @@ def _auto_register_adapters() -> None:
         ProviderRegistry.register_audit_adapter("file", FileAuditLogAdapter)
         ProviderRegistry.register_audit_adapter("stdout", StdoutAuditLogAdapter)
         ProviderRegistry.register_audit_adapter("null", NullAuditLogAdapter)
+    except ImportError:
+        pass
+
+    # Notification adapters
+    _auto_register_notification_adapters()
+
+
+def _auto_register_notification_adapters() -> None:
+    """Auto-register default notification adapters."""
+    try:
+        from selfhealing.interfaces.notification import (
+            LoggingNotificationAdapter,
+            StdoutNotificationAdapter,
+        )
+
+        ProviderRegistry.register_notification("logging", LoggingNotificationAdapter)
+        ProviderRegistry.register_notification("stdout", StdoutNotificationAdapter)
     except ImportError:
         pass
 

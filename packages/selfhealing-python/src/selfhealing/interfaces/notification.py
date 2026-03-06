@@ -6,13 +6,14 @@ Provides an abstraction for sending notifications to external channels
 any specific implementation.
 
 Design Philosophy:
-- Protocol-based interface for maximum flexibility
+- ABC-based interface with duck-typed adapter compatibility via ABC.register()
 - Default implementations: stdout, file logging
 - User provides their own adapter for production
+- All adapters are managed through ProviderRegistry
 
 Usage:
     # Register your notification adapter
-    from selfhealing.services.notification import register_notification_adapter
+    from selfhealing.interfaces.notification import register_notification_adapter
 
     class SlackNotificationAdapter(NotificationAdapter):
         def send(self, notification: Notification) -> bool:
@@ -28,10 +29,11 @@ Environment Variables:
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, overload
 
 import structlog
 
@@ -102,27 +104,28 @@ class Notification:
 
 
 # =============================================================================
-# Notification Adapter Interface
+# Notification Adapter Interface (ABC)
 # =============================================================================
 
 
-@runtime_checkable
-class NotificationAdapter(Protocol):
+class NotificationAdapter(ABC):
     """
-    Protocol for notification adapters.
+    ABC for notification adapters.
 
-    Implement this protocol to send notifications to your preferred channel.
+    Implement this class to send notifications to your preferred channel.
+    Duck-typed adapters are also accepted via register_notification_adapter(),
+    which auto-registers them as virtual subclasses.
 
     Example:
-        class SlackNotificationAdapter:
+        class SlackNotificationAdapter(NotificationAdapter):
             def send(self, notification: Notification) -> bool:
                 response = requests.post(
                     SLACK_WEBHOOK_URL,
-                    json={"text": f"*{notification.title}*\n{notification.message}"}
+                    json={"text": f"*{notification.title}*\\n{notification.message}"}
                 )
                 return response.ok
 
-            def send_batch(self, notifications: List[Notification]) -> int:
+            def send_batch(self, notifications: list[Notification]) -> int:
                 return sum(1 for n in notifications if self.send(n))
 
             @property
@@ -130,6 +133,7 @@ class NotificationAdapter(Protocol):
                 return NotificationChannel.SLACK
     """
 
+    @abstractmethod
     def send(self, notification: Notification) -> bool:
         """
         Send a single notification.
@@ -139,6 +143,7 @@ class NotificationAdapter(Protocol):
         """
         ...
 
+    @abstractmethod
     def send_batch(self, notifications: list[Notification]) -> int:
         """
         Send multiple notifications.
@@ -149,6 +154,7 @@ class NotificationAdapter(Protocol):
         ...
 
     @property
+    @abstractmethod
     def channel(self) -> NotificationChannel:
         """Return the channel this adapter handles."""
         ...
@@ -159,11 +165,14 @@ class NotificationAdapter(Protocol):
 # =============================================================================
 
 
-class StdoutNotificationAdapter:
+class StdoutNotificationAdapter(NotificationAdapter):
     """Default adapter that prints to stdout."""
 
     def send(self, notification: Notification) -> bool:
-        print(f"[{notification.severity.value.upper()}] " f"{notification.title}: {notification.message}")
+        print(
+            f"[{notification.severity.value.upper()}] "
+            f"{notification.title}: {notification.message}"
+        )
         return True
 
     def send_batch(self, notifications: list[Notification]) -> int:
@@ -174,10 +183,10 @@ class StdoutNotificationAdapter:
         return NotificationChannel.STDOUT
 
 
-class LoggingNotificationAdapter:
+class LoggingNotificationAdapter(NotificationAdapter):
     """Adapter that logs notifications."""
 
-    # severity → structlog 메서드 매핑
+    # severity -> structlog method mapping
     _SEVERITY_TO_LOG_METHOD = {
         "CRITICAL": "critical",
         "HIGH": "error",
@@ -190,7 +199,9 @@ class LoggingNotificationAdapter:
         self._logger = structlog.get_logger().bind(logger_name=logger_name)
 
     def send(self, notification: Notification) -> bool:
-        method_name = self._SEVERITY_TO_LOG_METHOD.get(notification.severity.value.upper(), "info")
+        method_name = self._SEVERITY_TO_LOG_METHOD.get(
+            notification.severity.value.upper(), "info"
+        )
         log_method = getattr(self._logger, method_name)
         log_method(
             "notification.sent",
@@ -210,18 +221,46 @@ class LoggingNotificationAdapter:
 
 
 # =============================================================================
-# Notification Service Registry
+# Notification Service Registry (delegates to ProviderRegistry)
 # =============================================================================
 
 
-_notification_adapters: dict[NotificationChannel, NotificationAdapter] = {}
 _default_adapter: NotificationAdapter = LoggingNotificationAdapter()
 
 
-def register_notification_adapter(adapter: NotificationAdapter) -> None:
-    """Register a notification adapter for its channel."""
-    _notification_adapters[adapter.channel] = adapter
-    logger.info("notification.adapter_registered", channel=adapter.channel.value)
+@overload
+def register_notification_adapter(adapter: NotificationAdapter) -> None: ...
+
+
+@overload
+def register_notification_adapter(adapter: object) -> None: ...
+
+
+def register_notification_adapter(adapter: object) -> None:
+    """Register a notification adapter for its channel.
+
+    Delegates to ProviderRegistry. Auto-registers duck-typed adapters
+    as virtual subclasses of NotificationAdapter.
+    """
+    if not isinstance(adapter, NotificationAdapter):
+        required = ("send", "send_batch", "channel")
+        missing = [m for m in required if not hasattr(adapter, m)]
+        if missing:
+            raise TypeError(
+                f"Adapter {type(adapter).__name__} missing: {missing}. "
+                f"Inherit from NotificationAdapter."
+            )
+        NotificationAdapter.register(type(adapter))
+        logger.warning(
+            "notification.duck_typed_adapter_registered",
+            adapter_type=type(adapter).__name__,
+        )
+
+    from selfhealing.factory import ProviderRegistry
+
+    channel_name = adapter.channel.value if hasattr(adapter, "channel") else "default"
+    ProviderRegistry.register_notification(channel_name, lambda: adapter)
+    logger.info("notification.adapter_registered", channel=channel_name)
 
 
 def get_notification_adapter(
@@ -230,15 +269,21 @@ def get_notification_adapter(
     """
     Get the notification adapter for a channel.
 
+    Delegates to ProviderRegistry.
+
     Args:
         channel: Target channel, or None for default
 
     Returns:
         NotificationAdapter instance
     """
-    if channel and channel in _notification_adapters:
-        return _notification_adapters[channel]
-    return _default_adapter
+    from selfhealing.factory import ProviderRegistry
+
+    name = channel.value if channel else None
+    try:
+        return ProviderRegistry.get_notification(name)
+    except ValueError:
+        return _default_adapter
 
 
 def send_notification(
@@ -310,7 +355,7 @@ __all__ = [
     "Notification",
     "NotificationSeverity",
     "NotificationChannel",
-    # Protocol
+    # ABC
     "NotificationAdapter",
     # Default adapters
     "StdoutNotificationAdapter",
