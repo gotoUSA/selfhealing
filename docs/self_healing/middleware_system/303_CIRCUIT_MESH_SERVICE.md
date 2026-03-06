@@ -4,7 +4,7 @@
 > **Target**:
 > - `packages/selfhealing-python/src/selfhealing/services/circuit_mesh/service.py` — 신규
 > - `packages/selfhealing-python/src/selfhealing/services/circuit_mesh/models.py` — 신규
-> - `packages/selfhealing-python/tests/unit/services/circuit_mesh/` — 신규
+> - `packages/selfhealing-python/tests/unit/circuit_mesh/` — 신규
 > **References**:
 > - [302_CIRCUIT_BREAKER_MESH_COORDINATOR.md](302_CIRCUIT_BREAKER_MESH_COORDINATOR.md) — MeshCoordinator 핵심 로직
 > - `services/circuit_breaker/service.py` — CircuitBreakerService
@@ -173,8 +173,8 @@ class CircuitMeshService:
 
         # 2. MeshCoordinator 생성 (TwoTierMeshOverrideStore 포함)
         override_store = TwoTierMeshOverrideStore(
-            redis_client=get_redis_client(),
-            key_prefix="selfhealing:mesh:override",
+            cache=ProviderRegistry.get_cache("redis"),
+            event_bus=get_event_bus(),
         )
         self._coordinator = MeshCoordinator(
             dependency_graph=br_integration._dependency_graph,
@@ -237,7 +237,7 @@ class CircuitMeshService:
         """현재 메쉬 상태 스냅샷 반환."""
         if not self._coordinator:
             return MeshStateSnapshot.empty()
-        return self._coordinator.get_snapshot()
+        return self._coordinator.get_mesh_snapshot()
 
     def get_active_overrides(self) -> list[ThresholdOverride]:
         """현재 활성 오버라이드 목록. TwoTierStore API를 통해 조회."""
@@ -318,8 +318,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
+from selfhealing.core.timezone import now
 from selfhealing.services.circuit_breaker.config import CircuitState
 
 
@@ -344,7 +344,6 @@ class ThresholdOverride:
     adjusted_recovery_timeout: int
     reason: str
     expires_at: datetime
-    created_at: datetime = field(default_factory=lambda: datetime.now())
     renewal_count: int = 0
 
 
@@ -361,7 +360,7 @@ class MeshStateSnapshot:
     @classmethod
     def empty(cls) -> MeshStateSnapshot:
         """빈 스냅샷 생성."""
-        return cls(timestamp=datetime.now())
+        return cls(timestamp=now())
 ```
 
 ---
@@ -371,25 +370,41 @@ class MeshStateSnapshot:
 ```python
 # settings/circuit_mesh.py
 
-class CircuitMeshSettings(SelfHealingBaseSettings):
-    """SELFHEALING_CIRCUIT_MESH_ 환경변수 prefix."""
+class CircuitMeshSettings(BaseSettings):
+    """SELFHEALING_CIRCUIT_MESH_ 환경변수 prefix. Pydantic v2 BaseSettings."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="SELFHEALING_CIRCUIT_MESH_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_default=True,
+    )
 
     # === 기본 설정 ===
     enabled: bool = False
-    threshold_multiplier: float = 2.0
-    recovery_timeout_multiplier: float = 3.0
-    override_ttl_seconds: int = 600
-    max_concurrent_overrides: int = 20
+    threshold_multiplier: float = Field(default=2.0, ge=1.0, le=10.0)
+    recovery_timeout_multiplier: float = Field(default=3.0, ge=1.0, le=10.0)
+    override_ttl_seconds: int = Field(default=600, ge=60, le=3600)
+    max_concurrent_overrides: int = Field(default=20, ge=1, le=100)
 
     # === Damped Propagation ===
-    propagation_max_depth: int = 1
-    propagation_damping_factor: float = 0.5
+    propagation_max_depth: int = Field(default=1, ge=1, le=5)
+    propagation_damping_factor: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    # === 순차 복구 ===
+    coordinated_recovery_enabled: bool = True
+    recovery_step_delay_seconds: int = Field(default=30, ge=5, le=300)
 
     # === Fast-Recovery ===
-    fast_recovery_timeout_seconds: int = 5
+    fast_recovery_timeout_seconds: int = Field(default=5, ge=1, le=60)
 
     # === TTL Heartbeat ===
-    max_renewals: int = 3
+    max_renewals: int = Field(default=3, ge=0, le=10)
+    renewal_check_threshold_seconds: int = Field(default=60, ge=10, le=300)
+
+    # === 운영 ===
+    snapshot_interval_seconds: int = Field(default=60, ge=10, le=600)
 
     # === 세부 기능별 Feature Flag ===
     # 스테이징 환경에서 하나씩 켜가며 격리 테스트 가능
@@ -401,10 +416,7 @@ class CircuitMeshSettings(SelfHealingBaseSettings):
     # === 크로스 리전 의존성 ===
     # 로컬 그래프에 존재하는 타 리전 서비스 목록 (명시적 Opt-in)
     # 예: ["auth_global", "payment_stripe"]
-    cross_region_dependencies: list[str] = []
-
-    class Config:
-        env_prefix = "SELFHEALING_CIRCUIT_MESH_"
+    cross_region_dependencies: list[str] = Field(default_factory=list)
 ```
 
 ---
@@ -536,11 +548,11 @@ if lock.acquire("mesh_renewal", session_id, blocking=False):
 ```python
 # MeshCoordinator.on_downstream_opened() 내부
 def _is_processable(self, service_name: str) -> bool:
-    """이벤트 처리 대상 판별."""
-    # 로컬 dependency graph에 등록된 서비스
-    if self._dependency_graph.has_node(service_name):
+    """이벤트 처리 대상 판별 (로컬 그래프 + 크로스 리전 명시 선언)."""
+    if self._graph.get_dependents(service_name):
         return True
-    # 명시적으로 선언된 크로스 리전 의존성
+    if self._graph.get_dependencies(service_name):
+        return True
     if service_name in self._settings.cross_region_dependencies:
         return True
     return False
@@ -558,14 +570,13 @@ def _is_processable(self, service_name: str) -> bool:
 ### 10.1 단위 테스트 위치
 
 ```
-packages/selfhealing-python/tests/unit/services/circuit_mesh/
-    __init__.py
-    test_mesh_coordinator.py      # MeshCoordinator 핵심 로직
-    test_service.py               # CircuitMeshService 오케스트레이터
-    test_models.py                # 모델 직렬화/유효성
-    test_threshold_override.py    # 오버라이드 적용/해제/TTL만료
-    test_recovery_order.py        # 순차 복구 위상정렬
-    test_store.py                 # TwoTierMeshOverrideStore L1/L2 동기화
+packages/selfhealing-python/tests/unit/circuit_mesh/
+    conftest.py                       # make_override 헬퍼
+    test_circuit_mesh_coordinator.py  # MeshCoordinator 핵심 로직
+    test_circuit_mesh_settings.py     # Settings 계약/경계/싱글톤
+    test_models.py                    # 모델 계약/동작 검증
+    test_service.py                   # CircuitMeshService 오케스트레이터
+    test_two_tier_store.py            # TwoTierMeshOverrideStore L1/L2 동기화
 ```
 
 ### 10.2 핵심 테스트 시나리오
