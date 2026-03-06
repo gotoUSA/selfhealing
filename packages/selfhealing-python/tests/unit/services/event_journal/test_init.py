@@ -97,7 +97,7 @@ class TestEventJournalEnabledSettingBehavior:
         reset_event_journal()
 
     @patch(
-        "selfhealing.services.event_journal.get_event_journal_settings",
+        "selfhealing.settings.event_journal.get_event_journal_settings",
     )
     def test_init_returns_none_when_disabled(self, mock_get_settings):
         """enabled=False이면 None을 반환하고 구독을 등록하지 않는다."""
