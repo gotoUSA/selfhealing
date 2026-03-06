@@ -60,11 +60,10 @@ class JSONLWriter:
         if self._handle is None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             self._handle = open(self._path, "a", encoding="utf-8")
-            if self._path.exists():
-                try:
-                    self._current_size = self._path.stat().st_size
-                except OSError:
-                    self._current_size = 0
+            try:
+                self._current_size = self._path.stat().st_size
+            except OSError:
+                self._current_size = 0
 
     def append(self, entry: dict[str, Any]) -> None:
         """JSONL 라인 추가 (write + flush + 조건부 fsync + 로테이션 체크)."""
@@ -95,7 +94,7 @@ class JSONLWriter:
         if self._max_size and self._current_size >= self._max_size:
             if self._handle:
                 self._handle.close()
-            rotated = self._path.with_suffix(f".{int(time.time())}.jsonl")
+            rotated = self._path.with_suffix(f".{time.time_ns()}.jsonl")
             self._path.rename(rotated)
             self._handle = open(self._path, "a", encoding="utf-8")
             self._current_size = 0
@@ -144,7 +143,9 @@ class JSONLReader:
         committed_seqs: set[int] = set()
 
         for entry in JSONLReader.iter_entries(file_path):
-            seq = entry.get("seq") or entry.get("wal_sequence")
+            seq = entry.get("seq")
+            if seq is None:
+                seq = entry.get("wal_sequence")
             if seq is not None:
                 status = entry.get(commit_field, "")
                 if status == commit_value:

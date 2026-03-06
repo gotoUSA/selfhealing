@@ -434,3 +434,6 @@ HashChainWAL과 HashChainWALRecovery의 커밋 추적을 통일:
 | D5 | 스레드 락: JSONLWriter 내부 RLock만, 상위 Block Lock 불필요 | 확정 | §5.1.5 |
 | D6 | 엔트리 스키마: dict[str, Any] 유지, 커밋 마커만 TypedDict | 확정 | §5.1.6 |
 | D7 | Cleanup: Atomic Replace (.tmp + os.replace + directory fsync) 필수 | 확정 | §Phase 3 |
+| D8 | seq 조회: `get("seq") or get("wal_sequence")` → 명시적 `None` 체크로 변경 (seq=0 falsy 방지) | 확정 | §5.1.6 |
+| D9 | 로테이션 파일명: `int(time.time())` → `time.time_ns()` (동일 초 내 collision 방지) | 확정 | §5.1.4 |
+| D10 | ensure_open: open("a") 후 redundant exists() 가드 제거 | 확정 | §5.1.1 |

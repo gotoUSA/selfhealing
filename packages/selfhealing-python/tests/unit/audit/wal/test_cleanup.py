@@ -164,8 +164,8 @@ class TestCleanupByAgeBehavior:
         assert not old_file.exists()
         assert new_file.exists()
 
-    def test_file_at_exact_cutoff_not_deleted(self, wal_dir: Path):
-        """정확히 cutoff 날짜의 파일은 삭제되지 않는다 (< 비교)."""
+    def test_file_at_exact_cutoff_date_is_deleted(self, wal_dir: Path):
+        """cutoff 날짜 파일은 삭제된다 (strptime midnight < now - 7 days)."""
         cutoff_date = (datetime.now(timezone.utc) - timedelta(days=7)).strftime(
             "%Y%m%d"
         )
@@ -174,10 +174,8 @@ class TestCleanupByAgeBehavior:
 
         removed = cleanup_by_age(wal_dir, pattern="wal_*.jsonl", max_age_days=7)
 
-        # datetime.strptime 결과는 00:00:00이고 cutoff는 현재 시간 - 7일이므로
-        # 같은 날짜면 file_date < cutoff가 True일 수 있음 (시간 부분 차이)
-        # 이 테스트는 경계 동작을 검증
-        assert cutoff_file.exists() or removed == 1
+        assert removed == 1
+        assert not cutoff_file.exists()
 
     def test_no_matching_files_returns_zero(self, wal_dir: Path):
         """매칭 파일이 없으면 0을 반환한다."""
