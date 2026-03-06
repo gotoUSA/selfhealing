@@ -1189,7 +1189,7 @@ class DiskBufferAdapter:
             entry: 이벤트 데이터
 
         Returns:
-            True (항상 성공, Fail-Open 시 드롭)
+            True if buffered successfully, False if dropped
         """
         result = self._disk_buffer.put(entry)
         if result is not None:

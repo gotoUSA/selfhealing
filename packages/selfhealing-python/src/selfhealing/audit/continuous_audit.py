@@ -620,44 +620,26 @@ class ContinuousAuditRecorder:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         action_filter: list[AuditAction] | None = None,
-        page_size: int = 1000,
+        limit: int = 50000,
     ) -> Iterator[str]:
         """
-        JSON Lines paginated streaming export.
+        JSON Lines streaming export.
 
         Yields:
             JSON string per entry
         """
-        offset = 0
-        while True:
-            batch = self.query(
-                start_time=start_time,
-                end_time=end_time,
-                limit=page_size,
-            )
-            if not batch:
-                break
-            for entry in batch:
-                if action_filter:
-                    entry_action = entry.get("action", "")
-                    if not any(a.value == entry_action for a in action_filter):
-                        continue
-                yield json.dumps(entry, default=str)
-            if len(batch) < page_size:
-                break
-            offset += page_size
+        entries = self.query(
+            start_time=start_time,
+            end_time=end_time,
+            limit=limit,
+        )
 
-    FIXED_AUDIT_FIELDS = [
-        "timestamp",
-        "action",
-        "actor_id",
-        "actor_type",
-        "target_type",
-        "target_id",
-        "service_name",
-        "reason",
-        "success",
-    ]
+        for entry in entries:
+            if action_filter:
+                entry_action = entry.get("action", "")
+                if not any(a.value == entry_action for a in action_filter):
+                    continue
+            yield json.dumps(entry, default=str)
 
     def export_csv_compatible(
         self,
@@ -670,9 +652,11 @@ class ContinuousAuditRecorder:
         Yields:
             Flattened dict per entry (fixed audit fields + details_* keys)
         """
+        from selfhealing.audit.constants import FIXED_AUDIT_FIELDS
+
         for line in self.export_jsonl(start_time=start_time, end_time=end_time):
             entry = json.loads(line)
-            flat = {k: entry.get(k) for k in self.FIXED_AUDIT_FIELDS}
+            flat = {k: entry.get(k) for k in FIXED_AUDIT_FIELDS}
 
             details = entry.get("details", {})
             for key, value in details.items():

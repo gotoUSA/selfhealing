@@ -445,21 +445,11 @@ class ExportCSVView(View):
         text/csv StreamingHttpResponse
     """
 
-    FIXED_AUDIT_FIELDS = [
-        "timestamp",
-        "action",
-        "actor_id",
-        "actor_type",
-        "target_type",
-        "target_id",
-        "service_name",
-        "reason",
-        "success",
-    ]
-
     def get(self, request: HttpRequest) -> HttpResponse:
         """CSV streaming export."""
         try:
+            from selfhealing.audit.constants import FIXED_AUDIT_FIELDS
+
             recorder = _get_recorder()
 
             start_time = _parse_datetime(request.GET.get("start_time"))
@@ -471,7 +461,7 @@ class ExportCSVView(View):
 
                 # Header row
                 buf = StringIO()
-                writer = csv.DictWriter(buf, fieldnames=self.FIXED_AUDIT_FIELDS)
+                writer = csv.DictWriter(buf, fieldnames=FIXED_AUDIT_FIELDS)
                 writer.writeheader()
                 yield buf.getvalue()
 
@@ -483,7 +473,7 @@ class ExportCSVView(View):
                     buf = StringIO()
                     writer = csv.DictWriter(
                         buf,
-                        fieldnames=self.FIXED_AUDIT_FIELDS,
+                        fieldnames=FIXED_AUDIT_FIELDS,
                         extrasaction="ignore",
                     )
                     writer.writerow(

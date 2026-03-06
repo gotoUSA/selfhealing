@@ -155,13 +155,16 @@ REQUIRED_STATS_KEYS = {
 `capacity=None` / `usage_percent=None`인 경우의 메트릭 발행 스킵 로직을 구현 시점에 같이 작성한다.
 
 ```python
-# audit/metrics 내부
+# audit/resilience/buffer_metrics.py
 def emit_buffer_stats(buffer_name: str, stats: dict[str, Any]) -> None:
     buffer_entries_gauge.labels(buffer=buffer_name).set(stats["count"])
-    buffer_dropped_total.labels(buffer=buffer_name).inc(stats["total_dropped"])
+    buffer_dropped_gauge.labels(buffer=buffer_name).set(stats["total_dropped"])  # Gauge (누적값)
     if stats.get("usage_percent") is not None:
         buffer_usage_percent_gauge.labels(buffer=buffer_name).set(stats["usage_percent"])
 ```
+
+> **주의**: `total_dropped`는 누적값이므로 `Counter.inc()`가 아닌 `Gauge.set()`을 사용한다.
+> Counter로 구현하면 `emit` 호출마다 누적값이 이중 가산되어 메트릭이 왜곡된다.
 
 ---
 
@@ -208,9 +211,10 @@ continuous_audit_api.py의 ExportJSONLView/ExportCSVView:
 > **참고**: 원래 계획은 AuditExporter에 위임하는 래퍼 패턴이었으나,
 > 서비스 레이어(recorder)와 CLI(exporter)의 관심사가 다르므로 독립 구현을 유지한다.
 
-#### Phase 2: Offset 기반 페이지네이션
+#### Phase 2: 단일 패스 스트리밍 익스포트
 
-`export_jsonl()`의 `limit=10000` 고정값을 offset 기반 반복으로 변경:
+`export_jsonl()`의 `limit=10000` 고정값을 단일 패스 고상한으로 변경.
+`query()`가 offset 파라미터를 지원하지 않으므로 단일 호출 + 고상한 방식 채택:
 
 ```python
 def export_jsonl(
@@ -218,30 +222,24 @@ def export_jsonl(
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     action_filter: list[AuditAction] | None = None,
-    page_size: int = 1000,
+    limit: int = 50000,
 ) -> Iterator[str]:
-    offset = 0
-    while True:
-        batch = self.query(start_time=start_time, end_time=end_time,
-                           limit=page_size)
-        if not batch:
-            break
-        for entry in batch:
-            if action_filter:
-                entry_action = entry.get("action", "")
-                if not any(a.value == entry_action for a in action_filter):
-                    continue
-            yield json.dumps(entry, default=str)
-        if len(batch) < page_size:
-            break
-        offset += page_size
+    entries = self.query(start_time=start_time, end_time=end_time, limit=limit)
+    for entry in entries:
+        if action_filter:
+            entry_action = entry.get("action", "")
+            if not any(a.value == entry_action for a in action_filter):
+                continue
+        yield json.dumps(entry, default=str)
 ```
 
 #### Phase 3: CSV View 스트리밍 전환
 
-`ExportCSVView` -> `StreamingHttpResponse` + 고정 필드셋 (감사 로그 스키마가 고정이므로 2-pass 불필요):
+`ExportCSVView` -> `StreamingHttpResponse` + 고정 필드셋 (감사 로그 스키마가 고정이므로 2-pass 불필요).
+`FIXED_AUDIT_FIELDS`는 `audit/constants.py`에 단일 정의하여 3곳(continuous_audit.py, continuous_audit_api.py, export.py)에서 import:
 
 ```python
+# audit/constants.py
 FIXED_AUDIT_FIELDS = [
     "timestamp", "action", "actor_id", "actor_type",
     "target_type", "target_id", "service_name", "reason", "success",
@@ -355,6 +353,8 @@ class LuaScriptRegistry:
                     return self._redis.eval(
                         self._scripts[name], len(keys), *keys, *args
                     )
+
+        raise RuntimeError(f"Lua script '{name}' failed after {self.MAX_RELOAD_ATTEMPTS} attempts")
 
     def _load_and_execute(self, name: str, keys: list, args: list) -> Any:
         body = self._scripts[name]
@@ -589,9 +589,10 @@ def delete_files_by_priority(directory: Path, pattern: str, priority_fn) -> int:
 
 ### 2. 리팩터링 계획
 
-#### Phase 1: hashlib.new() fallback 추가
+#### Phase 1: hashlib.new() fallback 추가 (allowlist 제한)
 
-`compute_checksum()`의 `else` 분기에 `hashlib.new()` fallback을 추가하여 SHA512, BLAKE2 등을 코드 변경 없이 지원:
+`compute_checksum()`의 `else` 분기에 `hashlib.new()` fallback을 추가하되,
+감사 모듈의 보안 요건상 허용 알고리즘을 명시적으로 제한:
 
 ```python
 def compute_checksum(data, algorithm: str = "crc32", truncate=None):
@@ -600,9 +601,15 @@ def compute_checksum(data, algorithm: str = "crc32", truncate=None):
     elif algorithm == "crc32":
         return compute_crc32(data)
     else:
+        _ALLOWED_ALGORITHMS = {"sha384", "sha512", "sha3_256", "sha3_512", "blake2b", "blake2s"}
+        if algorithm not in _ALLOWED_ALGORITHMS:
+            raise ValueError(f"Unsupported algorithm: {algorithm}. Allowed: ...")
         normalized = _normalize_to_bytes(data)
         return hashlib.new(algorithm, normalized).hexdigest()
 ```
+
+> **설계 결정**: md5, sha1 등 약한 해시 알고리즘은 allowlist에서 제외.
+> 감사 데이터 무결성 검증에 약한 알고리즘 사용을 방지하는 defense-in-depth 조치.
 
 #### Phase 2: MerkleTree가 checksum.py 사용
 

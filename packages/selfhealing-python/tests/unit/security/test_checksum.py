@@ -185,11 +185,10 @@ class TestGenericChecksumBehavior:
         with pytest.raises(ValueError):
             compute_checksum("test", algorithm="nonexistent_algo")
 
-    def test_md5_algorithm_uses_hashlib_new_fallback(self):
-        """md5 알고리즘은 hashlib.new() 폴백으로 동작."""
-        result = compute_checksum("test", algorithm="md5")
-        assert isinstance(result, str)
-        assert len(result) == 32  # MD5 = 32 hex chars
+    def test_md5_algorithm_rejected_by_allowlist(self):
+        """md5 알고리즘은 allowlist에 없어 ValueError 발생."""
+        with pytest.raises(ValueError, match="Unsupported algorithm"):
+            compute_checksum("test", algorithm="md5")
 
     def test_verify_crc32(self):
         """verify_checksum with crc32."""

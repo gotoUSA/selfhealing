@@ -8,7 +8,7 @@ from typing import Any
 def _get_buffer_metrics():
     """Lazy-init Prometheus metrics for buffer stats."""
     try:
-        from prometheus_client import Counter, Gauge
+        from prometheus_client import Gauge
 
         if not hasattr(_get_buffer_metrics, "_entries"):
             _get_buffer_metrics._entries = Gauge(
@@ -16,9 +16,9 @@ def _get_buffer_metrics():
                 "Current audit buffer entry count",
                 ["buffer"],
             )
-            _get_buffer_metrics._dropped = Counter(
+            _get_buffer_metrics._dropped = Gauge(
                 "selfhealing_audit_buffer_dropped_total",
-                "Total dropped audit buffer entries",
+                "Total dropped audit buffer entries (cumulative)",
                 ["buffer"],
             )
             _get_buffer_metrics._usage = Gauge(
@@ -36,12 +36,12 @@ def _get_buffer_metrics():
 
 
 def emit_buffer_stats(buffer_name: str, stats: dict[str, Any]) -> None:
-    """Emit buffer stats to Prometheus gauges/counters."""
-    entries_gauge, dropped_counter, usage_gauge = _get_buffer_metrics()
+    """Emit buffer stats to Prometheus gauges."""
+    entries_gauge, dropped_gauge, usage_gauge = _get_buffer_metrics()
     if entries_gauge is None:
         return
 
     entries_gauge.labels(buffer=buffer_name).set(stats["count"])
-    dropped_counter.labels(buffer=buffer_name).inc(stats["total_dropped"])
+    dropped_gauge.labels(buffer=buffer_name).set(stats["total_dropped"])
     if stats.get("usage_percent") is not None:
         usage_gauge.labels(buffer=buffer_name).set(stats["usage_percent"])

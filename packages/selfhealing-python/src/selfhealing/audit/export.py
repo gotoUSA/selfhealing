@@ -278,21 +278,11 @@ class AuditExporter:
         with open(output_path, "w", encoding="utf-8") as f:
             self._write_entries(entries, f)
 
-    FIXED_AUDIT_FIELDS = [
-        "timestamp",
-        "action",
-        "actor_id",
-        "actor_type",
-        "target_type",
-        "target_id",
-        "service_name",
-        "reason",
-        "success",
-    ]
-
     def _write_entries(self, entries: Iterator[dict[str, Any]], output: TextIO) -> None:
         """엔트리 쓰기 (형식별)."""
         import itertools
+
+        from selfhealing.audit.constants import FIXED_AUDIT_FIELDS
 
         format_type = self._options.format
 
@@ -318,7 +308,7 @@ class AuditExporter:
 
             writer = csv.DictWriter(
                 output,
-                fieldnames=self.FIXED_AUDIT_FIELDS,
+                fieldnames=FIXED_AUDIT_FIELDS,
                 extrasaction="ignore",
             )
             writer.writeheader()

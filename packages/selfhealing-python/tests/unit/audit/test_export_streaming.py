@@ -60,10 +60,14 @@ class TestFixedAuditFieldsContract:
 
     def test_fixed_audit_fields_count(self):
         """FIXED_AUDIT_FIELDS has 9 fields."""
-        assert len(AuditExporter.FIXED_AUDIT_FIELDS) == 9
+        from selfhealing.audit.constants import FIXED_AUDIT_FIELDS
+
+        assert len(FIXED_AUDIT_FIELDS) == 9
 
     def test_fixed_audit_fields_contains_required_keys(self):
         """FIXED_AUDIT_FIELDS contains all required CSV column names."""
+        from selfhealing.audit.constants import FIXED_AUDIT_FIELDS
+
         expected = {
             "timestamp",
             "action",
@@ -75,11 +79,13 @@ class TestFixedAuditFieldsContract:
             "reason",
             "success",
         }
-        assert set(AuditExporter.FIXED_AUDIT_FIELDS) == expected
+        assert set(FIXED_AUDIT_FIELDS) == expected
 
     def test_fixed_audit_fields_order_starts_with_timestamp(self):
         """First field is 'timestamp'."""
-        assert AuditExporter.FIXED_AUDIT_FIELDS[0] == "timestamp"
+        from selfhealing.audit.constants import FIXED_AUDIT_FIELDS
+
+        assert FIXED_AUDIT_FIELDS[0] == "timestamp"
 
 
 class TestExportOptionsContract:
@@ -181,7 +187,9 @@ class TestWriteEntriesBehavior:
         output.seek(0)
         reader = csv.reader(output)
         header = next(reader)
-        assert header == AuditExporter.FIXED_AUDIT_FIELDS
+        from selfhealing.audit.constants import FIXED_AUDIT_FIELDS
+
+        assert header == FIXED_AUDIT_FIELDS
 
     def test_csv_format_ignores_extra_fields(self):
         """CSV format ignores fields not in FIXED_AUDIT_FIELDS."""

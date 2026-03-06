@@ -179,15 +179,20 @@ class RedisLeaderElector(LeaderElector):
         return self._redis
 
     def _get_lua_registry(self):
-        """LuaScriptRegistry 반환 (lazy initialization)."""
+        """LuaScriptRegistry 반환 (lazy initialization, double-checked locking)."""
         if self._lua_registry is None:
-            from selfhealing.audit.performance.lua_registry import LuaScriptRegistry
+            with self._lock:
+                if self._lua_registry is None:
+                    from selfhealing.audit.performance.lua_registry import (
+                        LuaScriptRegistry,
+                    )
 
-            redis_client = self._get_redis()
-            self._lua_registry = LuaScriptRegistry(redis_client)
-            self._lua_registry.register("acquire", self.LUA_ACQUIRE_WITH_PRIORITY)
-            self._lua_registry.register("release", self.LUA_RELEASE)
-            self._lua_registry.register("renew", self.LUA_RENEW)
+                    redis_client = self._get_redis()
+                    registry = LuaScriptRegistry(redis_client)
+                    registry.register("acquire", self.LUA_ACQUIRE_WITH_PRIORITY)
+                    registry.register("release", self.LUA_RELEASE)
+                    registry.register("renew", self.LUA_RENEW)
+                    self._lua_registry = registry
         return self._lua_registry
 
     def _get_callback_executor(self) -> ThreadPoolExecutor:

@@ -608,14 +608,16 @@ class RedisAuditBuffer:
 
     def _get_active_domains_fallback(self) -> list[str]:
         """scan_iter 기반 fallback (ActiveKeySet 사용 불가 시)."""
+        import re
+
         domains = set()
         try:
             for key in self._redis.scan_iter(f"{self._key_prefix}*:buffer"):
                 key_str = key.decode() if isinstance(key, bytes) else key
                 # Extract domain from "audit:{domain}:buffer"
-                if key_str.endswith(":buffer"):
-                    raw = key_str[len(self._key_prefix) : -len(":buffer")]
-                    domains.add(raw.strip("{}"))
+                m = re.search(r"\{(.+?)\}", key_str)
+                if m:
+                    domains.add(m.group(1))
         except Exception:
             pass
         return list(domains)
@@ -810,9 +812,10 @@ class RedisAuditBuffer:
 
             # audit:{domain}:processing에서 domain 추출
             try:
-                parts = processing_key.split(":")
-                raw_domain = parts[1] if len(parts) >= 3 else parts[-1]
-                domain = raw_domain.strip("{}")
+                import re
+
+                m = re.search(r"\{(.+?)\}", processing_key)
+                domain = m.group(1) if m else processing_key.split(":")[-1]
                 restored = lua_scripts.atomic_batch_restore(domain)
                 recovered_total += restored
                 logger.info(

@@ -41,7 +41,11 @@ def delete_files_by_priority(
     priority_fn: Callable[[Path], int],
     target_free_bytes: int = 0,
 ) -> int:
-    """Priority-based file deletion (disk full response). Uses safe_unlink. Returns deleted count."""
+    """Priority-based file deletion (disk full response). Uses safe_unlink. Returns deleted count.
+
+    Note: ``freed`` is approximate — file size is read before deletion
+    and may differ if another worker modifies the file concurrently.
+    """
     candidates = []
     for f in directory.glob(pattern):
         try:

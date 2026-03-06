@@ -83,6 +83,10 @@ class LuaScriptRegistry:
                         self._scripts[name], len(keys), *keys, *args
                     )
 
+        raise RuntimeError(
+            f"Lua script '{name}' failed after {self.MAX_RELOAD_ATTEMPTS} attempts"
+        )
+
     def _load_and_execute(self, name: str, keys: list, args: list) -> Any:
         body = self._scripts[name]
         sha = self._redis.script_load(body)

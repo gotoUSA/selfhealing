@@ -151,6 +151,19 @@ def compute_checksum(
     elif algorithm == "crc32":
         return compute_crc32(data)
     else:
+        _ALLOWED_ALGORITHMS = {
+            "sha384",
+            "sha512",
+            "sha3_256",
+            "sha3_512",
+            "blake2b",
+            "blake2s",
+        }
+        if algorithm not in _ALLOWED_ALGORITHMS:
+            raise ValueError(
+                f"Unsupported algorithm: {algorithm}. "
+                f"Allowed: {', '.join(sorted(_ALLOWED_ALGORITHMS))}"
+            )
         normalized = _normalize_to_bytes(data)
         return hashlib.new(algorithm, normalized).hexdigest()
 

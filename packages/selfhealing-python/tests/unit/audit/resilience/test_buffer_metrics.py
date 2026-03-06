@@ -32,18 +32,18 @@ class TestEmitBufferStatsBehavior:
         "selfhealing.audit.resilience.buffer_metrics._get_buffer_metrics",
         autospec=True,
     )
-    def test_emits_dropped_to_counter(self, mock_get_metrics):
-        """Increments dropped counter with stats['total_dropped']."""
+    def test_emits_dropped_to_gauge(self, mock_get_metrics):
+        """Sets dropped gauge with stats['total_dropped']."""
         entries_gauge = MagicMock()
-        dropped_counter = MagicMock()
+        dropped_gauge = MagicMock()
         usage_gauge = MagicMock()
-        mock_get_metrics.return_value = (entries_gauge, dropped_counter, usage_gauge)
+        mock_get_metrics.return_value = (entries_gauge, dropped_gauge, usage_gauge)
 
         stats = {"count": 10, "total_dropped": 5, "usage_percent": None}
         emit_buffer_stats("disk", stats)
 
-        dropped_counter.labels.assert_called_with(buffer="disk")
-        dropped_counter.labels().inc.assert_called_with(5)
+        dropped_gauge.labels.assert_called_with(buffer="disk")
+        dropped_gauge.labels().set.assert_called_with(5)
 
     @patch(
         "selfhealing.audit.resilience.buffer_metrics._get_buffer_metrics",

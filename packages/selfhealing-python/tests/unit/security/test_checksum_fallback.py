@@ -22,40 +22,44 @@ class TestComputeChecksumFallbackBehavior:
         assert isinstance(result, str)
         assert len(result) == 64
 
-    def test_md5_algorithm_falls_back_to_hashlib_new(self):
-        """algorithm='md5' uses hashlib.new() fallback."""
-        result = compute_checksum(b"hello", algorithm="md5")
-        expected = hashlib.new("md5", b"hello").hexdigest()
-        assert result == expected
+    def test_md5_algorithm_rejected_by_allowlist(self):
+        """algorithm='md5' is not in the allowlist and raises ValueError."""
+        with pytest.raises(ValueError, match="Unsupported algorithm"):
+            compute_checksum(b"hello", algorithm="md5")
 
-    def test_sha1_algorithm_falls_back_to_hashlib_new(self):
-        """algorithm='sha1' uses hashlib.new() fallback."""
-        result = compute_checksum(b"hello", algorithm="sha1")
-        expected = hashlib.new("sha1", b"hello").hexdigest()
-        assert result == expected
+    def test_sha1_algorithm_rejected_by_allowlist(self):
+        """algorithm='sha1' is not in the allowlist and raises ValueError."""
+        with pytest.raises(ValueError, match="Unsupported algorithm"):
+            compute_checksum(b"hello", algorithm="sha1")
 
-    def test_sha512_algorithm_falls_back_to_hashlib_new(self):
-        """algorithm='sha512' uses hashlib.new() fallback."""
+    def test_sha512_algorithm_uses_hashlib_new(self):
+        """algorithm='sha512' is allowed and uses hashlib.new()."""
         result = compute_checksum(b"data", algorithm="sha512")
         expected = hashlib.new("sha512", b"data").hexdigest()
         assert result == expected
 
+    def test_blake2b_algorithm_uses_hashlib_new(self):
+        """algorithm='blake2b' is allowed and uses hashlib.new()."""
+        result = compute_checksum(b"data", algorithm="blake2b")
+        assert isinstance(result, str)
+        assert len(result) > 0
+
     def test_unsupported_algorithm_raises_value_error(self):
-        """Unsupported algorithm in hashlib.new() raises ValueError."""
-        with pytest.raises(ValueError):
+        """Unsupported algorithm raises ValueError."""
+        with pytest.raises(ValueError, match="Unsupported algorithm"):
             compute_checksum(b"data", algorithm="nonexistent_algo")
 
     def test_fallback_normalizes_dict_input(self):
-        """hashlib.new() fallback handles dict input via _normalize_to_bytes."""
+        """Allowed algorithm handles dict input via _normalize_to_bytes."""
         data = {"key": "value"}
-        result = compute_checksum(data, algorithm="md5")
+        result = compute_checksum(data, algorithm="sha512")
         assert isinstance(result, str)
-        assert len(result) == 32  # MD5 = 32 hex chars
+        assert len(result) == 128  # SHA512 = 128 hex chars
 
     def test_fallback_normalizes_string_input(self):
-        """hashlib.new() fallback handles string input."""
-        result = compute_checksum("hello", algorithm="sha1")
-        expected = hashlib.new("sha1", b"hello").hexdigest()
+        """Allowed algorithm handles string input."""
+        result = compute_checksum("hello", algorithm="sha512")
+        expected = hashlib.new("sha512", b"hello").hexdigest()
         assert result == expected
 
     def test_crc32_and_sha256_consistency_with_dedicated_functions(self):
