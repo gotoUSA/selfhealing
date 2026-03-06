@@ -12,8 +12,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from selfhealing.audit.wal._cleanup import (
     atomic_rewrite,
     cleanup_by_age,
@@ -24,18 +22,7 @@ from selfhealing.audit.wal._cleanup import (
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def wal_dir(tmp_path: Path) -> Path:
-    d = tmp_path / "wal"
-    d.mkdir()
-    return d
-
-
-@pytest.fixture
-def wal_file(wal_dir: Path) -> Path:
-    return wal_dir / "test.jsonl"
+# wal_dir, wal_file fixtures are in conftest.py (shared with test_jsonl.py)
 
 
 # ===========================================================================
@@ -43,8 +30,8 @@ def wal_file(wal_dir: Path) -> Path:
 # ===========================================================================
 
 
-class TestAtomicRewriteContract:
-    """atomic_rewrite() 계약 검증 (doc §Phase 3, D7)."""
+class TestAtomicRewriteBehavior:
+    """atomic_rewrite() 동작 검증 (doc §Phase 3, D7)."""
 
     def test_atomic_rewrite_replaces_file_content(self, wal_file: Path):
         """파일 내용이 원자적으로 교체된다."""

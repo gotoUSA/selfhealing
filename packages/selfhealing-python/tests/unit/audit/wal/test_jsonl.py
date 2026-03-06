@@ -20,20 +20,7 @@ from selfhealing.audit.wal._jsonl import CommitMarker, JSONLReader, JSONLWriter
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def wal_dir(tmp_path: Path) -> Path:
-    """WAL 파일용 임시 디렉토리."""
-    d = tmp_path / "wal"
-    d.mkdir()
-    return d
-
-
-@pytest.fixture
-def wal_file(wal_dir: Path) -> Path:
-    """WAL JSONL 파일 경로."""
-    return wal_dir / "test.jsonl"
+# wal_dir, wal_file fixtures are in conftest.py (shared with test_cleanup.py)
 
 
 @pytest.fixture
@@ -137,8 +124,8 @@ class TestJSONLWriterAppendBehavior:
         assert seqs == [1, 2, 3]
 
 
-class TestJSONLWriterMaybeRotateContract:
-    """JSONLWriter._maybe_rotate() 계약 검증."""
+class TestJSONLWriterMaybeRotateBehavior:
+    """JSONLWriter._maybe_rotate() 동작 검증."""
 
     def test_rotate_triggers_at_exact_max_size(self, wal_dir: Path):
         """현재 크기가 정확히 max_size일 때 로테이션이 발생한다."""
@@ -222,8 +209,8 @@ class TestJSONLWriterEnsureOpenBehavior:
 # ===========================================================================
 
 
-class TestJSONLReaderIterEntriesContract:
-    """JSONLReader.iter_entries() 계약 검증."""
+class TestJSONLReaderIterEntriesBehavior:
+    """JSONLReader.iter_entries() 동작 검증."""
 
     def test_corrupted_line_skipped_with_warning_log(self, wal_file: Path):
         """손상된 라인은 경고 로그 후 건너뛴다 (doc §5.1.2)."""
