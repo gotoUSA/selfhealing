@@ -229,6 +229,7 @@ SCHEDULED_MODE ──[Safety Valve 발동]──→ SAFETY_OVERRIDE (CRITICAL)
                                     ┌────────────┘
                                     │ min_hold_seconds 경과
                                     │ + RecoveryGate.check_recovery_allowed() == True
+                                    │ + check_safety_valve() == False (메트릭 안정)
                                     ▼
                               SCHEDULED_MODE 복귀
                               (실패 시 SAFETY_OVERRIDE 유지)
@@ -271,12 +272,17 @@ class PreWarmer:
         self._safety_valve_activated_at = time.monotonic()
 
     def check_safety_valve_recovery(self) -> bool:
-        """min_hold_seconds 경과 + RecoveryGate 통과 시 이벤트 모드 복귀."""
+        """min_hold_seconds 경과 + RecoveryGate 통과 + 메트릭 안정 시 이벤트 모드 복귀."""
         elapsed = time.monotonic() - self._safety_valve_activated_at
         if elapsed < self._settings.safety_valve_min_hold_seconds:
             return False
         allowed, _ = self._recovery_gate.check_recovery_allowed()
-        return allowed
+        if not allowed:
+            return False
+        # 메트릭이 여전히 임계치 초과이면 복귀 차단
+        if self.check_safety_valve():
+            return False
+        return True
 ```
 
 ### 2.5 SpikeClassifier — ML과의 Decision Authority Conflict
@@ -870,8 +876,9 @@ selfhealing_capacity_pool_multiplier        # Gauge: 현재 적용 중인 Pool �
 | `HPAMetricsExporter` | **변경 없음** | 기존 메트릭 export 활용 |
 | `StateBackend` (core) | **사용** (변경 없음) | EventCalendar 영속화 + Global Baseline 저장에 기존 StateBackend 활용 |
 | `RecoveryGate` (emergency_mode) | **사용** (변경 없음) | Safety Valve 복구 판단에 기존 RecoveryGate 활용 |
+| `prometheus.py` (metrics) | 메트릭 추가 | Capacity Reservation 전용 메트릭 6개 추가 (§6 참조) |
 
-**총 기존 코드 변경**: EventType enum 2줄 + SpikeClassifier 파라미터 1개 + PoolWatchdog 파라미터 1개.
+**총 기존 코드 변경**: EventType enum 2줄 + SpikeClassifier 파라미터 1개 + PoolWatchdog 파라미터 1개 + Prometheus 메트릭 6개.
 나머지는 기존 public API 호출만으로 구현한다.
 
 ---
@@ -882,11 +889,11 @@ selfhealing_capacity_pool_multiplier        # Gauge: 현재 적용 중인 Pool �
 
 | 테스트 파일 | 대상 | 핵심 케이스 | 테스트 수 |
 |------------|------|------------|----------|
-| `test_settings.py` | CapacityReservationSettings | 계약값 검증, Pydantic 경계값 분석, 싱글톤 캐싱 | 37 |
-| `test_event_calendar.py` | EventCalendar | 등록/취소/조회, 과거 시간 거부, 중복 ID 거부, 겹치는 이벤트 경고, MAX 배율 계산, StateBackend 영속화, 직렬화, Thread Safety | 23 |
-| `test_pre_warmer.py` | PreWarmer | warm_up/cool_down 정상 동작, Re-evaluation, Global Baseline 저장/복원, Safety Valve 발동/복구, 고아 Baseline, EventBus emit, Rollback | 21 |
-| `test_service.py` | CapacityReservationService | 싱글톤, 초기화, 이벤트 등록/취소, 스케줄러 라이프사이클, get_status | 13 |
-| `test_ml_integration.py` | ML 연동 + shrink_guard | PoolWatchdog shrink_guard, SpikeClassifier context, EventType 계약 | 9 |
+| `test_settings.py` | CapacityReservationSettings | 계약값 검증, Pydantic 경계값 분석, 싱글톤 캐싱 | 44 |
+| `test_event_calendar.py` | EventCalendar | 등록/취소/조회, 과거 시간 거부, 중복 ID 거부, 겹치는 이벤트 경고, MAX 배율 계산, StateBackend 영속화, 직렬화, Thread Safety | 38 |
+| `test_pre_warmer.py` | PreWarmer | warm_up/cool_down 정상 동작, Re-evaluation, Global Baseline 저장/복원, Safety Valve 발동/복구, 고아 Baseline, EventBus emit, Rollback | 31 |
+| `test_service.py` | CapacityReservationService | 싱글톤, 초기화, 이벤트 등록/취소, 스케줄러 라이프사이클, get_status | 16 |
+| `test_ml_integration.py` | ML 연동 + shrink_guard | PoolWatchdog shrink_guard, SpikeClassifier context, EventType 계약 | 11 |
 
 **총 단위 테스트: 140개** (전수 통과)
 
