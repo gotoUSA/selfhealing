@@ -136,6 +136,35 @@ class CircuitMeshSettings(BaseSettings):
         description="최대 동시 오버라이드 수 (안전장치)",
     )
 
+    # --- Feature Flags ---
+
+    enable_damped_propagation: bool = Field(
+        default=True,
+        description="감쇠 전파 활성화 (False면 직접 부모만 오버라이드)",
+    )
+
+    enable_preemptive_fallback: bool = Field(
+        default=True,
+        description="프리엠티브 Fallback 활성화 (should_allow() pre-check)",
+    )
+
+    enable_fast_recovery: bool = Field(
+        default=True,
+        description="하류 복구 시 Fast-Recovery 오버라이드 적용",
+    )
+
+    enable_ttl_heartbeat: bool = Field(
+        default=True,
+        description="TTL 자동 갱신 활성화",
+    )
+
+    # --- 크로스 리전 ---
+
+    cross_region_dependencies: list[str] = Field(
+        default_factory=list,
+        description="로컬 그래프에 존재하는 타 리전 서비스 목록 (명시적 Opt-in)",
+    )
+
     @field_validator("threshold_multiplier")
     @classmethod
     def validate_threshold_multiplier(cls, v: float) -> float:

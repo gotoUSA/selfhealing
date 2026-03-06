@@ -13,6 +13,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from selfhealing.services.circuit_mesh.service import CircuitMeshService
 
 
 @dataclass
@@ -29,6 +33,31 @@ class ThresholdOverride:
     renewal_count: int = 0
 
 
+_service: CircuitMeshService | None = None
+
+
+def get_circuit_mesh_service() -> CircuitMeshService:
+    """CircuitMeshService 싱글톤 반환."""
+    global _service
+    if _service is None:
+        from selfhealing.services.circuit_mesh.service import CircuitMeshService
+
+        _service = CircuitMeshService()
+    return _service
+
+
+def reset_circuit_mesh_service() -> None:
+    """CircuitMeshService 싱글톤 초기화 (테스트용)."""
+    global _service
+    if _service is not None:
+        from selfhealing.services.circuit_mesh.service import CircuitMeshService
+
+        CircuitMeshService._reset()
+    _service = None
+
+
 __all__ = [
     "ThresholdOverride",
+    "get_circuit_mesh_service",
+    "reset_circuit_mesh_service",
 ]

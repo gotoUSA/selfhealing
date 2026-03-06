@@ -18,6 +18,7 @@ Circuit Breaker Mesh Coordinator
 from __future__ import annotations
 
 import threading
+from collections import deque
 from dataclasses import replace
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -64,13 +65,59 @@ class MeshCoordinator:
         # _lock으로 보호: RedisEventBus 리스너 스레드와의 경합 방어.
         self._downstream_open_set: set[str] = set()
 
+        # Hydration: 시작 시 L2 → L1 복원 동안 수신되는 이벤트를 큐잉
+        self._hydrating = False
+        self._hydration_queue: deque[Any] = deque()
+
+    @property
+    def override_store(self) -> MeshOverrideStore:
+        """오버라이드 저장소 접근."""
+        return self._store
+
+    def set_hydrating(self, hydrating: bool) -> None:
+        """Hydration 상태 설정. False로 전환 시 큐잉된 이벤트를 flush."""
+        with self._lock:
+            self._hydrating = hydrating
+            if not hydrating:
+                queued = list(self._hydration_queue)
+                self._hydration_queue.clear()
+
+        if not hydrating and queued:
+            for event_handler, event in queued:
+                try:
+                    event_handler(event)
+                except Exception as e:
+                    logger.warning(
+                        "mesh_coordinator.hydration_flush_failed",
+                        error=str(e),
+                    )
+            logger.info(
+                "mesh_coordinator.hydration_queue_flushed",
+                count=len(queued),
+            )
+
+    def hydrate_from_store(self) -> None:
+        """L2(Redis)에서 기존 오버라이드를 복원하고 CB 서비스에 적용."""
+        restored = self._store.hydrate_from_l2()
+        for service_name, override in self._store.get_all().items():
+            self._cb.apply_threshold_override(service_name, override)
+            downstream = self._extract_downstream_from_reason(override.reason)
+            if downstream:
+                with self._lock:
+                    self._downstream_open_set.add(downstream)
+        logger.info(
+            "mesh_coordinator.hydration_complete",
+            restored=restored,
+        )
+
     def initialize(self) -> None:
         """
         MeshCoordinator 초기화: CB 서비스에 downstream checker 등록.
 
         이 메서드는 coordinator 생성 후 명시적으로 호출해야 한다.
         """
-        self._cb.register_downstream_checker(self._check_downstream_health)
+        if self._settings.enable_preemptive_fallback:
+            self._cb.register_downstream_checker(self._check_downstream_health)
         logger.info("mesh_coordinator.initialized")
 
     def _check_downstream_health(self, service_name: str) -> bool:
@@ -103,7 +150,13 @@ class MeshCoordinator:
         if not downstream:
             return
 
+        if not self._is_processable(downstream):
+            return
+
         with self._lock:
+            if self._hydrating:
+                self._hydration_queue.append((self.on_downstream_opened, event))
+                return
             self._downstream_open_set.add(downstream)
 
         current_overrides = self._store.get_all()
@@ -115,9 +168,14 @@ class MeshCoordinator:
             )
             return
 
+        max_depth = (
+            self._settings.propagation_max_depth
+            if self._settings.enable_damped_propagation
+            else 1
+        )
         affected = self._graph.get_dependents_recursive(
             downstream,
-            max_depth=self._settings.propagation_max_depth,
+            max_depth=max_depth,
         )
 
         for upstream, depth in affected:
@@ -192,6 +250,9 @@ class MeshCoordinator:
             return
 
         with self._lock:
+            if self._hydrating:
+                self._hydration_queue.append((self.on_downstream_closed, event))
+                return
             self._downstream_open_set.discard(downstream)
 
         affected = self._graph.get_dependents_recursive(
@@ -202,6 +263,12 @@ class MeshCoordinator:
         for upstream, depth in affected:
             existing = self._store.get(upstream)
             if existing is None:
+                continue
+
+            if not self._settings.enable_fast_recovery:
+                self._store.remove(upstream)
+                self._cb.remove_threshold_override(upstream)
+                self._record_metric("override_released")
                 continue
 
             fast_recovery_override = ThresholdOverride(
@@ -261,6 +328,15 @@ class MeshCoordinator:
         주기적 TTL 갱신 체크.
         Celery beat task로 snapshot_interval_seconds 주기에 실행.
         """
+        if not self._settings.enable_ttl_heartbeat:
+            return {
+                "success": True,
+                "renewed": 0,
+                "expired": 0,
+                "escalated": 0,
+                "total_overrides": 0,
+            }
+
         all_overrides = self._store.get_all()
         renewed = 0
         expired = 0
@@ -370,8 +446,105 @@ class MeshCoordinator:
         }
 
     # =========================================================================
+    # Manual Control
+    # =========================================================================
+
+    def force_release(self, service_name: str, reason: str = "") -> bool:
+        """특정 서비스의 오버라이드 수동 해제."""
+        existing = self._store.get(service_name)
+        if existing is None:
+            return False
+        self._store.remove(service_name)
+        self._cb.remove_threshold_override(service_name)
+        logger.info(
+            "mesh_coordinator.force_release",
+            service=service_name,
+            reason=reason,
+        )
+        self._record_metric("override_released")
+        return True
+
+    def release_all_overrides(self, reason: str = "") -> int:
+        """모든 오버라이드 일괄 해제 (L1 + L2 모두). 반환값: 해제된 수."""
+        all_overrides = self._store.get_all()
+        released = 0
+        for service_name in list(all_overrides.keys()):
+            self._store.remove(service_name)
+            self._cb.remove_threshold_override(service_name)
+            released += 1
+        with self._lock:
+            self._downstream_open_set.clear()
+            self._recovery_queue.clear()
+            self._recovery_start_times.clear()
+        logger.info(
+            "mesh_coordinator.release_all",
+            released=released,
+            reason=reason,
+        )
+        return released
+
+    # =========================================================================
+    # Dry-Run / Simulation
+    # =========================================================================
+
+    def simulate_downstream_open(self, service_name: str) -> list[ThresholdOverride]:
+        """
+        특정 서비스가 OPEN되었을 때 어떤 오버라이드가 발생할지 시뮬레이션.
+
+        실제 오버라이드를 적용하지 않고 결과만 반환한다.
+        """
+        max_depth = (
+            self._settings.propagation_max_depth
+            if self._settings.enable_damped_propagation
+            else 1
+        )
+        affected = self._graph.get_dependents_recursive(
+            service_name,
+            max_depth=max_depth,
+        )
+
+        results: list[ThresholdOverride] = []
+        for upstream, depth in affected:
+            damping = self._settings.propagation_damping_factor ** (depth - 1)
+            effective_threshold_multiplier = 1.0 + (
+                (self._settings.threshold_multiplier - 1.0) * damping
+            )
+            effective_recovery_multiplier = 1.0 + (
+                (self._settings.recovery_timeout_multiplier - 1.0) * damping
+            )
+
+            current_config = self._cb.get_effective_config(upstream)
+            override = ThresholdOverride(
+                service_name=upstream,
+                original_failure_threshold=current_config.failure_threshold,
+                adjusted_failure_threshold=int(
+                    current_config.failure_threshold * effective_threshold_multiplier
+                ),
+                original_recovery_timeout=current_config.recovery_timeout,
+                adjusted_recovery_timeout=int(
+                    current_config.recovery_timeout * effective_recovery_multiplier
+                ),
+                reason=f"SIMULATION: downstream:{service_name} OPEN (depth={depth})",
+                expires_at=now()
+                + timedelta(seconds=self._settings.override_ttl_seconds),
+                renewal_count=0,
+            )
+            results.append(override)
+        return results
+
+    # =========================================================================
     # Internal Helpers
     # =========================================================================
+
+    def _is_processable(self, service_name: str) -> bool:
+        """이벤트 처리 대상 판별 (로컬 그래프 + 크로스 리전 명시 선언)."""
+        if self._graph.get_dependents(service_name):
+            return True
+        if self._graph.get_dependencies(service_name):
+            return True
+        if service_name in self._settings.cross_region_dependencies:
+            return True
+        return False
 
     @staticmethod
     def _extract_downstream_from_reason(reason: str) -> str | None:
@@ -459,6 +632,23 @@ def register_mesh_handlers(coordinator: MeshCoordinator) -> None:
     )
 
     logger.info("mesh_coordinator.event_handlers_registered")
+
+
+def unregister_mesh_handlers(coordinator: MeshCoordinator) -> None:
+    """MeshCoordinator의 이벤트 핸들러를 EventBus에서 해제."""
+    from selfhealing.services.event_bus import EventType, get_event_bus
+
+    bus = get_event_bus()
+    bus.unsubscribe(EventType.CIRCUIT_BREAKER_OPENED, coordinator.on_downstream_opened)
+    bus.unsubscribe(
+        EventType.CIRCUIT_BREAKER_HALF_OPENED, coordinator.on_downstream_half_opened
+    )
+    bus.unsubscribe(EventType.CIRCUIT_BREAKER_CLOSED, coordinator.on_downstream_closed)
+    bus.unsubscribe(
+        EventType.CIRCUIT_BREAKER_CLOSED, coordinator.on_fast_recovery_completed
+    )
+
+    logger.info("mesh_coordinator.event_handlers_unregistered")
 
 
 # =============================================================================

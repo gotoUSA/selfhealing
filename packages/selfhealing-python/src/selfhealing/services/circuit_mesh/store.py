@@ -222,6 +222,37 @@ class TwoTierMeshOverrideStore:
             )
             return None
 
+    def clear_l1(self) -> None:
+        """L1 로컬 캐시 전체 제거. stop() 시 호출."""
+        self._l1.clear()
+
+    def hydrate_from_l2(self) -> int:
+        """
+        L2(Redis)에서 모든 오버라이드를 읽어 L1에 복원.
+
+        새 파드 시작 시 기존 글로벌 오버라이드를 복원하는 데 사용.
+        Returns: 복원된 오버라이드 수.
+        """
+        restored = 0
+        try:
+            keys = self._cache.keys(f"{self.REDIS_KEY_PREFIX}*")
+            for key in keys:
+                service_name = key.removeprefix(self.REDIS_KEY_PREFIX)
+                override = self._fetch_from_l2(service_name)
+                if override and now() <= override.expires_at:
+                    self._l1[service_name] = override
+                    restored += 1
+            logger.info(
+                "mesh_override_store.hydration_complete",
+                restored=restored,
+            )
+        except Exception as e:
+            logger.warning(
+                "mesh_override_store.hydration_failed",
+                error=str(e),
+            )
+        return restored
+
     def _publish_invalidation(self, service_name: str, action: str) -> None:
         """무효화 이벤트 발행."""
         try:
