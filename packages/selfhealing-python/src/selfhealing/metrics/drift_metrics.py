@@ -17,6 +17,8 @@ Drift Detection Metrics for Self-Healing System.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import structlog
 
 logger = structlog.get_logger()
@@ -28,10 +30,13 @@ try:
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
-    Counter = None
-    Gauge = None
-    Histogram = None
-    REGISTRY = None
+    if TYPE_CHECKING:
+        from prometheus_client import REGISTRY, Counter, Gauge, Histogram
+    else:
+        Counter = None
+        Gauge = None
+        Histogram = None
+        REGISTRY = None
 
 
 # =============================================================================
