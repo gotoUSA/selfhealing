@@ -196,7 +196,9 @@ class DiskPersistentBuffer:
         try:
             import lmdb
         except ImportError as e:
-            raise DiskBufferError("lmdb not installed. Install with: pip install lmdb") from e
+            raise DiskBufferError(
+                "lmdb not installed. Install with: pip install lmdb"
+            ) from e
 
         db_path = self._settings.data_path / self._db_name
         db_path.mkdir(parents=True, exist_ok=True)
@@ -253,7 +255,10 @@ class DiskPersistentBuffer:
         """
         try:
             timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-            corrupt_path = db_path.parent / f"{db_path.name}{self._settings.quarantine_suffix}.{timestamp}"
+            corrupt_path = (
+                db_path.parent
+                / f"{db_path.name}{self._settings.quarantine_suffix}.{timestamp}"
+            )
 
             shutil.move(str(db_path), str(corrupt_path))
             self._stats["quarantine_events"] += 1
@@ -473,7 +478,8 @@ class DiskPersistentBuffer:
         # 플러시 조건
         should_flush = (
             len(self._group_buffer) >= self._settings.group_commit_max_entries
-            or self._time_since_last_flush_ms() >= self._settings.group_commit_interval_ms
+            or self._time_since_last_flush_ms()
+            >= self._settings.group_commit_interval_ms
         )
 
         if should_flush:
@@ -746,7 +752,9 @@ class DiskPersistentBuffer:
 
         return flushed
 
-    def _handle_flush_failure(self, entries: list[BufferEntry], error: Exception) -> None:
+    def _handle_flush_failure(
+        self, entries: list[BufferEntry], error: Exception
+    ) -> None:
         """
         플러시 실패 처리 - Poison Pill 격리.
 
@@ -840,7 +848,9 @@ class DiskPersistentBuffer:
 
             payload = NotificationPayload(
                 title="⚠️ DiskBuffer Poison Pill Detected",
-                message=(f"반복 실패 엔트리가 Dead Letter DB로 격리됨: " f"{entry.key.decode()}"),
+                message=(
+                    f"반복 실패 엔트리가 Dead Letter DB로 격리됨: {entry.key.decode()}"
+                ),
                 priority=NotificationPriority.HIGH,
                 category=NotificationCategory.OPERATIONS,
                 source="DiskPersistentBuffer",
@@ -968,14 +978,28 @@ class DiskPersistentBuffer:
     def get_stats(self) -> dict[str, Any]:
         """통계 반환."""
         if self._env is None:
-            return {**self._stats, "count": 0, "db_size_bytes": 0, "sequence": 0}
+            return {
+                "count": 0,
+                "total_added": self._stats.get("total_puts", 0),
+                "total_dropped": 0,
+                "capacity": None,
+                "usage_percent": None,
+                **self._stats,
+                "db_size_bytes": 0,
+                "sequence": 0,
+            }
 
         with self._env.begin(db=self._entries_db) as txn:
             stat = txn.stat()
 
+        current = stat["entries"]
         return {
+            "count": current,
+            "total_added": self._stats.get("total_puts", 0),
+            "total_dropped": 0,
+            "capacity": None,
+            "usage_percent": None,
             **self._stats,
-            "count": stat["entries"],
             "db_size_bytes": stat.get("psize", 0) * stat.get("leaf_pages", 0),
             "sequence": self._sequence,
         }
@@ -1168,11 +1192,12 @@ class DiskBufferAdapter:
             True (항상 성공, Fail-Open 시 드롭)
         """
         result = self._disk_buffer.put(entry)
-        if result:
+        if result is not None:
             self._total_buffered += 1
+            return True
         else:
             self._total_dropped += 1
-        return True
+            return False
 
     def try_flush(
         self,
@@ -1200,15 +1225,33 @@ class DiskBufferAdapter:
     def get_stats(self) -> dict[str, Any]:
         """통계 반환."""
         stats = self._disk_buffer.get_stats()
+        current = self.count()
         return {
+            # Common keys (AuditBufferProtocol)
+            "count": current,
+            "total_added": self._total_buffered,
+            "total_dropped": self._total_dropped,
+            "capacity": None,
+            "usage_percent": None,
+            # Implementation-specific keys
             **stats,
             "total_buffered": self._total_buffered,
-            "total_dropped": self._total_dropped,
         }
+
+    def count(self) -> int:
+        """현재 엔트리 수 (AuditBufferProtocol)."""
+        return self._disk_buffer.count()
+
+    def clear(self) -> int:
+        """Logical reset (ClearableBuffer). Physical deletion via retention policy only."""
+        keys = [e.key for e in self._disk_buffer.iter_entries()]
+        if not keys:
+            return 0
+        return self._disk_buffer.delete_batch(keys)
 
     def __len__(self) -> int:
         """현재 엔트리 수."""
-        return self._disk_buffer.count()
+        return self.count()
 
 
 # ─────────────────────────────────────────────────────────────

@@ -19,6 +19,7 @@ from selfhealing.audit.wal._serialization import (
     compute_checksum,
     verify_checksum,
 )
+from selfhealing.core.file_utils import safe_unlink
 
 logger = structlog.get_logger()
 
@@ -46,7 +47,9 @@ class WALReaderMixin:
         """
         yield from self._read_wal_file_impl(filepath, best_effort=True)
 
-    def _read_wal_file_impl(self, filepath: Path, best_effort: bool = False) -> Iterator[Any]:
+    def _read_wal_file_impl(
+        self, filepath: Path, best_effort: bool = False
+    ) -> Iterator[Any]:
         """
         WAL 파일 읽기 통합 구현.
 
@@ -278,10 +281,7 @@ class WALReaderMixin:
                     max_seq = max(max_seq, entry.sequence)
 
                 if max_seq > 0 and max_seq <= last_processed_seq:
-                    try:
-                        wal_file.unlink()
+                    if safe_unlink(wal_file):
                         deleted_count += 1
-                    except Exception:
-                        pass
 
         return deleted_count

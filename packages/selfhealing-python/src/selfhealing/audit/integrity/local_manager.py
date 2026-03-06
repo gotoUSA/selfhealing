@@ -16,6 +16,7 @@ from typing import Any
 import structlog
 
 from selfhealing.audit.integrity.models import compute_hash
+from selfhealing.core.file_utils import safe_unlink
 
 logger = structlog.get_logger()
 
@@ -119,7 +120,11 @@ class HashChainManager:
         with self._lock:
             return {
                 "sequence": self._sequence,
-                "previous_hash": (self._previous_hash[:16] + "..." if len(self._previous_hash) > 16 else self._previous_hash),
+                "previous_hash": (
+                    self._previous_hash[:16] + "..."
+                    if len(self._previous_hash) > 16
+                    else self._previous_hash
+                ),
             }
 
     def reset(self) -> None:
@@ -127,8 +132,8 @@ class HashChainManager:
         with self._lock:
             self._sequence = 0
             self._previous_hash = self.GENESIS_HASH
-            if self._state_file and self._state_file.exists():
-                self._state_file.unlink()
+            if self._state_file:
+                safe_unlink(self._state_file)
             logger.warning("hash_chain.chain_state_reset")
 
 

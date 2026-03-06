@@ -35,8 +35,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import logging
 import json
+import logging
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -45,6 +45,8 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+
+from selfhealing.audit.checksum import compute_checksum
 
 logger = structlog.get_logger()
 
@@ -84,7 +86,8 @@ class MerkleTree:
 
     def _hash(self, data: bytes) -> bytes:
         """해시 계산."""
-        return hashlib.new(self._hash_func, data).digest()
+        hex_str = compute_checksum(data, algorithm=self._hash_func)
+        return bytes.fromhex(hex_str)
 
     def compute_root(self) -> bytes:
         """머클 루트 계산."""
@@ -282,7 +285,9 @@ class RFC3161Client:
         # 간소화: 해시값만 전송 (실제로는 ASN.1 구조 필요)
         return data_hash
 
-    def _parse_timestamp_response(self, response_data: bytes, original_hash: bytes) -> RFC3161Timestamp | None:
+    def _parse_timestamp_response(
+        self, response_data: bytes, original_hash: bytes
+    ) -> RFC3161Timestamp | None:
         """
         RFC 3161 TimeStampResp 파싱 (간소화 버전).
 

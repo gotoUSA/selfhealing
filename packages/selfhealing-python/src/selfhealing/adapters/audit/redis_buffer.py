@@ -88,7 +88,7 @@ class RedisAuditBuffer:
         buffer.log(entry, domain="payment")
     """
 
-    DEFAULT_KEY_PREFIX = "audit:buffer:"
+    DEFAULT_KEY_PREFIX = "audit:"
     DEFAULT_TTL_SECONDS = 86400  # 하위 호환성용 레거시 상수
     MAX_CONSECUTIVE_FAILURES = 3
     ACTIVE_DOMAINS_SET = "audit:active_domains"  # ActiveKeySet
@@ -115,8 +115,12 @@ class RedisAuditBuffer:
         """
         self._redis = redis_client
         self._fallback = fallback_adapter
-        self._key_prefix = key_prefix if key_prefix is not None else self.DEFAULT_KEY_PREFIX
-        self._ttl_seconds = ttl_seconds if ttl_seconds is not None else _get_audit_buffer_ttl()
+        self._key_prefix = (
+            key_prefix if key_prefix is not None else self.DEFAULT_KEY_PREFIX
+        )
+        self._ttl_seconds = (
+            ttl_seconds if ttl_seconds is not None else _get_audit_buffer_ttl()
+        )
         self._on_fallback = on_fallback
 
         # 상태 추적 (CB Advanced Protection 패턴)
@@ -126,7 +130,9 @@ class RedisAuditBuffer:
         # 폴백 버퍼 (Redis 실패 시 임시 저장)
         self._fallback_buffer: list[dict[str, Any]] = []
         self._fallback_lock = threading.Lock()
-        self._max_fallback = int(os.environ.get("SELFHEALING_REDIS_MAX_FALLBACK", "10000"))
+        self._max_fallback = int(
+            os.environ.get("SELFHEALING_REDIS_MAX_FALLBACK", "10000")
+        )
 
         # 워커 식별자 (Processing Queue 패턴용)
         self._worker_id = f"{socket.gethostname()}-{os.getpid()}"
@@ -158,7 +164,7 @@ class RedisAuditBuffer:
         Returns:
             True if Redis 성공, False if fallback 사용
         """
-        key = f"{self._key_prefix}{domain}"
+        key = f"{self._key_prefix}{{{domain}}}:buffer"
 
         try:
             payload = {
@@ -265,7 +271,7 @@ class RedisAuditBuffer:
         if not entries:
             return True
 
-        key = f"{self._key_prefix}{domain}"
+        key = f"{self._key_prefix}{{{domain}}}:buffer"
         timestamp = datetime.now(timezone.utc).isoformat()
         instance_id = self._get_instance_id()
 
@@ -426,7 +432,11 @@ class RedisAuditBuffer:
         flushed = 0
 
         try:
-            pattern = f"{self._key_prefix}{domain or '*'}"
+            pattern = (
+                f"{self._key_prefix}{{{domain}}}:buffer"
+                if domain
+                else f"{self._key_prefix}*:buffer"
+            )
 
             for key in self._redis.scan_iter(match=pattern):
                 count = 0
@@ -479,7 +489,7 @@ class RedisAuditBuffer:
 
         try:
             for domain in self._get_active_domains():
-                key = f"{self._key_prefix}{domain}"
+                key = f"{self._key_prefix}{{{domain}}}:buffer"
                 size = self._redis.llen(key)
                 stats["domains"][domain] = size
 
@@ -512,18 +522,26 @@ class RedisAuditBuffer:
         if size >= _BUFFER_CRITICAL_THRESHOLD:
             logger.exception(
                 f"[RedisAuditBuffer] CRITICAL: Buffer overflow for {domain}",  # noqa: G004
-                extra={"domain": domain, "size": size, "threshold": _BUFFER_CRITICAL_THRESHOLD},
+                extra={
+                    "domain": domain,
+                    "size": size,
+                    "threshold": _BUFFER_CRITICAL_THRESHOLD,
+                },
             )
         elif size >= _BUFFER_WARNING_THRESHOLD:
             logger.warning(
                 f"[RedisAuditBuffer] WARNING: Buffer high for {domain}",  # noqa: G004
-                extra={"domain": domain, "size": size, "threshold": _BUFFER_WARNING_THRESHOLD},
+                extra={
+                    "domain": domain,
+                    "size": size,
+                    "threshold": _BUFFER_WARNING_THRESHOLD,
+                },
             )
 
     def get_pending_count(self, domain: str = "default") -> int:
         """특정 도메인의 대기 엔트리 수."""
         try:
-            key = f"{self._key_prefix}{domain}"
+            key = f"{self._key_prefix}{{{domain}}}:buffer"
             return self._redis.llen(key)
         except Exception:
             return -1
@@ -568,7 +586,7 @@ class RedisAuditBuffer:
 
             for domain in domains:
                 domain_str = domain.decode() if isinstance(domain, bytes) else domain
-                key = f"{self._key_prefix}{domain_str}"
+                key = f"{self._key_prefix}{{{domain_str}}}:buffer"
 
                 if self._redis.llen(key) == 0:
                     empty_domains.append(domain_str)
@@ -592,10 +610,12 @@ class RedisAuditBuffer:
         """scan_iter 기반 fallback (ActiveKeySet 사용 불가 시)."""
         domains = set()
         try:
-            for key in self._redis.scan_iter(f"{self._key_prefix}*"):
+            for key in self._redis.scan_iter(f"{self._key_prefix}*:buffer"):
                 key_str = key.decode() if isinstance(key, bytes) else key
-                domain = key_str.replace(self._key_prefix, "")
-                domains.add(domain)
+                # Extract domain from "audit:{domain}:buffer"
+                if key_str.endswith(":buffer"):
+                    raw = key_str[len(self._key_prefix) : -len(":buffer")]
+                    domains.add(raw.strip("{}"))
         except Exception:
             pass
         return list(domains)
@@ -624,7 +644,7 @@ class RedisAuditBuffer:
         trimmed = {}
         try:
             for domain in self._get_active_domains():
-                key = f"{self._key_prefix}{domain}"
+                key = f"{self._key_prefix}{{{domain}}}:buffer"
                 size = self._redis.llen(key)
 
                 if size > _SAFETY_LTRIM_THRESHOLD:
@@ -652,7 +672,9 @@ class RedisAuditBuffer:
                             audit_buffer_dropped_total,
                         )
 
-                        audit_buffer_dropped_total.labels(domain=domain).inc(trimmed_count)
+                        audit_buffer_dropped_total.labels(domain=domain).inc(
+                            trimmed_count
+                        )
                     except ImportError:
                         pass
 
@@ -701,7 +723,7 @@ class RedisAuditBuffer:
                     continue
 
                 # 2. Processing Queue에서 데이터 읽기
-                processing_key = f"audit:processing:{current_domain}"
+                processing_key = f"{self._key_prefix}{{{current_domain}}}:processing"
                 items = self._redis.lrange(processing_key, 0, moved - 1)
 
                 entries = []
@@ -786,9 +808,11 @@ class RedisAuditBuffer:
                 },
             )
 
-            # audit:processing:{domain}에서 domain 추출
+            # audit:{domain}:processing에서 domain 추출
             try:
-                domain = processing_key.split(":")[-1]
+                parts = processing_key.split(":")
+                raw_domain = parts[1] if len(parts) >= 3 else parts[-1]
+                domain = raw_domain.strip("{}")
                 restored = lua_scripts.atomic_batch_restore(domain)
                 recovered_total += restored
                 logger.info(
@@ -879,7 +903,7 @@ class RedisAuditBuffer:
             삭제된 엔트리 수
         """
         try:
-            key = f"{self._key_prefix}{domain}"
+            key = f"{self._key_prefix}{{{domain}}}:buffer"
             count = self._redis.llen(key)
             self._redis.delete(key)
 

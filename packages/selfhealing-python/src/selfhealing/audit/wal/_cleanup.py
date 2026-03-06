@@ -14,6 +14,8 @@ from pathlib import Path
 
 import structlog
 
+from selfhealing.core.file_utils import safe_unlink
+
 logger = structlog.get_logger()
 
 
@@ -73,8 +75,8 @@ def cleanup_by_age(directory: Path, pattern: str, max_age_days: int) -> int:
                 tzinfo=timezone.utc
             )
             if file_date < cutoff:
-                wal_file.unlink()
-                removed += 1
+                if safe_unlink(wal_file):
+                    removed += 1
                 logger.debug(
                     "wal_cleanup.removed_old_file",
                     wal_file=wal_file.name,

@@ -21,6 +21,8 @@ from typing import Any
 
 import structlog
 
+from selfhealing.core.file_utils import safe_unlink
+
 logger = structlog.get_logger()
 
 # 폴백 로그 경로
@@ -74,7 +76,9 @@ class FallbackEscalationHandler:
             max_buffer_size: 메모리 버퍼 최대 크기
         """
         self._log_path = Path(log_path) if log_path else DEFAULT_ESCALATION_LOG_PATH
-        self._lock = threading.RLock()  # 재진입 가능 락 (drain_to_file에서 _write_to_file 호출 시 필요)
+        self._lock = (
+            threading.RLock()
+        )  # 재진입 가능 락 (drain_to_file에서 _write_to_file 호출 시 필요)
         self._memory_buffer: list[dict[str, Any]] = []
         self._max_buffer_size = max_buffer_size
 
@@ -269,15 +273,8 @@ class FallbackEscalationHandler:
 
     def clear_file(self) -> None:
         """파일 초기화 (처리 완료 후)."""
-        try:
-            if self._log_path.exists():
-                self._log_path.unlink()
-                logger.info("fallback_escalation.file_cleared")
-        except Exception as e:
-            logger.exception(
-                "fallback_escalation.clear_failed",
-                error=e,
-            )
+        if safe_unlink(self._log_path):
+            logger.info("fallback_escalation.file_cleared")
 
     def clear_memory(self) -> None:
         """메모리 버퍼 초기화."""

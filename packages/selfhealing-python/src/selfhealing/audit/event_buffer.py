@@ -290,7 +290,10 @@ class AuditEvent:
         }
 
     def __repr__(self) -> str:
-        return f"AuditEvent(type={self.event_type.value}, " f"source={self.source}, success={self.success})"
+        return (
+            f"AuditEvent(type={self.event_type.value}, "
+            f"source={self.source}, success={self.success})"
+        )
 
 
 class RequestAuditBuffer:
@@ -663,11 +666,12 @@ class RequestAuditBuffer:
 
         return result
 
-    def clear(self) -> None:
-        """버퍼 초기화 (테스트용)."""
-        self._ring_buffer.clear()
+    def clear(self) -> int:
+        """버퍼 초기화 (테스트용). Returns number of cleared entries."""
+        count = self._ring_buffer.clear()
         self._ring_buffer.reset_stats()
         self._wal_sequences.clear()
+        return count
 
     # =========================================================================
     # Class Methods - request에서 버퍼 관리

@@ -42,6 +42,7 @@ from selfhealing.audit.wal._models import (
 from selfhealing.audit.wal._reader import WALReaderMixin
 from selfhealing.audit.wal._serialization import compute_checksum, verify_checksum
 from selfhealing.audit.wal._writer import WALWriterMixin
+from selfhealing.core.file_utils import safe_unlink
 
 logger = structlog.get_logger()
 
@@ -212,10 +213,7 @@ class WriteAheadLog(
 
         while len(wal_files) > self._config.max_files:
             oldest = wal_files.pop(0)
-            try:
-                oldest.unlink()
-            except Exception:
-                pass
+            safe_unlink(oldest)
 
     # =========================================================================
     # Stats & Lifecycle

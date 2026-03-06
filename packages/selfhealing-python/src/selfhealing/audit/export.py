@@ -31,8 +31,8 @@ from __future__ import annotations
 
 import argparse
 import glob
-import logging
 import json
+import logging
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -93,6 +93,9 @@ class ExportOptions:
 
     # 무결성 검증
     verify_integrity: bool = True
+
+    # JSON format entry limit (OOM prevention)
+    max_entries_json_format: int = 50000
 
     # 기타
     verbose: bool = False
@@ -155,7 +158,9 @@ class AuditExporter:
                     files.append(path)
         return sorted(files)
 
-    def _read_and_filter_entries(self, input_files: list[Path]) -> Iterator[dict[str, Any]]:
+    def _read_and_filter_entries(
+        self, input_files: list[Path]
+    ) -> Iterator[dict[str, Any]]:
         """엔트리 읽기 및 필터링."""
         for file_path in input_files:
             try:
@@ -199,7 +204,10 @@ class AuditExporter:
                         timestamp_str = timestamp_str[:-1] + "+00:00"
                     timestamp = datetime.fromisoformat(timestamp_str)
 
-                    if self._options.start_time and timestamp < self._options.start_time:
+                    if (
+                        self._options.start_time
+                        and timestamp < self._options.start_time
+                    ):
                         return False
                     if self._options.end_time and timestamp > self._options.end_time:
                         return False
@@ -220,7 +228,9 @@ class AuditExporter:
 
         return True
 
-    def _verify_integrity(self, entries: Iterator[dict[str, Any]]) -> Iterator[dict[str, Any]]:
+    def _verify_integrity(
+        self, entries: Iterator[dict[str, Any]]
+    ) -> Iterator[dict[str, Any]]:
         """무결성 검증 (해시 체인)."""
         prev_hash = None
 
@@ -268,8 +278,22 @@ class AuditExporter:
         with open(output_path, "w", encoding="utf-8") as f:
             self._write_entries(entries, f)
 
+    FIXED_AUDIT_FIELDS = [
+        "timestamp",
+        "action",
+        "actor_id",
+        "actor_type",
+        "target_type",
+        "target_id",
+        "service_name",
+        "reason",
+        "success",
+    ]
+
     def _write_entries(self, entries: Iterator[dict[str, Any]], output: TextIO) -> None:
         """엔트리 쓰기 (형식별)."""
+        import itertools
+
         format_type = self._options.format
 
         if format_type == ExportFormat.JSONL:
@@ -278,7 +302,13 @@ class AuditExporter:
                 self._stats.exported_entries += 1
 
         elif format_type == ExportFormat.JSON:
-            entries_list = list(entries)
+            limit = self._options.max_entries_json_format
+            entries_list = list(itertools.islice(entries, limit + 1))
+            if len(entries_list) > limit:
+                raise ValueError(
+                    f"JSON format supports max {limit} entries. "
+                    f"Use JSONL format for larger exports."
+                )
             self._stats.exported_entries = len(entries_list)
             json.dump(entries_list, output, default=str, ensure_ascii=False, indent=2)
             output.write("\n")
@@ -286,20 +316,16 @@ class AuditExporter:
         elif format_type == ExportFormat.CSV:
             import csv
 
-            entries_list = list(entries)
-            if not entries_list:
-                return
-
-            # CSV 헤더 추출
-            headers = set()
-            for entry in entries_list:
-                headers.update(entry.keys())
-            headers = sorted(headers)
-
-            writer = csv.DictWriter(output, fieldnames=headers, extrasaction="ignore")
+            writer = csv.DictWriter(
+                output,
+                fieldnames=self.FIXED_AUDIT_FIELDS,
+                extrasaction="ignore",
+            )
             writer.writeheader()
-            for entry in entries_list:
-                writer.writerow({k: str(v) if v is not None else "" for k, v in entry.items()})
+            for entry in entries:
+                writer.writerow(
+                    {k: str(v) if v is not None else "" for k, v in entry.items()}
+                )
                 self._stats.exported_entries += 1
 
         elif format_type == ExportFormat.PARQUET:
@@ -317,7 +343,9 @@ class AuditExporter:
         # 임시 파일에 쓰기
         import tempfile
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False, encoding="utf-8") as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+        ) as f:
             temp_path = f.name
             self._write_entries(entries, f)
 
@@ -332,7 +360,9 @@ class AuditExporter:
         try:
             import boto3
         except ImportError:
-            raise ImportError("S3 export requires boto3. Install with: pip install boto3")
+            raise ImportError(
+                "S3 export requires boto3. Install with: pip install boto3"
+            )
 
         s3 = boto3.client("s3", region_name=self._options.s3_region)
 
@@ -347,38 +377,42 @@ class AuditExporter:
         )
 
     def _export_to_http(self, entries: Iterator[dict[str, Any]]) -> None:
-        """HTTP로 내보내기."""
+        """HTTP NDJSON chunked POST."""
+        import itertools
         import urllib.error
         import urllib.request
 
         if not self._options.http_endpoint:
             raise ValueError("--http-endpoint is required for HTTP target")
 
-        entries_list = list(entries)
-        self._stats.exported_entries = len(entries_list)
-
-        data = json.dumps(entries_list, default=str, ensure_ascii=False).encode("utf-8")
-
         headers = {
-            "Content-Type": "application/json",
+            "Content-Type": "application/x-ndjson",
             **(self._options.http_headers or {}),
         }
 
-        req = urllib.request.Request(
-            self._options.http_endpoint,
-            data=data,
-            headers=headers,
-            method="POST",
-        )
-
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                logger.info(
-                    "http_export_completed",
-                    response_status=response.status,
-                )
-        except urllib.error.URLError as e:
-            raise RuntimeError(f"HTTP export failed: {e}") from e
+        while True:
+            chunk = list(itertools.islice(entries, 500))
+            if not chunk:
+                break
+            self._stats.exported_entries += len(chunk)
+            data = "\n".join(
+                json.dumps(e, default=str, ensure_ascii=False) for e in chunk
+            ).encode("utf-8")
+            req = urllib.request.Request(
+                self._options.http_endpoint,
+                data=data,
+                headers=headers,
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    logger.debug(
+                        "http_export_chunk_sent",
+                        response_status=response.status,
+                        chunk_size=len(chunk),
+                    )
+            except urllib.error.URLError as e:
+                raise RuntimeError(f"HTTP export failed: {e}") from e
 
     def export_to_parquet(
         self,
@@ -402,7 +436,9 @@ class AuditExporter:
             import pyarrow as pa
             import pyarrow.parquet as pq
         except ImportError:
-            raise ImportError("Parquet export requires pyarrow. Install with: pip install pyarrow")
+            raise ImportError(
+                "Parquet export requires pyarrow. Install with: pip install pyarrow"
+            )
 
         # 모든 엔트리 수집
         entries = []

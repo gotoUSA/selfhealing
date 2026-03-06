@@ -152,7 +152,9 @@ class ContinuousAuditRecorder:
                 self._wal_enabled = False
 
         # Checkpoint Strategy 초기화
-        self._checkpoint_strategy: CheckpointStorageStrategy | None = checkpoint_strategy
+        self._checkpoint_strategy: CheckpointStorageStrategy | None = (
+            checkpoint_strategy
+        )
         self._checkpoint_namespace = checkpoint_namespace
 
         # Checkpoint Back-pressure 상태 (호출자 책임 패턴)
@@ -618,62 +620,60 @@ class ContinuousAuditRecorder:
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         action_filter: list[AuditAction] | None = None,
+        page_size: int = 1000,
     ) -> Iterator[str]:
         """
-        JSON Lines 형식으로 익스포트.
-
-        각 조직에서 자체 형식으로 변환할 때 사용.
+        JSON Lines paginated streaming export.
 
         Yields:
-            JSON 문자열 (한 줄씩)
+            JSON string per entry
         """
-        entries = self.query(
-            start_time=start_time,
-            end_time=end_time,
-            limit=10000,  # 대량 익스포트
-        )
+        offset = 0
+        while True:
+            batch = self.query(
+                start_time=start_time,
+                end_time=end_time,
+                limit=page_size,
+            )
+            if not batch:
+                break
+            for entry in batch:
+                if action_filter:
+                    entry_action = entry.get("action", "")
+                    if not any(a.value == entry_action for a in action_filter):
+                        continue
+                yield json.dumps(entry, default=str)
+            if len(batch) < page_size:
+                break
+            offset += page_size
 
-        for entry in entries:
-            if action_filter:
-                entry_action = entry.get("action", "")
-                if not any(a.value == entry_action for a in action_filter):
-                    continue
-            yield json.dumps(entry, default=str)
+    FIXED_AUDIT_FIELDS = [
+        "timestamp",
+        "action",
+        "actor_id",
+        "actor_type",
+        "target_type",
+        "target_id",
+        "service_name",
+        "reason",
+        "success",
+    ]
 
     def export_csv_compatible(
         self,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> Iterator[dict[str, Any]]:
         """
-        CSV 변환 가능한 평탄화된 데이터 반환.
+        Streaming CSV-compatible flattened data.
 
-        중첩 구조를 평탄화하여 CSV로 변환하기 쉽게 만듦.
-
-        Returns:
-            평탄화된 딕셔너리 목록
+        Yields:
+            Flattened dict per entry (fixed audit fields + details_* keys)
         """
-        entries = self.query(
-            start_time=start_time,
-            end_time=end_time,
-            limit=10000,
-        )
+        for line in self.export_jsonl(start_time=start_time, end_time=end_time):
+            entry = json.loads(line)
+            flat = {k: entry.get(k) for k in self.FIXED_AUDIT_FIELDS}
 
-        flattened = []
-        for entry in entries:
-            flat = {
-                "timestamp": entry.get("timestamp"),
-                "action": entry.get("action"),
-                "actor_id": entry.get("actor_id"),
-                "actor_type": entry.get("actor_type"),
-                "target_type": entry.get("target_type"),
-                "target_id": entry.get("target_id"),
-                "service_name": entry.get("service_name"),
-                "reason": entry.get("reason"),
-                "success": entry.get("success"),
-            }
-
-            # details 평탄화
             details = entry.get("details", {})
             for key, value in details.items():
                 if isinstance(value, (dict, list)):
@@ -681,9 +681,7 @@ class ContinuousAuditRecorder:
                 else:
                     flat[f"details_{key}"] = value
 
-            flattened.append(flat)
-
-        return flattened
+            yield flat
 
     # ─────────────────────────────────────────────────────────────
     # 무결성 검증
@@ -701,7 +699,9 @@ class ContinuousAuditRecorder:
         verifier = HashChainVerifier()
 
         # 엔트리에 integrity 필드가 있으면 검증
-        entries_with_integrity = [e for e in entries if "integrity" in e.get("details", {})]
+        entries_with_integrity = [
+            e for e in entries if "integrity" in e.get("details", {})
+        ]
 
         if not entries_with_integrity:
             return {
@@ -850,7 +850,8 @@ class ContinuousAuditRecorder:
 
         should_save = (
             self._records_since_checkpoint >= self._checkpoint_save_interval
-            or time.time() - self._last_checkpoint_time >= self._checkpoint_save_max_seconds
+            or time.time() - self._last_checkpoint_time
+            >= self._checkpoint_save_max_seconds
         )
 
         if not should_save:

@@ -106,23 +106,13 @@ class AuditBatchLuaScripts:
         Args:
             redis_client: Redis 클라이언트
         """
-        self._redis = redis_client
-        self._scripts: dict[str, str] = {}
-        self._register_scripts()
+        from selfhealing.audit.performance.lua_registry import LuaScriptRegistry
 
-    def _register_scripts(self) -> None:
-        """Lua 스크립트를 Redis에 등록하고 SHA 캐싱."""
-        try:
-            self._scripts["batch_move"] = self._redis.script_load(self.LUA_ATOMIC_BATCH_MOVE)
-            self._scripts["batch_complete"] = self._redis.script_load(self.LUA_ATOMIC_BATCH_COMPLETE)
-            self._scripts["batch_restore"] = self._redis.script_load(self.LUA_ATOMIC_BATCH_RESTORE)
-            logger.info("audit_batch_lua_scripts.lua_scripts_registered")
-        except redis_lib.RedisError as e:
-            logger.exception(
-                "audit_batch_lua_scripts.script_registration_failed",
-                error=e,
-            )
-            raise
+        self._redis = redis_client
+        self._registry = LuaScriptRegistry(redis_client)
+        self._registry.register("batch_move", self.LUA_ATOMIC_BATCH_MOVE)
+        self._registry.register("batch_complete", self.LUA_ATOMIC_BATCH_COMPLETE)
+        self._registry.register("batch_restore", self.LUA_ATOMIC_BATCH_RESTORE)
 
     def atomic_batch_move(
         self,
@@ -141,23 +131,15 @@ class AuditBatchLuaScripts:
         Returns:
             실제 이동된 항목 수
         """
-        buffer_key = f"audit:buffer:{domain}"
-        processing_key = f"audit:processing:{domain}"
+        buffer_key = f"audit:{{{domain}}}:buffer"
+        processing_key = f"audit:{{{domain}}}:processing"
 
-        try:
-            result = self._redis.evalsha(
-                self._scripts["batch_move"],
-                2,
-                buffer_key,
-                processing_key,
-                batch_size,
-                worker_id,
-            )
-            return int(result) if result else 0
-        except redis_lib.exceptions.NoScriptError:
-            logger.warning("audit_batch_lua_scripts.script_cache_miss_re")
-            self._register_scripts()
-            return self.atomic_batch_move(domain, batch_size, worker_id)
+        result = self._registry.execute(
+            "batch_move",
+            keys=[buffer_key, processing_key],
+            args=[batch_size, worker_id],
+        )
+        return int(result) if result else 0
 
     def atomic_batch_complete(self, domain: str, count: int) -> int:
         """
@@ -170,19 +152,14 @@ class AuditBatchLuaScripts:
         Returns:
             실제 제거된 항목 수
         """
-        processing_key = f"audit:processing:{domain}"
+        processing_key = f"audit:{{{domain}}}:processing"
 
-        try:
-            result = self._redis.evalsha(
-                self._scripts["batch_complete"],
-                1,
-                processing_key,
-                count,
-            )
-            return int(result) if result else 0
-        except redis_lib.exceptions.NoScriptError:
-            self._register_scripts()
-            return self.atomic_batch_complete(domain, count)
+        result = self._registry.execute(
+            "batch_complete",
+            keys=[processing_key],
+            args=[count],
+        )
+        return int(result) if result else 0
 
     def atomic_batch_restore(self, domain: str) -> int:
         """
@@ -196,20 +173,15 @@ class AuditBatchLuaScripts:
         Returns:
             복원된 항목 수
         """
-        processing_key = f"audit:processing:{domain}"
-        buffer_key = f"audit:buffer:{domain}"
+        processing_key = f"audit:{{{domain}}}:processing"
+        buffer_key = f"audit:{{{domain}}}:buffer"
 
-        try:
-            result = self._redis.evalsha(
-                self._scripts["batch_restore"],
-                2,
-                processing_key,
-                buffer_key,
-            )
-            return int(result) if result else 0
-        except redis_lib.exceptions.NoScriptError:
-            self._register_scripts()
-            return self.atomic_batch_restore(domain)
+        result = self._registry.execute(
+            "batch_restore",
+            keys=[processing_key, buffer_key],
+            args=[],
+        )
+        return int(result) if result else 0
 
     def get_orphaned_processing_queues(
         self,
@@ -232,8 +204,16 @@ class AuditBatchLuaScripts:
             current_time = int(time.time())
 
             for processing_key, worker_info in processing_meta.items():
-                key_str = processing_key.decode() if isinstance(processing_key, bytes) else processing_key
-                info_str = worker_info.decode() if isinstance(worker_info, bytes) else worker_info
+                key_str = (
+                    processing_key.decode()
+                    if isinstance(processing_key, bytes)
+                    else processing_key
+                )
+                info_str = (
+                    worker_info.decode()
+                    if isinstance(worker_info, bytes)
+                    else worker_info
+                )
 
                 try:
                     worker_id, timestamp_str = info_str.rsplit(":", 1)

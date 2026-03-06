@@ -20,6 +20,8 @@ from threading import Thread
 
 import structlog
 
+from selfhealing.core.file_utils import safe_unlink
+
 logger = structlog.get_logger()
 
 # 기본 보관 기간 (일)
@@ -112,19 +114,18 @@ class WALRetentionCleaner:
 
                 # 파일 삭제
                 age_days = (datetime.now(timezone.utc) - mtime).days
-                wal_file.unlink()
-                deleted_count += 1
+                if safe_unlink(wal_file):
+                    deleted_count += 1
 
-                logger.info(
-                    "retention_cleaner.deleted_expired_wal_age",
-                    wal_file=wal_file.name,
-                    age_days=age_days,
-                )
+                    logger.info(
+                        "retention_cleaner.deleted_expired_wal_age",
+                        wal_file=wal_file.name,
+                        age_days=age_days,
+                    )
 
                 # synced 마커도 삭제
                 synced_marker = wal_file.with_suffix(".synced")
-                if synced_marker.exists():
-                    synced_marker.unlink()
+                safe_unlink(synced_marker)
 
             except PermissionError:
                 logger.warning(

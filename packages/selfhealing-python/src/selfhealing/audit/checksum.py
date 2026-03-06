@@ -151,7 +151,8 @@ def compute_checksum(
     elif algorithm == "crc32":
         return compute_crc32(data)
     else:
-        raise ValueError(f"Unsupported algorithm: {algorithm}")
+        normalized = _normalize_to_bytes(data)
+        return hashlib.new(algorithm, normalized).hexdigest()
 
 
 def verify_checksum(

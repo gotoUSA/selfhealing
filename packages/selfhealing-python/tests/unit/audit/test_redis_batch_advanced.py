@@ -177,8 +177,9 @@ class FakeRedisWithLua:
         return True
 
     def scan_iter(self, match: str = "*") -> list:
-        prefix = match.rstrip("*")
-        return [k for k in self._data.keys() if k.startswith(prefix)]
+        import fnmatch
+
+        return [k for k in self._data.keys() if fnmatch.fnmatch(k, match)]
 
 
 class FakePipeline:
@@ -227,16 +228,16 @@ class TestAuditBatchLuaScripts:
 
     def test_scripts_registered_on_init(self, lua_scripts, fake_redis) -> None:
         """초기화 시 Lua 스크립트 등록."""
-        assert fake_redis._script_counter == 3
-        assert len(lua_scripts._scripts) == 3
-        assert "batch_move" in lua_scripts._scripts
-        assert "batch_complete" in lua_scripts._scripts
-        assert "batch_restore" in lua_scripts._scripts
+        registry = lua_scripts._registry
+        assert len(registry._scripts) == 3
+        assert "batch_move" in registry._scripts
+        assert "batch_complete" in registry._scripts
+        assert "batch_restore" in registry._scripts
 
     def test_atomic_batch_move_transfers_items(self, lua_scripts, fake_redis) -> None:
         """Buffer → Processing Queue 이동."""
         # 버퍼에 데이터 추가
-        fake_redis._data["audit:buffer:test"] = ["item1", "item2", "item3"]
+        fake_redis._data["audit:{test}:buffer"] = ["item1", "item2", "item3"]
 
         moved = lua_scripts.atomic_batch_move(
             domain="test",
@@ -245,8 +246,8 @@ class TestAuditBatchLuaScripts:
         )
 
         assert moved == 2
-        assert len(fake_redis._data.get("audit:buffer:test", [])) == 1
-        assert len(fake_redis._data.get("audit:processing:test", [])) == 2
+        assert len(fake_redis._data.get("audit:{test}:buffer", [])) == 1
+        assert len(fake_redis._data.get("audit:{test}:processing", [])) == 2
 
     def test_atomic_batch_move_empty_buffer(self, lua_scripts, fake_redis) -> None:
         """빈 버퍼에서 이동 시도."""
@@ -260,25 +261,27 @@ class TestAuditBatchLuaScripts:
 
     def test_atomic_batch_complete_removes_items(self, lua_scripts, fake_redis) -> None:
         """Processing Queue 정리."""
-        fake_redis._data["audit:processing:test"] = ["item1", "item2"]
+        fake_redis._data["audit:{test}:processing"] = ["item1", "item2"]
 
         removed = lua_scripts.atomic_batch_complete(domain="test", count=2)
 
         assert removed == 2
-        assert len(fake_redis._data.get("audit:processing:test", [])) == 0
+        assert len(fake_redis._data.get("audit:{test}:processing", [])) == 0
 
-    def test_atomic_batch_restore_preserves_order(self, lua_scripts, fake_redis) -> None:
+    def test_atomic_batch_restore_preserves_order(
+        self, lua_scripts, fake_redis
+    ) -> None:
         """실패 시 순서 보존하여 복원."""
-        fake_redis._data["audit:processing:test"] = ["item1", "item2", "item3"]
-        fake_redis._data["audit:buffer:test"] = ["item4", "item5"]
+        fake_redis._data["audit:{test}:processing"] = ["item1", "item2", "item3"]
+        fake_redis._data["audit:{test}:buffer"] = ["item4", "item5"]
 
         restored = lua_scripts.atomic_batch_restore(domain="test")
 
         assert restored == 3
         # Processing Queue 비워짐
-        assert len(fake_redis._data.get("audit:processing:test", [])) == 0
+        assert len(fake_redis._data.get("audit:{test}:processing", [])) == 0
         # Buffer 끝에 복원됨 (순서 보존)
-        buffer = fake_redis._data.get("audit:buffer:test", [])
+        buffer = fake_redis._data.get("audit:{test}:buffer", [])
         assert len(buffer) == 5
 
     def test_get_orphaned_processing_queues(self, lua_scripts, fake_redis) -> None:
@@ -287,15 +290,15 @@ class TestAuditBatchLuaScripts:
         old_timestamp = int(time.time()) - 400
 
         fake_redis._hashes["audit:processing:meta"] = {
-            b"audit:processing:old": f"worker-1:{old_timestamp}".encode(),
-            b"audit:processing:new": f"worker-2:{int(time.time())}".encode(),
+            b"audit:{old}:processing": f"worker-1:{old_timestamp}".encode(),
+            b"audit:{new}:processing": f"worker-2:{int(time.time())}".encode(),
         }
 
         orphaned = lua_scripts.get_orphaned_processing_queues(timeout_seconds=300)
 
         # old 도메인만 고아로 판단
         assert len(orphaned) == 1
-        assert orphaned[0][0] == "audit:processing:old"
+        assert orphaned[0][0] == "audit:{old}:processing"
 
 
 class TestRedisAuditBufferV2:
@@ -327,7 +330,7 @@ class TestRedisAuditBufferV2:
     def test_get_active_domains_returns_non_empty(self, buffer, fake_redis) -> None:
         """비어있지 않은 도메인만 반환."""
         # 데이터 있는 도메인
-        fake_redis._data["audit:buffer:active"] = ["item1"]
+        fake_redis._data["audit:{active}:buffer"] = ["item1"]
         fake_redis._sets["audit:active_domains"] = {"active", "empty"}
 
         domains = buffer._get_active_domains()
@@ -337,8 +340,8 @@ class TestRedisAuditBufferV2:
 
     def test_get_active_domains_fallback(self, buffer, fake_redis) -> None:
         """ActiveKeySet 실패 시 fallback."""
-        fake_redis._data["audit:buffer:domain1"] = ["item1"]
-        fake_redis._data["audit:buffer:domain2"] = ["item2"]
+        fake_redis._data["audit:{domain1}:buffer"] = ["item1"]
+        fake_redis._data["audit:{domain2}:buffer"] = ["item2"]
 
         domains = buffer._get_active_domains_fallback()
 
@@ -361,10 +364,12 @@ class TestRedisAuditBufferV2:
     def test_apply_safety_ltrim(self, buffer, fake_redis) -> None:
         """Safety LTRIM 적용."""
         # 임계치 초과 데이터 설정
-        fake_redis._data["audit:buffer:large"] = [f"item{i}" for i in range(200000)]
+        fake_redis._data["audit:{large}:buffer"] = [f"item{i}" for i in range(200000)]
         fake_redis._sets["audit:active_domains"] = {"large"}
 
-        with patch("selfhealing.adapters.audit.redis_buffer._SAFETY_LTRIM_THRESHOLD", 100000):
+        with patch(
+            "selfhealing.adapters.audit.redis_buffer._SAFETY_LTRIM_THRESHOLD", 100000
+        ):
             trimmed = buffer.apply_safety_ltrim()
 
         assert "large" in trimmed
@@ -373,7 +378,7 @@ class TestRedisAuditBufferV2:
     def test_flush_to_external_safe(self, buffer, fake_redis) -> None:
         """Processing Queue 패턴 플러시."""
         # 버퍼에 데이터 추가
-        fake_redis._data["audit:buffer:test"] = [
+        fake_redis._data["audit:{test}:buffer"] = [
             json.dumps({"entry": {"action": "test1"}}),
             json.dumps({"entry": {"action": "test2"}}),
         ]
@@ -395,11 +400,11 @@ class TestRedisAuditBufferV2:
     def test_recover_orphaned_processing_queues(self, buffer, fake_redis) -> None:
         """고아 Processing Queue 복구."""
         # 고아 Processing Queue 설정
-        fake_redis._data["audit:processing:orphan"] = ["item1", "item2"]
+        fake_redis._data["audit:{orphan}:processing"] = ["item1", "item2"]
         old_timestamp = int(time.time()) - 400
 
         fake_redis._hashes["audit:processing:meta"] = {
-            b"audit:processing:orphan": f"worker-1:{old_timestamp}".encode(),
+            b"audit:{orphan}:processing": f"worker-1:{old_timestamp}".encode(),
         }
 
         recovered = buffer.recover_orphaned_processing_queues(timeout_seconds=300)

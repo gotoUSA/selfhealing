@@ -180,7 +180,6 @@ class AtomicStateQuery:
         """
         self._redis = redis_client
         self._key_prefix = key_prefix
-        self._script_sha: str | None = None
 
     def _get_global_key(self) -> str:
         """Global 상태 Redis 키 반환."""
@@ -190,15 +189,108 @@ class AtomicStateQuery:
         """Regional 상태 Redis 키 반환."""
         return f"{self._key_prefix}:{namespace}:governance:emergency_state"
 
+    @staticmethod
+    def _decode_raw(raw: Any) -> dict[str, Any] | None:
+        """Decode raw Redis GET result to dict, or None."""
+        if raw is None:
+            return None
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8")
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    @staticmethod
+    def _is_active(state: dict[str, Any]) -> bool:
+        """Check if emergency state is active."""
+        level = state.get("emergency_level")
+        if level is not None:
+            return level != 0
+        return bool(state.get("is_active", False))
+
+    def _resolve_precedence(
+        self,
+        global_raw: Any,
+        regional_raw: Any,
+        namespace: str,
+        precedence_level: int,
+    ) -> tuple[dict[str, Any], str, str]:
+        """Resolve precedence between global and regional states (Python-side)."""
+        global_state = self._decode_raw(global_raw)
+        regional_state = self._decode_raw(regional_raw)
+
+        if global_state is None:
+            global_state = {
+                "namespace": "global",
+                "scope": "global",
+                "governance_mode": "NORMAL",
+                "is_active": False,
+                "emergency_level": 0,
+            }
+
+        if regional_state is None:
+            regional_state = {
+                "namespace": namespace,
+                "scope": "regional",
+                "governance_mode": "NORMAL",
+                "is_active": False,
+                "emergency_level": 0,
+            }
+
+        # 1: Admin Override (precedence >= 2)
+        if precedence_level >= 2:
+            return (
+                regional_state,
+                "ADMIN_OVERRIDE",
+                "Admin override active, using regional state",
+            )
+
+        # 2: Safety-Max
+        global_is_strict = (
+            self._is_active(global_state)
+            and global_state.get("governance_mode") == "STRICT"
+        )
+        regional_is_strict = (
+            self._is_active(regional_state)
+            and regional_state.get("governance_mode") == "STRICT"
+        )
+
+        if global_is_strict and regional_is_strict:
+            return (
+                global_state,
+                "GLOBAL_OVERRIDE",
+                "Both Global and Regional STRICT, using Global state",
+            )
+        elif global_is_strict:
+            ns_name = regional_state.get("namespace", "unknown")
+            return (
+                global_state,
+                "GLOBAL_OVERRIDE",
+                f"Global STRICT overrides regional {ns_name}",
+            )
+        elif regional_is_strict:
+            return (
+                regional_state,
+                "REGIONAL_STRICT",
+                "Regional STRICT active",
+            )
+        else:
+            return (
+                regional_state,
+                "REGIONAL_DEFAULT",
+                "Both states NORMAL, using regional",
+            )
+
     def query_effective_state(
         self,
         namespace: str,
         precedence: str | None = None,
     ) -> tuple[dict[str, Any], str, str]:
         """
-        유효한 상태 원자적 조회.
+        유효한 상태 조회 (Pipeline 기반).
 
-        Global과 Regional 상태를 한 번의 Redis 호출로 조회하고
+        Global과 Regional 상태를 Pipeline으로 조회하고
         우선순위에 따라 유효한 상태를 결정합니다.
 
         Args:
@@ -224,28 +316,17 @@ class AtomicStateQuery:
         precedence_level = self.PRECEDENCE_LEVELS.get(precedence or "AUTO", 0)
 
         try:
-            result = self._redis.eval(
-                ATOMIC_STATE_QUERY_SCRIPT,
-                2,  # number of keys
-                global_key,
-                regional_key,
-                str(precedence_level),
+            pipe = self._redis.pipeline(transaction=False)
+            pipe.get(global_key)
+            pipe.get(regional_key)
+            global_raw, regional_raw = pipe.execute()
+
+            state, decision_type, decision_reason = self._resolve_precedence(
+                global_raw,
+                regional_raw,
+                namespace,
+                precedence_level,
             )
-
-            # 결과 파싱
-            state_json = result[0]
-            decision_type = result[1]
-            decision_reason = result[2]
-
-            # bytes → str 변환 (redis-py는 bytes 반환)
-            if isinstance(state_json, bytes):
-                state_json = state_json.decode("utf-8")
-            if isinstance(decision_type, bytes):
-                decision_type = decision_type.decode("utf-8")
-            if isinstance(decision_reason, bytes):
-                decision_reason = decision_reason.decode("utf-8")
-
-            state = json.loads(state_json)
 
             logger.debug(
                 "atomic_state_query.event",
@@ -274,23 +355,12 @@ class AtomicStateQuery:
                 f"Query failed, using safe default: {e}",
             )
 
-    def preload_script(self) -> str:
+    def preload_script(self) -> None:
         """
-        Lua 스크립트 사전 로드.
+        No-op retained for backward compatibility.
 
-        SCRIPT LOAD로 SHA를 얻어 EVALSHA로 호출하면 성능 향상.
-        서버 시작 시 한 번 호출 권장.
-
-        Returns:
-            스크립트 SHA
+        Pipeline-based implementation does not use Lua scripts.
         """
-        if self._script_sha is None:
-            self._script_sha = self._redis.script_load(ATOMIC_STATE_QUERY_SCRIPT)
-            logger.info(
-                "atomic_state_query.script_loaded",
-                script_sha_prefix=self._script_sha[:8],
-            )
-        return self._script_sha
 
     def query_with_sha(
         self,
@@ -298,9 +368,9 @@ class AtomicStateQuery:
         precedence: str | None = None,
     ) -> tuple[dict[str, Any], str, str]:
         """
-        사전 로드된 스크립트로 조회 (성능 최적화).
+        Delegates to query_effective_state (Pipeline-based).
 
-        preload_script()를 먼저 호출해야 합니다.
+        Retained for backward compatibility.
 
         Args:
             namespace: 대상 네임스페이스
@@ -309,41 +379,7 @@ class AtomicStateQuery:
         Returns:
             query_effective_state와 동일
         """
-        if self._script_sha is None:
-            self.preload_script()
-
-        global_key = self._get_global_key()
-        regional_key = self._get_regional_key(namespace)
-        precedence_level = self.PRECEDENCE_LEVELS.get(precedence or "AUTO", 0)
-
-        try:
-            result = self._redis.evalsha(
-                self._script_sha,
-                2,
-                global_key,
-                regional_key,
-                str(precedence_level),
-            )
-
-            state_json = result[0]
-            decision_type = result[1]
-            decision_reason = result[2]
-
-            if isinstance(state_json, bytes):
-                state_json = state_json.decode("utf-8")
-            if isinstance(decision_type, bytes):
-                decision_type = decision_type.decode("utf-8")
-            if isinstance(decision_reason, bytes):
-                decision_reason = decision_reason.decode("utf-8")
-
-            return (json.loads(state_json), decision_type, decision_reason)
-
-        except Exception as e:
-            logger.warning(
-                "atomic_state_query.evalsha_failed_falling_back",
-                error=e,
-            )
-            return self.query_effective_state(namespace, precedence)
+        return self.query_effective_state(namespace, precedence)
 
 
 # =============================================================================

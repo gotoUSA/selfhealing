@@ -147,7 +147,9 @@ class ContinuousAuditDetailView(View):
                 timestamp = datetime.strptime(ts_str, "%Y%m%d%H%M%S")
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
             except ValueError:
-                return JsonResponse({"error": "Invalid timestamp in log ID"}, status=400)
+                return JsonResponse(
+                    {"error": "Invalid timestamp in log ID"}, status=400
+                )
 
             # 시퀀스 번호로 찾기
             sequence = int(parts[2])
@@ -163,7 +165,9 @@ class ContinuousAuditDetailView(View):
                 if integrity.get("sequence") == sequence:
                     return JsonResponse({"entry": entry})
 
-            return JsonResponse({"error": f"Log entry '{log_id}' not found"}, status=404)
+            return JsonResponse(
+                {"error": f"Log entry '{log_id}' not found"}, status=404
+            )
 
         except Exception as e:
             logger.exception(
@@ -413,7 +417,9 @@ class ExportJSONLView(View):
                 generate(),
                 content_type="application/x-ndjson",
             )
-            response["Content-Disposition"] = 'attachment; filename="audit_export.jsonl"'
+            response["Content-Disposition"] = (
+                'attachment; filename="audit_export.jsonl"'
+            )
 
             return response
 
@@ -427,57 +433,66 @@ class ExportJSONLView(View):
 
 class ExportCSVView(View):
     """
-    CSV 호환 형식 익스포트.
+    CSV streaming export.
 
     GET /api/self-healing/audit/export/csv/
 
     Query Parameters:
-        start_time: 시작 시간 (ISO 8601)
-        end_time: 종료 시간 (ISO 8601)
+        start_time: ISO 8601
+        end_time: ISO 8601
 
     Response:
-        text/csv 스트리밍 응답
+        text/csv StreamingHttpResponse
     """
 
-    def get(self, request: HttpRequest) -> HttpResponse:
-        """CSV 형식 익스포트."""
-        try:
-            import csv
-            from io import StringIO
+    FIXED_AUDIT_FIELDS = [
+        "timestamp",
+        "action",
+        "actor_id",
+        "actor_type",
+        "target_type",
+        "target_id",
+        "service_name",
+        "reason",
+        "success",
+    ]
 
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """CSV streaming export."""
+        try:
             recorder = _get_recorder()
 
             start_time = _parse_datetime(request.GET.get("start_time"))
             end_time = _parse_datetime(request.GET.get("end_time"))
 
-            data = recorder.export_csv_compatible(
-                start_time=start_time,
-                end_time=end_time,
-            )
+            def generate_csv():
+                import csv
+                from io import StringIO
 
-            if not data:
-                return HttpResponse(
-                    "No data found",
-                    content_type="text/plain",
-                    status=204,
-                )
+                # Header row
+                buf = StringIO()
+                writer = csv.DictWriter(buf, fieldnames=self.FIXED_AUDIT_FIELDS)
+                writer.writeheader()
+                yield buf.getvalue()
 
-            # 모든 필드 수집
-            all_fields = set()
-            for row in data:
-                all_fields.update(row.keys())
+                # Data rows (streaming from export_csv_compatible iterator)
+                for row in recorder.export_csv_compatible(
+                    start_time=start_time,
+                    end_time=end_time,
+                ):
+                    buf = StringIO()
+                    writer = csv.DictWriter(
+                        buf,
+                        fieldnames=self.FIXED_AUDIT_FIELDS,
+                        extrasaction="ignore",
+                    )
+                    writer.writerow(
+                        {k: str(v) if v is not None else "" for k, v in row.items()}
+                    )
+                    yield buf.getvalue()
 
-            # 정렬된 필드 목록
-            fieldnames = sorted(all_fields)
-
-            # CSV 생성
-            output = StringIO()
-            writer = csv.DictWriter(output, fieldnames=fieldnames)
-            writer.writeheader()
-            writer.writerows(data)
-
-            response = HttpResponse(
-                output.getvalue(),
+            response = StreamingHttpResponse(
+                generate_csv(),
                 content_type="text/csv",
             )
             response["Content-Disposition"] = 'attachment; filename="audit_export.csv"'
@@ -534,7 +549,11 @@ def get_continuous_audit_urlpatterns():
             name="audit-log-detail",
         ),
         # 도메인별 이력
-        path("auto-tuning/", ContinuousAuditAutoTuningView.as_view(), name="audit-auto-tuning"),
+        path(
+            "auto-tuning/",
+            ContinuousAuditAutoTuningView.as_view(),
+            name="audit-auto-tuning",
+        ),
         path("drift/", DriftHistoryView.as_view(), name="audit-drift"),
         path("compliance/", ComplianceHistoryView.as_view(), name="audit-compliance"),
         # 무결성 검증

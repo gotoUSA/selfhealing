@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import structlog
 
+from selfhealing.core.file_utils import safe_unlink
+
 logger = structlog.get_logger()
 
 
@@ -91,14 +93,14 @@ class WALDiskManagerMixin:
 
                 try:
                     file_size = wal_file.stat().st_size
-                    wal_file.unlink()
-                    freed_bytes += file_size
-                    logger.warning(
-                        "wal.priority_purge_deleted",
-                        wal_file=wal_file.name,
-                        priority=priority,
-                        file_size=file_size,
-                    )
+                    if safe_unlink(wal_file):
+                        freed_bytes += file_size
+                        logger.warning(
+                            "wal.priority_purge_deleted",
+                            wal_file=wal_file.name,
+                            priority=priority,
+                            file_size=file_size,
+                        )
                 except Exception as e:
                     logger.exception(
                         "wal.failed_delete",
@@ -129,13 +131,13 @@ class WALDiskManagerMixin:
 
                 try:
                     file_size = wal_file.stat().st_size
-                    wal_file.unlink()
-                    freed_bytes += file_size
-                    logger.warning(
-                        "wal.general_purge_deleted",
-                        wal_file=wal_file.name,
-                        file_size=file_size,
-                    )
+                    if safe_unlink(wal_file):
+                        freed_bytes += file_size
+                        logger.warning(
+                            "wal.general_purge_deleted",
+                            wal_file=wal_file.name,
+                            file_size=file_size,
+                        )
                 except Exception as e:
                     logger.exception(
                         "wal.failed_delete",

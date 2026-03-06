@@ -24,6 +24,8 @@ from typing import Any
 
 import structlog
 
+from selfhealing.core.file_utils import safe_unlink
+
 logger = structlog.get_logger()
 
 
@@ -381,7 +383,5 @@ class CriticalPathFallback:
             else:
                 # 전체 삭제
                 self._memory_state = None
-                if self._local_state_path.exists():
-                    self._local_state_path.unlink()
-                if self._local_audit_path.exists():
-                    self._local_audit_path.unlink()
+                safe_unlink(self._local_state_path)
+                safe_unlink(self._local_audit_path)

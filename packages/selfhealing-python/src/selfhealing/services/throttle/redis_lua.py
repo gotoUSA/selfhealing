@@ -218,67 +218,31 @@ class RedisThrottleLimitManager:
             key_prefix: Redis 키 prefix
             default_ttl_seconds: 기본 TTL (초)
         """
+        from selfhealing.audit.performance.lua_registry import LuaScriptRegistry
+
         self._redis = redis_client
         self._key_prefix = key_prefix
         self._default_ttl = default_ttl_seconds
 
-        # Script SHA 캐시
-        self._script_shas: dict[str, str] = {}
-        self._scripts_loaded = False
+        self._registry = LuaScriptRegistry(redis_client)
+        self._registry.register(
+            "atomic_update", ThrottleLuaScripts.LUA_ATOMIC_LIMIT_UPDATE
+        )
+        self._registry.register("cas_update", ThrottleLuaScripts.LUA_CAS_LIMIT_UPDATE)
+        self._registry.register("load_safe", ThrottleLuaScripts.LUA_LOAD_SAFE_LIMIT)
+        self._registry.register("add_rtt", ThrottleLuaScripts.LUA_ADD_RTT_SAMPLE)
 
     def _get_limit_key(self, service_name: str) -> str:
         """서비스별 limit 키."""
-        return f"{self._key_prefix}throttle:limit:{service_name}"
+        return f"{self._key_prefix}throttle:{{{service_name}}}:limit"
 
     def _get_safe_limit_key(self, service_name: str) -> str:
         """서비스별 마지막 안전 limit 키."""
-        return f"{self._key_prefix}throttle:last_safe_limit:{service_name}"
+        return f"{self._key_prefix}throttle:{{{service_name}}}:safe_limit"
 
     def _get_rtt_key(self, service_name: str) -> str:
         """서비스별 RTT 샘플 키."""
-        return f"{self._key_prefix}throttle:rtt:{service_name}"
-
-    def _ensure_scripts_loaded(self) -> None:
-        """Lua 스크립트 로드."""
-        if self._scripts_loaded:
-            return
-
-        try:
-            self._script_shas["atomic_update"] = self._redis.script_load(ThrottleLuaScripts.LUA_ATOMIC_LIMIT_UPDATE)
-            self._script_shas["cas_update"] = self._redis.script_load(ThrottleLuaScripts.LUA_CAS_LIMIT_UPDATE)
-            self._script_shas["load_safe"] = self._redis.script_load(ThrottleLuaScripts.LUA_LOAD_SAFE_LIMIT)
-            self._script_shas["add_rtt"] = self._redis.script_load(ThrottleLuaScripts.LUA_ADD_RTT_SAMPLE)
-            self._scripts_loaded = True
-            logger.debug("redis_throttle_limit_manager.scripts_loaded")
-        except Exception as e:
-            logger.warning(
-                "redis_throttle_limit_manager.script_load_failed",
-                error=e,
-            )
-
-    def _run_script(
-        self,
-        script_name: str,
-        script_body: str,
-        keys: list[str],
-        args: list,
-    ) -> Any:
-        """스크립트 실행 (evalsha 또는 eval 폴백)."""
-        self._ensure_scripts_loaded()
-
-        sha = self._script_shas.get(script_name)
-
-        try:
-            if sha:
-                return self._redis.evalsha(sha, len(keys), *keys, *args)
-            else:
-                return self._redis.eval(script_body, len(keys), *keys, *args)
-        except Exception as e:
-            # NOSCRIPT 에러 시 eval로 폴백
-            if "NOSCRIPT" in str(e):
-                self._scripts_loaded = False
-                return self._redis.eval(script_body, len(keys), *keys, *args)
-            raise
+        return f"{self._key_prefix}throttle:{{{service_name}}}:rtt"
 
     def update_limit_atomic(
         self,
@@ -313,12 +277,7 @@ class RedisThrottleLimitManager:
             str(time.time()),
         ]
 
-        result = self._run_script(
-            "atomic_update",
-            ThrottleLuaScripts.LUA_ATOMIC_LIMIT_UPDATE,
-            keys,
-            args,
-        )
+        result = self._registry.execute("atomic_update", keys=keys, args=args)
 
         prev_limit, actual_new = result
         logger.debug(
@@ -355,12 +314,7 @@ class RedisThrottleLimitManager:
         keys = [self._get_limit_key(service_name)]
         args = [expected_current, new_limit, min_limit, max_limit]
 
-        result = self._run_script(
-            "cas_update",
-            ThrottleLuaScripts.LUA_CAS_LIMIT_UPDATE,
-            keys,
-            args,
-        )
+        result = self._registry.execute("cas_update", keys=keys, args=args)
 
         success = bool(result[0])
         actual_value = int(result[1])
@@ -393,12 +347,7 @@ class RedisThrottleLimitManager:
         ]
         args = [default_limit, max_age_seconds]
 
-        result = self._run_script(
-            "load_safe",
-            ThrottleLuaScripts.LUA_LOAD_SAFE_LIMIT,
-            keys,
-            args,
-        )
+        result = self._registry.execute("load_safe", keys=keys, args=args)
 
         limit_value = int(result[0])
         source = result[1].decode() if isinstance(result[1], bytes) else result[1]
@@ -475,12 +424,7 @@ class RedisThrottleLimitManager:
         keys = [self._get_rtt_key(service_name)]
         args = [rtt_ms, time.time(), window_seconds, max_samples]
 
-        result = self._run_script(
-            "add_rtt",
-            ThrottleLuaScripts.LUA_ADD_RTT_SAMPLE,
-            keys,
-            args,
-        )
+        result = self._registry.execute("add_rtt", keys=keys, args=args)
 
         return int(result)
 

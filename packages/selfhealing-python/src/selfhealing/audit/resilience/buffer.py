@@ -11,7 +11,10 @@ from __future__ import annotations
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from selfhealing.audit.resilience.buffer_protocol import AuditBufferProtocol
 
 import structlog
 
@@ -70,8 +73,14 @@ class InMemoryAuditBuffer:
         self._flush_failures: int = 0
         self._total_dropped: int = 0
         self._total_buffered: int = 0
-        self._max_entries = max_entries if max_entries is not None else _get_max_entries()
-        self._flush_interval_seconds = flush_interval_seconds if flush_interval_seconds is not None else _get_flush_interval()
+        self._max_entries = (
+            max_entries if max_entries is not None else _get_max_entries()
+        )
+        self._flush_interval_seconds = (
+            flush_interval_seconds
+            if flush_interval_seconds is not None
+            else _get_flush_interval()
+        )
 
     @classmethod
     def get_instance(cls) -> InMemoryAuditBuffer:
@@ -106,7 +115,8 @@ class InMemoryAuditBuffer:
                 self._total_dropped += 1
                 dropped = True
                 logger.warning(
-                    "[InMemoryAuditBuffer] Buffer full, dropped oldest entry " f"(total dropped: {self._total_dropped})"  # noqa: G004
+                    "[InMemoryAuditBuffer] Buffer full, dropped oldest entry "
+                    f"(total dropped: {self._total_dropped})"  # noqa: G004
                 )
 
             entry["buffered_at"] = datetime.now(timezone.utc).isoformat()
@@ -162,22 +172,38 @@ class InMemoryAuditBuffer:
 
             return flushed
 
-    def get_buffer_size(self) -> int:
-        """현재 버퍼 크기."""
+    def count(self) -> int:
+        """현재 버퍼 크기 (AuditBufferProtocol)."""
         with self._buffer_lock:
             return len(self._buffer)
+
+    def get_buffer_size(self) -> int:
+        """현재 버퍼 크기 (legacy alias)."""
+        return self.count()
 
     def get_stats(self) -> dict[str, Any]:
         """버퍼 통계."""
         with self._buffer_lock:
+            current = len(self._buffer)
+            capacity = self._max_entries
             return {
-                "buffered_entries": len(self._buffer),
-                "max_entries": self._max_entries,
+                # Common keys (AuditBufferProtocol)
+                "count": current,
+                "total_added": self._total_buffered,
+                "total_dropped": self._total_dropped,
+                "capacity": capacity,
+                "usage_percent": (current / capacity * 100) if capacity else None,
+                # Implementation-specific keys
+                "buffered_entries": current,
+                "max_entries": capacity,
                 "flush_interval_seconds": self._flush_interval_seconds,
                 "total_buffered": self._total_buffered,
-                "total_dropped": self._total_dropped,
                 "flush_failures": self._flush_failures,
-                "last_flush_attempt": (self._last_flush_attempt.isoformat() if self._last_flush_attempt else None),
+                "last_flush_attempt": (
+                    self._last_flush_attempt.isoformat()
+                    if self._last_flush_attempt
+                    else None
+                ),
             }
 
     def clear(self) -> int:
@@ -193,7 +219,7 @@ def get_inmemory_audit_buffer() -> InMemoryAuditBuffer:
     return InMemoryAuditBuffer.get_instance()
 
 
-def get_audit_buffer() -> InMemoryAuditBuffer:
+def get_audit_buffer() -> AuditBufferProtocol:
     """
     Audit Buffer 팩토리.
 

@@ -115,10 +115,14 @@ class TestAuditConfig:
 
     def test_to_dict_masks_seed(self):
         """to_dict()에서 해시 시드 마스킹."""
-        with patch.dict(os.environ, {
-            "AUDIT_HASH_SEED": "secret-seed",
-            "ENVIRONMENT": "development",
-        }, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "AUDIT_HASH_SEED": "secret-seed",
+                "ENVIRONMENT": "development",
+            },
+            clear=True,
+        ):
             config = AuditConfig()
             config_dict = config.to_dict()
 
@@ -168,12 +172,16 @@ class TestContinuousAuditRecorder:
         """ContinuousAuditRecorder 인스턴스."""
         adapter = FileAuditLogAdapter(temp_log_file)
 
-        with patch.dict(os.environ, {
-            "AUDIT_HASH_SEED": "test-seed",
-            "ENVIRONMENT": "development",
-            "SERVICE_NAME": "test-service",
-            "SERVICE_VERSION": "1.0.0",
-        }, clear=False):
+        with patch.dict(
+            os.environ,
+            {
+                "AUDIT_HASH_SEED": "test-seed",
+                "ENVIRONMENT": "development",
+                "SERVICE_NAME": "test-service",
+                "SERVICE_VERSION": "1.0.0",
+            },
+            clear=False,
+        ):
             config = AuditConfig()
             return ContinuousAuditRecorder(
                 audit_adapter=adapter,
@@ -259,14 +267,22 @@ class TestContinuousAuditRecorder:
         """해시 체인 무결성 검증."""
         # 여러 이벤트 기록
         recorder.record_auto_tuning(
-            parameter="param1", old_value=1, new_value=2,
-            reason="test", confidence=0.9,
-            metrics_snapshot={}, safety_check={},
+            parameter="param1",
+            old_value=1,
+            new_value=2,
+            reason="test",
+            confidence=0.9,
+            metrics_snapshot={},
+            safety_check={},
         )
         recorder.record_auto_tuning(
-            parameter="param2", old_value=10, new_value=20,
-            reason="test2", confidence=0.95,
-            metrics_snapshot={}, safety_check={},
+            parameter="param2",
+            old_value=10,
+            new_value=20,
+            reason="test2",
+            confidence=0.95,
+            metrics_snapshot={},
+            safety_check={},
         )
 
         # 체인 상태 확인
@@ -278,9 +294,13 @@ class TestContinuousAuditRecorder:
         """JSON Lines 익스포트."""
         # 이벤트 기록
         recorder.record_auto_tuning(
-            parameter="timeout_ms", old_value=5000, new_value=6000,
-            reason="test", confidence=0.9,
-            metrics_snapshot={}, safety_check={},
+            parameter="timeout_ms",
+            old_value=5000,
+            new_value=6000,
+            reason="test",
+            confidence=0.9,
+            metrics_snapshot={},
+            safety_check={},
         )
 
         # 익스포트
@@ -293,12 +313,16 @@ class TestContinuousAuditRecorder:
     def test_export_csv_compatible(self, recorder):
         """CSV 호환 형식 익스포트."""
         recorder.record_auto_tuning(
-            parameter="timeout_ms", old_value=5000, new_value=6000,
-            reason="test", confidence=0.9,
-            metrics_snapshot={"p99": 4200}, safety_check={"ok": True},
+            parameter="timeout_ms",
+            old_value=5000,
+            new_value=6000,
+            reason="test",
+            confidence=0.9,
+            metrics_snapshot={"p99": 4200},
+            safety_check={"ok": True},
         )
 
-        data = recorder.export_csv_compatible()
+        data = list(recorder.export_csv_compatible())
         assert len(data) == 1
 
         row = data[0]
@@ -312,13 +336,20 @@ class TestContinuousAuditRecorder:
         """필터를 사용한 쿼리."""
         # 다양한 이벤트 기록
         recorder.record_auto_tuning(
-            parameter="timeout_ms", old_value=5000, new_value=6000,
-            reason="test1", confidence=0.9,
-            metrics_snapshot={}, safety_check={},
+            parameter="timeout_ms",
+            old_value=5000,
+            new_value=6000,
+            reason="test1",
+            confidence=0.9,
+            metrics_snapshot={},
+            safety_check={},
         )
         recorder.record_drift_detected(
-            resource_id="stage14", declared={}, actual={},
-            drifted_fields=["x"], severity="low",
+            resource_id="stage14",
+            declared={},
+            actual={},
+            drifted_fields=["x"],
+            severity="low",
         )
 
         # 액션 필터
@@ -333,13 +364,18 @@ class TestContinuousAuditRecorder:
         adapter = FileAuditLogAdapter(temp_log_file)
 
         alerts = []
+
         def capture_alert(channel, data):
             alerts.append((channel, data))
 
-        with patch.dict(os.environ, {
-            "AUDIT_HASH_SEED": "test-seed",
-            "ENVIRONMENT": "development",
-        }, clear=False):
+        with patch.dict(
+            os.environ,
+            {
+                "AUDIT_HASH_SEED": "test-seed",
+                "ENVIRONMENT": "development",
+            },
+            clear=False,
+        ):
             config = AuditConfig()
             recorder = ContinuousAuditRecorder(
                 audit_adapter=adapter,
@@ -348,9 +384,13 @@ class TestContinuousAuditRecorder:
             )
 
         recorder.record_auto_tuning(
-            parameter="timeout_ms", old_value=5000, new_value=6000,
-            reason="test", confidence=0.9,
-            metrics_snapshot={}, safety_check={},
+            parameter="timeout_ms",
+            old_value=5000,
+            new_value=6000,
+            reason="test",
+            confidence=0.9,
+            metrics_snapshot={},
+            safety_check={},
         )
 
         assert len(alerts) == 1
@@ -386,8 +426,12 @@ class TestHashChainIntegrity:
         assert entry3["integrity"]["sequence"] == 3
 
         # 이전 해시 연결 확인
-        assert entry2["integrity"]["previous_hash"] == entry1["integrity"]["current_hash"]
-        assert entry3["integrity"]["previous_hash"] == entry2["integrity"]["current_hash"]
+        assert (
+            entry2["integrity"]["previous_hash"] == entry1["integrity"]["current_hash"]
+        )
+        assert (
+            entry3["integrity"]["previous_hash"] == entry2["integrity"]["current_hash"]
+        )
 
     def test_hash_chain_verifier_valid(self):
         """유효한 해시 체인 검증."""

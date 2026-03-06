@@ -52,7 +52,7 @@ class TestLuaAtomicHashChain:
         lua_chain.reserve_sequence_atomic("expected_hash", "GENESIS")
 
         # Mock pending entry
-        pending_key = "test:audit:hash_chain:pending:1"
+        pending_key = "test:audit:{hash_chain}:pending:1"
         redis._hashes[pending_key] = {"expected_hash": "expected_hash"}
 
         # Commit

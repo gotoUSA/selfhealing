@@ -31,6 +31,8 @@ from typing import Any
 
 import structlog
 
+from selfhealing.core.file_utils import safe_unlink
+
 logger = structlog.get_logger()
 
 
@@ -155,9 +157,13 @@ class MetricSnapshotStorage:
             filename: 스냅샷 파일명
             max_age_seconds: 스냅샷 최대 유효 기간 (초). None이면 Settings에서 가져옴.
         """
-        self._storage_dir = Path(storage_dir) if storage_dir else self._get_default_dir()
+        self._storage_dir = (
+            Path(storage_dir) if storage_dir else self._get_default_dir()
+        )
         self._filename = filename
-        self._max_age = max_age_seconds if max_age_seconds is not None else _get_snapshot_max_age()
+        self._max_age = (
+            max_age_seconds if max_age_seconds is not None else _get_snapshot_max_age()
+        )
         self._lock = threading.Lock()
         self._snapshot: MetricSnapshot | None = None
         self._dirty = False
@@ -279,10 +285,7 @@ class MetricSnapshotStorage:
 
             except Exception:
                 # 임시 파일 정리
-                try:
-                    os.unlink(temp_path)
-                except Exception:
-                    pass
+                safe_unlink(Path(temp_path))
                 raise
 
         except Exception as e:

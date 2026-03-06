@@ -74,7 +74,9 @@ class MmapBuffer:
         """
         if file_path is None:
             if sys.platform == "win32":
-                default_dir = os.path.join(os.environ.get("TEMP", "C:\\Temp"), "selfhealing")
+                default_dir = os.path.join(
+                    os.environ.get("TEMP", "C:\\Temp"), "selfhealing"
+                )
             else:
                 default_dir = "/var/lib/selfhealing"
             file_path = os.path.join(default_dir, "mmap_buffer.dat")
@@ -84,6 +86,8 @@ class MmapBuffer:
         self._lock = threading.RLock()
         self._mmap: mmap.mmap | None = None
         self._file: Any = None
+        self._total_added: int = 0
+        self._total_dropped: int = 0
 
         self._init_storage()
 
@@ -186,6 +190,7 @@ class MmapBuffer:
 
             # 헤더 업데이트
             self._write_header(entry_count + 1, write_pos + record_size)
+            self._total_added += 1
 
             return True
 
@@ -233,16 +238,25 @@ class MmapBuffer:
             entry_count, _ = self._read_header()
             return entry_count
 
-    def clear(self) -> None:
-        """버퍼 초기화."""
+    def clear(self) -> int:
+        """버퍼 초기화. Returns number of cleared entries."""
         with self._lock:
+            entry_count, _ = self._read_header()
             self._write_header(0, self.HEADER_SIZE)
+            return entry_count
 
     def get_stats(self) -> dict[str, Any]:
         """통계 반환."""
         with self._lock:
             entry_count, write_pos = self._read_header()
             return {
+                # Common keys (AuditBufferProtocol)
+                "count": entry_count,
+                "total_added": self._total_added,
+                "total_dropped": self._total_dropped,
+                "capacity": None,
+                "usage_percent": None,
+                # Implementation-specific keys
                 "entry_count": entry_count,
                 "write_pos": write_pos,
                 "file_size": self._size_bytes,

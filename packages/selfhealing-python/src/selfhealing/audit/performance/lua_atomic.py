@@ -129,40 +129,22 @@ class LuaAtomicHashChain:
             key_prefix: Prefix for all Redis keys
             pending_ttl_seconds: TTL for pending entries
         """
+        from selfhealing.audit.performance.lua_registry import LuaScriptRegistry
+
         self._redis = redis_client
         self._key_prefix = key_prefix
         self._pending_ttl = pending_ttl_seconds
-        self._scripts_loaded = False
-        self._add_integrity_sha: str | None = None
-        self._commit_sha: str | None = None
-        self._batch_get_sha: str | None = None
-
-    def _ensure_scripts_loaded(self) -> None:
-        """Load Lua scripts into Redis (cached via SHA)."""
-        if self._scripts_loaded:
-            return
-
-        try:
-            self._add_integrity_sha = self._redis.script_load(
-                self.LUA_ATOMIC_ADD_INTEGRITY
-            )
-            self._commit_sha = self._redis.script_load(self.LUA_ATOMIC_COMMIT)
-            self._batch_get_sha = self._redis.script_load(self.LUA_BATCH_GET_STATE)
-            self._scripts_loaded = True
-            logger.debug("lua_atomic_hash_chain.scripts_loaded_successfully")
-        except Exception as e:
-            logger.warning(
-                "lua_atomic_hash_chain.script_load_failed",
-                error=e,
-            )
-            # Fallback to eval on each call
+        self._registry = LuaScriptRegistry(redis_client)
+        self._registry.register("add_integrity", self.LUA_ATOMIC_ADD_INTEGRITY)
+        self._registry.register("commit", self.LUA_ATOMIC_COMMIT)
+        self._registry.register("batch_get", self.LUA_BATCH_GET_STATE)
 
     def _get_keys(self) -> dict[str, str]:
         """Get standard Redis key names."""
         return {
-            "seq": f"{self._key_prefix}audit:hash_chain:seq",
-            "state": f"{self._key_prefix}audit:hash_chain:state",
-            "pending_prefix": f"{self._key_prefix}audit:hash_chain:pending",
+            "seq": f"{self._key_prefix}audit:{{hash_chain}}:seq",
+            "state": f"{self._key_prefix}audit:{{hash_chain}}:state",
+            "pending_prefix": f"{self._key_prefix}audit:{{hash_chain}}:pending",
         }
 
     def reserve_sequence_atomic(
@@ -185,35 +167,20 @@ class LuaAtomicHashChain:
         Returns:
             Tuple of (success, sequence, error_message)
         """
-        self._ensure_scripts_loaded()
         keys = self._get_keys()
         timestamp = datetime.now(timezone.utc).isoformat()
 
         try:
-            if self._add_integrity_sha:
-                result = self._redis.evalsha(
-                    self._add_integrity_sha,
-                    3,
-                    keys["seq"],
-                    keys["state"],
-                    keys["pending_prefix"],
+            result = self._registry.execute(
+                "add_integrity",
+                keys=[keys["seq"], keys["state"], keys["pending_prefix"]],
+                args=[
                     expected_hash,
                     previous_hash,
                     timestamp,
                     str(self._pending_ttl),
-                )
-            else:
-                result = self._redis.eval(
-                    self.LUA_ATOMIC_ADD_INTEGRITY,
-                    3,
-                    keys["seq"],
-                    keys["state"],
-                    keys["pending_prefix"],
-                    expected_hash,
-                    previous_hash,
-                    timestamp,
-                    str(self._pending_ttl),
-                )
+                ],
+            )
 
             if isinstance(result, dict) and "err" in result:
                 return False, 0, result["err"]
@@ -258,32 +225,16 @@ class LuaAtomicHashChain:
         Returns:
             Tuple of (success, error_message)
         """
-        self._ensure_scripts_loaded()
         keys = self._get_keys()
         pending_key = f"{keys['pending_prefix']}:{sequence}"
         timestamp = datetime.now(timezone.utc).isoformat()
 
         try:
-            if self._commit_sha:
-                result = self._redis.evalsha(
-                    self._commit_sha,
-                    2,
-                    pending_key,
-                    keys["state"],
-                    str(sequence),
-                    actual_hash,
-                    timestamp,
-                )
-            else:
-                result = self._redis.eval(
-                    self.LUA_ATOMIC_COMMIT,
-                    2,
-                    pending_key,
-                    keys["state"],
-                    str(sequence),
-                    actual_hash,
-                    timestamp,
-                )
+            result = self._registry.execute(
+                "commit",
+                keys=[pending_key, keys["state"]],
+                args=[str(sequence), actual_hash, timestamp],
+            )
 
             if isinstance(result, dict) and "err" in result:
                 return False, result["err"]

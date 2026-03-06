@@ -138,8 +138,12 @@ class RedisLeaderElector(LeaderElector):
         self._redis = redis_client
 
         self._node_id = self._settings.get_node_id()
-        self._leader_key = f"{self._settings.redis_key_prefix}{resource_name}"
-        self._fencing_key = f"{self._settings.redis_key_prefix}fencing_token:{resource_name}"
+        self._leader_key = (
+            f"{self._settings.redis_key_prefix}{{{resource_name}}}:leader"
+        )
+        self._fencing_key = (
+            f"{self._settings.redis_key_prefix}{{{resource_name}}}:fencing"
+        )
 
         self._lock = threading.RLock()
         self._state = LeadershipState.NOT_STARTED
@@ -157,10 +161,8 @@ class RedisLeaderElector(LeaderElector):
         # 비동기 콜백 실행용 스레드 풀
         self._callback_executor: ThreadPoolExecutor | None = None
 
-        # Lua 스크립트
-        self._acquire_script: Any = None
-        self._release_script: Any = None
-        self._renew_script: Any = None
+        # Lua Script Registry (lazy-initialized after Redis client is available)
+        self._lua_registry = None
 
         # 메트릭
         self._metrics: LeaderElectorMetrics | None = None
@@ -175,6 +177,18 @@ class RedisLeaderElector(LeaderElector):
                 decode_responses=True,
             )
         return self._redis
+
+    def _get_lua_registry(self):
+        """LuaScriptRegistry 반환 (lazy initialization)."""
+        if self._lua_registry is None:
+            from selfhealing.audit.performance.lua_registry import LuaScriptRegistry
+
+            redis_client = self._get_redis()
+            self._lua_registry = LuaScriptRegistry(redis_client)
+            self._lua_registry.register("acquire", self.LUA_ACQUIRE_WITH_PRIORITY)
+            self._lua_registry.register("release", self.LUA_RELEASE)
+            self._lua_registry.register("renew", self.LUA_RENEW)
+        return self._lua_registry
 
     def _get_callback_executor(self) -> ThreadPoolExecutor:
         """콜백 실행용 스레드 풀 (lazy initialization)."""
@@ -261,8 +275,6 @@ class RedisLeaderElector(LeaderElector):
     def _try_acquire(self) -> bool:
         """리더 획득 시도 (Fencing Token 및 우선순위 포함)."""
         try:
-            redis = self._get_redis()
-
             value = json.dumps(
                 {
                     "node_id": self._node_id,
@@ -271,13 +283,15 @@ class RedisLeaderElector(LeaderElector):
                 }
             )
 
-            # 우선순위 기반 획득 사용
-            if self._acquire_script is None:
-                self._acquire_script = redis.register_script(self.LUA_ACQUIRE_WITH_PRIORITY)
-
-            result = self._acquire_script(
+            registry = self._get_lua_registry()
+            result = registry.execute(
+                "acquire",
                 keys=[self._leader_key, self._fencing_key],
-                args=[value, self._settings.lease_ttl_seconds, self._settings.region_priority],
+                args=[
+                    value,
+                    self._settings.lease_ttl_seconds,
+                    self._settings.region_priority,
+                ],
             )
 
             if result > 0:
@@ -299,12 +313,9 @@ class RedisLeaderElector(LeaderElector):
     def _renew_lease(self) -> bool:
         """Lease 갱신."""
         try:
-            redis = self._get_redis()
-
-            if self._renew_script is None:
-                self._renew_script = redis.register_script(self.LUA_RENEW)
-
-            result = self._renew_script(
+            registry = self._get_lua_registry()
+            result = registry.execute(
+                "renew",
                 keys=[self._leader_key],
                 args=[self._node_id, self._settings.lease_ttl_seconds],
             )
@@ -330,12 +341,9 @@ class RedisLeaderElector(LeaderElector):
     def _release_leadership(self) -> None:
         """리더십 반납."""
         try:
-            redis = self._get_redis()
-
-            if self._release_script is None:
-                self._release_script = redis.register_script(self.LUA_RELEASE)
-
-            self._release_script(
+            registry = self._get_lua_registry()
+            registry.execute(
+                "release",
                 keys=[self._leader_key],
                 args=[self._node_id],
             )
@@ -411,7 +419,9 @@ class RedisLeaderElector(LeaderElector):
             executor.submit(self._safe_callback, callback, "on_lose_leader")
 
         # Recovery Audit 기록
-        event_type = "leader_stepped_down" if reason == "self_fencing" else "leader_lost"
+        event_type = (
+            "leader_stepped_down" if reason == "self_fencing" else "leader_lost"
+        )
         self._record_leadership_event(event_type)
 
     def _record_leadership_event(
@@ -479,7 +489,9 @@ class RedisLeaderElector(LeaderElector):
                             self._lose_leader(reason="self_fencing")
                             consecutive_failures = 0
                         elif (
-                            self._settings.max_retry_attempts > 0 and consecutive_failures >= self._settings.max_retry_attempts
+                            self._settings.max_retry_attempts > 0
+                            and consecutive_failures
+                            >= self._settings.max_retry_attempts
                         ):
                             self._lose_leader(reason="max_retry_exceeded")
                             consecutive_failures = 0
@@ -503,10 +515,13 @@ class RedisLeaderElector(LeaderElector):
 
                     # Jitter 적용 (Thundering Herd 방지)
                     jitter = calculate_jitter(
-                        max_delay_seconds=self._settings.retry_interval_seconds * self._settings.retry_jitter_factor,
+                        max_delay_seconds=self._settings.retry_interval_seconds
+                        * self._settings.retry_jitter_factor,
                         min_delay_seconds=0,
                     )
-                    self._stop_event.wait(self._settings.retry_interval_seconds + jitter)
+                    self._stop_event.wait(
+                        self._settings.retry_interval_seconds + jitter
+                    )
                     if self._stop_event.is_set():
                         break
 

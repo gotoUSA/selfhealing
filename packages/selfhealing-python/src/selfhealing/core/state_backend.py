@@ -26,6 +26,8 @@ from typing import Any, Generic, TypeVar
 
 import structlog
 
+from selfhealing.core.file_utils import safe_unlink
+
 logger = structlog.get_logger()
 
 T = TypeVar("T")
@@ -115,7 +117,7 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                     )
                 else:
                     # .json exists → .tmp is stale, remove it
-                    tmp_path.unlink()
+                    safe_unlink(tmp_path)
                     logger.debug(
                         "state_backend.removed_stale_tmp",
                         tmp_path=tmp_path.name,
@@ -132,7 +134,9 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
         safe_key = key.replace("/", "_").replace(":", "_")
         return self._directory / f"{safe_key}.json"
 
-    def get(self, key: str, default: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    def get(
+        self, key: str, default: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         file_path = self._get_file_path(key)
         with self._lock:
             try:
@@ -164,7 +168,9 @@ class FileStateBackend(StateBackend[dict[str, Any]]):
                 )
         return default
 
-    def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
+    def set(
+        self, key: str, value: dict[str, Any], ttl_seconds: int | None = None
+    ) -> None:
         file_path = self._get_file_path(key)
         with self._lock:
             temp_file = file_path.with_suffix(".tmp")
@@ -270,7 +276,9 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
     def _make_key(self, key: str) -> str:
         return f"{self._key_prefix}{key}"
 
-    def get(self, key: str, default: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    def get(
+        self, key: str, default: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         try:
             data = self._client.get(self._make_key(key))
             if data:
@@ -283,7 +291,9 @@ class RedisStateBackend(StateBackend[dict[str, Any]]):
             )
         return default
 
-    def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
+    def set(
+        self, key: str, value: dict[str, Any], ttl_seconds: int | None = None
+    ) -> None:
         try:
             data = json.dumps(value, default=str)
             if ttl_seconds:
@@ -378,11 +388,15 @@ class MemoryStateBackend(StateBackend[dict[str, Any]]):
         self._lock = threading.Lock()
         logger.info("state_backend.memory_backend_initialized_testing")
 
-    def get(self, key: str, default: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    def get(
+        self, key: str, default: dict[str, Any] | None = None
+    ) -> dict[str, Any] | None:
         with self._lock:
             return self._store.get(key, default)
 
-    def set(self, key: str, value: dict[str, Any], ttl_seconds: int | None = None) -> None:
+    def set(
+        self, key: str, value: dict[str, Any], ttl_seconds: int | None = None
+    ) -> None:
         with self._lock:
             self._store[key] = value
 
@@ -401,7 +415,9 @@ class MemoryStateBackend(StateBackend[dict[str, Any]]):
         with self._lock:
             if pattern == "*":
                 return dict(self._store)
-            return {k: v for k, v in self._store.items() if pattern.replace("*", "") in k}
+            return {
+                k: v for k, v in self._store.items() if pattern.replace("*", "") in k
+            }
 
 
 # =============================================================================

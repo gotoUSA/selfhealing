@@ -73,6 +73,7 @@ class TestInMemoryAuditBuffer:
 
         # Mock WAL 쓰기 함수
         written = []
+
         def mock_wal_write(entry):
             written.append(entry)
             return len(written)  # sequence 반환
@@ -96,6 +97,7 @@ class TestInMemoryAuditBuffer:
         buffer.add({"event_type": "SUCCESS2"})
 
         call_count = [0]
+
         def mock_wal_write(entry):
             call_count[0] += 1
             if entry["event_type"] == "FAIL":
@@ -212,7 +214,7 @@ class TestRedisAuditBuffer:
         mock_redis.pipeline.return_value = mock_pipe
 
         # spec을 사용하여 log_raw가 없는 fallback 시뮬레이션
-        mock_fallback = MagicMock(spec=['log'])
+        mock_fallback = MagicMock(spec=["log"])
 
         buffer = RedisAuditBuffer(
             redis_client=mock_redis,
@@ -234,6 +236,7 @@ class TestRedisAuditBuffer:
         mock_redis.pipeline.return_value = mock_pipe
 
         callback_called = []
+
         def on_fallback(e):
             callback_called.append(str(e))
 
@@ -323,7 +326,7 @@ class TestRedisAuditBuffer:
         count = buffer.get_pending_count("test")
 
         assert count == 42
-        mock_redis.llen.assert_called_with("audit:buffer:test")
+        mock_redis.llen.assert_called_with("audit:{test}:buffer")
 
     def test_flush_to_external(self):
         """외부 저장소로 플러시."""
@@ -332,18 +335,30 @@ class TestRedisAuditBuffer:
         mock_redis = MagicMock()
 
         # scan_iter 설정
-        mock_redis.scan_iter.return_value = [b"audit:buffer:test"]
+        mock_redis.scan_iter.return_value = [b"audit:{test}:buffer"]
 
         # rpop 설정 (2개 항목 후 None)
         entries = [
-            json.dumps({"entry": {"event": "e1"}, "timestamp": "2026-01-08T00:00:00Z", "instance_id": "test"}),
-            json.dumps({"entry": {"event": "e2"}, "timestamp": "2026-01-08T00:00:01Z", "instance_id": "test"}),
+            json.dumps(
+                {
+                    "entry": {"event": "e1"},
+                    "timestamp": "2026-01-08T00:00:00Z",
+                    "instance_id": "test",
+                }
+            ),
+            json.dumps(
+                {
+                    "entry": {"event": "e2"},
+                    "timestamp": "2026-01-08T00:00:01Z",
+                    "instance_id": "test",
+                }
+            ),
             None,
         ]
         mock_redis.rpop.side_effect = entries
 
         # spec을 사용하여 log_raw가 없는 target 시뮬레이션
-        mock_target = MagicMock(spec=['log'])
+        mock_target = MagicMock(spec=["log"])
 
         buffer = RedisAuditBuffer(redis_client=mock_redis)
 
@@ -364,7 +379,7 @@ class TestRedisAuditBuffer:
         count = buffer.clear_domain("test")
 
         assert count == 5
-        mock_redis.delete.assert_called_with("audit:buffer:test")
+        mock_redis.delete.assert_called_with("audit:{test}:buffer")
 
     def test_custom_key_prefix(self):
         """커스텀 키 프리픽스."""
@@ -383,7 +398,7 @@ class TestRedisAuditBuffer:
 
         # lpush가 custom:audit:myapp 키로 호출되었는지 확인
         call_args = mock_pipe.lpush.call_args
-        assert "custom:audit:myapp" in str(call_args)
+        assert "custom:audit:{myapp}:buffer" in str(call_args)
 
     # NOTE: test_factory_function_no_redis는 실제 Redis 연결을 시도하므로
     # tests/integration/selfhealing/test_regional_gate_integration.py로 이동됨
