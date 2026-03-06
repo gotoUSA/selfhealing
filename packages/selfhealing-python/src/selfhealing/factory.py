@@ -1130,17 +1130,8 @@ def _auto_register_adapters() -> None:
 
 
 def _auto_register_notification_adapters() -> None:
-    """Auto-register default notification adapters."""
-    try:
-        from selfhealing.interfaces.notification import (
-            LoggingNotificationAdapter,
-            StdoutNotificationAdapter,
-        )
-
-        ProviderRegistry.register_notification("logging", LoggingNotificationAdapter)
-        ProviderRegistry.register_notification("stdout", StdoutNotificationAdapter)
-    except ImportError:
-        pass
+    """Auto-register default notification adapters (delegates to class method)."""
+    ProviderRegistry._auto_register_notification_adapters()
 
 
 # Run auto-registration on module import

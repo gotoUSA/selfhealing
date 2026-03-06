@@ -325,40 +325,50 @@ class FallbackPolicy(str, Enum):
 
 **표준 DI 패턴 (최종)**:
 
+공통 헬퍼 `core/di_fallback.py`의 `resolve_with_fallback()`으로 중앙 집중:
+
+```python
+# core/di_fallback.py — 3-tier fallback 구현
+def resolve_with_fallback(registry_method, fallback_class, service_name):
+    try:
+        return registry_method()
+    except (ImportError, ValueError) as exc:
+        policy = get_config().fallback_policy  # SELFHEALING_FALLBACK_POLICY
+        if policy == FallbackPolicy.FAIL_FAST:
+            raise RuntimeError(...) from exc
+        instance = fallback_class()
+        if policy == FallbackPolicy.WARN_AND_ALLOW:
+            logger.warning("service.fallback_adapter", ...)
+            _inc_fallback_metric(service_name, fallback_class.__name__)
+        return instance  # ALLOW: silent, WARN_AND_ALLOW: warning+metric
+```
+
+서비스 사용 예시:
+
 ```python
 # 표준 패턴 — 모든 서비스에서 사용
 @property
 def repository(self) -> FailedOperationRepository:
     if self._repository is None:
-        try:
-            from selfhealing.factory import ProviderRegistry
-            self._repository = ProviderRegistry.get_failed_operation_repo()
-        except (ImportError, ValueError) as exc:
-            policy = get_config().fallback_policy  # SELFHEALING_FALLBACK_POLICY
-            if policy == FallbackPolicy.FAIL_FAST:
-                raise RuntimeError(
-                    f"ProviderRegistry unavailable in production: {exc}"
-                ) from exc
-            from selfhealing.adapters.memory import InMemoryFailedOperationRepository
-            self._repository = InMemoryFailedOperationRepository()
-            logger.warning(
-                "service.fallback_adapter",
-                adapter="InMemoryFailedOperationRepository",
-                service=self.__class__.__name__,
-            )
-            # Prometheus 메트릭 emit
-            try:
-                from selfhealing.metrics.prometheus import get_metrics
-                metrics = get_metrics()
-                if hasattr(metrics, 'di_fallback_total'):
-                    metrics.di_fallback_total.labels(
-                        service=self.__class__.__name__,
-                        adapter="InMemoryFailedOperationRepository",
-                    ).inc()
-            except Exception:
-                pass  # 메트릭 실패가 서비스를 중단시키면 안 됨
+        from selfhealing.core.di_fallback import resolve_with_fallback
+        from selfhealing.factory import ProviderRegistry
+        from selfhealing.adapters.memory import InMemoryFailedOperationRepository
+
+        self._repository = resolve_with_fallback(
+            registry_method=ProviderRegistry.get_failed_operation_repo,
+            fallback_class=InMemoryFailedOperationRepository,
+            service_name=self.__class__.__name__,
+        )
     return self._repository
 ```
+
+3-tier 동작 요약:
+
+| 정책 | Fallback | 경고 로그 | Prometheus 메트릭 |
+|------|----------|-----------|------------------|
+| `ALLOW` | O | X | X |
+| `WARN_AND_ALLOW` | O | O | O |
+| `FAIL_FAST` | X (RuntimeError) | — | — |
 
 **Prometheus 메트릭 정의** (`metrics/prometheus.py`에 추가):
 
@@ -664,7 +674,7 @@ class TestDIPatternConsistency:
 
 | 위험 | 영향 | 완화 |
 |------|------|------|
-| NotificationAdapter ABC 전환이 breaking change | 외부 사용자 구현체가 상속 필요 | `@overload` + `ABC.register()` 자동 등록으로 duck-typed 어댑터 즉시 호환 (§3.3.3) |
+| NotificationAdapter ABC 전환이 breaking change | 외부 사용자 구현체가 상속 필요 | `ABC.register()` 자동 등록으로 duck-typed 어댑터 즉시 호환 (§3.3.3) |
 | DI fallback이 운영 환경에서 InMemory 사용 | Silent Data Loss, K8s 자동 복구 무력화 | 환경별 3단계 Fallback Policy: prod → Fail-Fast 크래시 (§3.2.1) |
 | Fallback 발생을 로그로만 감지 | 즉각적 알림 불가 | `di_fallback_total` Prometheus 카운터 + Grafana 알림 (§3.2.1) |
 | ProviderRegistry Race Condition | 멀티 스레드 환경에서 인스턴스 중복 생성 | Double-Checked Locking 패턴 도입 (§3.1.4) |
@@ -679,3 +689,4 @@ class TestDIPatternConsistency:
 |------|------|----------|
 | 2026-03-06 | 1.0.0 | 초안 작성 |
 | 2026-03-07 | 1.1.0 | Q1~Q5 구현 세부사항 추가: DCL 스레드 안전성(§3.1.4), Fail-Fast 정책+Prometheus 메트릭(§3.2.1), Virtual Subclass @overload 브릿지(§3.3.3), TYPE_CHECKING 3중 패턴(§3.4.1), 위험 테이블 갱신 |
+| 2026-03-07 | 1.2.0 | 코드 리뷰 반영: `core/di_fallback.py`로 fallback 헬퍼 추출, 3-tier 정책 실제 구분 구현(ALLOW=silent, WARN_AND_ALLOW=warning+metric, FAIL_FAST=crash), @overload 제거, auto-register 위임 패턴 |

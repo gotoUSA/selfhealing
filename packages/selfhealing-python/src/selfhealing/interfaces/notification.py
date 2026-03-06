@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, overload
+from typing import Any
 
 import structlog
 
@@ -226,14 +226,6 @@ class LoggingNotificationAdapter(NotificationAdapter):
 
 
 _default_adapter: NotificationAdapter = LoggingNotificationAdapter()
-
-
-@overload
-def register_notification_adapter(adapter: NotificationAdapter) -> None: ...
-
-
-@overload
-def register_notification_adapter(adapter: object) -> None: ...
 
 
 def register_notification_adapter(adapter: object) -> None:

@@ -191,39 +191,17 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
     def repository(self) -> CircuitBreakerStateRepository:
         """Get the repository using ProviderRegistry with fallback policy."""
         if self._repository is None:
-            try:
-                from selfhealing.factory import ProviderRegistry
+            from selfhealing.adapters.memory import (
+                InMemoryCircuitBreakerStateRepository,
+            )
+            from selfhealing.core.di_fallback import resolve_with_fallback
+            from selfhealing.factory import ProviderRegistry
 
-                self._repository = ProviderRegistry.get_circuit_breaker_repo()
-            except (ImportError, ValueError) as exc:
-                from selfhealing.settings import FallbackPolicy, get_config
-
-                policy = get_config().fallback_policy
-                if policy == FallbackPolicy.FAIL_FAST:
-                    raise RuntimeError(
-                        f"ProviderRegistry unavailable in production: {exc}"
-                    ) from exc
-                from selfhealing.adapters.memory import (
-                    InMemoryCircuitBreakerStateRepository,
-                )
-
-                self._repository = InMemoryCircuitBreakerStateRepository()
-                logger.warning(
-                    "service.fallback_adapter",
-                    adapter="InMemoryCircuitBreakerStateRepository",
-                    service=self.__class__.__name__,
-                )
-                try:
-                    from selfhealing.metrics.prometheus import get_metrics
-
-                    metrics = get_metrics()
-                    if hasattr(metrics, "di_fallback_total"):
-                        metrics.di_fallback_total.labels(
-                            service=self.__class__.__name__,
-                            adapter="InMemoryCircuitBreakerStateRepository",
-                        ).inc()
-                except Exception:
-                    pass
+            self._repository = resolve_with_fallback(
+                registry_method=ProviderRegistry.get_circuit_breaker_repo,
+                fallback_class=InMemoryCircuitBreakerStateRepository,
+                service_name=self.__class__.__name__,
+            )
         return self._repository
 
     @property

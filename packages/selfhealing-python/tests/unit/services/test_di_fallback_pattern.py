@@ -1,13 +1,14 @@
 """
-DI fallback pattern tests for services (commit 0b59f932).
+DI fallback pattern tests for resolve_with_fallback and service integration.
 
-Tests for the unified fallback pattern in:
-- CircuitBreakerService.repository
-- DLQServiceBase.repository
-- ReplayService.repository
+Tests for the 3-tier FallbackPolicy:
+- ALLOW: Silent fallback to in-memory adapter (no warning, no metric)
+- WARN_AND_ALLOW: Fallback with warning log + Prometheus metric
+- FAIL_FAST: Raise RuntimeError
 
 Test Categories:
-    A. Behavior: Normal path (ProviderRegistry), ALLOW fallback, FAIL_FAST raises
+    A. Unit: resolve_with_fallback 3-tier behavior
+    B. Integration: CircuitBreakerService / DLQServiceBase / ReplayService
 """
 
 from unittest.mock import MagicMock, patch
@@ -17,15 +18,180 @@ import pytest
 from selfhealing.settings.root import FallbackPolicy
 
 # =============================================================================
-# CircuitBreakerService DI Fallback
+# A. Unit Tests — resolve_with_fallback
+# =============================================================================
+
+
+class TestResolveWithFallbackBehavior:
+    """Verify 3-tier policy in resolve_with_fallback."""
+
+    def test_returns_registry_result_on_success(self):
+        """Normal path: returns result from registry_method."""
+        from selfhealing.core.di_fallback import resolve_with_fallback
+
+        mock_repo = MagicMock()
+        result = resolve_with_fallback(
+            registry_method=lambda: mock_repo,
+            fallback_class=MagicMock,
+            service_name="TestService",
+        )
+        assert result is mock_repo
+
+    def test_allow_policy_returns_fallback_silently(self):
+        """ALLOW policy: returns fallback without warning or metric."""
+        from selfhealing.core.di_fallback import resolve_with_fallback
+
+        mock_config = MagicMock()
+        mock_config.fallback_policy = FallbackPolicy.ALLOW
+        fallback_cls = MagicMock()
+        fallback_instance = MagicMock()
+        fallback_cls.return_value = fallback_instance
+
+        with (
+            patch(
+                "selfhealing.settings.get_config",
+                return_value=mock_config,
+            ),
+            patch("selfhealing.core.di_fallback.logger") as mock_logger,
+        ):
+            result = resolve_with_fallback(
+                registry_method=MagicMock(side_effect=ValueError("No repo")),
+                fallback_class=fallback_cls,
+                service_name="TestService",
+            )
+
+        assert result is fallback_instance
+        mock_logger.warning.assert_not_called()
+
+    def test_warn_and_allow_policy_returns_fallback_with_warning(self):
+        """WARN_AND_ALLOW policy: returns fallback with warning log."""
+        from selfhealing.core.di_fallback import resolve_with_fallback
+
+        mock_config = MagicMock()
+        mock_config.fallback_policy = FallbackPolicy.WARN_AND_ALLOW
+        fallback_cls = MagicMock()
+        fallback_cls.__name__ = "InMemoryRepo"
+        fallback_instance = MagicMock()
+        fallback_cls.return_value = fallback_instance
+
+        with (
+            patch(
+                "selfhealing.settings.get_config",
+                return_value=mock_config,
+            ),
+            patch("selfhealing.core.di_fallback.logger") as mock_logger,
+            patch("selfhealing.core.di_fallback._inc_fallback_metric") as mock_metric,
+        ):
+            result = resolve_with_fallback(
+                registry_method=MagicMock(side_effect=ValueError("No repo")),
+                fallback_class=fallback_cls,
+                service_name="TestService",
+            )
+
+        assert result is fallback_instance
+        mock_logger.warning.assert_called_once_with(
+            "service.fallback_adapter",
+            adapter="InMemoryRepo",
+            service="TestService",
+        )
+        mock_metric.assert_called_once_with("TestService", "InMemoryRepo")
+
+    def test_warn_and_allow_policy_increments_prometheus_metric(self):
+        """WARN_AND_ALLOW policy: increments di_fallback_total counter."""
+        from selfhealing.core.di_fallback import resolve_with_fallback
+
+        mock_config = MagicMock()
+        mock_config.fallback_policy = FallbackPolicy.WARN_AND_ALLOW
+        fallback_cls = MagicMock()
+        fallback_cls.__name__ = "InMemoryRepo"
+
+        with (
+            patch(
+                "selfhealing.settings.get_config",
+                return_value=mock_config,
+            ),
+            patch("selfhealing.core.di_fallback._inc_fallback_metric") as mock_inc,
+        ):
+            resolve_with_fallback(
+                registry_method=MagicMock(side_effect=ValueError("No repo")),
+                fallback_class=fallback_cls,
+                service_name="CBService",
+            )
+
+        mock_inc.assert_called_once_with("CBService", "InMemoryRepo")
+
+    def test_fail_fast_policy_raises_runtime_error(self):
+        """FAIL_FAST policy: raises RuntimeError."""
+        from selfhealing.core.di_fallback import resolve_with_fallback
+
+        mock_config = MagicMock()
+        mock_config.fallback_policy = FallbackPolicy.FAIL_FAST
+
+        with (
+            patch(
+                "selfhealing.settings.get_config",
+                return_value=mock_config,
+            ),
+            pytest.raises(RuntimeError, match="ProviderRegistry unavailable"),
+        ):
+            resolve_with_fallback(
+                registry_method=MagicMock(side_effect=ValueError("No repo")),
+                fallback_class=MagicMock,
+                service_name="TestService",
+            )
+
+    def test_fail_fast_policy_chains_original_exception(self):
+        """FAIL_FAST policy: RuntimeError chains the original exception."""
+        from selfhealing.core.di_fallback import resolve_with_fallback
+
+        mock_config = MagicMock()
+        mock_config.fallback_policy = FallbackPolicy.FAIL_FAST
+        original_exc = ValueError("Original error")
+
+        with (
+            patch(
+                "selfhealing.settings.get_config",
+                return_value=mock_config,
+            ),
+        ):
+            with pytest.raises(RuntimeError) as exc_info:
+                resolve_with_fallback(
+                    registry_method=MagicMock(side_effect=original_exc),
+                    fallback_class=MagicMock,
+                    service_name="TestService",
+                )
+            assert exc_info.value.__cause__ is original_exc
+
+    def test_handles_import_error_from_registry(self):
+        """ImportError from registry_method is caught and handled."""
+        from selfhealing.core.di_fallback import resolve_with_fallback
+
+        mock_config = MagicMock()
+        mock_config.fallback_policy = FallbackPolicy.ALLOW
+        fallback_cls = MagicMock()
+
+        with patch(
+            "selfhealing.settings.get_config",
+            return_value=mock_config,
+        ):
+            result = resolve_with_fallback(
+                registry_method=MagicMock(side_effect=ImportError("no module")),
+                fallback_class=fallback_cls,
+                service_name="TestService",
+            )
+
+        assert result is fallback_cls.return_value
+
+
+# =============================================================================
+# B. Integration Tests — Service .repository property
 # =============================================================================
 
 
 class TestCircuitBreakerServiceDIFallbackBehavior:
-    """Verify CircuitBreakerService.repository fallback pattern."""
+    """Verify CircuitBreakerService.repository uses resolve_with_fallback."""
 
     def _make_service(self):
-        """Create a fresh CircuitBreakerService with no cached repository."""
         from selfhealing.services.circuit_breaker.service import CircuitBreakerService
 
         service = CircuitBreakerService.__new__(CircuitBreakerService)
@@ -49,7 +215,7 @@ class TestCircuitBreakerServiceDIFallbackBehavior:
         assert repo is mock_repo
 
     def test_repository_falls_back_to_inmemory_when_allow_policy(self):
-        """ALLOW policy: falls back to InMemory when ProviderRegistry fails."""
+        """ALLOW policy: falls back to InMemory silently."""
         from selfhealing.adapters.memory import InMemoryCircuitBreakerStateRepository
 
         service = self._make_service()
@@ -71,7 +237,7 @@ class TestCircuitBreakerServiceDIFallbackBehavior:
         assert isinstance(repo, InMemoryCircuitBreakerStateRepository)
 
     def test_repository_raises_runtime_error_when_fail_fast_policy(self):
-        """FAIL_FAST policy: raises RuntimeError when ProviderRegistry fails."""
+        """FAIL_FAST policy: raises RuntimeError."""
         service = self._make_service()
         mock_config = MagicMock()
         mock_config.fallback_policy = FallbackPolicy.FAIL_FAST
@@ -104,16 +270,10 @@ class TestCircuitBreakerServiceDIFallbackBehavior:
         assert repo1 is repo2
 
 
-# =============================================================================
-# DLQServiceBase DI Fallback
-# =============================================================================
-
-
 class TestDLQServiceBaseDIFallbackBehavior:
-    """Verify DLQServiceBase.repository fallback pattern."""
+    """Verify DLQServiceBase.repository uses resolve_with_fallback."""
 
     def _make_service(self):
-        """Create a fresh DLQServiceBase with no cached repository."""
         from selfhealing.services.dlq.base import DLQServiceBase
 
         service = DLQServiceBase.__new__(DLQServiceBase)
@@ -135,7 +295,7 @@ class TestDLQServiceBaseDIFallbackBehavior:
         assert repo is mock_repo
 
     def test_repository_falls_back_to_inmemory_when_allow_policy(self):
-        """ALLOW policy: falls back to InMemory when ProviderRegistry fails."""
+        """ALLOW policy: falls back to InMemory silently."""
         from selfhealing.adapters.memory import InMemoryFailedOperationRepository
 
         service = self._make_service()
@@ -157,7 +317,7 @@ class TestDLQServiceBaseDIFallbackBehavior:
         assert isinstance(repo, InMemoryFailedOperationRepository)
 
     def test_repository_raises_runtime_error_when_fail_fast_policy(self):
-        """FAIL_FAST policy: raises RuntimeError when ProviderRegistry fails."""
+        """FAIL_FAST policy: raises RuntimeError."""
         service = self._make_service()
         mock_config = MagicMock()
         mock_config.fallback_policy = FallbackPolicy.FAIL_FAST
@@ -176,16 +336,10 @@ class TestDLQServiceBaseDIFallbackBehavior:
             _ = service.repository
 
 
-# =============================================================================
-# ReplayService DI Fallback
-# =============================================================================
-
-
 class TestReplayServiceDIFallbackBehavior:
-    """Verify ReplayService.repository fallback pattern."""
+    """Verify ReplayService.repository uses resolve_with_fallback."""
 
     def _make_service(self):
-        """Create a fresh ReplayService with no cached repository."""
         from selfhealing.services.replay_service.service import ReplayService
 
         service = ReplayService.__new__(ReplayService)
@@ -208,7 +362,7 @@ class TestReplayServiceDIFallbackBehavior:
         assert repo is mock_repo
 
     def test_repository_falls_back_to_inmemory_when_allow_policy(self):
-        """ALLOW policy: falls back to InMemory when ProviderRegistry fails."""
+        """ALLOW policy: falls back to InMemory silently."""
         from selfhealing.adapters.memory import InMemoryFailedOperationRepository
 
         service = self._make_service()
@@ -221,7 +375,7 @@ class TestReplayServiceDIFallbackBehavior:
                 side_effect=ValueError("No repo"),
             ),
             patch(
-                "selfhealing.services.replay_service.service.get_config",
+                "selfhealing.settings.get_config",
                 return_value=mock_config,
             ),
         ):
@@ -230,7 +384,7 @@ class TestReplayServiceDIFallbackBehavior:
         assert isinstance(repo, InMemoryFailedOperationRepository)
 
     def test_repository_raises_runtime_error_when_fail_fast_policy(self):
-        """FAIL_FAST policy: raises RuntimeError when ProviderRegistry fails."""
+        """FAIL_FAST policy: raises RuntimeError."""
         service = self._make_service()
         mock_config = MagicMock()
         mock_config.fallback_policy = FallbackPolicy.FAIL_FAST
@@ -241,7 +395,7 @@ class TestReplayServiceDIFallbackBehavior:
                 side_effect=ValueError("No repo"),
             ),
             patch(
-                "selfhealing.services.replay_service.service.get_config",
+                "selfhealing.settings.get_config",
                 return_value=mock_config,
             ),
             pytest.raises(RuntimeError, match="ProviderRegistry unavailable"),

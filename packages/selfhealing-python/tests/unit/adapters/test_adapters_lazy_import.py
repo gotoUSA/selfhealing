@@ -21,7 +21,7 @@ class TestAdaptersLazyImportContract:
     """Verify _LAZY_IMPORTS keys, module paths, and __all__ consistency."""
 
     def test_lazy_imports_contains_all_expected_adapter_names(self):
-        """_LAZY_IMPORTS contains all 12 adapter names from design."""
+        """_LAZY_IMPORTS contains all 13 adapter names from design."""
         from selfhealing.adapters import _LAZY_IMPORTS
 
         expected_names = {
