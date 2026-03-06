@@ -225,6 +225,65 @@ def _auto_register_notification_adapters():
     ProviderRegistry.register_notification("stdout", StdoutNotificationAdapter)
 ```
 
+#### 3.1.4 ProviderRegistry 스레드 안전성 — Double-Checked Locking
+
+ProviderRegistry의 모든 getter(`get_cache`, `get_notification` 등)는 check-then-act 패턴이다.
+gunicorn 워커, FastAPI 같은 멀티 스레드/비동기 환경에서 여러 스레드가 동시에 getter를 호출하면
+어댑터 인스턴스가 중복 생성되는 Race Condition이 발생할 수 있다.
+
+**현재 문제 코드** (`factory.py:327-338`):
+
+```python
+if singleton:
+    key = f"cache:{name}"
+    if key in cls._instances:       # Thread A 통과
+        return cls._instances[key]
+# ...
+instance = cls._cache_providers[name]()  # Thread A, B 모두 도달
+if singleton:
+    cls._instances[key] = instance       # 인스턴스 2개 생성
+```
+
+**기존 선례**: `config.py:248-256`의 `EventLoggingConfig`와 `coordination/factory.py:18`이
+이미 `threading.Lock`으로 싱글톤 생성을 보호하고 있다.
+
+**구현: 클래스 레벨 Lock + Double-Checked Locking**
+
+```python
+import threading
+
+class ProviderRegistry:
+    _lock: ClassVar[threading.Lock] = threading.Lock()
+
+    @classmethod
+    def get_cache(cls, name: str | None = None, singleton: bool = True) -> CacheProviderInterface:
+        name = name or cls._default_cache
+        if singleton:
+            key = f"cache:{name}"
+            if key in cls._instances:          # Fast path (락 없이)
+                return cls._instances[key]
+            with cls._lock:                    # Slow path
+                if key in cls._instances:      # Double-check (락 내부 재확인 필수)
+                    return cls._instances[key]
+                if name not in cls._cache_providers:
+                    raise ValueError(...)
+                instance = cls._cache_providers[name]()
+                cls._instances[key] = instance
+                return instance
+        # non-singleton path
+        ...
+```
+
+**적용 범위**:
+- 락은 **singleton 인스턴스 생성 경로(slow path)에만** 적용
+- `register_*` 메서드: 앱 기동 시 단일 스레드에서 호출 → 락 불요
+- `_auto_register_adapters()`: 모듈 import 시점(GIL 보호) → 락 불요
+- 모든 getter(`get_cache`, `get_queue`, `get_notification` 등)에 동일 패턴 적용
+
+**주의**: Python dict의 읽기/쓰기는 CPython GIL 하에서 사실상 원자적이지만,
+이는 구현 세부사항이며 언어 보장이 아니다. Python 3.13+ free-threaded 모드(`--disable-gil`)
+대비를 위해 DCL의 inner check를 반드시 포함해야 한다.
+
 **영향 범위**:
 - `factory.py` — ProviderRegistry 확장
 - `interfaces/notification.py` — 기존 함수를 wrapper로 변경 (backward-compatible)
@@ -238,7 +297,33 @@ def _auto_register_notification_adapters():
 
 #### 3.2.1 표준 DI 패턴 결정
 
-**Pattern B (Lazy + Fallback)를 표준으로 채택**:
+**Pattern B (Lazy + Fallback + Fail-Fast + Metrics)를 표준으로 채택**:
+
+운영 환경에서 In-Memory Fallback은 Silent Data Loss를 유발할 수 있다.
+워커 재시작 시 메모리에 쌓인 재시도 데이터가 조용히 증발하며,
+K8s의 liveness/readiness probe 기반 자동 복구 메커니즘을 무력화시킨다.
+따라서 환경별 Fallback 정책을 적용한다.
+
+**Fallback 정책 (3단계)**:
+
+| 정책 | 환경 | 동작 |
+|------|------|------|
+| `ALLOW` | dev/test | InMemory fallback 허용 |
+| `WARN_AND_ALLOW` | staging | Fallback + 메트릭 + 경고 |
+| `FAIL_FAST` | production | 즉시 크래시 → K8s 파드 재시작 |
+
+**설정**: `SELFHEALING_FALLBACK_POLICY` 환경 변수로 제어.
+기존 `settings/namespace.py`의 `SELFHEALING_NAMESPACE_ENV`와 연동.
+
+```python
+# settings에 추가
+class FallbackPolicy(str, Enum):
+    ALLOW = "allow"
+    WARN_AND_ALLOW = "warn"
+    FAIL_FAST = "fail_fast"
+```
+
+**표준 DI 패턴 (최종)**:
 
 ```python
 # 표준 패턴 — 모든 서비스에서 사용
@@ -248,17 +333,55 @@ def repository(self) -> FailedOperationRepository:
         try:
             from selfhealing.factory import ProviderRegistry
             self._repository = ProviderRegistry.get_failed_operation_repo()
-        except (ImportError, ValueError):
+        except (ImportError, ValueError) as exc:
+            policy = get_config().fallback_policy  # SELFHEALING_FALLBACK_POLICY
+            if policy == FallbackPolicy.FAIL_FAST:
+                raise RuntimeError(
+                    f"ProviderRegistry unavailable in production: {exc}"
+                ) from exc
             from selfhealing.adapters.memory import InMemoryFailedOperationRepository
             self._repository = InMemoryFailedOperationRepository()
-            logger.warning("service.fallback_adapter", adapter="InMemoryFailedOperationRepository")
+            logger.warning(
+                "service.fallback_adapter",
+                adapter="InMemoryFailedOperationRepository",
+                service=self.__class__.__name__,
+            )
+            # Prometheus 메트릭 emit
+            try:
+                from selfhealing.metrics.prometheus import get_metrics
+                metrics = get_metrics()
+                if hasattr(metrics, 'di_fallback_total'):
+                    metrics.di_fallback_total.labels(
+                        service=self.__class__.__name__,
+                        adapter="InMemoryFailedOperationRepository",
+                    ).inc()
+            except Exception:
+                pass  # 메트릭 실패가 서비스를 중단시키면 안 됨
     return self._repository
 ```
 
+**Prometheus 메트릭 정의** (`metrics/prometheus.py`에 추가):
+
+```python
+self.di_fallback_total = Counter(
+    f"{prefix}_di_fallback_total",
+    "DI fallback to in-memory adapter",
+    ["service", "adapter"],
+)
+```
+
+프로젝트 내 기존 fallback 메트릭 선례:
+- `metrics/prometheus.py:226` — `mesh_preemptive_fallback_total`
+- `audit/cascade_metrics.py:326` — `selfhealing_cascade_fallback_writes_total`
+- `metrics/audit_buffer_metrics.py:100` — `audit_buffer_fallback_size`
+
+Grafana 알림: `rate(selfhealing_di_fallback_total[5m]) > 0`으로 즉시 구성 가능.
+
 **근거**:
-- ProviderRegistry 미초기화 시에도 서비스가 동작 (graceful degradation)
+- ProviderRegistry 미초기화 시에도 서비스가 동작 (graceful degradation, dev/staging)
+- 운영 환경에서는 Fail-Fast로 K8s 자동 복구 활용 (Google SRE: "Fail loudly and early")
 - InMemory fallback은 테스트/개발 환경에서 유용
-- fallback 시 warning 로깅으로 운영 환경에서 감지 가능
+- fallback 시 로깅 + Prometheus 메트릭으로 정량적 모니터링
 
 #### 3.2.2 수정 대상
 
@@ -338,10 +461,59 @@ class NotificationAdapter(ABC):
     def channel(self) -> NotificationChannel: ...
 ```
 
+**내장 구현체**: `StdoutNotificationAdapter`, `LoggingNotificationAdapter`는
+ABC 상속으로 즉시 변경한다.
+
+#### 3.3.3 Duck-typed 어댑터 하위 호환 — Virtual Subclass 자동 등록
+
+Protocol → ABC 전환 시 기존에 duck typing에 의존하던 외부 사용자의
+커스텀 어댑터가 `isinstance()` 검사를 통과하지 못하는 Breaking Change가 발생한다.
+현재 프로젝트 내에서 `isinstance(x, NotificationAdapter)` 호출은 없지만,
+ProviderRegistry 통합(Phase 1) 시 내부적으로 타입 검증이 추가될 수 있다.
+
+**`register_notification_adapter`에서 자동 Virtual Subclass 등록**:
+
+`@overload`를 사용하여 MyPy 타입 안전성을 유지하면서, duck-typed 객체도 수용한다.
+별도의 LegacyProtocol을 정의하지 않는다 — 프로젝트 내 13개 ABC 인터페이스 중
+어떤 것도 Legacy Protocol을 병행하지 않으므로 일관성을 위해 `@overload` 패턴을 채택한다.
+
+```python
+from typing import overload
+
+@overload
+def register_notification_adapter(adapter: NotificationAdapter) -> None: ...
+@overload
+def register_notification_adapter(adapter: object) -> None: ...
+
+def register_notification_adapter(adapter: object) -> None:
+    """Register adapter. Auto-registers as virtual subclass if duck-typed."""
+    if not isinstance(adapter, NotificationAdapter):
+        required = ('send', 'send_batch', 'channel')
+        missing = [m for m in required if not hasattr(adapter, m)]
+        if missing:
+            raise TypeError(
+                f"Adapter {type(adapter).__name__} missing: {missing}. "
+                f"Inherit from NotificationAdapter."
+            )
+        NotificationAdapter.register(type(adapter))
+        logger.warning(
+            "notification.duck_typed_adapter_registered",
+            adapter_type=type(adapter).__name__,
+        )
+    _notification_adapters[adapter.channel] = adapter
+```
+
+**설계 결정 근거**:
+- `Any` 타입 힌트 사용 금지 — 정적 분석 도구가 인자 타입을 검사하지 못함
+- `LegacyNotificationProtocol` 별도 정의 금지 — ABC와 동일한 메서드 시그니처를
+  두 곳에서 유지해야 하므로 309가 해결하려는 "패턴 불일치"를 고착화함
+- `@overload` 패턴 채택 — 첫 번째 overload로 MyPy가 `NotificationAdapter` 타입 추론,
+  두 번째 overload로 duck-typed 객체 수용, 런타임에 검증 후 `ABC.register()` 호출
+
 **영향 범위**:
 - `StdoutNotificationAdapter` — `(NotificationAdapter)` 상속 추가
 - `LoggingNotificationAdapter` — `(NotificationAdapter)` 상속 추가
-- 외부 사용자 구현체 — 상속 필요 (breaking change, 버전 올릴 때 반영)
+- 외부 duck-typed 구현체 — 코드 변경 없이 `register_notification_adapter()`로 등록 가능
 
 ---
 
@@ -349,13 +521,45 @@ class NotificationAdapter(ABC):
 
 **목표**: 하나의 전략으로 통일
 
-#### 3.4.1 표준 전략: `__getattr__` lazy loading
+#### 3.4.1 표준 전략: `__getattr__` + `TYPE_CHECKING` + `__all__` 3중 패턴
+
+`__getattr__` 단독 사용 시 IDE 자동 완성과 MyPy 정적 타입 체킹이 동작하지 않는다.
+pandas, FastAPI 등 대형 오픈소스에서 검증된 3중 패턴을 채택하여
+**런타임 최적화 + DX(개발자 경험) + 모듈 공개 범위**를 동시에 확보한다.
 
 ```python
 # 표준 패턴 — 대형 __init__.py에서 사용
+from __future__ import annotations
+import importlib
+from typing import TYPE_CHECKING
+
+# (1) IDE autocomplete + MyPy 지원 (런타임에는 실행되지 않음)
+if TYPE_CHECKING:
+    from selfhealing.adapters.redis import (
+        RedisCircuitBreakerStateRepository,
+        RedisDLQRepository,
+    )
+    from selfhealing.adapters.memory import (
+        InMemoryFailedOperationRepository,
+        InMemoryCircuitBreakerStateRepository,
+    )
+    # ...
+
+# (2) 런타임 Lazy Loading
 _LAZY_IMPORTS: dict[str, tuple[str, str]] = {
-    "RedisAdapter": ("selfhealing.adapters.redis", "RedisAdapter"),
-    "InMemoryAdapter": ("selfhealing.adapters.memory", "InMemoryAdapter"),
+    "RedisCircuitBreakerStateRepository": (
+        "selfhealing.adapters.redis", "RedisCircuitBreakerStateRepository"
+    ),
+    "RedisDLQRepository": (
+        "selfhealing.adapters.redis", "RedisDLQRepository"
+    ),
+    "InMemoryFailedOperationRepository": (
+        "selfhealing.adapters.memory", "InMemoryFailedOperationRepository"
+    ),
+    "InMemoryCircuitBreakerStateRepository": (
+        "selfhealing.adapters.memory", "InMemoryCircuitBreakerStateRepository"
+    ),
+    # ...
 }
 
 def __getattr__(name: str):
@@ -366,12 +570,27 @@ def __getattr__(name: str):
         globals()[name] = value  # 캐싱
         return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+# (3) __all__과 _LAZY_IMPORTS 자동 동기화
+__all__ = list(_LAZY_IMPORTS.keys())
 ```
 
+**3중 패턴의 각 역할**:
+
+| 요소 | 역할 | 런타임 비용 |
+|------|------|------------|
+| `TYPE_CHECKING` 블록 | IDE 자동 완성, MyPy 타입 추론 | 0 (실행되지 않음) |
+| `_LAZY_IMPORTS` + `__getattr__` | 실제 모듈 로딩 (최초 접근 시) | 최초 1회만 |
+| `__all__ = list(_LAZY_IMPORTS.keys())` | 모듈 공개 범위 동기화 | 0 |
+
+**핵심**: `__all__ = list(_LAZY_IMPORTS.keys())`로 두 목록을 자동 동기화하여,
+기존 `try/except` 패턴의 "`__all__`에 이름은 있지만 런타임 AttributeError" 문제를 완전 해결.
+
 **근거**:
-- `TYPE_CHECKING`은 런타임에 타입 정보 접근 불가 → 동적 디스패치에 부적합
+- `TYPE_CHECKING`은 런타임에 타입 정보 접근 불가 → 동적 디스패치에 부적합 (단독 사용 불가)
 - `try/except`는 None 할당으로 `__all__` 불일치 유발
 - `__getattr__`는 Python 3.7+ 공식 지원, import 실패 시 명확한 AttributeError
+- 3중 패턴으로 병행 시 각 약점이 상호 보완됨
 
 #### 3.4.2 수정 대상
 
@@ -445,8 +664,11 @@ class TestDIPatternConsistency:
 
 | 위험 | 영향 | 완화 |
 |------|------|------|
-| NotificationAdapter ABC 전환이 breaking change | 외부 사용자 구현체가 상속 필요 | wrapper 함수로 backward-compatible 유지, 다음 major 버전에서 전환 |
-| DI fallback이 운영 환경에서 InMemory 사용 | 데이터 유실 가능 | fallback 시 WARNING 로그 + Prometheus 메트릭 emit |
+| NotificationAdapter ABC 전환이 breaking change | 외부 사용자 구현체가 상속 필요 | `@overload` + `ABC.register()` 자동 등록으로 duck-typed 어댑터 즉시 호환 (§3.3.3) |
+| DI fallback이 운영 환경에서 InMemory 사용 | Silent Data Loss, K8s 자동 복구 무력화 | 환경별 3단계 Fallback Policy: prod → Fail-Fast 크래시 (§3.2.1) |
+| Fallback 발생을 로그로만 감지 | 즉각적 알림 불가 | `di_fallback_total` Prometheus 카운터 + Grafana 알림 (§3.2.1) |
+| ProviderRegistry Race Condition | 멀티 스레드 환경에서 인스턴스 중복 생성 | Double-Checked Locking 패턴 도입 (§3.1.4) |
+| `__getattr__` 단독 사용 시 IDE 지원 불가 | 개발자 경험 저하, MyPy 오류 | `TYPE_CHECKING` + `__all__` 3중 패턴 병행 (§3.4.1) |
 | ChaosScheduler에 Repository 도입 시 복잡도 증가 | 불필요한 추상화 | Option B (현 상태 유지 + 문서화) 채택 |
 
 ---
@@ -456,3 +678,4 @@ class TestDIPatternConsistency:
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
 | 2026-03-06 | 1.0.0 | 초안 작성 |
+| 2026-03-07 | 1.1.0 | Q1~Q5 구현 세부사항 추가: DCL 스레드 안전성(§3.1.4), Fail-Fast 정책+Prometheus 메트릭(§3.2.1), Virtual Subclass @overload 브릿지(§3.3.3), TYPE_CHECKING 3중 패턴(§3.4.1), 위험 테이블 갱신 |
