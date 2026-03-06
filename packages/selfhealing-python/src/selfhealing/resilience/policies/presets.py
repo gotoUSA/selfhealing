@@ -266,6 +266,9 @@ def minimal_pipeline(
         pipeline = minimal_pipeline("search_api", audit_sampling_rate=0.01)
         result = pipeline.execute(lambda: search(query))
     """
+    from selfhealing.resilience.policies.hooks.sampled_audit import (
+        SampledAuditHook,
+    )
     from selfhealing.services.circuit_breaker.policy import CircuitBreakerPolicy
 
     composer = compose(CircuitBreakerPolicy(service_name=service_name))

@@ -1,8 +1,8 @@
 """
-standard_pipeline / ha_pipeline 프리셋 단위 테스트 (#231, #234).
+standard_pipeline / ha_pipeline / minimal_pipeline / adaptive_pipeline 프리셋 단위 테스트.
 
 테스트 대상:
-- resilience/policies/presets.py (standard_pipeline, ha_pipeline, _build_fallback_policy)
+- resilience/policies/presets.py
 
 UNIT_TEST_GUIDELINES.md 준수:
 - 동작 검증(Behavior): 소스 참조 (PolicyComposer, Guard/Hook/Sink 타입)
@@ -423,3 +423,235 @@ class TestHaPipelineFallbackBehavior:
         guard_types = [type(g) for g in pipeline._guards]
         assert KillSwitchGuard in guard_types
         assert ErrorBudgetGuard in guard_types
+
+
+# =============================================================================
+# 동작 검증 — minimal_pipeline
+# =============================================================================
+
+
+class TestMinimalPipelineBehavior:
+    """minimal_pipeline() 동작 검증."""
+
+    def test_returns_policy_composer(self):
+        """minimal_pipeline()은 PolicyComposer 인스턴스를 반환한다."""
+        from selfhealing.resilience.policies.presets import minimal_pipeline
+
+        pipeline = minimal_pipeline("test_service")
+        assert isinstance(pipeline, PolicyComposer)
+
+    def test_has_circuit_breaker_policy(self):
+        """CircuitBreakerPolicy가 _policies에 포함되어 있다."""
+        from selfhealing.resilience.policies.presets import minimal_pipeline
+
+        pipeline = minimal_pipeline("test_service")
+        assert len(pipeline._policies) == 1
+        assert pipeline._policies[0].name == "circuit_breaker"
+
+    def test_no_guards(self):
+        """Guard가 포함되지 않는다 (ErrorBudget Redis 호출 절약)."""
+        from selfhealing.resilience.policies.presets import minimal_pipeline
+
+        pipeline = minimal_pipeline("test_service")
+        assert len(pipeline._guards) == 0
+
+    def test_no_sinks(self):
+        """Sink가 포함되지 않는다 (DLQ 미사용)."""
+        from selfhealing.resilience.policies.presets import minimal_pipeline
+
+        pipeline = minimal_pipeline("test_service")
+        assert len(pipeline._sinks) == 0
+
+    def test_default_audit_rate_uses_audit_hook(self):
+        """audit_sampling_rate 기본값(1.0)이면 AuditHook이 사용된다."""
+        from selfhealing.resilience.policies.presets import minimal_pipeline
+
+        pipeline = minimal_pipeline("test_service")
+        assert len(pipeline._hooks) == 1
+        assert type(pipeline._hooks[0]) is AuditHook
+
+    def test_sampled_rate_uses_sampled_audit_hook(self):
+        """audit_sampling_rate < 1.0이면 SampledAuditHook이 사용된다."""
+        from selfhealing.resilience.policies.hooks.sampled_audit import (
+            SampledAuditHook,
+        )
+        from selfhealing.resilience.policies.presets import minimal_pipeline
+
+        pipeline = minimal_pipeline("test_service", audit_sampling_rate=0.5)
+        assert len(pipeline._hooks) == 1
+        hook = pipeline._hooks[0]
+        assert isinstance(hook, SampledAuditHook)
+        assert hook.sample_rate == 0.5
+
+    def test_zero_rate_no_hooks(self):
+        """audit_sampling_rate=0.0이면 Hook이 없다."""
+        from selfhealing.resilience.policies.presets import minimal_pipeline
+
+        pipeline = minimal_pipeline("test_service", audit_sampling_rate=0.0)
+        assert len(pipeline._hooks) == 0
+
+    def test_service_name_passed_to_cb(self):
+        """service_name이 CircuitBreakerPolicy에 전달된다."""
+        from selfhealing.resilience.policies.presets import minimal_pipeline
+
+        pipeline = minimal_pipeline("my_read_api")
+        cb = pipeline._policies[0]
+        assert cb.service_name == "my_read_api"
+
+
+# =============================================================================
+# 동작 검증 — adaptive_pipeline
+# =============================================================================
+
+
+class TestAdaptivePipelineBehavior:
+    """adaptive_pipeline() 동작 검증."""
+
+    def _reset_settings(self):
+        from selfhealing.settings.pipeline import reset_pipeline_settings
+
+        reset_pipeline_settings()
+
+    def test_disabled_returns_standard_pipeline(self):
+        """adaptive_enabled=False이면 standard_pipeline을 반환한다."""
+        from selfhealing.resilience.policies.presets import adaptive_pipeline
+
+        self._reset_settings()
+        pipeline = adaptive_pipeline("test_service")
+        # standard_pipeline은 KillSwitchGuard + ErrorBudgetGuard를 가짐
+        guard_types = [type(g) for g in pipeline._guards]
+        assert KillSwitchGuard in guard_types
+        assert ErrorBudgetGuard in guard_types
+
+    def test_enabled_hot_tier_returns_minimal(self):
+        """adaptive_enabled=True + hot tier → minimal_pipeline 반환."""
+        from unittest.mock import patch
+
+        from selfhealing.resilience.policies.presets import adaptive_pipeline
+        from selfhealing.settings.pipeline import PipelineSettings
+
+        self._reset_settings()
+        mock_settings = PipelineSettings(
+            adaptive_enabled=True,
+            hot_path_tiers=["non_essential"],
+            audit_sampling_rate=1.0,
+        )
+        with patch(
+            "selfhealing.settings.pipeline.get_pipeline_settings",
+            return_value=mock_settings,
+        ):
+            pipeline = adaptive_pipeline("test_service", tier_id="non_essential")
+        # minimal은 Guard가 없다
+        assert len(pipeline._guards) == 0
+        assert pipeline._policies[0].name == "circuit_breaker"
+
+    def test_enabled_non_hot_tier_returns_standard(self):
+        """adaptive_enabled=True + non-hot tier → standard_pipeline 반환."""
+        from unittest.mock import patch
+
+        from selfhealing.resilience.policies.presets import adaptive_pipeline
+        from selfhealing.settings.pipeline import PipelineSettings
+
+        self._reset_settings()
+        mock_settings = PipelineSettings(
+            adaptive_enabled=True,
+            hot_path_tiers=["non_essential"],
+            audit_sampling_rate=1.0,
+        )
+        with patch(
+            "selfhealing.settings.pipeline.get_pipeline_settings",
+            return_value=mock_settings,
+        ):
+            pipeline = adaptive_pipeline("test_service", tier_id="critical")
+        guard_types = [type(g) for g in pipeline._guards]
+        assert KillSwitchGuard in guard_types
+
+    def test_enabled_no_tier_returns_standard(self):
+        """adaptive_enabled=True + tier_id=None → standard_pipeline 반환."""
+        from unittest.mock import patch
+
+        from selfhealing.resilience.policies.presets import adaptive_pipeline
+        from selfhealing.settings.pipeline import PipelineSettings
+
+        self._reset_settings()
+        mock_settings = PipelineSettings(
+            adaptive_enabled=True,
+            hot_path_tiers=["non_essential"],
+            audit_sampling_rate=1.0,
+        )
+        with patch(
+            "selfhealing.settings.pipeline.get_pipeline_settings",
+            return_value=mock_settings,
+        ):
+            pipeline = adaptive_pipeline("test_service", tier_id=None)
+        guard_types = [type(g) for g in pipeline._guards]
+        assert KillSwitchGuard in guard_types
+
+    def test_degradation_active_returns_minimal(self):
+        """GracefulDegradation이 full_guards를 비활성화하면 minimal 반환."""
+        from unittest.mock import MagicMock, patch
+
+        from selfhealing.resilience.policies.presets import adaptive_pipeline
+        from selfhealing.settings.pipeline import PipelineSettings
+
+        self._reset_settings()
+        mock_settings = PipelineSettings(
+            adaptive_enabled=True,
+            hot_path_tiers=[],
+            audit_sampling_rate=1.0,
+        )
+        mock_degradation = MagicMock()
+        mock_degradation.is_enabled.return_value = False
+
+        with (
+            patch(
+                "selfhealing.settings.pipeline.get_pipeline_settings",
+                return_value=mock_settings,
+            ),
+            patch(
+                "selfhealing.scaling.graceful_degradation.get_graceful_degradation",
+                return_value=mock_degradation,
+            ),
+        ):
+            pipeline = adaptive_pipeline("test_service", tier_id="standard")
+        # minimal → Guard 없음
+        assert len(pipeline._guards) == 0
+        mock_degradation.is_enabled.assert_called_once_with("full_guards")
+
+    def test_audit_sampling_rate_propagated_to_minimal(self):
+        """adaptive_pipeline의 audit_sampling_rate가 minimal에 전달된다."""
+        from unittest.mock import patch
+
+        from selfhealing.resilience.policies.hooks.sampled_audit import (
+            SampledAuditHook,
+        )
+        from selfhealing.resilience.policies.presets import adaptive_pipeline
+        from selfhealing.settings.pipeline import PipelineSettings
+
+        self._reset_settings()
+        mock_settings = PipelineSettings(
+            adaptive_enabled=True,
+            hot_path_tiers=["non_essential"],
+            audit_sampling_rate=0.05,
+        )
+        with patch(
+            "selfhealing.settings.pipeline.get_pipeline_settings",
+            return_value=mock_settings,
+        ):
+            pipeline = adaptive_pipeline("test_service", tier_id="non_essential")
+        assert len(pipeline._hooks) == 1
+        hook = pipeline._hooks[0]
+        assert isinstance(hook, SampledAuditHook)
+        assert hook.sample_rate == 0.05
+
+    def test_fallback_params_forwarded_to_standard(self):
+        """adaptive_pipeline의 fallback 파라미터가 standard_pipeline에 전달된다."""
+        from selfhealing.resilience.policies.presets import adaptive_pipeline
+
+        self._reset_settings()
+        pipeline = adaptive_pipeline(
+            "test_service",
+            fallback_default={"status": "degraded"},
+        )
+        policy_names = [p.name for p in pipeline._policies]
+        assert "fallback" in policy_names
