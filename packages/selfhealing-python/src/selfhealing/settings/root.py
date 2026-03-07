@@ -39,6 +39,7 @@ from selfhealing.settings.error_budget import ErrorBudgetSettings
 from selfhealing.settings.forensic import ForensicSettings
 from selfhealing.settings.governance import GovernanceSettings
 from selfhealing.settings.idempotency import IdempotencySettings
+from selfhealing.settings.kafka_producer import KafkaProducerSettings
 from selfhealing.settings.l2_storage import L2StorageSettings
 from selfhealing.settings.logging_config import LoggingSettings
 from selfhealing.settings.metrics import MetricsSettings
@@ -155,6 +156,10 @@ class SelfHealingSettings(BaseSettings):
     detection: DetectionSettings = Field(
         default_factory=DetectionSettings,
         description="Anomaly detection and correlation engine configuration",
+    )
+    kafka_producer: KafkaProducerSettings = Field(
+        default_factory=KafkaProducerSettings,
+        description="Kafka producer timeout configuration",
     )
 
     # ==========================================================================

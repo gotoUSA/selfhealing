@@ -363,25 +363,21 @@ class RedisEventBus:
         except ImportError:
             raise RuntimeError("kafka-python package not installed")
 
+        from selfhealing.settings.kafka_producer import get_kafka_producer_settings
+
+        _kafka = get_kafka_producer_settings()
         producer = KafkaProducer(
             bootstrap_servers=kafka_bootstrap.split(","),
             value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
             acks="all",
             retries=3,
-            request_timeout_ms=10000,
+            request_timeout_ms=_kafka.request_timeout_ms,
         )
 
         topic = "selfhealing.routing.events"
-        from selfhealing.settings.thread_management import (
-            get_thread_management_settings,
-        )
-
-        _thread_settings = get_thread_management_settings()
-        producer.send(topic, value=event.to_dict()).get(
-            timeout=_thread_settings.join_timeout_long
-        )
-        producer.flush(timeout=_thread_settings.join_timeout)
-        producer.close(timeout=_thread_settings.join_timeout)
+        producer.send(topic, value=event.to_dict()).get(timeout=_kafka.send_timeout)
+        producer.flush(timeout=_kafka.shutdown_timeout)
+        producer.close(timeout=_kafka.shutdown_timeout)
 
         logger.info(
             "redis_event_bus.event_published_kafka_fallback",

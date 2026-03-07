@@ -10,7 +10,7 @@ IQRDetector:
     IQR(사분위수 범위) 기반 이상 탐지. Z-Score보다 이상치에 강건(robust).
     정규분포 가정이 불필요하며, 극단적 이상치 영향을 적게 받는다.
 
-외부 의존성 없이 Python 표준 라이브러리(math, collections)만 사용.
+외부 의존성 없이 Python 표준 라이브러리(math, collections, time)만 사용.
 
 Usage:
     from selfhealing.services.predictive_forecaster.anomaly_detector import (
@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import collections
 import math
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -97,7 +98,6 @@ class ZScoreDetector:
         """max_age_seconds 초과 데이터 포인트를 좌측에서 제거."""
         if self._max_age_seconds is None or not self._timestamps:
             return
-        import time
 
         cutoff = time.monotonic() - self._max_age_seconds
         while self._timestamps and self._timestamps[0] < cutoff:
@@ -260,6 +260,9 @@ class ZScoreDetector:
             max_age_seconds=data.get("max_age_seconds"),
         )
         det._values.extend(data["values"])
+        if det._max_age_seconds is not None and det._values:
+            now = time.monotonic()
+            det._timestamps.extend([now] * len(det._values))
         return det
 
 

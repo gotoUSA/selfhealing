@@ -173,6 +173,57 @@ class TestZScoreHybridWindowSerializationBehavior:
         assert restored._max_age_seconds == original._max_age_seconds
         assert list(restored._values) == list(original._values)
 
+    def test_round_trip_restores_timestamps_when_max_age_set(self):
+        """from_dict()가 max_age_seconds 설정 시 _timestamps를 복원한다."""
+        original = ZScoreDetector(threshold=2.5, window=50, max_age_seconds=60.0)
+        original._values.extend([1.0, 2.0, 3.0])
+
+        restored = ZScoreDetector.from_dict(original.to_dict())
+
+        assert len(restored._timestamps) == len(restored._values)
+        assert len(restored._timestamps) == 3
+
+    def test_round_trip_no_timestamps_when_max_age_none(self):
+        """from_dict()가 max_age_seconds=None 시 _timestamps를 생성하지 않는다."""
+        original = ZScoreDetector(threshold=3.0, window=100)
+        original._values.extend([1.0, 2.0, 3.0])
+
+        restored = ZScoreDetector.from_dict(original.to_dict())
+
+        assert len(restored._timestamps) == 0
+
+    def test_round_trip_append_then_evict_keeps_alignment(self):
+        """복원 후 값 추가 + 제거 시 _values와 _timestamps 정렬이 유지된다."""
+        # 복원: 5개 값, 타임스탬프는 "지금" 기준으로 생성됨
+        data = {
+            "values": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "threshold": 3.0,
+            "window": 100,
+            "max_age_seconds": 10.0,
+        }
+
+        with patch("time.monotonic", return_value=1000.0):
+            restored = ZScoreDetector.from_dict(data)
+
+        assert len(restored._values) == 5
+        assert len(restored._timestamps) == 5
+
+        # 새 값 3개 추가 (8초 후)
+        with patch("time.monotonic", return_value=1008.0):
+            for v in [6.0, 7.0, 8.0]:
+                restored._append_value(v)
+
+        assert len(restored._values) == 8
+        assert len(restored._timestamps) == 8
+
+        # 11초 후 제거 → 복원된 5개만 만료, 새 3개 유지
+        with patch("time.monotonic", return_value=1011.0):
+            restored._evict_stale()
+
+        assert len(restored._values) == 3
+        assert len(restored._timestamps) == 3
+        assert list(restored._values) == [6.0, 7.0, 8.0]
+
     def test_round_trip_without_max_age_preserves_none(self):
         """max_age_seconds=None인 경우 직렬화/역직렬화 시 None 유지."""
         original = ZScoreDetector(threshold=3.0, window=100)

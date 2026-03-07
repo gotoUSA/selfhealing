@@ -231,6 +231,13 @@ from selfhealing.settings.idempotency import (
     get_idempotency_settings,
     reset_idempotency_settings,
 )
+
+# 313: Kafka Producer Settings
+from selfhealing.settings.kafka_producer import (
+    KafkaProducerSettings,
+    get_kafka_producer_settings,
+    reset_kafka_producer_settings,
+)
 from selfhealing.settings.l2_storage import (
     L2StorageSettings,
     get_l2_storage_settings,
@@ -752,4 +759,8 @@ __all__ = [
     "DetectionSettings",
     "get_detection_settings",
     "reset_detection_settings",
+    # 313: Kafka Producer
+    "KafkaProducerSettings",
+    "get_kafka_producer_settings",
+    "reset_kafka_producer_settings",
 ]
