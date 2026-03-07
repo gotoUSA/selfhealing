@@ -11,11 +11,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from selfhealing.core.exceptions import RunbookError
+
 if TYPE_CHECKING:
     from selfhealing.services.runbook.execution_models import ApprovalDecisionType
 
 
-class RunbookExecutionError(Exception):
+class RunbookExecutionError(RunbookError):
     """Runbook 실행 중 일반 오류."""
 
 

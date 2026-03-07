@@ -99,7 +99,7 @@ SelfHealingError (Exception)
 │   ├── IPCConnectionError
 │   └── IPCProtocolError
 ├── RunbookError
-│   └── (RunbookNotFoundError — 별도 마이그레이션 예정, services/runbook/exceptions.py에 유지)
+│   └── RunbookNotFoundError
 └── ConfigurationError                # 설정 관련 에러
     └── SettingsValidationError
 ```
