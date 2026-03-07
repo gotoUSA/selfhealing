@@ -72,7 +72,7 @@ def _collect_violations() -> list[tuple[str, int, str]]:
     return violations
 
 
-class TestEventNameConventionScan:
+class TestEventNameConventionScanBehavior:
     """AST 기반 이벤트명 컨벤션 소스 스캔."""
 
     def test_violation_count_within_threshold(self):

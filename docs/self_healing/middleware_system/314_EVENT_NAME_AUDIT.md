@@ -300,6 +300,7 @@ logger.info("dlq_consumer.consume_loop_started")
 4. **Add source-scan test** — CI test that greps all `logger.*("` calls and validates against pattern
    - Prevents regression after migration
    - More reliable than runtime validation for catching violations early
+   - **Implemented**: `test_event_name_convention.py` — threshold = 600 (현재 위반 547건, P1 마이그레이션 진행에 따라 점진 축소)
 
 5. **Switch Prometheus counter to fixed buckets** (Option E) after migration completes
    - `counter.labels(violation_type="...")` with 5 fixed categories
