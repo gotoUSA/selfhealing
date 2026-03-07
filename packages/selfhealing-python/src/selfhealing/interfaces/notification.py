@@ -32,7 +32,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Any
 
 import structlog
@@ -45,27 +44,11 @@ logger = structlog.get_logger()
 # =============================================================================
 
 
-class NotificationSeverity(str, Enum):
-    """Notification urgency levels."""
+from selfhealing.interfaces.messaging_common import MessageChannel, MessageSeverity
 
-    CRITICAL = "critical"  # Immediate action required (pages on-call)
-    HIGH = "high"  # Urgent but not page-worthy
-    MEDIUM = "medium"  # Should be addressed soon
-    LOW = "low"  # Informational
-    INFO = "info"  # FYI only
-
-
-class NotificationChannel(str, Enum):
-    """Notification delivery channels."""
-
-    SLACK = "slack"
-    TEAMS = "teams"
-    PAGERDUTY = "pagerduty"
-    EMAIL = "email"
-    WEBHOOK = "webhook"
-    SMS = "sms"
-    STDOUT = "stdout"  # Default: print to console
-    FILE = "file"  # Log to file
+# Backward-compatible aliases
+NotificationSeverity = MessageSeverity
+NotificationChannel = MessageChannel
 
 
 @dataclass

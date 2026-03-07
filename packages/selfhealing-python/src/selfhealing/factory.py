@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
+    from selfhealing.interfaces.alert_adapter import AlertAdapter
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
     from selfhealing.interfaces.cache_provider import CacheProviderInterface
     from selfhealing.interfaces.event_journal import EventJournalRepository
@@ -69,6 +70,8 @@ class ProviderRegistry:
     _mesh_override_stores: dict[str, type] = {}
     _notifications: dict[str, type | Callable] = {}
     _notification_instances: dict[str, NotificationAdapter] = {}
+    _alerts: dict[str, type | Callable] = {}
+    _alert_instances: dict[str, object] = {}
 
     # Statistics adapter (singleton, registered by app)
     _statistics_adapter: StatisticsRepositoryInterface | None = None
@@ -83,6 +86,7 @@ class ProviderRegistry:
     _default_audit: str = "file"
     _default_traffic_routing: str = "logging"
     _default_notification: str = "logging"
+    _default_alert: str = "stdout"
 
     # Singleton instances (for reuse)
     _instances: dict[str, object] = {}
@@ -168,6 +172,12 @@ class ProviderRegistry:
         """Register a notification adapter."""
         cls._notifications[name] = adapter_class
         logger.debug("registry.notification_registered", name=name)
+
+    @classmethod
+    def register_alert(cls, name: str, factory: type | Callable) -> None:
+        """Register an alert adapter."""
+        cls._alerts[name] = factory
+        logger.debug("registry.alert_registered", name=name)
 
     @classmethod
     def register_correlation_strategy(cls, name: str, strategy_class: type) -> None:
@@ -769,6 +779,54 @@ class ProviderRegistry:
             pass
 
     # =========================================================================
+    # Alert Adapter
+    # =========================================================================
+
+    @classmethod
+    def get_alert(
+        cls,
+        name: str | None = None,
+    ) -> AlertAdapter:
+        """Get alert adapter instance. Thread-safe singleton.
+
+        Args:
+            name: Adapter name (e.g., 'stdout', 'null')
+
+        Returns:
+            AlertAdapter instance
+        """
+        target = name or cls._default_alert
+
+        if target in cls._alert_instances:
+            return cls._alert_instances[target]
+
+        with cls._lock:
+            if target in cls._alert_instances:
+                return cls._alert_instances[target]
+
+            if target not in cls._alerts:
+                cls._auto_register_alert_adapters()
+
+            factory = cls._alerts.get(target)
+            if factory:
+                cls._alert_instances[target] = factory()
+
+        return cls._alert_instances.get(target)
+
+    @classmethod
+    def _auto_register_alert_adapters(cls) -> None:
+        """Auto-register default alert adapters."""
+        try:
+            from selfhealing.adapters.alert import NullAlertAdapter, StdoutAlertAdapter
+
+            if "stdout" not in cls._alerts:
+                cls.register_alert("stdout", StdoutAlertAdapter)
+            if "null" not in cls._alerts:
+                cls.register_alert("null", NullAlertAdapter)
+        except ImportError:
+            pass
+
+    # =========================================================================
     # Correlation Engine Strategy Getters
     # =========================================================================
 
@@ -867,6 +925,7 @@ class ProviderRegistry:
             "traffic_routing": list(cls._traffic_routing_adapters.keys()),
             "event_journal_repo": list(cls._event_journal_repos.keys()),
             "notification": list(cls._notifications.keys()),
+            "alert": list(cls._alerts.keys()),
             "statistics_adapter": (
                 type(cls._statistics_adapter).__name__
                 if cls._statistics_adapter
@@ -883,6 +942,7 @@ class ProviderRegistry:
         """
         cls._instances.clear()
         cls._notification_instances.clear()
+        cls._alert_instances.clear()
         logger.debug("registry")
 
     @classmethod
@@ -906,6 +966,8 @@ class ProviderRegistry:
         cls._event_journal_repos.clear()
         cls._notifications.clear()
         cls._notification_instances.clear()
+        cls._alerts.clear()
+        cls._alert_instances.clear()
         cls._statistics_adapter = None
         cls._postmortem_model = None
         cls._default_cache = "memory"
@@ -914,6 +976,7 @@ class ProviderRegistry:
         cls._default_audit = "file"
         cls._default_traffic_routing = "logging"
         cls._default_notification = "logging"
+        cls._default_alert = "stdout"
         logger.debug("registry")
 
     # =========================================================================
@@ -1128,10 +1191,18 @@ def _auto_register_adapters() -> None:
     # Notification adapters
     _auto_register_notification_adapters()
 
+    # Alert adapters
+    _auto_register_alert_adapters()
+
 
 def _auto_register_notification_adapters() -> None:
     """Auto-register default notification adapters (delegates to class method)."""
     ProviderRegistry._auto_register_notification_adapters()
+
+
+def _auto_register_alert_adapters() -> None:
+    """Auto-register default alert adapters (delegates to class method)."""
+    ProviderRegistry._auto_register_alert_adapters()
 
 
 # Run auto-registration on module import

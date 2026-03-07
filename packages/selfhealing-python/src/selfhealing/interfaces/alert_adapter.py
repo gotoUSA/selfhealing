@@ -36,11 +36,21 @@ logger = structlog.get_logger()
 
 
 class AlertSeverity(str, Enum):
-    """Alert severity levels."""
+    """Alert severity levels.
+
+    .. deprecated::
+        Use MessageSeverity from interfaces.messaging_common instead.
+        Kept as backward-compatible alias.
+    """
 
     CRITICAL = "critical"  # Immediate attention required
     WARNING = "warning"  # Needs attention soon
     INFO = "info"  # Informational
+
+
+# Backward-compatible alias: AlertSeverity values map to MessageSeverity
+# AlertSeverity has fewer members (no HIGH/MEDIUM/LOW), so it remains
+# as a separate Enum for type safety in Alert dataclass.
 
 
 class AlertCategory(str, Enum):
