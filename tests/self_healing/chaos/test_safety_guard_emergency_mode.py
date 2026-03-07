@@ -203,7 +203,7 @@ class TestSafetyGuardEmergencyAudit:
                     mock_em.return_value = mock_manager
 
                     with patch(
-                        "selfhealing.services.audit_helpers.log_governance_blocked_audit"
+                        "selfhealing.services.audit.log_governance_blocked_audit"
                     ) as mock_audit:
                         result = guard.check(experiment_id="test-audit-001")
 
@@ -232,7 +232,7 @@ class TestSafetyGuardEmergencyAudit:
                     mock_em.return_value = mock_manager
 
                     with patch(
-                        "selfhealing.services.audit_helpers.log_governance_blocked_audit"
+                        "selfhealing.services.audit.log_governance_blocked_audit"
                     ) as mock_audit:
                         guard.check(experiment_id="test-audit-002")
 
@@ -260,7 +260,7 @@ class TestSafetyGuardEmergencyAudit:
                         return_value={"remaining_percent": 100.0},
                     ):
                         with patch(
-                            "selfhealing.services.audit_helpers.log_governance_blocked_audit"
+                            "selfhealing.services.audit.log_governance_blocked_audit"
                         ) as mock_audit:
                             result = guard.check(experiment_id="test-audit-003")
 
@@ -283,7 +283,7 @@ class TestSafetyGuardEmergencyAudit:
                     mock_em.return_value = mock_manager
 
                     with patch(
-                        "selfhealing.services.audit_helpers.log_governance_blocked_audit",
+                        "selfhealing.services.audit.log_governance_blocked_audit",
                         side_effect=Exception("Audit failed"),
                     ):
                         # Audit 실패해도 차단은 정상 동작해야 함
@@ -316,7 +316,7 @@ class TestSafetyGuardEmergencyAudit:
                     mock_em.return_value = mock_manager
 
                     with patch(
-                        "selfhealing.services.audit_helpers.log_governance_blocked_audit"
+                        "selfhealing.services.audit.log_governance_blocked_audit"
                     ) as mock_audit:
                         guard.check(experiment_id="test-audit-005")
 

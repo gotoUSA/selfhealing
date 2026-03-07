@@ -871,7 +871,7 @@ class GracefulDegradationManager:
         - 변경: log_emergency_mode_audit 헬퍼 사용 (WAL + 해시 체인 연결)
         """
         try:
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             log_emergency_mode_audit(
                 action=action,

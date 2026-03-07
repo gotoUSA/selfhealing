@@ -1233,7 +1233,7 @@ class ChaosExperiment(abc.ABC):
         - 변경: WAL + 해시 체인 연결
         - 하위 호환: _audit_records 리스트 유지
         """
-        from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+        from selfhealing.services.audit import log_chaos_experiment_audit
 
         record_id = log_chaos_experiment_audit(
             experiment_id=self.experiment_id,

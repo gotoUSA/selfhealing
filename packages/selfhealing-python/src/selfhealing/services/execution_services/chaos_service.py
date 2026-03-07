@@ -23,7 +23,7 @@ from typing import Any
 
 import structlog
 
-from selfhealing.services.governance_checks import (
+from selfhealing.services.governance.checks import (
     GovernanceCheckMixin,
     check_all_governance,
 )

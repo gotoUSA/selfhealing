@@ -71,7 +71,7 @@ class ProviderRegistry:
     _notifications: dict[str, type | Callable] = {}
     _notification_instances: dict[str, NotificationAdapter] = {}
     _alerts: dict[str, type | Callable] = {}
-    _alert_instances: dict[str, object] = {}
+    _alert_instances: dict[str, AlertAdapter] = {}
 
     # Statistics adapter (singleton, registered by app)
     _statistics_adapter: StatisticsRepositoryInterface | None = None
@@ -807,11 +807,16 @@ class ProviderRegistry:
             if target not in cls._alerts:
                 cls._auto_register_alert_adapters()
 
-            factory = cls._alerts.get(target)
-            if factory:
-                cls._alert_instances[target] = factory()
+            if target not in cls._alerts:
+                raise ValueError(
+                    f"Unknown alert adapter: {target}. "
+                    f"Available: {list(cls._alerts.keys())}"
+                )
 
-        return cls._alert_instances.get(target)
+            factory = cls._alerts[target]
+            instance = factory()
+            cls._alert_instances[target] = instance
+            return instance
 
     @classmethod
     def _auto_register_alert_adapters(cls) -> None:

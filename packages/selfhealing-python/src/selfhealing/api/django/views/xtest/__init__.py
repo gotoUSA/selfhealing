@@ -47,7 +47,7 @@ DLQ Test Endpoints:
 
 # Base utilities and Regional Scope constants
 # Incident functions from postmortem_store
-from selfhealing.services.postmortem_store import (
+from selfhealing.services.postmortem.store import (
     add_healing_incident,
     get_healing_incidents,
     get_healing_incidents_count,

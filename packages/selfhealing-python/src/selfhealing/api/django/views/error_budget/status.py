@@ -26,7 +26,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
-from selfhealing.services.error_budget_service import (
+from selfhealing.services.error_budget import (
     get_error_budget_service,
     get_failsafe_status_response,
 )

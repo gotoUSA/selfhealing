@@ -20,7 +20,7 @@ class TestBufferIntegration:
             "selfhealing.services.audit.chaos_audit._try_add_to_buffer",
             return_value=True,
         ) as mock_buffer:
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             mock_request = MagicMock()
 
@@ -46,7 +46,7 @@ class TestBufferIntegration:
         ) as mock_buffer, patch(
             "selfhealing.audit.log_config_change",
         ):
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             mock_request = MagicMock()
 
@@ -73,7 +73,7 @@ class TestBufferIntegration:
             "selfhealing.services.audit.chaos_audit._try_add_to_buffer",
             return_value=True,
         ) as mock_buffer:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 

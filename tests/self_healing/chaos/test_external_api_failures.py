@@ -61,7 +61,7 @@ class TestPaymentTimeoutRecovery:
         - Entry includes order_id, payment_key, amount for replay
         """
         from selfhealing.services import DLQService
-        from selfhealing.services.dlq_models import DLQConfig
+        from selfhealing.services.dlq.models import DLQConfig
 
         # Use in-memory repository for testing
         from unittest.mock import Mock
@@ -117,7 +117,7 @@ class TestPaymentTimeoutRecovery:
         - Replay mechanism can use the same key
         """
         from selfhealing.services import DLQService
-        from selfhealing.services.dlq_models import DLQConfig
+        from selfhealing.services.dlq.models import DLQConfig
         from unittest.mock import Mock
 
         mock_repo = Mock()
@@ -210,7 +210,7 @@ class TestConnectionFailureRecovery:
         - Entry is marked as retryable (auto_replay candidate)
         """
         from selfhealing.services import DLQService
-        from selfhealing.services.dlq_models import DLQConfig
+        from selfhealing.services.dlq.models import DLQConfig
 
         dlq_service = DLQService(
             config=DLQConfig(enabled=True, retention_days=30, max_replay_attempts=3),
@@ -307,7 +307,7 @@ class TestRateLimitingRecovery:
         - Retry is not immediate
         """
         from selfhealing.services import DLQService
-        from selfhealing.services.dlq_models import DLQConfig
+        from selfhealing.services.dlq.models import DLQConfig
         from unittest.mock import Mock
 
         mock_repo = Mock()
@@ -399,7 +399,7 @@ class TestExponentialBackoffRetry:
         - Metrics on retry success rates
         """
         from selfhealing.services import DLQService
-        from selfhealing.services.dlq_models import DLQConfig
+        from selfhealing.services.dlq.models import DLQConfig
         from unittest.mock import Mock
 
         mock_repo = Mock()
@@ -649,7 +649,7 @@ class TestServiceUnavailableRecovery:
         - Entry includes suggested retry delay
         """
         from selfhealing.services import DLQService
-        from selfhealing.services.dlq_models import DLQConfig
+        from selfhealing.services.dlq.models import DLQConfig
         from unittest.mock import Mock
 
         mock_repo = Mock()

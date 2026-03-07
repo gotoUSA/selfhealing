@@ -406,7 +406,7 @@ def _get_last_processed_sequence() -> int:
 def _get_wal_instance():
     """WAL 인스턴스 가져오기."""
     try:
-        from selfhealing.services.audit_helpers import _get_wal
+        from selfhealing.services.audit import _get_wal
 
         return _get_wal()
     except Exception:

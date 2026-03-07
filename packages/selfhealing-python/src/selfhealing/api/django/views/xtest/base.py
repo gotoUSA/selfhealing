@@ -715,7 +715,7 @@ def collect_system_snapshot() -> dict[str, Any]:
 
         # Error Budget에서 에러율 조회
         try:
-            from selfhealing.services.error_budget_service import (
+            from selfhealing.services.error_budget import (
                 get_error_budget_service,
             )
 

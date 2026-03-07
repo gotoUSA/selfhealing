@@ -112,19 +112,19 @@ def mock_governance_checks():
     mock_result.block_message = ""
 
     with patch(
-        "selfhealing.services.governance_checks.check_all_governance",
+        "selfhealing.services.governance.checks.check_all_governance",
         return_value=mock_result,
     ):
         with patch(
-            "selfhealing.services.governance_checks.is_system_enabled",
+            "selfhealing.services.governance.checks.is_system_enabled",
             return_value=True,
         ):
             with patch(
-                "selfhealing.services.governance_checks.is_emergency_blocking",
+                "selfhealing.services.governance.checks.is_emergency_blocking",
                 return_value=(False, "NORMAL"),
             ):
                 with patch(
-                    "selfhealing.services.governance_checks.is_error_budget_blocking",
+                    "selfhealing.services.governance.checks.is_error_budget_blocking",
                     return_value=(False, 100.0, 20.0),
                 ):
                     yield mock_result
@@ -158,7 +158,7 @@ def mock_circuit_breaker():
     }
 
     with patch(
-        "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+        "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
         return_value=mock_cb_service,
     ):
         yield mock_cb_service
@@ -278,7 +278,7 @@ class TestReplaySingleView:
         mock_gov_result.block_message = "Kill Switch is active"
 
         with patch(
-            "selfhealing.services.governance_checks.check_all_governance",
+            "selfhealing.services.governance.checks.check_all_governance",
             return_value=mock_gov_result,
         ):
             view = ReplaySingleView.as_view()
@@ -630,7 +630,7 @@ class TestReplayIntegrationScenarios:
         mock_gov_result.block_message = "Error budget exhausted"
 
         with patch(
-            "selfhealing.services.governance_checks.check_all_governance",
+            "selfhealing.services.governance.checks.check_all_governance",
             return_value=mock_gov_result,
         ):
             view = ReplaySingleView.as_view()

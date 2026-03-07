@@ -17,7 +17,7 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 
@@ -43,7 +43,7 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=2,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 
@@ -69,7 +69,7 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=3,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 
@@ -95,7 +95,7 @@ class TestLogErrorBudgetBlockedAudit:
             ),
             patch("selfhealing.services.audit.chaos_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 
@@ -123,7 +123,7 @@ class TestLogErrorBudgetBlockedAudit:
             ),
             patch("selfhealing.services.audit.chaos_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 
@@ -147,7 +147,7 @@ class TestLogErrorBudgetBlockedAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=6,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 
@@ -185,7 +185,7 @@ class TestLogErrorBudgetBlockedAudit:
                 return_value="auto-trace-456",
             ),
         ):
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 
@@ -212,7 +212,7 @@ class TestLogErrorBudgetBlockedAudit:
                 {"selfhealing.audit.trace": None},
             ),
         ):
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 
@@ -238,7 +238,7 @@ class TestLogErrorBudgetBlockedAudit:
             ),
             patch("selfhealing.services.audit.chaos_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 

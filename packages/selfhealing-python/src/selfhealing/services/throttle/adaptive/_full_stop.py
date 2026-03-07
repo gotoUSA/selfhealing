@@ -61,7 +61,7 @@ class FullStopMixin:
             True if any DB circuit breaker is OPEN
         """
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 get_circuit_breaker_service,
             )
 
@@ -102,7 +102,7 @@ class FullStopMixin:
             True if error budget is exhausted (0% or less)
         """
         try:
-            from selfhealing.services.error_budget_service import (
+            from selfhealing.services.error_budget import (
                 get_error_budget_service,
             )
 

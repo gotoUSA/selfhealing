@@ -350,7 +350,7 @@ def reset_watchdog_singleton():
 # 제거할 audit 모듈 목록 (의존성 역순으로 정렬) — 모듈 레벨 상수로 정의
 _AUDIT_MODULES_TO_CLEAR = frozenset(
     [
-        "selfhealing.services.audit_helpers",
+        "selfhealing.services.audit",
         "selfhealing.services.audit",
         "selfhealing.services.audit.retry_audit",
         "selfhealing.services.audit.chaos_audit",

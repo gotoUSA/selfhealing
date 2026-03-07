@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.services.governance_checks import GovernanceCheckResult
+from selfhealing.services.governance.checks import GovernanceCheckResult
 from selfhealing.services.replay_service import (
     BatchReplayResult,
     DefaultReplayHandler,

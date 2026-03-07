@@ -11,7 +11,7 @@ class TestPostmortemStoreInMemory:
 
     def test_add_healing_incident_stores_in_memory(self):
         """인시던트가 In-Memory에 저장되는지 확인."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_healing_incidents,
@@ -40,7 +40,7 @@ class TestPostmortemStoreInMemory:
 
     def test_get_healing_incidents_respects_limit(self):
         """limit 파라미터가 적용되는지 확인."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_healing_incidents,
@@ -61,7 +61,7 @@ class TestPostmortemStoreInMemory:
 
     def test_get_healing_incidents_count(self):
         """인시던트 개수 조회 테스트."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_healing_incidents_count,
@@ -82,7 +82,7 @@ class TestPostmortemStoreInMemory:
 
     def test_clear_healing_incidents(self):
         """인시던트 초기화 테스트."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_healing_incidents_count,
@@ -105,7 +105,7 @@ class TestPostmortemStoreDbPersistence:
 
     def test_db_persistence_toggle(self):
         """DB 영속성 활성화/비활성화 토글 테스트."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             get_db_persistence_enabled,
             set_db_persistence_enabled,
         )
@@ -118,7 +118,7 @@ class TestPostmortemStoreDbPersistence:
 
     def test_add_incident_skips_db_when_disabled(self):
         """DB 영속성 비활성화 시 DB 저장을 건너뛰는지 확인."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_healing_incidents_count,
@@ -142,7 +142,7 @@ class TestPostmortemStoreImport:
 
     def test_import_from_postmortem_store(self):
         """postmortem_store.py에서 직접 import 가능한지 확인."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_healing_incidents,
@@ -162,7 +162,7 @@ class TestGetIncidentById:
 
     def test_get_incident_by_id_found(self):
         """ID로 인시던트 조회 성공 테스트."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_incident_by_id,
@@ -190,7 +190,7 @@ class TestGetIncidentById:
 
     def test_get_incident_by_id_not_found(self):
         """ID로 인시던트 조회 실패 테스트 (없는 ID)."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             clear_healing_incidents,
             get_incident_by_id,
             set_db_persistence_enabled,
@@ -205,7 +205,7 @@ class TestGetIncidentById:
 
     def test_get_incident_by_id_returns_dict(self):
         """반환된 인시던트가 dict인지 확인."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_incident_by_id,
@@ -230,7 +230,7 @@ class TestGetIncidentById:
 
     def test_get_incident_by_id_multiple_incidents(self):
         """여러 인시던트 중 정확한 ID 조회 테스트."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             clear_healing_incidents,
             get_incident_by_id,

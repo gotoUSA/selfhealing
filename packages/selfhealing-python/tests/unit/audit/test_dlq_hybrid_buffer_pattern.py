@@ -27,7 +27,7 @@ class TestDLQServiceWithRequest:
     def test_store_failure_with_request_adds_to_buffer(self):
         """store_failure가 request와 함께 호출되면 버퍼에 이벤트가 적재되어야 함."""
         from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
-        from selfhealing.services.dlq_service import DLQConfig, DLQService
+        from selfhealing.services.dlq import DLQConfig, DLQService
 
         # Mock repository
         mock_repo = MagicMock()
@@ -62,7 +62,7 @@ class TestDLQServiceWithRequest:
 
     def test_store_failure_without_request_logs_directly(self):
         """store_failure가 request 없이 호출되면 직접 로깅."""
-        from selfhealing.services.dlq_service import DLQConfig, DLQService
+        from selfhealing.services.dlq import DLQConfig, DLQService
 
         # Mock repository
         mock_repo = MagicMock()
@@ -92,7 +92,7 @@ class TestDLQServiceReplay:
     def test_replay_with_request_logs_to_buffer(self):
         """replay가 request와 함께 호출되면 버퍼에 이벤트가 적재되어야 함."""
         from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
-        from selfhealing.services.dlq_service import DLQConfig, DLQService
+        from selfhealing.services.dlq import DLQConfig, DLQService
 
         # Mock repository
         mock_repo = MagicMock()
@@ -136,7 +136,7 @@ class TestAuditHelpersHybridWithRequest:
     def test_log_dlq_store_with_request_adds_to_buffer(self):
         """request와 함께 호출 시 버퍼에 적재."""
         from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
-        from selfhealing.services.audit_helpers import log_dlq_store_audit
+        from selfhealing.services.audit import log_dlq_store_audit
 
         request = MockRequest()
 
@@ -157,7 +157,7 @@ class TestAuditHelpersHybridWithRequest:
     def test_log_dlq_replay_with_request_adds_to_buffer(self):
         """request와 함께 호출 시 버퍼에 적재."""
         from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
-        from selfhealing.services.audit_helpers import log_dlq_replay_audit
+        from selfhealing.services.audit import log_dlq_replay_audit
 
         request = MockRequest()
 
@@ -177,7 +177,7 @@ class TestAuditHelpersHybridWithRequest:
     def test_log_cb_state_change_with_request_adds_to_buffer(self):
         """request와 함께 호출 시 버퍼에 적재."""
         from selfhealing.audit.event_buffer import AuditEventType, RequestAuditBuffer
-        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+        from selfhealing.services.audit import log_cb_state_change_audit
 
         request = MockRequest()
 
@@ -196,7 +196,7 @@ class TestAuditHelpersHybridWithRequest:
 
     def test_backward_compatibility_without_request(self):
         """request 없이 호출 시 하위 호환 유지."""
-        from selfhealing.services.audit_helpers import (
+        from selfhealing.services.audit import (
             log_cb_state_change_audit,
             log_dlq_replay_audit,
             log_dlq_store_audit,
@@ -222,7 +222,7 @@ class TestBufferIntegrity:
     def test_multiple_operations_accumulate_in_buffer(self):
         """여러 작업이 동일 버퍼에 누적되어야 함."""
         from selfhealing.audit.event_buffer import RequestAuditBuffer
-        from selfhealing.services.audit_helpers import (
+        from selfhealing.services.audit import (
             log_cb_state_change_audit,
             log_dlq_store_audit,
             log_rate_limited_audit,
@@ -242,7 +242,7 @@ class TestBufferIntegrity:
     def test_events_maintain_order(self):
         """이벤트가 적재 순서를 유지해야 함."""
         from selfhealing.audit.event_buffer import RequestAuditBuffer
-        from selfhealing.services.audit_helpers import log_dlq_store_audit
+        from selfhealing.services.audit import log_dlq_store_audit
 
         request = MockRequest()
 

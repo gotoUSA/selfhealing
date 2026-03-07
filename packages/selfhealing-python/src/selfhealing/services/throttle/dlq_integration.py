@@ -78,7 +78,7 @@ class ThrottleDLQIntegration:
         """DLQ 서비스 인스턴스 가져오기."""
         if self._dlq_service is None:
             try:
-                from selfhealing.services.dlq_service import get_dlq_service
+                from selfhealing.services.dlq import get_dlq_service
 
                 self._dlq_service = get_dlq_service()
             except ImportError:

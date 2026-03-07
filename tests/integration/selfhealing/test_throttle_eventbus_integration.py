@@ -245,7 +245,7 @@ class TestThrottleRedisEventPropagation:
     def test_throttle_event_channel_mapping(self):
         """Throttle 이벤트가 올바른 채널에 매핑되는지 확인."""
         from selfhealing.services.event_bus import EventType
-        from selfhealing.services.event_bus_redis import EVENT_TYPE_TO_CHANNEL, EventChannel
+        from selfhealing.services.event_bus.redis_bus import EVENT_TYPE_TO_CHANNEL, EventChannel
 
         # THROTTLE_LIMIT_CHANGED → THROTTLE 채널
         assert EVENT_TYPE_TO_CHANNEL.get(EventType.THROTTLE_LIMIT_CHANGED) == EventChannel.THROTTLE
@@ -258,7 +258,7 @@ class TestThrottleRedisEventPropagation:
 
     def test_throttle_channel_defined(self):
         """THROTTLE 채널이 SELFHEALING_EVENT_CHANNELS에 정의되어 있는지 확인."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             SELFHEALING_EVENT_CHANNELS,
             EventChannel,
         )
@@ -271,7 +271,7 @@ class TestThrottleRedisEventPropagation:
         if not redis_available:
             pytest.skip("Redis not available")
 
-        from selfhealing.services.event_bus_redis import RedisEventBus
+        from selfhealing.services.event_bus.redis_bus import RedisEventBus
         from selfhealing.services.event_bus import EventType, SelfHealingEvent
 
         # RedisEventBus 인스턴스 생성
@@ -300,7 +300,7 @@ class TestThrottleRedisEventPropagation:
 
     def test_redis_fallback_on_connection_failure(self):
         """Redis 연결 실패 시 로컬 EventBus로 폴백하는지 확인."""
-        from selfhealing.services.event_bus_redis import RedisEventBus
+        from selfhealing.services.event_bus.redis_bus import RedisEventBus
         from selfhealing.services.event_bus import EventType, SelfHealingEvent
 
         # Redis 연결 실패 시뮬레이션 (redis 모듈 자체를 mock)

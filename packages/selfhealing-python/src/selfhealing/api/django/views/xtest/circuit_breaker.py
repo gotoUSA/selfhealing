@@ -69,7 +69,7 @@ class InjectCBFailureView(XTestModeMixin, APIView):
             )
 
         # Exception은 exception handler가 처리
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             force_open_circuit,
             get_circuit_breaker_service,
         )
@@ -162,7 +162,7 @@ class ResetCBView(XTestModeMixin, APIView):
         service_name = request.data.get("service", "database")
 
         # Exception은 exception handler가 처리
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 
@@ -223,7 +223,7 @@ class CBStatusDetailView(XTestModeMixin, APIView):
         service_name = request.query_params.get("service")
 
         # Exception은 exception handler가 처리
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 
@@ -294,7 +294,7 @@ class FastFailTestView(XTestModeMixin, APIView):
         service_name = request.query_params.get("service", "database")
 
         # Exception은 exception handler가 처리
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 
@@ -348,7 +348,7 @@ class TriggerCBRecoveryView(XTestModeMixin, APIView):
         force_close = request.data.get("force", False)
 
         # Exception은 exception handler가 처리
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 
@@ -449,7 +449,7 @@ class TryRecoveryTransitionView(XTestModeMixin, APIView):
         service_name = request.data.get("service", "database")
 
         # Exception은 exception handler가 처리
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 
@@ -544,7 +544,7 @@ class SwitchToAutoModeView(XTestModeMixin, APIView):
         service_name = request.data.get("service", "database")
 
         # Exception은 exception handler가 처리
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 

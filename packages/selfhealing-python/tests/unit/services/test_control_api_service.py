@@ -70,7 +70,7 @@ def service(mock_cb_service):
     """ControlAPIService 인스턴스 (의존성 모킹)."""
     with (
         patch(
-            "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+            "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
             return_value=mock_cb_service,
         ),
         patch(

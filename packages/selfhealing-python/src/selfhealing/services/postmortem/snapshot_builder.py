@@ -149,7 +149,7 @@ class SnapshotBuilder:
 
             # CB 상태 정보 추가
             try:
-                from selfhealing.services.circuit_breaker_service import (
+                from selfhealing.services.circuit_breaker import (
                     get_circuit_breaker_service,
                 )
 

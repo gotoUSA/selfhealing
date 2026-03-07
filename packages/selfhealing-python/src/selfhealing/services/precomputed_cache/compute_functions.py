@@ -41,7 +41,7 @@ def compute_error_budget_status() -> dict[str, Any]:
     try:
         from django.utils import timezone
 
-        from selfhealing.services.error_budget_service import (
+        from selfhealing.services.error_budget import (
             get_error_budget_service,
         )
 

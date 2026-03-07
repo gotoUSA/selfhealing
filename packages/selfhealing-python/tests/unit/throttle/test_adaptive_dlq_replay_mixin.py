@@ -513,7 +513,7 @@ class TestExecuteDlqReplayOnRecovery:
     def test_healthy_entries_replayed_via_replay_throttle_aware(self):
         """can_retry=True인 엔트리는 replay_throttle_aware로 Replay한다."""
         from selfhealing.interfaces.repositories import FailedOperationData
-        from selfhealing.services.dlq_models import DLQThrottleReplayResult
+        from selfhealing.services.dlq.models import DLQThrottleReplayResult
 
         throttle = _make_throttle(initial_limit=100)
         mock_dlq = MagicMock()
@@ -537,7 +537,7 @@ class TestExecuteDlqReplayOnRecovery:
     def test_stops_replay_when_health_degrades(self):
         """Replay 중 Throttle 건강 상태 악화 시 중단한다."""
         from selfhealing.interfaces.repositories import FailedOperationData
-        from selfhealing.services.dlq_models import DLQThrottleReplayResult
+        from selfhealing.services.dlq.models import DLQThrottleReplayResult
 
         throttle = _make_throttle(initial_limit=100)
         mock_dlq = MagicMock()

@@ -139,7 +139,7 @@ def _get_decision_logger():
 
 def _get_idempotency_service():
     """Lazy import idempotency service."""
-    from selfhealing.services.idempotency_service import (
+    from selfhealing.services.idempotency import (
         IdempotencyService,
         IdempotencyKey,
         IdempotencyResult,

@@ -277,7 +277,7 @@ class IdempotentReplayScenario(IntegrationScenario):
 
     def execute(self) -> ScenarioResult:
         from selfhealing.services.dlq import get_dlq_service
-        from selfhealing.services.idempotency_service import (
+        from selfhealing.services.idempotency import (
             IdempotencyKey,
             IdempotencyService,
         )

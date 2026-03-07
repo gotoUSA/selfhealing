@@ -278,7 +278,7 @@ class FullSnapshotView(XTestModeMixin, APIView):
 
         # Circuit Breaker 상태
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 get_circuit_breaker_service,
             )
 
@@ -368,7 +368,7 @@ class FullSnapshotView(XTestModeMixin, APIView):
 
         # Idempotency 상태
         try:
-            from selfhealing.services.idempotency_service import IdempotencyService
+            from selfhealing.services.idempotency import IdempotencyService
 
             idempotency_service = IdempotencyService()
 
@@ -439,7 +439,7 @@ class FullSnapshotView(XTestModeMixin, APIView):
 def _reset_circuit_breakers(service_name: str | None, xtest_only: bool) -> dict[str, Any]:
     """Circuit Breaker 컴포넌트 초기화."""
     try:
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 

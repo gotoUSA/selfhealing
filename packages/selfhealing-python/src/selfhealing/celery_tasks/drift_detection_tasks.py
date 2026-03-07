@@ -127,7 +127,7 @@ def check_sla_drift(self) -> dict[str, Any]:
 
         # Audit logging (optional)
         try:
-            from selfhealing.services.audit_helpers import log_drift_detection_audit
+            from selfhealing.services.audit import log_drift_detection_audit
 
             log_drift_detection_audit(
                 check_type="sla_drift",
@@ -148,7 +148,7 @@ def check_sla_drift(self) -> dict[str, Any]:
     except Exception as e:
         # Audit logging (failure)
         try:
-            from selfhealing.services.audit_helpers import log_drift_detection_audit
+            from selfhealing.services.audit import log_drift_detection_audit
 
             log_drift_detection_audit(
                 check_type="sla_drift",
@@ -193,7 +193,7 @@ def cleanup_expired_chaos_experiments(self) -> dict[str, Any]:
 
         # Audit logging (optional)
         try:
-            from selfhealing.services.audit_helpers import log_drift_detection_audit
+            from selfhealing.services.audit import log_drift_detection_audit
 
             log_drift_detection_audit(
                 check_type="chaos_cleanup",
@@ -214,7 +214,7 @@ def cleanup_expired_chaos_experiments(self) -> dict[str, Any]:
     except Exception as e:
         # Audit logging (failure)
         try:
-            from selfhealing.services.audit_helpers import log_drift_detection_audit
+            from selfhealing.services.audit import log_drift_detection_audit
 
             log_drift_detection_audit(
                 check_type="chaos_cleanup",

@@ -162,13 +162,13 @@ class TestCreateDefaultFullStopGuardBehavior:
     def test_cb_provider_failopen_returns_closed(self):
         """CB 모듈 import 실패 시 provider는 'closed'를 반환해야 한다."""
         guard = create_default_full_stop_guard()
-        with patch.dict("sys.modules", {"selfhealing.services.circuit_breaker_service": None}):
+        with patch.dict("sys.modules", {"selfhealing.services.circuit_breaker": None}):
             result = guard.check()
             assert result.allowed is True
 
     def test_budget_provider_failopen_returns_100(self):
         """Budget 모듈 import 실패 시 provider는 100.0을 반환해야 한다."""
         guard = create_default_full_stop_guard()
-        with patch.dict("sys.modules", {"selfhealing.services.error_budget_service": None}):
+        with patch.dict("sys.modules", {"selfhealing.services.error_budget": None}):
             result = guard.check()
             assert result.allowed is True

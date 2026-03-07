@@ -72,7 +72,7 @@ def check_traffic_health(domain: str | None = None) -> TrafficHealthStatus:
     # Check 1: Circuit Breaker State (도메인이 지정된 경우에만)
     if domain:
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 CircuitState,
                 get_circuit_breaker_service,
             )
@@ -120,7 +120,7 @@ def check_traffic_health(domain: str | None = None) -> TrafficHealthStatus:
 
     # Check 3: Governance (Kill Switch, Emergency Mode)
     try:
-        from selfhealing.services.governance_checks import check_all_governance
+        from selfhealing.services.governance.checks import check_all_governance
         from selfhealing.settings.governance import get_governance_settings
 
         governance_settings = get_governance_settings()
@@ -328,7 +328,7 @@ class TrafficAwareReplayTask(BaseNotifyingTask):
     ) -> None:
         """Audit 로그 기록."""
         try:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_traffic_aware_replay_audit,
             )
 

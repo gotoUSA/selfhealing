@@ -113,7 +113,7 @@ class TestPreemptiveProtectionSkipConditions:
     @patch.object(AdaptiveThrottle, "_subscribe_error_budget_events")
     @patch.object(AdaptiveThrottle, "_subscribe_rate_limit_events")
     @patch("selfhealing.services.error_budget.forecaster.BudgetDepletionForecaster")
-    @patch("selfhealing.services.error_budget_service.get_error_budget_service")
+    @patch("selfhealing.services.error_budget.get_error_budget_service")
     def test_skips_if_already_in_reduction_mode(self, mock_get_service, mock_forecaster_class, mock_sub_rate, mock_sub_budget):
         """이미 감소 모드면 추가 감소 없음."""
         config = ThrottleConfig(initial_limit=1000, min_limit=10, max_limit=2000)
@@ -134,7 +134,7 @@ class TestPreemptiveProtectionSkipConditions:
     @patch.object(AdaptiveThrottle, "_subscribe_error_budget_events")
     @patch.object(AdaptiveThrottle, "_subscribe_rate_limit_events")
     @patch("selfhealing.services.error_budget.forecaster.BudgetDepletionForecaster")
-    @patch("selfhealing.services.error_budget_service.get_error_budget_service")
+    @patch("selfhealing.services.error_budget.get_error_budget_service")
     def test_skips_if_forecaster_says_no(self, mock_get_service, mock_forecaster_class, mock_sub_rate, mock_sub_budget):
         """Forecaster가 False 반환 시 감소 없음."""
         config = ThrottleConfig(initial_limit=1000, min_limit=10, max_limit=2000)
@@ -177,7 +177,7 @@ class TestPreemptiveProtectionMinLimit:
     @patch.object(AdaptiveThrottle, "_subscribe_error_budget_events")
     @patch.object(AdaptiveThrottle, "_subscribe_rate_limit_events")
     @patch("selfhealing.services.error_budget.forecaster.BudgetDepletionForecaster")
-    @patch("selfhealing.services.error_budget_service.get_error_budget_service")
+    @patch("selfhealing.services.error_budget.get_error_budget_service")
     def test_respects_min_limit(self, mock_get_service, mock_forecaster_class, mock_sub_rate, mock_sub_budget):
         """선제적 감소 시 min_limit 미만으로 내려가지 않음."""
         config = ThrottleConfig(initial_limit=100, min_limit=60)
@@ -235,7 +235,7 @@ class TestPreemptiveProtectionFailOpen:
 
         # ImportError 발생 시 예외 없이 진행
         with patch(
-            "selfhealing.services.error_budget_service.get_error_budget_service",
+            "selfhealing.services.error_budget.get_error_budget_service",
             side_effect=ImportError("Module not found"),
         ):
             throttle._check_preemptive_protection()
@@ -246,7 +246,7 @@ class TestPreemptiveProtectionFailOpen:
 
     @patch.object(AdaptiveThrottle, "_subscribe_error_budget_events")
     @patch.object(AdaptiveThrottle, "_subscribe_rate_limit_events")
-    @patch("selfhealing.services.error_budget_service.get_error_budget_service")
+    @patch("selfhealing.services.error_budget.get_error_budget_service")
     def test_handles_service_exception_gracefully(self, mock_get_service, mock_sub_rate, mock_sub_budget):
         """서비스 예외 발생 시 정상 동작."""
         config = ThrottleConfig(initial_limit=1000, min_limit=10, max_limit=2000)

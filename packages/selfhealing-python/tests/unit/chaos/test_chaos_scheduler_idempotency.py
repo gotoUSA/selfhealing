@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.services.idempotency_service import IdempotencyDomain, IdempotencyKey
+from selfhealing.services.idempotency import IdempotencyDomain, IdempotencyKey
 
 # =============================================================================
 # IdempotencyKey.for_chaos_experiment Tests (순위 6 관련)
@@ -133,7 +133,7 @@ class TestChaosSchedulerIdempotencyMethods:
 
         scheduler = ChaosSchedulerService()
 
-        with patch("selfhealing.services.idempotency_service.get_idempotency_service") as mock_get_svc:
+        with patch("selfhealing.services.idempotency.get_idempotency_service") as mock_get_svc:
             mock_svc = MagicMock()
             mock_result = MagicMock()
             mock_result.is_duplicate = False
@@ -158,7 +158,7 @@ class TestChaosSchedulerIdempotencyMethods:
 
         scheduler = ChaosSchedulerService()
 
-        with patch("selfhealing.services.idempotency_service.get_idempotency_service") as mock_get_svc:
+        with patch("selfhealing.services.idempotency.get_idempotency_service") as mock_get_svc:
             mock_svc = MagicMock()
             mock_result = MagicMock()
             mock_result.is_duplicate = True
@@ -187,7 +187,7 @@ class TestChaosSchedulerIdempotencyMethods:
         scheduler = ChaosSchedulerService()
 
         # patch import to raise ImportError - 내부 import이므로 idempotency_service 모듈 패치
-        with patch.dict("sys.modules", {"selfhealing.services.idempotency_service": None}):
+        with patch.dict("sys.modules", {"selfhealing.services.idempotency": None}):
             result = scheduler._check_idempotency(
                 mock_schedule,
                 "test-schedule-123",
@@ -207,7 +207,7 @@ class TestChaosSchedulerIdempotencyMethods:
 
         scheduler = ChaosSchedulerService()
 
-        with patch("selfhealing.services.idempotency_service.get_idempotency_service") as mock_get_svc:
+        with patch("selfhealing.services.idempotency.get_idempotency_service") as mock_get_svc:
             mock_svc = MagicMock()
             mock_get_svc.return_value = mock_svc
 

@@ -133,7 +133,7 @@ class RollbackService:
         Fail-Open 원칙: Audit 실패가 롤백 로직을 중단시키지 않음.
         """
         try:
-            from selfhealing.services.audit_helpers import log_rollback_audit
+            from selfhealing.services.audit import log_rollback_audit
 
             log_rollback_audit(
                 request_id=request_id,

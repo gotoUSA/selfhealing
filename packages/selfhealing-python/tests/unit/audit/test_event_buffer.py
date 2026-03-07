@@ -418,7 +418,7 @@ class TestAuditHelpersHybridNoRequest:
 
     def test_log_dlq_store_without_request(self):
         """request 없이 호출 - 직접 로깅."""
-        from selfhealing.services.audit_helpers import log_dlq_store_audit
+        from selfhealing.services.audit import log_dlq_store_audit
 
         # request 없이 호출 - 에러 없이 완료되어야 함
         log_dlq_store_audit(
@@ -430,7 +430,7 @@ class TestAuditHelpersHybridNoRequest:
 
     def test_log_dlq_replay_without_request(self):
         """request 없이 호출 - 직접 로깅."""
-        from selfhealing.services.audit_helpers import log_dlq_replay_audit
+        from selfhealing.services.audit import log_dlq_replay_audit
 
         log_dlq_replay_audit(
             dlq_id=789,
@@ -441,7 +441,7 @@ class TestAuditHelpersHybridNoRequest:
 
     def test_log_cb_state_change_without_request(self):
         """request 없이 호출 - 직접 로깅."""
-        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+        from selfhealing.services.audit import log_cb_state_change_audit
 
         log_cb_state_change_audit(
             cb_name="payment_cb",
@@ -452,7 +452,7 @@ class TestAuditHelpersHybridNoRequest:
 
     def test_log_governance_blocked_without_request(self):
         """request 없이 호출 - 직접 로깅."""
-        from selfhealing.services.audit_helpers import log_governance_blocked_audit
+        from selfhealing.services.audit import log_governance_blocked_audit
 
         log_governance_blocked_audit(
             action="auto_replay",
@@ -462,7 +462,7 @@ class TestAuditHelpersHybridNoRequest:
 
     def test_log_rate_limited_without_request(self):
         """request 없이 호출 - 직접 로깅."""
-        from selfhealing.services.audit_helpers import log_rate_limited_audit
+        from selfhealing.services.audit import log_rate_limited_audit
 
         log_rate_limited_audit(
             client_ip="192.168.1.100",
@@ -473,7 +473,7 @@ class TestAuditHelpersHybridNoRequest:
 
     def test_log_pool_cb_rejection_without_request(self):
         """request 없이 호출 - 직접 로깅."""
-        from selfhealing.services.audit_helpers import log_pool_cb_rejection_audit
+        from selfhealing.services.audit import log_pool_cb_rejection_audit
 
         log_pool_cb_rejection_audit(
             pool_name="default",

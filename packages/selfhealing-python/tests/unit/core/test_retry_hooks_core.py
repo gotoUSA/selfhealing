@@ -36,6 +36,7 @@ class TestMakeStandardOnRetryBehavior:
         ctx = RetryContext(
             func_name="charge",
             attempt=1,
+            max_retries=5,
             wait_time=2.0,
             elapsed_total=2.0,
         )
@@ -44,7 +45,7 @@ class TestMakeStandardOnRetryBehavior:
         mock_audit.assert_called_once_with(
             domain="payment",
             attempt=1,
-            max_attempts=2,
+            max_attempts=5,
             success=False,
             wait_time=2.0,
         )
@@ -64,6 +65,7 @@ class TestMakeStandardOnRetryBehavior:
             ctx = RetryContext(
                 func_name="charge",
                 attempt=2,
+                max_retries=5,
                 wait_time=1.0,
                 elapsed_total=3.0,
                 metric_labels={"context": "payment"},
@@ -85,6 +87,7 @@ class TestMakeStandardOnRetryBehavior:
             ctx = RetryContext(
                 func_name="charge",
                 attempt=0,
+                max_retries=3,
                 wait_time=1.0,
                 elapsed_total=1.0,
             )
@@ -107,6 +110,7 @@ class TestMakeStandardOnRetryBehavior:
             ctx = RetryContext(
                 func_name="charge",
                 attempt=0,
+                max_retries=3,
                 wait_time=1.0,
                 elapsed_total=1.0,
             )
@@ -134,6 +138,7 @@ class TestMakeStandardOnExhaustedBehavior:
         ctx = RetryContext(
             func_name="charge",
             attempt=4,
+            max_retries=5,
             wait_time=0.0,
             elapsed_total=10.0,
         )
@@ -156,6 +161,7 @@ class TestMakeStandardOnExhaustedBehavior:
         ctx = RetryContext(
             func_name="charge",
             attempt=2,
+            max_retries=3,
             wait_time=0.0,
             elapsed_total=5.0,
         )
@@ -185,6 +191,7 @@ class TestMakeStandardOnExhaustedBehavior:
             ctx = RetryContext(
                 func_name="charge",
                 attempt=0,
+                max_retries=3,
                 wait_time=0.0,
                 elapsed_total=0.0,
             )

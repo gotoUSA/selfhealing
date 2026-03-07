@@ -22,7 +22,7 @@ class TestLogEmergencyModeAudit:
                 "selfhealing.audit.log_config_change",
             ),
         ):
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             result = log_emergency_mode_audit(
                 action="activate",
@@ -50,7 +50,7 @@ class TestLogEmergencyModeAudit:
                 "selfhealing.audit.log_config_change",
             ),
         ):
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             log_emergency_mode_audit(
                 action="auto_activate",
@@ -76,7 +76,7 @@ class TestLogEmergencyModeAudit:
                 "selfhealing.audit.log_config_change",
             ),
         ):
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             log_emergency_mode_audit(
                 action="deactivate",
@@ -101,7 +101,7 @@ class TestLogEmergencyModeAudit:
                 "selfhealing.audit.log_config_change",
             ),
         ):
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             # Activation should be critical
             log_emergency_mode_audit(
@@ -138,7 +138,7 @@ class TestLogEmergencyModeAudit:
                 "selfhealing.audit.log_config_change",
             ),
         ):
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             log_emergency_mode_audit(
                 action="escalate",
@@ -163,7 +163,7 @@ class TestLogEmergencyModeAudit:
             ),
             patch("selfhealing.services.audit.chaos_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             log_emergency_mode_audit(
                 action="activate",
@@ -191,7 +191,7 @@ class TestLogEmergencyModeAudit:
                 "selfhealing.audit.log_config_change",
             ) as mock_config_change,
         ):
-            from selfhealing.services.audit_helpers import log_emergency_mode_audit
+            from selfhealing.services.audit import log_emergency_mode_audit
 
             log_emergency_mode_audit(
                 action="activate",

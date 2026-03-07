@@ -23,7 +23,7 @@ class TestCheckEmergencyModeExpiry:
         mock_service.check_emergency_mode_expiry.return_value = mock_result
 
         with patch(
-            "selfhealing.services.governance_service.get_governance_service",
+            "selfhealing.services.governance.service.get_governance_service",
             return_value=mock_service,
         ):
             result = check_emergency_mode_expiry()
@@ -41,7 +41,7 @@ class TestCheckEmergencyModeExpiry:
         mock_service.check_emergency_mode_expiry.return_value = mock_result
 
         with patch(
-            "selfhealing.services.governance_service.get_governance_service",
+            "selfhealing.services.governance.service.get_governance_service",
             return_value=mock_service,
         ):
             result = check_emergency_mode_expiry()

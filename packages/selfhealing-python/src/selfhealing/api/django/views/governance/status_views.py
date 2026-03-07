@@ -19,7 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from selfhealing.api.django.permissions import IsSelfHealingAdmin, IsViewer
-from selfhealing.services.governance_api_service import get_governance_api_service
+from selfhealing.services.governance.api_service import get_governance_api_service
 
 logger = structlog.get_logger()
 

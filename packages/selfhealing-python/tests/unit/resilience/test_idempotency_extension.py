@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from selfhealing.services.idempotency_service import (
+from selfhealing.services.idempotency import (
     AntiFlappingWindow,
     IdempotencyDomain,
     IdempotencyKey,
@@ -315,7 +315,7 @@ class TestAntiFlappingWindowMemory:
         short_window.check_and_record(key, 1.0)
 
         # time.time()을 1.1초 전진시켜 윈도우 만료를 시뮬레이션
-        import selfhealing.services.idempotency_service as _idem_mod
+        import selfhealing.services.idempotency as _idem_mod
 
         original_time = time.time()
         with patch.object(_idem_mod.time, "time", return_value=original_time + 1.1):

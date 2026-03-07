@@ -58,7 +58,7 @@ class TestWALRecoveryDeduplication:
 
     def test_idempotency_key_for_wal_recovery_format(self):
         """IdempotencyKey.for_wal_recovery() 키 형식 확인."""
-        from selfhealing.services.idempotency_service import (
+        from selfhealing.services.idempotency import (
             IdempotencyDomain,
             IdempotencyKey,
         )
@@ -164,7 +164,7 @@ class TestWALRecoveryDeduplication:
         self._create_wal_file(wal_dir, entries)
 
         # ImportError 시뮬레이션
-        with patch.dict("sys.modules", {"selfhealing.services.idempotency_service": None}):
+        with patch.dict("sys.modules", {"selfhealing.services.idempotency": None}):
             with patch.object(recovery, "_replay_entry", return_value=True):
                 # 실제 메서드 호출
                 is_dup = recovery._is_duplicate_via_idempotency(1, "redis_replay")
@@ -173,7 +173,7 @@ class TestWALRecoveryDeduplication:
 
     def test_idempotency_check_graceful_on_service_error(self, recovery):
         """IdempotencyService 에러 시 안전하게 진행."""
-        with patch("selfhealing.services.idempotency_service.IdempotencyKey") as mock_key:
+        with patch("selfhealing.services.idempotency.IdempotencyKey") as mock_key:
             mock_key.for_wal_recovery.side_effect = RuntimeError("Redis unavailable")
 
             is_dup = recovery._is_duplicate_via_idempotency(1, "redis_replay")
@@ -221,7 +221,7 @@ class TestIdempotencyKeyIntegration:
 
     def test_for_wal_recovery_creates_valid_key(self):
         """for_wal_recovery가 유효한 키 생성."""
-        from selfhealing.services.idempotency_service import IdempotencyKey
+        from selfhealing.services.idempotency import IdempotencyKey
 
         key = IdempotencyKey.for_wal_recovery(
             wal_entry_id="seq_12345",
@@ -235,7 +235,7 @@ class TestIdempotencyKeyIntegration:
 
     def test_for_wal_recovery_different_operations_different_keys(self):
         """다른 operation은 다른 키 생성."""
-        from selfhealing.services.idempotency_service import IdempotencyKey
+        from selfhealing.services.idempotency import IdempotencyKey
 
         key1 = IdempotencyKey.for_wal_recovery("1", "redis_replay")
         key2 = IdempotencyKey.for_wal_recovery("1", "pg_insert")
@@ -245,7 +245,7 @@ class TestIdempotencyKeyIntegration:
 
     def test_for_wal_recovery_same_inputs_same_key(self):
         """동일 입력은 동일 키 생성 (멱등성 보장)."""
-        from selfhealing.services.idempotency_service import IdempotencyKey
+        from selfhealing.services.idempotency import IdempotencyKey
 
         key1 = IdempotencyKey.for_wal_recovery("123", "redis_replay")
         key2 = IdempotencyKey.for_wal_recovery("123", "redis_replay")

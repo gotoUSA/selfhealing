@@ -52,12 +52,12 @@ _otel_injection_in_progress = threading.local()
 _COMPONENT_LOGGER_MAP: dict[str, list[str]] = {
     "dlq_log_level": [
         "selfhealing.services.dlq",
-        "selfhealing.services.dlq_service",
-        "selfhealing.services.dlq_models",
+        "selfhealing.services.dlq",
+        "selfhealing.services.dlq.models",
     ],
     "circuit_breaker_log_level": [
         "selfhealing.services.circuit_breaker",
-        "selfhealing.services.circuit_breaker_service",
+        "selfhealing.services.circuit_breaker",
     ],
     "replay_log_level": [
         "selfhealing.services.replay_service",

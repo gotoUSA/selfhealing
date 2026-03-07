@@ -55,7 +55,7 @@ class ControlAPIService:
 
     def __init__(self):
         """Initialize the Control API Service."""
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
         from selfhealing.services.replay_service import ReplayService

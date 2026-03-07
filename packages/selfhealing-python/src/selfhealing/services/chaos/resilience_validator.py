@@ -134,7 +134,7 @@ class DefaultCircuitBreakerStatusProvider:
 
     def get_status(self, service_name: str) -> dict[str, Any]:
         try:
-            from selfhealing.services.circuit_breaker_service import get_cb_status
+            from selfhealing.services.circuit_breaker import get_cb_status
 
             return get_cb_status(service_name)
         except ImportError:

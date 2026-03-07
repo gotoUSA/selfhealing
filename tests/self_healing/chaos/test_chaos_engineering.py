@@ -41,11 +41,11 @@ import pytest
 from selfhealing.interfaces.repositories import FailedOperationStatus
 
 from selfhealing.services import CircuitBreakerService, DLQService
-from selfhealing.services.circuit_breaker_service import (
+from selfhealing.services.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitState,
 )
-from selfhealing.services.dlq_service import DLQConfig
+from selfhealing.services.dlq import DLQConfig
 from shopping.tests.factories import OrderFactory, UserFactory
 
 

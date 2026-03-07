@@ -29,7 +29,7 @@ def create_dlq_service(
     Returns:
         DLQService instance
     """
-    from selfhealing.services.dlq_service import DLQService
+    from selfhealing.services.dlq import DLQService
 
     return DLQService(repository=repository)
 
@@ -63,7 +63,7 @@ def create_circuit_breaker_service(
     Returns:
         CircuitBreakerService instance
     """
-    from selfhealing.services.circuit_breaker_service import CircuitBreakerService
+    from selfhealing.services.circuit_breaker import CircuitBreakerService
 
     return CircuitBreakerService(repository=repository)
 

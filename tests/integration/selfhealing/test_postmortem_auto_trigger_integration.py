@@ -36,7 +36,7 @@ class TestPostmortemAutoTriggerIntegration:
             _healing_events,
             _healing_events_lock,
         )
-        from selfhealing.services.postmortem_store import clear_healing_incidents
+        from selfhealing.services.postmortem.store import clear_healing_incidents
 
         # 이벤트 버스 리셋
         self.bus = get_event_bus()
@@ -60,7 +60,7 @@ class TestPostmortemAutoTriggerIntegration:
             _healing_events,
             _healing_events_lock,
         )
-        from selfhealing.services.postmortem_store import clear_healing_incidents
+        from selfhealing.services.postmortem.store import clear_healing_incidents
 
         get_event_bus().reset()
         reset_api_view_settings()
@@ -313,7 +313,7 @@ class TestPostmortemNotificationIntegration:
             _healing_events,
             _healing_events_lock,
         )
-        from selfhealing.services.postmortem_store import clear_healing_incidents
+        from selfhealing.services.postmortem.store import clear_healing_incidents
 
         self.bus = get_event_bus()
         self.bus.reset()
@@ -333,7 +333,7 @@ class TestPostmortemNotificationIntegration:
             _healing_events,
             _healing_events_lock,
         )
-        from selfhealing.services.postmortem_store import clear_healing_incidents
+        from selfhealing.services.postmortem.store import clear_healing_incidents
 
         get_event_bus().reset()
         reset_api_view_settings()

@@ -400,7 +400,7 @@ class RetrySimulateView(XTestModeMixin, APIView):
     def _simulate_dlq_entry(self, domain: str, failure_count: int, max_attempts: int) -> int | None:
         """DLQ 테스트 항목 생성 (X-Test-Mode 마커 포함)."""
         try:
-            from selfhealing.services.dlq_service import store_to_dlq
+            from selfhealing.services.dlq import store_to_dlq
 
             result = store_to_dlq(
                 healing_domain=domain,

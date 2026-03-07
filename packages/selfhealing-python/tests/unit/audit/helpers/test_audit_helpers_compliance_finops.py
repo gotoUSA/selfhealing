@@ -75,7 +75,7 @@ class TestLogComplianceAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=42,
         ):
-            from selfhealing.services.audit_helpers import log_compliance_audit
+            from selfhealing.services.audit import log_compliance_audit
 
             result = log_compliance_audit(
                 stage_name="production",
@@ -92,7 +92,7 @@ class TestLogComplianceAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_compliance_audit
+            from selfhealing.services.audit import log_compliance_audit
 
             log_compliance_audit(
                 stage_name="staging",
@@ -119,7 +119,7 @@ class TestLogComplianceAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_compliance_audit
+            from selfhealing.services.audit import log_compliance_audit
 
             log_compliance_audit(
                 stage_name="production",
@@ -155,7 +155,7 @@ class TestLogComplianceAudit:
                 return_value=True,
             ) as mock_buffer,
         ):
-            from selfhealing.services.audit_helpers import log_compliance_audit
+            from selfhealing.services.audit import log_compliance_audit
 
             log_compliance_audit(
                 stage_name="production",
@@ -176,7 +176,7 @@ class TestLogComplianceAudit:
             ),
             patch("selfhealing.services.audit.compliance_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_compliance_audit
+            from selfhealing.services.audit import log_compliance_audit
 
             log_compliance_audit(
                 stage_name="test-stage",
@@ -204,7 +204,7 @@ class TestLogBlastRadiusAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=99,
         ):
-            from selfhealing.services.audit_helpers import log_blast_radius_audit
+            from selfhealing.services.audit import log_blast_radius_audit
 
             result = log_blast_radius_audit(
                 experiment_id="exp-12345",
@@ -222,7 +222,7 @@ class TestLogBlastRadiusAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_blast_radius_audit
+            from selfhealing.services.audit import log_blast_radius_audit
 
             log_blast_radius_audit(
                 experiment_id="chaos-test-001",
@@ -249,7 +249,7 @@ class TestLogBlastRadiusAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_blast_radius_audit
+            from selfhealing.services.audit import log_blast_radius_audit
 
             violations = [
                 "Region level requires approval",
@@ -282,7 +282,7 @@ class TestLogBlastRadiusAudit:
             ),
             patch("selfhealing.services.audit.compliance_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_blast_radius_audit
+            from selfhealing.services.audit import log_blast_radius_audit
 
             log_blast_radius_audit(
                 experiment_id="exp-blocked",
@@ -312,7 +312,7 @@ class TestLogFinopsAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=77,
         ):
-            from selfhealing.services.audit_helpers import log_finops_audit
+            from selfhealing.services.audit import log_finops_audit
 
             result = log_finops_audit(
                 stage_name="production",
@@ -330,7 +330,7 @@ class TestLogFinopsAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_finops_audit
+            from selfhealing.services.audit import log_finops_audit
 
             log_finops_audit(
                 stage_name="staging",
@@ -357,7 +357,7 @@ class TestLogFinopsAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_finops_audit
+            from selfhealing.services.audit import log_finops_audit
 
             log_finops_audit(
                 stage_name="production",
@@ -383,7 +383,7 @@ class TestLogFinopsAudit:
             ),
             patch("selfhealing.services.audit.compliance_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_finops_audit
+            from selfhealing.services.audit import log_finops_audit
 
             log_finops_audit(
                 stage_name="production",
@@ -412,7 +412,7 @@ class TestLogDataAccessAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=55,
         ):
-            from selfhealing.services.audit_helpers import log_data_access_audit
+            from selfhealing.services.audit import log_data_access_audit
 
             result = log_data_access_audit(
                 path="/api/admin/users/",
@@ -428,7 +428,7 @@ class TestLogDataAccessAudit:
             "selfhealing.services.audit.compliance_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_data_access_audit
+            from selfhealing.services.audit import log_data_access_audit
 
             log_data_access_audit(
                 path="/api/payments/transactions/",
@@ -464,7 +464,7 @@ class TestLogDataAccessAudit:
                 return_value=True,
             ) as mock_buffer,
         ):
-            from selfhealing.services.audit_helpers import log_data_access_audit
+            from selfhealing.services.audit import log_data_access_audit
 
             log_data_access_audit(
                 path="/api/admin/config/",

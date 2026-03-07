@@ -86,14 +86,17 @@ class RetryHandler:
             service_name: Service name for Throttle Registry (defaults to domain)
         """
         warnings.warn(
-            "RetryHandler is deprecated. Use RetryPolicy instead. " "RetryHandler will be removed in a future version.",
+            "RetryHandler is deprecated. Use RetryPolicy instead. "
+            "RetryHandler will be removed in a future version.",
             DeprecationWarning,
             stacklevel=2,
         )
         self.config = config or RetryConfig.from_settings(domain)
 
         # Throttle-aware 설정 결정 (파라미터 > config)
-        self._throttle_aware = throttle_aware if throttle_aware is not None else self.config.throttle_aware
+        self._throttle_aware = (
+            throttle_aware if throttle_aware is not None else self.config.throttle_aware
+        )
 
         # 서비스명 결정 (파라미터 > domain)
         effective_service_name = service_name or domain
@@ -162,7 +165,7 @@ class RetryHandler:
         Fail-Open 원칙: Audit 실패가 비즈니스 로직을 중단시키지 않음.
         """
         try:
-            from ..audit_helpers import log_retry_audit
+            from ..audit import log_retry_audit
 
             log_retry_audit(
                 domain=self.config.domain,
@@ -227,7 +230,10 @@ class RetryHandler:
             "quota exceeded",
         ]
 
-        is_rate_limited = any(indicator in error_str or indicator in error_type for indicator in rate_limit_indicators)
+        is_rate_limited = any(
+            indicator in error_str or indicator in error_type
+            for indicator in rate_limit_indicators
+        )
 
         # Try to extract retry-after from exception
         retry_after = None
@@ -318,8 +324,12 @@ class RetryHandler:
         Returns:
             Delay in seconds. -1 indicates Full Stop (immediate DLQ routing).
         """
-        if self._throttle_aware and hasattr(self.backoff, "calculate_with_throttle_context"):
-            delay, multiplier, reason = self.backoff.calculate_with_throttle_context(attempt)
+        if self._throttle_aware and hasattr(
+            self.backoff, "calculate_with_throttle_context"
+        ):
+            delay, multiplier, reason = self.backoff.calculate_with_throttle_context(
+                attempt
+            )
 
             # 백오프 정보 저장 (DLQ 메타데이터용)
             self._last_backoff_info = {
@@ -368,7 +378,9 @@ class RetryHandler:
         try:
             from ..metrics.definitions import retry_critical_tier_grace_retries_total
 
-            retry_critical_tier_grace_retries_total.labels(domain=self.config.domain).inc()
+            retry_critical_tier_grace_retries_total.labels(
+                domain=self.config.domain
+            ).inc()
         except ImportError:
             pass
         except Exception:
@@ -420,7 +432,9 @@ class RetryHandler:
 
         return throttle_delay
 
-    def _check_preconditions(self, context: dict[str, Any] | None) -> RetryResult | None:
+    def _check_preconditions(
+        self, context: dict[str, Any] | None
+    ) -> RetryResult | None:
         """Kill Switch 및 ErrorBudgetGate 사전 조건 확인. 차단 시 RetryResult 반환."""
         # Kill Switch 체크
         if not _is_system_enabled():
@@ -432,7 +446,9 @@ class RetryHandler:
                 success=False,
                 action=RetryAction.ABORT,
                 attempt=0,
-                error=Exception("Kill Switch is active: self-healing system is disabled"),
+                error=Exception(
+                    "Kill Switch is active: self-healing system is disabled"
+                ),
             )
 
         # ErrorBudgetGate 체크
@@ -514,7 +530,9 @@ class RetryHandler:
             # Throttle 상태에 따라 예산 조정
             if self._last_backoff_info:
                 throttle_reason = self._last_backoff_info.get("reason")
-                self._retry_budget.adjust_budget_for_throttle_state(throttle_reason or "normal")
+                self._retry_budget.adjust_budget_for_throttle_state(
+                    throttle_reason or "normal"
+                )
 
         self._log_retry_audit(
             attempt=attempt,
@@ -530,7 +548,11 @@ class RetryHandler:
             },
         )
 
-        if self.should_retry(e, attempt, effective_max_attempts) and next_delay is not None and next_delay >= 0:
+        if (
+            self.should_retry(e, attempt, effective_max_attempts)
+            and next_delay is not None
+            and next_delay >= 0
+        ):
             delay = next_delay
             logger.info(
                 "retry_handler.retry_attempt",
@@ -598,7 +620,11 @@ class RetryHandler:
             self._retry_budget.record_request(is_retry=(attempt > 1))
 
             # Adaptive Retry Budget: 재시도 예산 확인 (CRITICAL 티어는 우회)
-            if attempt > 1 and not is_critical_tier and not self._retry_budget.should_allow_retry():
+            if (
+                attempt > 1
+                and not is_critical_tier
+                and not self._retry_budget.should_allow_retry()
+            ):
                 logger.warning(
                     "retry_handler.retry_budget_exhausted",
                     _self=self._retry_budget.get_stats(),
@@ -699,7 +725,7 @@ class RetryHandler:
         Returns:
             DLQ record ID or None if DLQ is disabled
         """
-        from ..dlq_service import store_to_dlq
+        from ..dlq import store_to_dlq
 
         try:
             context = context or {}

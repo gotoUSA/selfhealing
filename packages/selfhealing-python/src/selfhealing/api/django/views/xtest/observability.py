@@ -78,7 +78,7 @@ class HealingTimelineView(XTestModeMixin, APIView):
             local_events = [e for e in local_events if e.get("service") == service_filter]
 
         # CB 상태 정보 추가
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 
@@ -143,7 +143,7 @@ class BlastRadiusTestView(XTestModeMixin, APIView):
             "details": {},
         }
 
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 
@@ -331,7 +331,7 @@ class MultiServiceBlastRadiusView(XTestModeMixin, APIView):
         requested_services = request.data.get("test_services", [])
         failure_count = int(request.data.get("failure_count", 5))
 
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
 

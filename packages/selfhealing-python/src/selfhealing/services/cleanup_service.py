@@ -88,7 +88,7 @@ class CleanupService:
         )
 
         try:
-            from selfhealing.services.dlq_service import get_dlq_service
+            from selfhealing.services.dlq import get_dlq_service
 
             dlq_service = get_dlq_service()
             count = dlq_service.archive_old_entries(older_than_days=older_than_days)
@@ -270,7 +270,7 @@ class CleanupService:
         )
 
         try:
-            from selfhealing.services.dlq_service import get_dlq_service
+            from selfhealing.services.dlq import get_dlq_service
 
             dlq_service = get_dlq_service()
 

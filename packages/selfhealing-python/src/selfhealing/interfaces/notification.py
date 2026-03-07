@@ -173,6 +173,7 @@ class LoggingNotificationAdapter(NotificationAdapter):
     _SEVERITY_TO_LOG_METHOD = {
         "CRITICAL": "critical",
         "HIGH": "error",
+        "WARNING": "warning",
         "MEDIUM": "warning",
         "LOW": "info",
         "INFO": "debug",

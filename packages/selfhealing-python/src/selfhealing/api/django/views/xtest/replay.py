@@ -182,7 +182,7 @@ class ReplaySingleView(XTestModeMixin, APIView):
             }
 
         try:
-            from selfhealing.services.governance_checks import check_all_governance
+            from selfhealing.services.governance.checks import check_all_governance
 
             result = check_all_governance(
                 check_kill_switch=True,
@@ -461,7 +461,7 @@ class ReplayBatchView(XTestModeMixin, APIView):
     def _get_governance_status(self) -> dict[str, Any]:
         """현재 거버넌스 상태 조회."""
         try:
-            from selfhealing.services.governance_checks import (
+            from selfhealing.services.governance.checks import (
                 is_emergency_blocking,
                 is_error_budget_blocking,
                 is_system_enabled,
@@ -634,7 +634,7 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
     def _get_cb_state(self, service_name: str) -> str:
         """CB 상태 조회."""
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 get_circuit_breaker_service,
             )
 
@@ -651,7 +651,7 @@ class TriggerReplayOnCBCloseView(XTestModeMixin, APIView):
     def _simulate_cb_close(self, service_name: str) -> bool:
         """CB CLOSE 시뮬레이션."""
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 get_circuit_breaker_service,
             )
 
@@ -834,7 +834,7 @@ class ReplayStatusView(XTestModeMixin, APIView):
     def _get_governance_status(self) -> dict[str, Any]:
         """거버넌스 상태 조회."""
         try:
-            from selfhealing.services.governance_checks import (
+            from selfhealing.services.governance.checks import (
                 is_emergency_blocking,
                 is_error_budget_blocking,
                 is_system_enabled,
@@ -858,7 +858,7 @@ class ReplayStatusView(XTestModeMixin, APIView):
     def _get_cb_states(self) -> dict[str, str]:
         """등록된 CB 상태 목록 조회."""
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 get_circuit_breaker_service,
             )
 

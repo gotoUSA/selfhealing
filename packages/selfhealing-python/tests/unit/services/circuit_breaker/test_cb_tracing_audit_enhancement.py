@@ -322,7 +322,7 @@ class TestLogCbStateChangeWithTraceAudit:
     @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_log_state_change_with_trace(self, mock_wal):
         """trace 정보 포함 상태 변경 로그 테스트."""
-        from selfhealing.services.audit_helpers import (
+        from selfhealing.services.audit import (
             log_cb_state_change_with_trace_audit,
         )
 
@@ -364,7 +364,7 @@ class TestLogCbStateChangeWithTraceAudit:
     @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_log_state_change_without_trace(self, mock_wal):
         """trace 정보 없이 상태 변경 로그 테스트."""
-        from selfhealing.services.audit_helpers import (
+        from selfhealing.services.audit import (
             log_cb_state_change_with_trace_audit,
         )
 
@@ -397,7 +397,7 @@ class TestLogGovernanceBlockedCbAudit:
     @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_log_governance_blocked_blast_radius(self, mock_wal):
         """Blast Radius CRITICAL로 인한 GOVERNANCE_BLOCKED 로그 테스트."""
-        from selfhealing.services.audit_helpers import log_governance_blocked_cb_audit
+        from selfhealing.services.audit import log_governance_blocked_cb_audit
 
         mock_wal.return_value = 12347
 
@@ -436,7 +436,7 @@ class TestLogGovernanceBlockedCbAudit:
     @patch('selfhealing.services.audit.cb_audit._write_to_wal')
     def test_log_governance_blocked_no_affected_services(self, mock_wal):
         """영향받는 서비스 없는 GOVERNANCE_BLOCKED 로그 테스트."""
-        from selfhealing.services.audit_helpers import log_governance_blocked_cb_audit
+        from selfhealing.services.audit import log_governance_blocked_cb_audit
 
         mock_wal.return_value = 12348
 

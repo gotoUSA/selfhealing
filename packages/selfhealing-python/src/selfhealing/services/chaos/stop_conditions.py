@@ -385,7 +385,7 @@ class StopConditionsChecker:
 
         # 내부 서비스에서 수집 시도
         try:
-            from selfhealing.services.error_budget_service import (
+            from selfhealing.services.error_budget import (
                 get_error_budget_service,
             )
 

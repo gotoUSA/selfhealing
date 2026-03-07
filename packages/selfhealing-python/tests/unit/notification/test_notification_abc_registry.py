@@ -85,10 +85,11 @@ class TestNotificationAdapterABCContract:
         assert adapter.channel == NotificationChannel.FILE
 
     def test_logging_adapter_severity_mapping_contract(self):
-        """LoggingNotificationAdapter severity mapping has 5 entries."""
+        """LoggingNotificationAdapter severity mapping has 6 entries."""
         expected = {
             "CRITICAL": "critical",
             "HIGH": "error",
+            "WARNING": "warning",
             "MEDIUM": "warning",
             "LOW": "info",
             "INFO": "debug",

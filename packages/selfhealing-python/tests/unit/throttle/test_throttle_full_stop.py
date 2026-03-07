@@ -101,7 +101,7 @@ class TestCheckDbCircuitBreakerOpen:
     def teardown_method(self):
         reset_adaptive_throttle()
 
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
     def test_returns_true_when_db_cb_open(self, mock_get_cb):
         """DB Circuit Breaker OPEN 시 True 반환."""
         mock_cb_service = MagicMock()
@@ -113,7 +113,7 @@ class TestCheckDbCircuitBreakerOpen:
 
         assert result is True
 
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
     def test_returns_false_when_db_cb_closed(self, mock_get_cb):
         """DB Circuit Breaker CLOSED 시 False 반환."""
         mock_cb_service = MagicMock()
@@ -145,7 +145,7 @@ class TestCheckErrorBudgetExhausted:
     def teardown_method(self):
         reset_adaptive_throttle()
 
-    @patch("selfhealing.services.error_budget_service.get_error_budget_service")
+    @patch("selfhealing.services.error_budget.get_error_budget_service")
     def test_returns_true_when_budget_exhausted(self, mock_get_budget):
         """Budget 소진 시 True 반환."""
         mock_status = MagicMock()
@@ -159,7 +159,7 @@ class TestCheckErrorBudgetExhausted:
 
         assert result is True
 
-    @patch("selfhealing.services.error_budget_service.get_error_budget_service")
+    @patch("selfhealing.services.error_budget.get_error_budget_service")
     def test_returns_true_when_budget_negative(self, mock_get_budget):
         """Budget 음수 시 True 반환."""
         mock_status = MagicMock()
@@ -173,7 +173,7 @@ class TestCheckErrorBudgetExhausted:
 
         assert result is True
 
-    @patch("selfhealing.services.error_budget_service.get_error_budget_service")
+    @patch("selfhealing.services.error_budget.get_error_budget_service")
     def test_returns_false_when_budget_remaining(self, mock_get_budget):
         """Budget 남아있으면 False 반환."""
         mock_status = MagicMock()

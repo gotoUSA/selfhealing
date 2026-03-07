@@ -60,7 +60,7 @@ class TestGeneratePostmortemDataDeepLinks:
 
     def test_deep_links_field_exists_in_postmortem_data(self):
         """generate_postmortem_data 반환값에 deep_links 필드가 존재."""
-        from selfhealing.services.postmortem_store import generate_postmortem_data
+        from selfhealing.services.postmortem.store import generate_postmortem_data
 
         timeline = [
             {
@@ -97,7 +97,7 @@ class TestGeneratePostmortemDataDeepLinks:
         mock_auditor.get_recent_events.return_value = []
         mock_get_auditor.return_value = mock_auditor
 
-        from selfhealing.services.postmortem_store import generate_postmortem_data
+        from selfhealing.services.postmortem.store import generate_postmortem_data
 
         timeline = [
             {
@@ -138,7 +138,7 @@ class TestGeneratePostmortemDataDeepLinks:
         from selfhealing.services.postmortem.deep_links import (
             reset_postmortem_deep_link_builder,
         )
-        from selfhealing.services.postmortem_store import generate_postmortem_data
+        from selfhealing.services.postmortem.store import generate_postmortem_data
 
         # 환경변수가 적용되도록 빌더 리셋
         reset_postmortem_deep_link_builder()
@@ -177,7 +177,7 @@ class TestGeneratePostmortemDataDeepLinks:
     @mock.patch("selfhealing.services.postmortem.deep_links.get_postmortem_deep_link_builder")
     def test_deep_links_builder_called_with_correct_params(self, mock_get_builder):
         """PostmortemDeepLinkBuilder가 올바른 파라미터로 호출됨."""
-        from selfhealing.services.postmortem_store import generate_postmortem_data
+        from selfhealing.services.postmortem.store import generate_postmortem_data
 
         mock_builder = mock.MagicMock()
         mock_links = mock.MagicMock()
@@ -222,7 +222,7 @@ class TestGeneratePostmortemDataCascadeEvent:
             CascadeEvent,
             CascadeTrigger,
         )
-        from selfhealing.services.postmortem_store import generate_postmortem_data
+        from selfhealing.services.postmortem.store import generate_postmortem_data
 
         # Mock CascadeEvent 생성
         mock_event = CascadeEvent(
@@ -280,7 +280,7 @@ class TestGeneratePostmortemDataCascadeEvent:
         mock_auditor.get_recent_events.return_value = []
         mock_get_auditor.return_value = mock_auditor
 
-        from selfhealing.services.postmortem_store import generate_postmortem_data
+        from selfhealing.services.postmortem.store import generate_postmortem_data
 
         timeline = [
             {
@@ -315,7 +315,7 @@ class TestGeneratePostmortemDataCascadeEvent:
         mock_get_auditor.side_effect = ImportError("Module not found")
         mock_deep_links.return_value.build_postmortem_links.return_value.to_dict.return_value = {}
 
-        from selfhealing.services.postmortem_store import generate_postmortem_data
+        from selfhealing.services.postmortem.store import generate_postmortem_data
 
         timeline = [
             {
@@ -372,7 +372,7 @@ class TestDeepLinksWithCascadeEvent:
         from selfhealing.services.postmortem.deep_links import (
             reset_postmortem_deep_link_builder,
         )
-        from selfhealing.services.postmortem_store import generate_postmortem_data
+        from selfhealing.services.postmortem.store import generate_postmortem_data
 
         reset_postmortem_deep_link_builder()
 

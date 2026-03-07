@@ -11,7 +11,7 @@ import pytest
 from dataclasses import dataclass
 
 from selfhealing.services import CircuitBreakerService
-from selfhealing.services.circuit_breaker_service import CircuitBreakerConfig
+from selfhealing.services.circuit_breaker import CircuitBreakerConfig
 
 
 @dataclass

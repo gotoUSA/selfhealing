@@ -92,7 +92,7 @@ class DLQServiceBase:
             request: Django HttpRequest 객체 (있으면 버퍼에 적재)
         """
         try:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_dlq_replay_audit,
                 log_dlq_store_audit,
             )

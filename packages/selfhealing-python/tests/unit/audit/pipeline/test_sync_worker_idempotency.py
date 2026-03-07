@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 from selfhealing.audit.sync_worker import AuditSyncWorker, SyncWorkerConfig
 
 # 테스트용 IdempotencyService 모듈 패치 경로
-IDEMPOTENCY_MODULE = "selfhealing.services.idempotency_service"
+IDEMPOTENCY_MODULE = "selfhealing.services.idempotency"
 
 
 @dataclass
@@ -94,7 +94,7 @@ class TestAuditSyncWorkerIdempotency:
 
         try:
             # import 자체가 실패하도록 patch
-            with patch.dict(sys.modules, {"selfhealing.services.idempotency_service": None}):
+            with patch.dict(sys.modules, {"selfhealing.services.idempotency": None}):
                 # ImportError 발생 시 예외 무시하고 진행
                 worker._sync_entry_to_adapter(adapter, entry)
         finally:

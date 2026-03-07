@@ -87,7 +87,7 @@ class TestPostmortemStoreImports(TestCase):
 
     def test_import_from_postmortem_store_works(self):
         """postmortem_store.py에서 import 가능."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             get_healing_incidents,
             get_healing_incidents_count,

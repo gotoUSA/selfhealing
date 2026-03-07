@@ -42,6 +42,7 @@ class RetryContext:
 
     func_name: str
     attempt: int
+    max_retries: int
     wait_time: float
     elapsed_total: float
     metric_labels: dict[str, str] = field(default_factory=dict)
@@ -127,6 +128,7 @@ def retry_with_backoff(
             ctx = RetryContext(
                 func_name=func_name,
                 attempt=attempt,
+                max_retries=config.max_retries,
                 wait_time=wait,
                 elapsed_total=total_wait,
                 metric_labels={"context": config.context_name},
@@ -159,6 +161,7 @@ def retry_with_backoff(
     exhausted_ctx = RetryContext(
         func_name=func_name,
         attempt=config.max_retries - 1,
+        max_retries=config.max_retries,
         wait_time=0.0,
         elapsed_total=total_wait,
         metric_labels={"context": config.context_name},

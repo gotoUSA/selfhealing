@@ -228,7 +228,7 @@ class XTestCleanupService:
         restored_count = 0
 
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 CircuitState,
                 get_circuit_breaker_service,
             )

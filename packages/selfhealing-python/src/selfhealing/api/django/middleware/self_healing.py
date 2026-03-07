@@ -440,7 +440,7 @@ class SelfHealingMiddleware:
     ) -> int | None:
         """Store failed request to DLQ."""
         try:
-            from selfhealing.services.dlq_service import store_to_dlq
+            from selfhealing.services.dlq import store_to_dlq
 
             domain = self._infer_domain(request_data.get("path", ""))
 

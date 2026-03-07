@@ -40,7 +40,7 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
 
 변경 후 (v2.0.0):
     from selfhealing.services.retry_handler import RetryHandler, RetryConfig
-    from selfhealing.services.idempotency_service import IdempotencyService
+    from selfhealing.services.idempotency import IdempotencyService
     from selfhealing.services.control_api_service import ControlAPIService
 
 삭제된 심볼과 새 경로:
@@ -52,31 +52,31 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
     RetryAction          → from selfhealing.services.retry_handler import RetryAction
     MaxRetriesExceededError → from selfhealing.services.retry_handler import MaxRetriesExceededError
 
-    # Idempotency (→ idempotency_service.py)
-    IdempotencyService   → from selfhealing.services.idempotency_service import IdempotencyService
-    IdempotencyKey       → from selfhealing.services.idempotency_service import IdempotencyKey
-    IdempotencyDomain    → from selfhealing.services.idempotency_service import IdempotencyDomain
-    get_idempotency_service → from selfhealing.services.idempotency_service import get_idempotency_service
+    # Idempotency (→ idempotency/)
+    IdempotencyService   → from selfhealing.services.idempotency import IdempotencyService
+    IdempotencyKey       → from selfhealing.services.idempotency import IdempotencyKey
+    IdempotencyDomain    → from selfhealing.services.idempotency import IdempotencyDomain
+    get_idempotency_service → from selfhealing.services.idempotency import get_idempotency_service
 
     # Control API (→ control_api_service.py)
     ControlAPIService    → from selfhealing.services.control_api_service import ControlAPIService
     ControlRequest       → from selfhealing.services.control_api_service import ControlRequest
     ControlResponse      → from selfhealing.services.control_api_service import ControlResponse
 
-    # Circuit Breaker 상세 (→ circuit_breaker_service.py)
-    CircuitBreakerConfig → from selfhealing.services.circuit_breaker_service import CircuitBreakerConfig
-    CircuitBreakerResult → from selfhealing.services.circuit_breaker_service import CircuitBreakerResult
-    CircuitState         → from selfhealing.services.circuit_breaker_service import CircuitState
-    should_allow_request → from selfhealing.services.circuit_breaker_service import should_allow_request
-    force_open_circuit   → from selfhealing.services.circuit_breaker_service import force_open_circuit
-    force_close_circuit  → from selfhealing.services.circuit_breaker_service import force_close_circuit
+    # Circuit Breaker 상세 (→ circuit_breaker/)
+    CircuitBreakerConfig → from selfhealing.services.circuit_breaker import CircuitBreakerConfig
+    CircuitBreakerResult → from selfhealing.services.circuit_breaker import CircuitBreakerResult
+    CircuitState         → from selfhealing.services.circuit_breaker import CircuitState
+    should_allow_request → from selfhealing.services.circuit_breaker import should_allow_request
+    force_open_circuit   → from selfhealing.services.circuit_breaker import force_open_circuit
+    force_close_circuit  → from selfhealing.services.circuit_breaker import force_close_circuit
 
-    # Rate Limit (→ circuit_breaker_service.py)
-    RateLimitTracker     → from selfhealing.services.circuit_breaker_service import RateLimitTracker
-    get_rate_limit_tracker → from selfhealing.services.circuit_breaker_service import get_rate_limit_tracker
-    record_rate_limit    → from selfhealing.services.circuit_breaker_service import record_rate_limit
-    should_allow_with_protection → from selfhealing.services.circuit_breaker_service import should_allow_with_protection
-    get_protection_status → from selfhealing.services.circuit_breaker_service import get_protection_status
+    # Rate Limit (→ circuit_breaker/)
+    RateLimitTracker     → from selfhealing.services.circuit_breaker import RateLimitTracker
+    get_rate_limit_tracker → from selfhealing.services.circuit_breaker import get_rate_limit_tracker
+    record_rate_limit    → from selfhealing.services.circuit_breaker import record_rate_limit
+    should_allow_with_protection → from selfhealing.services.circuit_breaker import should_allow_with_protection
+    get_protection_status → from selfhealing.services.circuit_breaker import get_protection_status
 
     # Metrics 상세 (→ metrics/ subpackage)
     record_dlq_item_created → from selfhealing.services.metrics.recorders import record_dlq_item_created
@@ -104,9 +104,9 @@ v2.0.0에서 62개의 export가 15개 핵심 API로 축소되었습니다.
     get_security_notification_service → from selfhealing.services.security_notification import get_security_notification_service
     notify_security_incident → from selfhealing.services.security_notification import notify_security_incident
 
-    # DLQ 상세 (→ dlq_service.py)
-    DLQConfig            → from selfhealing.services.dlq_service import DLQConfig
-    DLQEntryResult       → from selfhealing.services.dlq_service import DLQEntryResult
+    # DLQ 상세 (→ dlq/)
+    DLQConfig            → from selfhealing.services.dlq import DLQConfig
+    DLQEntryResult       → from selfhealing.services.dlq import DLQEntryResult
 
     # Replay 상세 (→ replay_service.py)
     ReplayService        → from selfhealing.services.replay_service import ReplayService

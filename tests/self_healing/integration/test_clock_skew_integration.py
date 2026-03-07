@@ -124,7 +124,7 @@ class TestClockSkewIntegration:
         Test IdempotencyService with TimeProvider injection.
         """
         from selfhealing.core.time_provider import MockTimeProvider
-        from selfhealing.services.idempotency_service import IdempotencyService
+        from selfhealing.services.idempotency import IdempotencyService
 
         fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
         time_provider = MockTimeProvider(fixed_time=fixed)

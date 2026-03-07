@@ -41,7 +41,7 @@ def reset_services():
 @pytest.fixture
 def mock_dlq_service():
     """DLQ 서비스 모킹."""
-    with patch("selfhealing.services.dlq_service.get_dlq_service") as mock_get:
+    with patch("selfhealing.services.dlq.get_dlq_service") as mock_get:
         mock_service = Mock()
         mock_get.return_value = mock_service
         yield mock_service
@@ -289,7 +289,7 @@ class TestCleanupBeatSchedule:
 class TestCleanupTaskIntegration:
     """청소부 레인 통합 테스트."""
 
-    @patch("selfhealing.services.dlq_service.get_dlq_service")
+    @patch("selfhealing.services.dlq.get_dlq_service")
     @patch("selfhealing.services.pending_config.get_pending_config_service")
     @patch("selfhealing.services.runtime_config.get_runtime_config_manager")
     def test_daily_cleanup_simulation(self, mock_runtime, mock_pending, mock_dlq):

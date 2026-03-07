@@ -434,7 +434,7 @@ class TestIdempotencyServiceTimeProvider:
     def test_idempotency_service_accepts_time_provider(self):
         """IdempotencyService can be initialized with TimeProvider."""
         from selfhealing.core.time_provider import MockTimeProvider
-        from selfhealing.services.idempotency_service import IdempotencyService
+        from selfhealing.services.idempotency import IdempotencyService
 
         fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
         time_provider = MockTimeProvider(fixed_time=fixed)
@@ -446,7 +446,7 @@ class TestIdempotencyServiceTimeProvider:
     def test_idempotency_service_now_method(self):
         """IdempotencyService.now() uses injected TimeProvider."""
         from selfhealing.core.time_provider import MockTimeProvider
-        from selfhealing.services.idempotency_service import IdempotencyService
+        from selfhealing.services.idempotency import IdempotencyService
 
         fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
         time_provider = MockTimeProvider(fixed_time=fixed)
@@ -458,7 +458,7 @@ class TestIdempotencyServiceTimeProvider:
     def test_idempotency_service_clock_skew_from_config(self):
         """IdempotencyService uses config clock_skew_tolerance by default."""
         from selfhealing.core.config import get_config
-        from selfhealing.services.idempotency_service import IdempotencyService
+        from selfhealing.services.idempotency import IdempotencyService
 
         service = IdempotencyService()
         config = get_config()
@@ -467,7 +467,7 @@ class TestIdempotencyServiceTimeProvider:
 
     def test_idempotency_service_custom_clock_skew(self):
         """IdempotencyService can use custom clock_skew_tolerance."""
-        from selfhealing.services.idempotency_service import IdempotencyService
+        from selfhealing.services.idempotency import IdempotencyService
 
         service = IdempotencyService(clock_skew_tolerance_seconds=10.0)
 
@@ -476,7 +476,7 @@ class TestIdempotencyServiceTimeProvider:
     def test_is_timestamp_valid_within_tolerance(self):
         """is_timestamp_valid returns True for recent timestamps."""
         from selfhealing.core.time_provider import MockTimeProvider
-        from selfhealing.services.idempotency_service import IdempotencyService
+        from selfhealing.services.idempotency import IdempotencyService
 
         fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
         time_provider = MockTimeProvider(fixed_time=fixed)
@@ -493,7 +493,7 @@ class TestIdempotencyServiceTimeProvider:
     def test_is_timestamp_valid_outside_tolerance(self):
         """is_timestamp_valid returns False for old timestamps."""
         from selfhealing.core.time_provider import MockTimeProvider
-        from selfhealing.services.idempotency_service import IdempotencyService
+        from selfhealing.services.idempotency import IdempotencyService
 
         fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
         time_provider = MockTimeProvider(fixed_time=fixed)
@@ -510,7 +510,7 @@ class TestIdempotencyServiceTimeProvider:
     def test_is_timestamp_valid_custom_tolerance_override(self):
         """is_timestamp_valid can override tolerance."""
         from selfhealing.core.time_provider import MockTimeProvider
-        from selfhealing.services.idempotency_service import IdempotencyService
+        from selfhealing.services.idempotency import IdempotencyService
 
         fixed = datetime(2024, 1, 15, 12, 0, 0, tzinfo=tz.utc)
         time_provider = MockTimeProvider(fixed_time=fixed)

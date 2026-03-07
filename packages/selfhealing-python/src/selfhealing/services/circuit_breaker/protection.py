@@ -14,7 +14,7 @@ import structlog
 from .rate_limit_tracker import get_rate_limit_tracker
 
 if TYPE_CHECKING:
-    from selfhealing.services.circuit_breaker_service import CircuitBreakerResult
+    from selfhealing.services.circuit_breaker import CircuitBreakerResult
 
     from .config import CircuitBreakerConfig
 

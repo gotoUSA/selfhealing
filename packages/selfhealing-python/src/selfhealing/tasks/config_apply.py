@@ -64,7 +64,7 @@ def apply_pending_config_changes(self):
 
         # === Audit 기록 ===
         try:
-            from selfhealing.services.audit_helpers import log_config_apply_audit
+            from selfhealing.services.audit import log_config_apply_audit
 
             log_config_apply_audit(
                 config_key="pending_changes",
@@ -91,7 +91,7 @@ def apply_pending_config_changes(self):
 
         # === Audit 기록 (실패) ===
         try:
-            from selfhealing.services.audit_helpers import log_config_apply_audit
+            from selfhealing.services.audit import log_config_apply_audit
 
             log_config_apply_audit(
                 config_key="pending_changes",
@@ -143,7 +143,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
 
             # === Audit 기록 (차단) ===
             try:
-                from selfhealing.services.audit_helpers import log_config_apply_audit
+                from selfhealing.services.audit import log_config_apply_audit
 
                 log_config_apply_audit(
                     pending_id=pending_id,
@@ -167,7 +167,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
 
         # === Audit 기록 (성공) ===
         try:
-            from selfhealing.services.audit_helpers import log_config_apply_audit
+            from selfhealing.services.audit import log_config_apply_audit
 
             log_config_apply_audit(
                 pending_id=pending_id,
@@ -202,7 +202,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
 
                 # === Audit 기록 (강제 적용) ===
                 try:
-                    from selfhealing.services.audit_helpers import (
+                    from selfhealing.services.audit import (
                         log_config_apply_audit,
                     )
 
@@ -226,7 +226,7 @@ def apply_graceful_config_change(self, pending_id: str, max_wait_seconds: int = 
 
                 # === Audit 기록 (실패) ===
                 try:
-                    from selfhealing.services.audit_helpers import (
+                    from selfhealing.services.audit import (
                         log_config_apply_audit,
                     )
 

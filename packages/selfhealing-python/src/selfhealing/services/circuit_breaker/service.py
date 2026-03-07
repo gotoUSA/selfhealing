@@ -355,7 +355,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
                     )
                     # Audit 기록 - 자동 복구 시도 (OPEN → HALF_OPEN)
                     try:
-                        from selfhealing.services.audit_helpers import (
+                        from selfhealing.services.audit import (
                             log_cb_state_change_audit,
                         )
 
@@ -537,7 +537,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             True if successfully queued
         """
         try:
-            from selfhealing.services.dlq_service import enqueue_failed_operation
+            from selfhealing.services.dlq import enqueue_failed_operation
 
             enqueue_failed_operation(
                 operation_type=f"cb_fallback_{service_name}",
@@ -847,7 +847,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
             snapshot: Failure snapshot data
         """
         try:
-            from selfhealing.services.audit_helpers import log_cb_state_change_audit
+            from selfhealing.services.audit import log_cb_state_change_audit
 
             # snapshot에서 값을 참조한다 (flat / nested 구조 모두 지원)
             cb_data = snapshot.get("circuit_breaker", {})
@@ -991,7 +991,7 @@ class CircuitBreakerService(ProtectionMixin, ManualControlMixin):
 
             # Audit 기록 - 자동 복구 완료 (HALF_OPEN → CLOSED)
             try:
-                from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                from selfhealing.services.audit import log_cb_state_change_audit
 
                 log_cb_state_change_audit(
                     cb_name=service_name,

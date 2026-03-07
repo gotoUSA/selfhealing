@@ -55,7 +55,7 @@ class TestPromoteTierIdPropagationBehavior:
             patch.object(service, "_save_rollout"),
             patch("selfhealing.services.canary.service.log_canary_action"),
             patch(
-                "selfhealing.services.governance_checks.check_all_governance",
+                "selfhealing.services.governance.checks.check_all_governance",
                 return_value=MagicMock(allowed=True),
             ),
         ):
@@ -89,7 +89,7 @@ class TestPromoteTierIdPropagationBehavior:
             patch.object(service, "_save_rollout"),
             patch("selfhealing.services.canary.service.log_canary_action"),
             patch(
-                "selfhealing.services.governance_checks.check_all_governance",
+                "selfhealing.services.governance.checks.check_all_governance",
                 return_value=MagicMock(allowed=True),
             ),
         ):
@@ -129,7 +129,7 @@ class TestPromoteLiveEvaluationBlockBehavior:
                 return_value=False,
             ),
             patch(
-                "selfhealing.services.governance_checks.check_all_governance",
+                "selfhealing.services.governance.checks.check_all_governance",
                 return_value=MagicMock(allowed=True),
             ),
         ):
@@ -160,7 +160,7 @@ class TestPromoteLiveEvaluationBlockBehavior:
             patch.object(service, "_save_rollout"),
             patch("selfhealing.services.canary.service.log_canary_action"),
             patch(
-                "selfhealing.services.governance_checks.check_all_governance",
+                "selfhealing.services.governance.checks.check_all_governance",
                 return_value=MagicMock(allowed=True),
             ),
         ):
@@ -191,7 +191,7 @@ class TestPromoteLiveEvaluationBlockBehavior:
             patch.object(service, "_save_rollout"),
             patch("selfhealing.services.canary.service.log_canary_action"),
             patch(
-                "selfhealing.services.governance_checks.check_all_governance",
+                "selfhealing.services.governance.checks.check_all_governance",
                 return_value=MagicMock(allowed=True),
             ),
         ):

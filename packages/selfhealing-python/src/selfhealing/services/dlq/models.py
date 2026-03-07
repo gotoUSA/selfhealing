@@ -4,7 +4,7 @@ DLQ Models and Data Classes
 Data classes and configuration for DLQ operations.
 
 This is the canonical location for DLQ models.
-Previously located at ``selfhealing.services.dlq_models``.
+Previously located at ``selfhealing.services.dlq.models``.
 """
 
 from __future__ import annotations

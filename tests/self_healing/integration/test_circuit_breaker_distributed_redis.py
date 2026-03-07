@@ -24,7 +24,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 
 from selfhealing.services import CircuitBreakerService
-from selfhealing.services.circuit_breaker_service import CircuitBreakerConfig
+from selfhealing.services.circuit_breaker import CircuitBreakerConfig
 
 
 @dataclass

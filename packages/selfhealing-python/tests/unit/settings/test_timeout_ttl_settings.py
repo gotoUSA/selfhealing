@@ -396,7 +396,7 @@ class TestGovernanceChecksUsesSettings:
         reset_governance_settings()
 
         # 모듈 재로드하여 새 설정 적용 확인
-        from selfhealing.services import governance_checks
+        from selfhealing.services.governance import checks as governance_checks
 
         new_cache = governance_checks._create_governance_cache()
 

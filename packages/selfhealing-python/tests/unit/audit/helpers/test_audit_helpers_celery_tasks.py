@@ -64,7 +64,7 @@ def mock_adapter():
 @pytest.fixture
 def disable_wal():
     """WAL 비활성화 fixture."""
-    from selfhealing.services.audit_helpers import disable_wal, enable_wal
+    from selfhealing.services.audit import disable_wal, enable_wal
     disable_wal()
     yield
     enable_wal()
@@ -80,7 +80,7 @@ class TestLogConfigApplyAudit:
 
     def test_basic_config_apply_audit(self, mock_wal, mock_adapter):
         """기본 설정 적용 audit 기록."""
-        from selfhealing.services.audit_helpers import log_config_apply_audit
+        from selfhealing.services.audit import log_config_apply_audit
 
         result = log_config_apply_audit(
             pending_id="pending-123",
@@ -103,7 +103,7 @@ class TestLogConfigApplyAudit:
 
     def test_config_apply_blocked_audit(self, mock_wal, mock_adapter):
         """설정 적용 차단 audit 기록."""
-        from selfhealing.services.audit_helpers import log_config_apply_audit
+        from selfhealing.services.audit import log_config_apply_audit
 
         result = log_config_apply_audit(
             pending_id="pending-456",
@@ -120,7 +120,7 @@ class TestLogConfigApplyAudit:
 
     def test_config_apply_failed_audit(self, mock_wal, mock_adapter):
         """설정 적용 실패 audit 기록."""
-        from selfhealing.services.audit_helpers import log_config_apply_audit
+        from selfhealing.services.audit import log_config_apply_audit
 
         result = log_config_apply_audit(
             pending_id="pending-789",
@@ -137,7 +137,7 @@ class TestLogConfigApplyAudit:
 
     def test_config_apply_with_adapter(self, mock_wal, mock_adapter):
         """Adapter를 통한 기록 테스트."""
-        from selfhealing.services.audit_helpers import log_config_apply_audit
+        from selfhealing.services.audit import log_config_apply_audit
 
         log_config_apply_audit(
             config_key="test",
@@ -158,7 +158,7 @@ class TestLogChaosSchedulerAudit:
 
     def test_chaos_scheduled_audit(self, mock_wal, mock_adapter):
         """Chaos 실험 스케줄링 audit 기록."""
-        from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+        from selfhealing.services.audit import log_chaos_scheduler_audit
 
         result = log_chaos_scheduler_audit(
             experiment_id="exp-123",
@@ -178,7 +178,7 @@ class TestLogChaosSchedulerAudit:
 
     def test_chaos_completed_audit(self, mock_wal, mock_adapter):
         """Chaos 실험 완료 audit 기록."""
-        from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+        from selfhealing.services.audit import log_chaos_scheduler_audit
 
         result = log_chaos_scheduler_audit(
             experiment_id="exp-456",
@@ -193,7 +193,7 @@ class TestLogChaosSchedulerAudit:
 
     def test_chaos_cleanup_audit(self, mock_wal, mock_adapter):
         """Chaos 실험 정리 audit 기록."""
-        from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+        from selfhealing.services.audit import log_chaos_scheduler_audit
 
         result = log_chaos_scheduler_audit(
             action="cleanup",
@@ -208,7 +208,7 @@ class TestLogChaosSchedulerAudit:
 
     def test_chaos_failed_audit(self, mock_wal, mock_adapter):
         """Chaos 실험 실패 audit 기록."""
-        from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+        from selfhealing.services.audit import log_chaos_scheduler_audit
 
         result = log_chaos_scheduler_audit(
             experiment_id="exp-fail",
@@ -234,7 +234,7 @@ class TestLogGovernanceTaskAudit:
 
     def test_governance_expiry_check_no_action(self, mock_wal, mock_adapter):
         """Governance 만료 체크 - 조치 없음."""
-        from selfhealing.services.audit_helpers import log_governance_task_audit
+        from selfhealing.services.audit import log_governance_task_audit
 
         result = log_governance_task_audit(
             action="expiry_check",
@@ -250,7 +250,7 @@ class TestLogGovernanceTaskAudit:
 
     def test_governance_warning_sent(self, mock_wal, mock_adapter):
         """Governance 경고 발송 audit 기록."""
-        from selfhealing.services.audit_helpers import log_governance_task_audit
+        from selfhealing.services.audit import log_governance_task_audit
 
         result = log_governance_task_audit(
             action="expiry_check",
@@ -269,7 +269,7 @@ class TestLogGovernanceTaskAudit:
 
     def test_governance_auto_recovered(self, mock_wal, mock_adapter):
         """Governance 자동 복구 audit 기록."""
-        from selfhealing.services.audit_helpers import log_governance_task_audit
+        from selfhealing.services.audit import log_governance_task_audit
 
         result = log_governance_task_audit(
             action="expiry_check",
@@ -298,7 +298,7 @@ class TestLogTrafficAwareReplayAudit:
 
     def test_replay_completed_audit(self, mock_wal, mock_adapter):
         """Traffic-Aware Replay 완료 audit 기록."""
-        from selfhealing.services.audit_helpers import log_traffic_aware_replay_audit
+        from selfhealing.services.audit import log_traffic_aware_replay_audit
 
         result = log_traffic_aware_replay_audit(
             domain="payment",
@@ -320,7 +320,7 @@ class TestLogTrafficAwareReplayAudit:
 
     def test_replay_skipped_audit(self, mock_wal, mock_adapter):
         """Traffic-Aware Replay 스킵 audit 기록."""
-        from selfhealing.services.audit_helpers import log_traffic_aware_replay_audit
+        from selfhealing.services.audit import log_traffic_aware_replay_audit
 
         result = log_traffic_aware_replay_audit(
             status="skipped",
@@ -336,7 +336,7 @@ class TestLogTrafficAwareReplayAudit:
 
     def test_replay_disabled_audit(self, mock_wal, mock_adapter):
         """Traffic-Aware Replay 비활성화 audit 기록."""
-        from selfhealing.services.audit_helpers import log_traffic_aware_replay_audit
+        from selfhealing.services.audit import log_traffic_aware_replay_audit
 
         result = log_traffic_aware_replay_audit(
             status="disabled",
@@ -349,7 +349,7 @@ class TestLogTrafficAwareReplayAudit:
 
     def test_replay_error_audit(self, mock_wal, mock_adapter):
         """Traffic-Aware Replay 오류 audit 기록."""
-        from selfhealing.services.audit_helpers import log_traffic_aware_replay_audit
+        from selfhealing.services.audit import log_traffic_aware_replay_audit
 
         result = log_traffic_aware_replay_audit(
             status="error",
@@ -373,7 +373,7 @@ class TestLogDriftDetectionAudit:
 
     def test_sla_drift_detected(self, mock_wal, mock_adapter):
         """SLA drift 감지 audit 기록."""
-        from selfhealing.services.audit_helpers import log_drift_detection_audit
+        from selfhealing.services.audit import log_drift_detection_audit
 
         result = log_drift_detection_audit(
             check_type="sla_drift",
@@ -393,7 +393,7 @@ class TestLogDriftDetectionAudit:
 
     def test_sla_no_drift(self, mock_wal, mock_adapter):
         """SLA drift 없음 audit 기록."""
-        from selfhealing.services.audit_helpers import log_drift_detection_audit
+        from selfhealing.services.audit import log_drift_detection_audit
 
         result = log_drift_detection_audit(
             check_type="sla_drift",
@@ -410,7 +410,7 @@ class TestLogDriftDetectionAudit:
 
     def test_analyze_pending_audit(self, mock_wal, mock_adapter):
         """Pending 분석 audit 기록."""
-        from selfhealing.services.audit_helpers import log_drift_detection_audit
+        from selfhealing.services.audit import log_drift_detection_audit
 
         result = log_drift_detection_audit(
             check_type="analyze_pending",
@@ -427,7 +427,7 @@ class TestLogDriftDetectionAudit:
 
     def test_chaos_cleanup_audit(self, mock_wal, mock_adapter):
         """Chaos 정리 audit 기록."""
-        from selfhealing.services.audit_helpers import log_drift_detection_audit
+        from selfhealing.services.audit import log_drift_detection_audit
 
         result = log_drift_detection_audit(
             check_type="chaos_cleanup",
@@ -442,7 +442,7 @@ class TestLogDriftDetectionAudit:
 
     def test_drift_detection_error(self, mock_wal, mock_adapter):
         """Drift detection 오류 audit 기록."""
-        from selfhealing.services.audit_helpers import log_drift_detection_audit
+        from selfhealing.services.audit import log_drift_detection_audit
 
         result = log_drift_detection_audit(
             check_type="sla_drift",
@@ -467,7 +467,7 @@ class TestAuditWithWALDisabled:
 
     def test_config_apply_without_wal(self, disable_wal, mock_adapter, caplog):
         """WAL 비활성화 시에도 로깅은 동작."""
-        from selfhealing.services.audit_helpers import log_config_apply_audit
+        from selfhealing.services.audit import log_config_apply_audit
 
         with caplog.at_level(logging.INFO):
             result = log_config_apply_audit(
@@ -483,7 +483,7 @@ class TestAuditWithWALDisabled:
 
     def test_chaos_scheduler_without_wal(self, disable_wal, mock_adapter, caplog):
         """WAL 비활성화 시 Chaos 스케줄러 audit."""
-        from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+        from selfhealing.services.audit import log_chaos_scheduler_audit
 
         with caplog.at_level(logging.INFO):
             result = log_chaos_scheduler_audit(
@@ -504,7 +504,7 @@ class TestAuditEdgeCases:
 
     def test_none_values_filtered(self, mock_wal, mock_adapter):
         """None 값이 details에서 필터링됨."""
-        from selfhealing.services.audit_helpers import log_config_apply_audit
+        from selfhealing.services.audit import log_config_apply_audit
 
         log_config_apply_audit(
             pending_id=None,
@@ -530,7 +530,7 @@ class TestAuditEdgeCases:
 
     def test_adapter_failure_does_not_raise(self, mock_wal, mock_adapter):
         """Adapter 실패 시 예외 발생 안함 (Fail-Open)."""
-        from selfhealing.services.audit_helpers import log_config_apply_audit
+        from selfhealing.services.audit import log_config_apply_audit
 
         mock_adapter.record.side_effect = Exception("Adapter error")
 
@@ -546,7 +546,7 @@ class TestAuditEdgeCases:
     def test_wal_failure_does_not_raise(self, mock_adapter):
         """WAL 실패 시에도 예외 발생 안함 (Fail-Open)."""
         import selfhealing.services.audit.base as base_module
-        from selfhealing.services.audit_helpers import log_config_apply_audit
+        from selfhealing.services.audit import log_config_apply_audit
 
         # 싱글톤 초기화
         original_instance = base_module._wal_instance
@@ -572,7 +572,7 @@ class TestAuditEdgeCases:
 
     def test_complex_details_merge(self, mock_wal, mock_adapter):
         """복잡한 details 병합 테스트."""
-        from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+        from selfhealing.services.audit import log_chaos_scheduler_audit
 
         # 메모리 버퍼 초기화 (이전 테스트의 실패한 이벤트 제거)
         try:

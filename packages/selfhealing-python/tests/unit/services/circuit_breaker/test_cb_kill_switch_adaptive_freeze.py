@@ -596,7 +596,7 @@ class TestAuditHelpers:
 
     def test_log_kill_switch_override_audit(self):
         """Kill Switch Override Audit 기록."""
-        from selfhealing.services.audit_helpers import log_kill_switch_override_audit
+        from selfhealing.services.audit import log_kill_switch_override_audit
 
         # WAL 기록 성공 확인
         result = log_kill_switch_override_audit(
@@ -611,7 +611,7 @@ class TestAuditHelpers:
 
     def test_log_panic_threshold_audit(self):
         """Panic Threshold Audit 기록."""
-        from selfhealing.services.audit_helpers import log_panic_threshold_audit
+        from selfhealing.services.audit import log_panic_threshold_audit
 
         result = log_panic_threshold_audit(
             open_rate=75.0,
@@ -626,7 +626,7 @@ class TestAuditHelpers:
 
     def test_log_freeze_mode_audit(self):
         """Freeze Mode Audit 기록."""
-        from selfhealing.services.audit_helpers import log_freeze_mode_audit
+        from selfhealing.services.audit import log_freeze_mode_audit
 
         result = log_freeze_mode_audit(
             active=True,

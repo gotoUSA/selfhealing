@@ -20,7 +20,7 @@ class TestChaosExperimentMigration:
                 return_value=1,
             ),
             patch(
-                "selfhealing.services.audit_helpers.log_chaos_experiment_audit",
+                "selfhealing.services.audit.log_chaos_experiment_audit",
                 return_value="audit-test1234",
             ) as mock_helper,
         ):
@@ -100,7 +100,7 @@ class TestEmergencyModeManagerMigration:
                 return_value=1,
             ),
             patch(
-                "selfhealing.services.audit_helpers.log_emergency_mode_audit",
+                "selfhealing.services.audit.log_emergency_mode_audit",
                 return_value=1,
             ) as mock_helper,
             patch(
@@ -150,7 +150,7 @@ class TestErrorBudgetGateMigration:
                 return_value=1,
             ),
             patch(
-                "selfhealing.services.audit_helpers.log_error_budget_blocked_audit",
+                "selfhealing.services.audit.log_error_budget_blocked_audit",
                 return_value=1,
             ) as mock_helper,
         ):
@@ -183,7 +183,7 @@ class TestErrorBudgetGateMigration:
         """Should not raise exception if audit helper fails."""
         with (
             patch(
-                "selfhealing.services.audit_helpers.log_error_budget_blocked_audit",
+                "selfhealing.services.audit.log_error_budget_blocked_audit",
                 side_effect=Exception("Audit failed"),
             ),
             patch("selfhealing.services.error_budget_gate.gate.logger") as mock_logger,

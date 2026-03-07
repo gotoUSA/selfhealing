@@ -125,7 +125,7 @@ def create_default_full_stop_guard() -> FullStopGuard:
     def _get_cb_state(service: str) -> str:
         """핵심 DB Circuit Breaker 상태 조회 (Fail-Open → "closed")."""
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 get_circuit_breaker_service,
             )
 
@@ -154,7 +154,7 @@ def create_default_full_stop_guard() -> FullStopGuard:
     def _get_budget_remaining() -> float:
         """Error Budget 잔여 퍼센트 조회 (Fail-Open → 100.0)."""
         try:
-            from selfhealing.services.error_budget_service import (
+            from selfhealing.services.error_budget import (
                 get_error_budget_service,
             )
 

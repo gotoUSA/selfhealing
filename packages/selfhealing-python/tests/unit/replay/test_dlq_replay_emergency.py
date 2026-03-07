@@ -185,7 +185,7 @@ class TestServiceFunctionsExist:
     def test_governance_check_importable(self):
         """거버넌스 체크 함수들이 import 가능한지 테스트."""
         try:
-            from selfhealing.services.governance_checks import (
+            from selfhealing.services.governance.checks import (
                 GovernanceCheckResult,
                 check_all_governance,
             )

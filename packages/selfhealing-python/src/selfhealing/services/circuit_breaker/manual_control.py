@@ -144,7 +144,7 @@ class ManualControlMixin:
                     )
                     # Audit 기록 - 수동 OPEN은 중요 운영 이벤트
                     try:
-                        from selfhealing.services.audit_helpers import (
+                        from selfhealing.services.audit import (
                             log_cb_state_change_audit,
                         )
 
@@ -302,7 +302,7 @@ class ManualControlMixin:
             controlled_by_id=controlled_by_id,
         )
         try:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_kill_switch_override_audit,
             )
 
@@ -374,7 +374,7 @@ class ManualControlMixin:
     ) -> None:
         """CB 상태 변경 Audit 로그 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_cb_state_change_audit
+            from selfhealing.services.audit import log_cb_state_change_audit
 
             log_cb_state_change_audit(
                 cb_name=service_name,
@@ -449,7 +449,7 @@ class ManualControlMixin:
                 # Audit 기록 - reset은 상태 초기화 이벤트
                 if previous_state != new_state:
                     try:
-                        from selfhealing.services.audit_helpers import (
+                        from selfhealing.services.audit import (
                             log_cb_state_change_audit,
                         )
 

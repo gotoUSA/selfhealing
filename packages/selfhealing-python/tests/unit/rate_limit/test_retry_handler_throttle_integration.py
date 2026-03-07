@@ -301,7 +301,7 @@ class TestRetryHandlerDLQMetadata:
     @patch("selfhealing.services.retry_handler.RetryHandler._check_error_budget_gate")
     @patch("selfhealing.services.retry_handler.RetryHandler._wait_for_rate_limit")
     @patch("selfhealing.services.retry_handler.RetryHandler._log_retry_audit")
-    @patch("selfhealing.services.dlq_service.store_to_dlq")
+    @patch("selfhealing.services.dlq.store_to_dlq")
     def test_dlq_includes_backoff_info(self, mock_dlq, mock_audit, mock_wait, mock_gate, mock_system):
         """DLQ에 backoff_info 포함."""
         mock_gate.return_value = None

@@ -14,7 +14,7 @@ Usage:
     )
 
     # 또는 기존 방식:
-    from selfhealing.services.audit_helpers import log_dlq_store_audit
+    from selfhealing.services.audit import log_dlq_store_audit
 """
 
 from __future__ import annotations

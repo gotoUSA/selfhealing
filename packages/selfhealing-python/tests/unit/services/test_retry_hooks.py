@@ -52,7 +52,7 @@ class TestAuditHookBehavior:
         """on_execute는 아무 동작도 하지 않는다."""
         AuditHook(domain="test").on_execute("retry", 1)
 
-    @patch("selfhealing.services.audit_helpers.log_retry_audit")
+    @patch("selfhealing.services.audit.log_retry_audit")
     def test_on_success_calls_log_retry_audit(self, mock_audit):
         """on_success는 성공 정보로 log_retry_audit를 호출한다."""
         hook = AuditHook(domain="payment")
@@ -69,7 +69,7 @@ class TestAuditHookBehavior:
             success=True,
         )
 
-    @patch("selfhealing.services.audit_helpers.log_retry_audit")
+    @patch("selfhealing.services.audit.log_retry_audit")
     def test_on_failure_calls_log_retry_audit(self, mock_audit):
         """on_failure는 에러 정보로 log_retry_audit를 호출한다."""
         hook = AuditHook(domain="payment")
@@ -83,7 +83,7 @@ class TestAuditHookBehavior:
             error_message="timeout",
         )
 
-    @patch("selfhealing.services.audit_helpers.log_retry_audit")
+    @patch("selfhealing.services.audit.log_retry_audit")
     def test_on_retry_calls_log_retry_audit_with_delay(self, mock_audit):
         """on_retry는 delay 정보와 함께 log_retry_audit를 호출한다."""
         hook = AuditHook(domain="payment")
@@ -96,7 +96,7 @@ class TestAuditHookBehavior:
             wait_time=5.0,
         )
 
-    @patch("selfhealing.services.audit_helpers.log_retry_audit")
+    @patch("selfhealing.services.audit.log_retry_audit")
     def test_on_reject_calls_log_retry_audit_as_policy_rejected(self, mock_audit):
         """on_reject는 PolicyRejected 타입으로 log_retry_audit를 호출한다."""
         hook = AuditHook(domain="payment")
@@ -113,7 +113,7 @@ class TestAuditHookBehavior:
     def test_fail_open_on_success_audit_failure(self):
         """on_success 중 예외가 발생해도 전파되지 않는다."""
         with patch(
-            "selfhealing.services.audit_helpers.log_retry_audit",
+            "selfhealing.services.audit.log_retry_audit",
             side_effect=RuntimeError("audit down"),
         ):
             AuditHook(domain="test").on_success("retry", PolicyResult())
@@ -121,7 +121,7 @@ class TestAuditHookBehavior:
     def test_fail_open_on_failure_audit_failure(self):
         """on_failure 중 예외가 발생해도 전파되지 않는다."""
         with patch(
-            "selfhealing.services.audit_helpers.log_retry_audit",
+            "selfhealing.services.audit.log_retry_audit",
             side_effect=RuntimeError("audit down"),
         ):
             AuditHook(domain="test").on_failure("retry", Exception("err"), 1)
@@ -129,7 +129,7 @@ class TestAuditHookBehavior:
     def test_fail_open_on_retry_audit_failure(self):
         """on_retry 중 예외가 발생해도 전파되지 않는다."""
         with patch(
-            "selfhealing.services.audit_helpers.log_retry_audit",
+            "selfhealing.services.audit.log_retry_audit",
             side_effect=RuntimeError("audit down"),
         ):
             AuditHook(domain="test").on_retry("retry", 1, 2.0)
@@ -137,7 +137,7 @@ class TestAuditHookBehavior:
     def test_fail_open_on_reject_audit_failure(self):
         """on_reject 중 예외가 발생해도 전파되지 않는다."""
         with patch(
-            "selfhealing.services.audit_helpers.log_retry_audit",
+            "selfhealing.services.audit.log_retry_audit",
             side_effect=RuntimeError("audit down"),
         ):
             AuditHook(domain="test").on_reject("retry", "reason")

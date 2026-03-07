@@ -410,7 +410,7 @@ class CanaryRolloutService:
         # 거버넌스 체크 (수동 프로모션에도 적용)
         if not bypass_governance:
             try:
-                from selfhealing.services.governance_checks import check_all_governance
+                from selfhealing.services.governance.checks import check_all_governance
 
                 governance = check_all_governance(
                     check_kill_switch=True,

@@ -194,7 +194,7 @@ class ComplianceService:
     ) -> None:
         """Audit 헬퍼를 통해 compliance 이벤트 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_compliance_audit
+            from selfhealing.services.audit import log_compliance_audit
 
             log_compliance_audit(
                 stage_name=stage_name,

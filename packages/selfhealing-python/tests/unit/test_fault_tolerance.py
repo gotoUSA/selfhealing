@@ -116,7 +116,7 @@ class TestGracefulDegradation:
         """IdempotencyService should gracefully degrade to DB-only."""
         import inspect
 
-        from selfhealing.services.idempotency_service import (
+        from selfhealing.services.idempotency import (
             IdempotencyService,
         )
 
@@ -135,7 +135,7 @@ class TestGracefulDegradation:
         # - Drift Detection runs in separate Celery tasks
 
         from selfhealing.services.chaos_context import ChaosExperimentContext
-        from selfhealing.services.dlq_service import DLQService
+        from selfhealing.services.dlq import DLQService
 
         # Verify DLQService works without additional dependencies
         dlq = DLQService()

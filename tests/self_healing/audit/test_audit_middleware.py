@@ -169,7 +169,7 @@ class TestGatewayPipelineIntegration:
         """전체 요청 생명주기 테스트."""
         from selfhealing.api.django.audit_middleware import AuditMiddleware
         from selfhealing.audit.event_buffer import RequestAuditBuffer
-        from selfhealing.services.audit_helpers import (
+        from selfhealing.services.audit import (
             log_dlq_store_audit,
             log_cb_state_change_audit,
         )
@@ -326,7 +326,7 @@ class TestAuditHelpersWithRequest:
 
     def test_log_dlq_store_with_request_uses_buffer(self):
         """request가 있으면 버퍼에 적재."""
-        from selfhealing.services.audit_helpers import log_dlq_store_audit
+        from selfhealing.services.audit import log_dlq_store_audit
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
 
         mock_request = MagicMock()
@@ -350,7 +350,7 @@ class TestAuditHelpersWithRequest:
 
     def test_log_dlq_replay_with_request_uses_buffer(self):
         """request가 있으면 버퍼에 적재."""
-        from selfhealing.services.audit_helpers import log_dlq_replay_audit
+        from selfhealing.services.audit import log_dlq_replay_audit
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
 
         mock_request = MagicMock()
@@ -371,7 +371,7 @@ class TestAuditHelpersWithRequest:
 
     def test_log_cb_state_change_with_request(self):
         """CB 상태 변경을 request 버퍼에 적재."""
-        from selfhealing.services.audit_helpers import log_cb_state_change_audit
+        from selfhealing.services.audit import log_cb_state_change_audit
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
 
         mock_request = MagicMock()
@@ -393,7 +393,7 @@ class TestAuditHelpersWithRequest:
 
     def test_log_governance_blocked_with_request(self):
         """Governance 차단을 request 버퍼에 적재."""
-        from selfhealing.services.audit_helpers import log_governance_blocked_audit
+        from selfhealing.services.audit import log_governance_blocked_audit
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
 
         mock_request = MagicMock()
@@ -413,7 +413,7 @@ class TestAuditHelpersWithRequest:
 
     def test_log_rate_limited_with_request(self):
         """Rate Limit 차단을 request 버퍼에 적재."""
-        from selfhealing.services.audit_helpers import log_rate_limited_audit
+        from selfhealing.services.audit import log_rate_limited_audit
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
 
         mock_request = MagicMock()
@@ -433,7 +433,7 @@ class TestAuditHelpersWithRequest:
 
     def test_log_pool_cb_rejection_with_request(self):
         """Pool CB 거부를 request 버퍼에 적재."""
-        from selfhealing.services.audit_helpers import log_pool_cb_rejection_audit
+        from selfhealing.services.audit import log_pool_cb_rejection_audit
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
 
         mock_request = MagicMock()

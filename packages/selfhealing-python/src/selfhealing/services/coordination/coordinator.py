@@ -92,7 +92,7 @@ class DryRunAuditLogger:
         )
 
         # 실제 audit 시스템 연동 시 여기서 기록
-        # from selfhealing.services.audit_helpers import log_config_change
+        # from selfhealing.services.audit import log_config_change
         # log_config_change(...)
 
         return event_id

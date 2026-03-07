@@ -729,7 +729,7 @@ def _store_to_dlq(
 ):
     """Store failed operation to DLQ."""
     try:
-        from selfhealing.services.dlq_service import store_to_dlq
+        from selfhealing.services.dlq import store_to_dlq
 
         # Determine failure type from exception
         failure_type = _classify_failure_type(exception)

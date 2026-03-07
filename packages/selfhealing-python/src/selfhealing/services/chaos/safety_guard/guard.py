@@ -449,7 +449,7 @@ class SafetyGuard:
     def _check_error_budget(self) -> dict[str, Any]:
         """Check current error budget status."""
         try:
-            from selfhealing.services.error_budget_service import (
+            from selfhealing.services.error_budget import (
                 get_error_budget_service,
             )
 
@@ -510,7 +510,7 @@ class SafetyGuard:
     def _check_active_incidents(self) -> dict[str, Any]:
         """Check for active incidents."""
         try:
-            from selfhealing.services.dlq_service import get_dlq_service
+            from selfhealing.services.dlq import get_dlq_service
 
             service = get_dlq_service()
             # Consider DLQ items with status 'pending' as active incidents
@@ -531,7 +531,7 @@ class SafetyGuard:
     def _check_deployment_freeze(self) -> dict[str, Any]:
         """Check if deployment freeze is active."""
         try:
-            from selfhealing.services.error_budget_service import (
+            from selfhealing.services.error_budget import (
                 get_error_budget_service,
             )
 
@@ -609,7 +609,7 @@ class SafetyGuard:
             emergency_result: Emergency mode 체크 결과 (level, level_value 포함)
         """
         try:
-            from selfhealing.services.audit_helpers import log_governance_blocked_audit
+            from selfhealing.services.audit import log_governance_blocked_audit
 
             log_governance_blocked_audit(
                 action="chaos_experiment",
@@ -724,7 +724,7 @@ class SafetyGuard:
             panic_result: Panic threshold 체크 결과
         """
         try:
-            from selfhealing.services.audit_helpers import log_governance_blocked_audit
+            from selfhealing.services.audit import log_governance_blocked_audit
 
             log_governance_blocked_audit(
                 action="chaos_experiment",

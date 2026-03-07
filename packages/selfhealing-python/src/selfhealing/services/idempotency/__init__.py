@@ -41,7 +41,7 @@ __all__ = [
 # =============================================================================
 # Eagerly copy all sub-module attributes to package level.
 # This is critical for backward compatibility with tests that do:
-#   import selfhealing.services.idempotency_service as mod; mod.time
+#   import selfhealing.services.idempotency as mod; mod.time
 #   @patch("selfhealing.services.idempotency.X")
 
 import importlib as _importlib  # noqa: E402

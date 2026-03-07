@@ -81,7 +81,7 @@ class TestHuntZombieExperimentsTask:
         from selfhealing.services.chaos.base import ExperimentStatus
         
         with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler, \
-             patch("selfhealing.services.idempotency_service.IdempotencyService") as mock_idem_class:
+             patch("selfhealing.services.idempotency.IdempotencyService") as mock_idem_class:
             
             mock_exp = Mock()
             mock_exp.experiment_id = "exp-zombie"
@@ -118,7 +118,7 @@ class TestHuntZombieExperimentsTask:
         from selfhealing.tasks.chaos_scheduler import hunt_zombie_experiments
         
         with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler, \
-             patch("selfhealing.services.idempotency_service.IdempotencyService") as mock_idem_class:
+             patch("selfhealing.services.idempotency.IdempotencyService") as mock_idem_class:
             
             mock_exp = Mock()
             mock_exp.experiment_id = "exp-locked"
@@ -146,7 +146,7 @@ class TestHuntZombieExperimentsTask:
         from selfhealing.tasks.chaos_scheduler import hunt_zombie_experiments
         
         with patch("selfhealing.services.chaos.get_chaos_scheduler") as mock_get_scheduler, \
-             patch("selfhealing.services.idempotency_service.IdempotencyService") as mock_idem_class:
+             patch("selfhealing.services.idempotency.IdempotencyService") as mock_idem_class:
             
             mock_exp = Mock()
             mock_exp.experiment_id = "exp-monotonic"
@@ -438,7 +438,7 @@ class TestIdempotencyDomainZombieHunter:
     
     def test_chaos_zombie_hunter_domain_exists(self):
         """Test CHAOS_ZOMBIE_HUNTER exists in IdempotencyDomain."""
-        from selfhealing.services.idempotency_service import IdempotencyDomain
+        from selfhealing.services.idempotency import IdempotencyDomain
         
         assert hasattr(IdempotencyDomain, "CHAOS_ZOMBIE_HUNTER")
         assert IdempotencyDomain.CHAOS_ZOMBIE_HUNTER.value == "chaos_zombie_hunter"

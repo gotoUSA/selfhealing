@@ -262,7 +262,7 @@ class AuditSyncWorker:
 
         # audit_helpers에서 가져오기
         try:
-            from selfhealing.services.audit_helpers import _get_wal
+            from selfhealing.services.audit import _get_wal
 
             return _get_wal()
         except Exception as e:
@@ -478,7 +478,7 @@ class AuditSyncWorker:
         """
         # Idempotent Consumer: 중복 처리 방지
         try:
-            from selfhealing.services.idempotency_service import (
+            from selfhealing.services.idempotency import (
                 IdempotencyDomain,
                 IdempotencyKey,
                 IdempotencyService,
@@ -529,7 +529,7 @@ class AuditSyncWorker:
 
                 # 성공 시 처리 완료 마킹
                 try:
-                    from selfhealing.services.idempotency_service import (
+                    from selfhealing.services.idempotency import (
                         IdempotencyDomain,
                         IdempotencyKey,
                         IdempotencyService,

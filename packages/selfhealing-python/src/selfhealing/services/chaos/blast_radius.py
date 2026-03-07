@@ -379,7 +379,7 @@ class BlastRadiusManager:
     ) -> None:
         """Audit 헬퍼를 통해 blast radius 이벤트 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_blast_radius_audit
+            from selfhealing.services.audit import log_blast_radius_audit
 
             log_blast_radius_audit(
                 experiment_id=experiment_id,

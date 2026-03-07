@@ -246,7 +246,7 @@ class AuditReconciler:
             return self._wal
 
         try:
-            from selfhealing.services.audit_helpers import _get_wal
+            from selfhealing.services.audit import _get_wal
 
             return _get_wal()
         except Exception as e:

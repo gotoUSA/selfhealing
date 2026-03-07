@@ -18,7 +18,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def disable_db_persistence():
     """모든 테스트에서 DB persistence 비활성화."""
-    from selfhealing.services.postmortem_store import (
+    from selfhealing.services.postmortem.store import (
         get_db_persistence_enabled,
         set_db_persistence_enabled,
     )
@@ -34,7 +34,7 @@ class TestPostmortemDistributedLockConstants:
 
     def test_lock_key_patterns_defined(self):
         """락 키 패턴 상수가 정의되어 있어야 함."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             LOCK_KEY_POSTMORTEM_GENERATE,
             LOCK_KEY_POSTMORTEM_GROUP,
             LOCK_TTL_POSTMORTEM_GENERATE,
@@ -53,7 +53,7 @@ class TestPostmortemDistributedLockConstants:
 
     def test_lock_key_format(self):
         """락 키 포맷이 올바르게 동작해야 함."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             LOCK_KEY_POSTMORTEM_GENERATE,
             LOCK_KEY_POSTMORTEM_GROUP,
         )
@@ -73,7 +73,7 @@ class TestAddHealingIncidentWithLock:
 
     def test_save_with_lock_success(self):
         """락 획득 성공 시 저장이 진행되어야 함."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident_with_lock,
             clear_healing_incidents,
             get_healing_incidents,
@@ -108,7 +108,7 @@ class TestAddHealingIncidentWithLock:
 
     def test_save_with_lock_failure_skips(self):
         """락 획득 실패 시 저장이 스킵되어야 함."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident_with_lock,
             clear_healing_incidents,
             get_healing_incidents,
@@ -142,7 +142,7 @@ class TestAddHealingIncidentWithLock:
 
     def test_save_without_redis_fallback(self):
         """Redis 미사용 환경에서 락 없이 저장이 진행되어야 함."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident_with_lock,
             clear_healing_incidents,
             get_healing_incidents,
@@ -171,7 +171,7 @@ class TestAddHealingIncidentWithLock:
 
     def test_save_without_incident_id_fallback(self):
         """incident_id가 없으면 락 없이 저장되어야 함."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident_with_lock,
             clear_healing_incidents,
             get_healing_incidents,
@@ -195,7 +195,7 @@ class TestAddHealingIncidentWithLock:
 
     def test_lock_released_on_exception(self):
         """저장 중 예외 발생 시에도 락이 해제되어야 함."""
-        from selfhealing.services.postmortem_store import add_healing_incident_with_lock
+        from selfhealing.services.postmortem.store import add_healing_incident_with_lock
 
         mock_lock = MagicMock()
         mock_lock.acquire.return_value = True
@@ -222,7 +222,7 @@ class TestAcquireGroupCloseLock:
 
     def test_acquire_group_close_lock_with_redis(self):
         """Redis 사용 시 락 객체가 생성되어야 함."""
-        from selfhealing.services.postmortem_store import acquire_group_close_lock
+        from selfhealing.services.postmortem.store import acquire_group_close_lock
 
         mock_redis = MagicMock()
 
@@ -237,7 +237,7 @@ class TestAcquireGroupCloseLock:
 
     def test_acquire_group_close_lock_without_redis(self):
         """Redis 미사용 시 None이 반환되어야 함."""
-        from selfhealing.services.postmortem_store import acquire_group_close_lock
+        from selfhealing.services.postmortem.store import acquire_group_close_lock
 
         with patch(
             "selfhealing.services.postmortem.store._get_redis_client",
@@ -366,7 +366,7 @@ class TestIntegrationScenario:
 
     def test_concurrent_save_prevention(self):
         """동시 저장 요청 시 첫 번째만 성공해야 함."""
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident_with_lock,
             clear_healing_incidents,
             get_healing_incidents,

@@ -30,7 +30,7 @@ def mock_audit_adapter():
 def mock_system_disabled():
     """Mock system disabled (Kill Switch active)."""
     with patch(
-        "selfhealing.services.governance_checks.is_system_enabled",
+        "selfhealing.services.governance.checks.is_system_enabled",
         return_value=False,
     ):
         yield
@@ -40,7 +40,7 @@ def mock_system_disabled():
 def mock_emergency_mode():
     """Mock emergency mode active."""
     with patch(
-        "selfhealing.services.governance_checks.is_emergency_blocking",
+        "selfhealing.services.governance.checks.is_emergency_blocking",
         return_value=(True, "CRITICAL"),
     ):
         yield
@@ -50,7 +50,7 @@ def mock_emergency_mode():
 def mock_low_error_budget():
     """Mock low error budget."""
     with patch(
-        "selfhealing.services.governance_checks.is_error_budget_blocking",
+        "selfhealing.services.governance.checks.is_error_budget_blocking",
         return_value=(True, 5.0, 10.0),  # 5% budget, 10% threshold
     ):
         yield
@@ -66,13 +66,13 @@ class TestCheckAllGovernanceAuditLogging:
 
     def test_audit_log_on_kill_switch_block(self, mock_audit_adapter, mock_system_disabled):
         """Kill Switch 차단 시 Audit Log 기록 확인."""
-        from selfhealing.services.governance_checks import (
+        from selfhealing.services.governance.checks import (
             BlockReason,
             check_all_governance,
         )
 
         with patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             result = check_all_governance(
@@ -96,19 +96,19 @@ class TestCheckAllGovernanceAuditLogging:
 
     def test_audit_log_on_emergency_block(self, mock_audit_adapter):
         """Emergency Mode 차단 시 Audit Log 기록 확인."""
-        from selfhealing.services.governance_checks import (
+        from selfhealing.services.governance.checks import (
             BlockReason,
             check_all_governance,
         )
 
         with patch(
-            "selfhealing.services.governance_checks.is_system_enabled",
+            "selfhealing.services.governance.checks.is_system_enabled",
             return_value=True,
         ), patch(
-            "selfhealing.services.governance_checks.is_emergency_blocking",
+            "selfhealing.services.governance.checks.is_emergency_blocking",
             return_value=(True, "CRITICAL"),
         ), patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             result = check_all_governance(
@@ -129,22 +129,22 @@ class TestCheckAllGovernanceAuditLogging:
 
     def test_audit_log_on_error_budget_block(self, mock_audit_adapter):
         """Error Budget 차단 시 Audit Log 기록 확인."""
-        from selfhealing.services.governance_checks import (
+        from selfhealing.services.governance.checks import (
             BlockReason,
             check_all_governance,
         )
 
         with patch(
-            "selfhealing.services.governance_checks.is_system_enabled",
+            "selfhealing.services.governance.checks.is_system_enabled",
             return_value=True,
         ), patch(
-            "selfhealing.services.governance_checks.is_emergency_blocking",
+            "selfhealing.services.governance.checks.is_emergency_blocking",
             return_value=(False, None),
         ), patch(
-            "selfhealing.services.governance_checks.is_error_budget_blocking",
+            "selfhealing.services.governance.checks.is_error_budget_blocking",
             return_value=(True, 5.0, 10.0),
         ), patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             result = check_all_governance(
@@ -166,19 +166,19 @@ class TestCheckAllGovernanceAuditLogging:
 
     def test_no_audit_log_when_allowed(self, mock_audit_adapter):
         """허용된 경우 Audit Log 미기록 확인."""
-        from selfhealing.services.governance_checks import check_all_governance
+        from selfhealing.services.governance.checks import check_all_governance
 
         with patch(
-            "selfhealing.services.governance_checks.is_system_enabled",
+            "selfhealing.services.governance.checks.is_system_enabled",
             return_value=True,
         ), patch(
-            "selfhealing.services.governance_checks.is_emergency_blocking",
+            "selfhealing.services.governance.checks.is_emergency_blocking",
             return_value=(False, None),
         ), patch(
-            "selfhealing.services.governance_checks.is_error_budget_blocking",
+            "selfhealing.services.governance.checks.is_error_budget_blocking",
             return_value=(False, 50.0, 10.0),
         ), patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             result = check_all_governance(
@@ -191,10 +191,10 @@ class TestCheckAllGovernanceAuditLogging:
 
     def test_no_audit_when_disabled(self, mock_audit_adapter, mock_system_disabled):
         """audit_on_block=False일 때 Audit Log 미기록 확인."""
-        from selfhealing.services.governance_checks import check_all_governance
+        from selfhealing.services.governance.checks import check_all_governance
 
         with patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             result = check_all_governance(
@@ -216,10 +216,10 @@ class TestDecoratorAuditLogging:
 
     def test_require_system_enabled_logs_on_block(self, mock_audit_adapter, mock_system_disabled):
         """@require_system_enabled 차단 시 Audit Log 기록."""
-        from selfhealing.services.governance_checks import require_system_enabled
+        from selfhealing.services.governance.checks import require_system_enabled
 
         with patch(
-            "selfhealing.services.governance_checks._log_governance_blocked"
+            "selfhealing.services.governance.checks._log_governance_blocked"
         ) as mock_log:
             @require_system_enabled
             def my_operation():
@@ -234,10 +234,10 @@ class TestDecoratorAuditLogging:
 
     def test_require_not_emergency_logs_on_block(self, mock_audit_adapter, mock_emergency_mode):
         """@require_not_emergency 차단 시 Audit Log 기록."""
-        from selfhealing.services.governance_checks import require_not_emergency
+        from selfhealing.services.governance.checks import require_not_emergency
 
         with patch(
-            "selfhealing.services.governance_checks._log_governance_blocked"
+            "selfhealing.services.governance.checks._log_governance_blocked"
         ) as mock_log:
             @require_not_emergency(min_level=2)
             def my_critical_task():
@@ -253,16 +253,16 @@ class TestDecoratorAuditLogging:
 
     def test_require_error_budget_logs_on_block(self, mock_audit_adapter, mock_low_error_budget):
         """@require_error_budget 차단 시 Audit Log 기록."""
-        from selfhealing.services.governance_checks import require_error_budget
+        from selfhealing.services.governance.checks import require_error_budget
 
         with patch(
-            "selfhealing.services.governance_checks.is_system_enabled",
+            "selfhealing.services.governance.checks.is_system_enabled",
             return_value=True,
         ), patch(
-            "selfhealing.services.governance_checks.is_emergency_blocking",
+            "selfhealing.services.governance.checks.is_emergency_blocking",
             return_value=(False, None),
         ), patch(
-            "selfhealing.services.governance_checks._log_governance_blocked"
+            "selfhealing.services.governance.checks._log_governance_blocked"
         ) as mock_log:
             @require_error_budget()
             def my_risky_operation():
@@ -278,10 +278,10 @@ class TestDecoratorAuditLogging:
 
     def test_require_governance_logs_on_block(self, mock_audit_adapter, mock_system_disabled):
         """@require_governance 차단 시 Audit Log 기록 (check_all_governance 경유)."""
-        from selfhealing.services.governance_checks import require_governance
+        from selfhealing.services.governance.checks import require_governance
 
         with patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             @require_governance(operation_name="custom_op_name", audit_on_block=True)
@@ -304,7 +304,7 @@ class TestMixinAuditLogging:
 
     def test_mixin_check_governance_logs_on_block(self, mock_audit_adapter, mock_system_disabled):
         """Mixin.check_governance() 차단 시 Audit Log 기록."""
-        from selfhealing.services.governance_checks import GovernanceCheckMixin
+        from selfhealing.services.governance.checks import GovernanceCheckMixin
 
         class MyService(GovernanceCheckMixin):
             _governance_service_name = "MyService"
@@ -313,7 +313,7 @@ class TestMixinAuditLogging:
         service = MyService()
 
         with patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             result = service.check_governance(
@@ -332,7 +332,7 @@ class TestMixinAuditLogging:
         self, mock_audit_adapter, mock_system_disabled
     ):
         """Mixin.is_automation_allowed() 차단 시 Audit Log 기록."""
-        from selfhealing.services.governance_checks import GovernanceCheckMixin
+        from selfhealing.services.governance.checks import GovernanceCheckMixin
 
         class AutomationService(GovernanceCheckMixin):
             _governance_service_name = "AutomationService"
@@ -340,7 +340,7 @@ class TestMixinAuditLogging:
         service = AutomationService()
 
         with patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             allowed = service.is_automation_allowed(operation_name="auto_remediation")
@@ -359,13 +359,13 @@ class TestFallbackLogging:
 
     def test_logs_to_standard_logger_when_adapter_unavailable(self, mock_system_disabled):
         """AuditLogAdapter가 없을 때 표준 로거로 기록."""
-        from selfhealing.services.governance_checks import check_all_governance
+        from selfhealing.services.governance.checks import check_all_governance
 
         with patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=None,
         ), patch(
-            "selfhealing.services.governance_checks.logger"
+            "selfhealing.services.governance.checks.logger"
         ) as mock_logger:
             result = check_all_governance(
                 operation_name="test_fallback",
@@ -424,7 +424,7 @@ class TestGovernanceAuditIntegration:
 
     def test_replay_service_audit_logging_scenario(self, mock_audit_adapter):
         """DLQ Replay가 차단될 때 Audit 기록 시나리오."""
-        from selfhealing.services.governance_checks import GovernanceCheckMixin
+        from selfhealing.services.governance.checks import GovernanceCheckMixin
 
         class ReplayService(GovernanceCheckMixin):
             _governance_service_name = "ReplayService"
@@ -446,10 +446,10 @@ class TestGovernanceAuditIntegration:
         service = ReplayService()
 
         with patch(
-            "selfhealing.services.governance_checks.is_system_enabled",
+            "selfhealing.services.governance.checks.is_system_enabled",
             return_value=False,  # Kill Switch active
         ), patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             result = service.replay_dlq_messages(["msg1", "msg2"])
@@ -464,19 +464,19 @@ class TestGovernanceAuditIntegration:
 
     def test_chaos_service_emergency_block_audit(self, mock_audit_adapter):
         """Chaos 주입이 Emergency Mode로 차단될 때 Audit 기록."""
-        from selfhealing.services.governance_checks import (
+        from selfhealing.services.governance.checks import (
             BlockReason,
             check_all_governance,
         )
 
         with patch(
-            "selfhealing.services.governance_checks.is_system_enabled",
+            "selfhealing.services.governance.checks.is_system_enabled",
             return_value=True,
         ), patch(
-            "selfhealing.services.governance_checks.is_emergency_blocking",
+            "selfhealing.services.governance.checks.is_emergency_blocking",
             return_value=(True, "HIGH"),  # Emergency mode HIGH
         ), patch(
-            "selfhealing.services.governance_checks._get_audit_adapter",
+            "selfhealing.services.governance.checks._get_audit_adapter",
             return_value=mock_audit_adapter,
         ):
             result = check_all_governance(

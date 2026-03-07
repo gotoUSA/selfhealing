@@ -16,7 +16,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def _setup_inmemory_store():
     """In-Memory 저장소를 격리하고 DB 영속성을 비활성화한다."""
-    from selfhealing.services.postmortem_store import (
+    from selfhealing.services.postmortem.store import (
         clear_healing_incidents,
         set_db_persistence_enabled,
     )
@@ -35,7 +35,7 @@ class TestUpdateIncidentFieldsBehavior:
         from selfhealing.services.postmortem.store import (
             update_incident_fields,
         )
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             get_healing_incidents,
         )
@@ -57,7 +57,7 @@ class TestUpdateIncidentFieldsBehavior:
         from selfhealing.services.postmortem.store import (
             update_incident_fields,
         )
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             get_healing_incidents,
         )
@@ -86,7 +86,7 @@ class TestUpdateIncidentFieldsBehavior:
         from selfhealing.services.postmortem.store import (
             update_incident_fields,
         )
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
             get_healing_incidents,
         )

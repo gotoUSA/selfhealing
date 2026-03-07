@@ -357,7 +357,7 @@ class CollectSelfHealingMetricsTask(BaseNotifyingTask):
 
             # DLQ 메트릭
             try:
-                from selfhealing.services.dlq_service import get_dlq_service
+                from selfhealing.services.dlq import get_dlq_service
 
                 service = get_dlq_service()
                 # 서비스 상태 확인 (실제 메트릭 수집은 구현 필요)

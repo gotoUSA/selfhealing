@@ -24,7 +24,7 @@ class TestLogDlqStoreAudit:
                 return_value=1,
             ),
         ):
-            from selfhealing.services.audit_helpers import log_dlq_store_audit
+            from selfhealing.services.audit import log_dlq_store_audit
 
             log_dlq_store_audit(
                 dlq_id=123,
@@ -53,7 +53,7 @@ class TestLogDlqStoreAudit:
             ),
             patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_dlq_store_audit
+            from selfhealing.services.audit import log_dlq_store_audit
 
             log_dlq_store_audit(
                 dlq_id=456,
@@ -84,7 +84,7 @@ class TestLogDlqStoreAudit:
             ),
             patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_dlq_store_audit
+            from selfhealing.services.audit import log_dlq_store_audit
 
             # Should not raise
             log_dlq_store_audit(
@@ -115,7 +115,7 @@ class TestLogDlqReplayAudit:
                 return_value=1,
             ),
         ):
-            from selfhealing.services.audit_helpers import log_dlq_replay_audit
+            from selfhealing.services.audit import log_dlq_replay_audit
 
             log_dlq_replay_audit(
                 dlq_id=123,
@@ -146,7 +146,7 @@ class TestLogDlqReplayAudit:
                 return_value=1,
             ),
         ):
-            from selfhealing.services.audit_helpers import log_dlq_replay_audit
+            from selfhealing.services.audit import log_dlq_replay_audit
 
             log_dlq_replay_audit(
                 dlq_id=456,
@@ -176,7 +176,7 @@ class TestLogDlqReplayAudit:
             ),
             patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_dlq_replay_audit
+            from selfhealing.services.audit import log_dlq_replay_audit
 
             log_dlq_replay_audit(
                 dlq_id=789,
@@ -204,7 +204,7 @@ class TestLogDlqReplayAudit:
             ),
             patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_dlq_replay_audit
+            from selfhealing.services.audit import log_dlq_replay_audit
 
             log_dlq_replay_audit(
                 dlq_id=101,
@@ -237,7 +237,7 @@ class TestLogDlqReplayAudit:
             ),
             patch("selfhealing.services.audit.dlq_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_dlq_replay_audit
+            from selfhealing.services.audit import log_dlq_replay_audit
 
             # Should not raise
             log_dlq_replay_audit(
@@ -262,7 +262,7 @@ class TestGetAuditAdapter:
         ):
 
             # Re-import to test actual behavior
-            import selfhealing.services.audit_helpers as helpers
+            import selfhealing.services.audit as helpers
 
             with patch.object(helpers, "_get_audit_adapter", wraps=helpers._get_audit_adapter):
                 # Mock ProviderRegistry to raise ImportError

@@ -186,7 +186,7 @@ def get_budget_exhausted_flag_manager() -> BudgetExhaustedFlagManager:
         # Redis 클라이언트 가져오기 시도
         redis_client = None
         try:
-            from selfhealing.services.event_bus_redis import get_redis_client
+            from selfhealing.services.event_bus.redis_bus import get_redis_client
 
             redis_client = get_redis_client()
         except Exception:

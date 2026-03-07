@@ -32,7 +32,7 @@ class FullRecoveryScenario(IntegrationScenario):
     max_timeout_seconds = 120
 
     def execute(self) -> ScenarioResult:
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
         from selfhealing.services.dlq import get_dlq_service

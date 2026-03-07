@@ -452,7 +452,7 @@ class RolloutWatchdog:
 
         # 글로벌 에러 예산 체크 (Fail-Closed 정책)
         try:
-            from selfhealing.services.governance_checks import check_all_governance
+            from selfhealing.services.governance.checks import check_all_governance
 
             governance = check_all_governance(
                 check_kill_switch=True,

@@ -16,7 +16,7 @@ from typing import Any
 import structlog
 
 # Governance integration
-from selfhealing.services.governance_checks import (
+from selfhealing.services.governance.checks import (
     GovernanceCheckResult,
     check_all_governance,
 )

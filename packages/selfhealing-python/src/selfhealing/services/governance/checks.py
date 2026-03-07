@@ -27,7 +27,7 @@ Audit Logging 연동:
             ...
 
     # 직접 호출 방식
-    from selfhealing.services.governance_checks import (
+    from selfhealing.services.governance.checks import (
         is_system_enabled,
         is_emergency_blocking,
         is_error_budget_blocking,

@@ -75,7 +75,7 @@ def mock_cb_service():
     mock_service.get_all_states.return_value = {}
 
     with patch(
-        "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+        "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
         return_value=mock_service,
     ):
         yield mock_service

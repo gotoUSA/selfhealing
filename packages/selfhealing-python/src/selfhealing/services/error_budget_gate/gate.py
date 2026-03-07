@@ -599,7 +599,7 @@ class ErrorBudgetGate:
         - 변경: log_error_budget_blocked_audit 헬퍼 사용 (WAL + 해시 체인 연결)
         """
         try:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_error_budget_blocked_audit,
             )
 

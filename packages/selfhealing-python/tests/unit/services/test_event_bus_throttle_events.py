@@ -41,7 +41,7 @@ class TestThrottleEventChannel:
 
     def test_throttle_channel_exists(self):
         """THROTTLE 채널 존재 확인."""
-        from selfhealing.services.event_bus_redis import EventChannel
+        from selfhealing.services.event_bus.redis_bus import EventChannel
 
         assert hasattr(EventChannel, "THROTTLE")
         assert EventChannel.THROTTLE.value == "throttle"
@@ -52,7 +52,7 @@ class TestThrottleEventChannelMapping:
 
     def test_throttle_channel_in_selfhealing_event_channels(self):
         """SELFHEALING_EVENT_CHANNELS에 throttle 채널 포함 확인."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             SELFHEALING_EVENT_CHANNELS,
             EventChannel,
         )
@@ -62,7 +62,7 @@ class TestThrottleEventChannelMapping:
 
     def test_throttle_limit_changed_mapped_to_throttle_channel(self):
         """THROTTLE_LIMIT_CHANGED는 THROTTLE 채널로 매핑."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -71,7 +71,7 @@ class TestThrottleEventChannelMapping:
 
     def test_throttle_sla_warning_mapped_to_throttle_channel(self):
         """THROTTLE_SLA_WARNING은 THROTTLE 채널로 매핑."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -80,7 +80,7 @@ class TestThrottleEventChannelMapping:
 
     def test_throttle_sla_critical_mapped_to_global_channel(self):
         """THROTTLE_SLA_CRITICAL은 GLOBAL 채널로 매핑 (전체 클러스터 알림)."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -89,7 +89,7 @@ class TestThrottleEventChannelMapping:
 
     def test_throttle_limit_recovered_mapped_to_throttle_channel(self):
         """THROTTLE_LIMIT_RECOVERED는 THROTTLE 채널로 매핑."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -198,7 +198,7 @@ class TestAllChannelsCovered:
 
     def test_all_channels_have_redis_key(self):
         """모든 EventChannel이 Redis 키 매핑을 갖는지 확인."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             SELFHEALING_EVENT_CHANNELS,
             EventChannel,
         )

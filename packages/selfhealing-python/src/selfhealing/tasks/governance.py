@@ -55,7 +55,7 @@ def check_emergency_mode_expiry(task_id: str = None) -> dict[str, Any]:
     Returns:
         dict: 실행 결과
     """
-    from selfhealing.services.governance_service import get_governance_service
+    from selfhealing.services.governance.service import get_governance_service
 
     try:
         service = get_governance_service()
@@ -64,7 +64,7 @@ def check_emergency_mode_expiry(task_id: str = None) -> dict[str, Any]:
 
         # === Audit 기록 ===
         try:
-            from selfhealing.services.audit_helpers import log_governance_task_audit
+            from selfhealing.services.audit import log_governance_task_audit
 
             status = result_dict.get("status", "completed")
             auto_recovered = result_dict.get("auto_recovered", False)
@@ -91,7 +91,7 @@ def check_emergency_mode_expiry(task_id: str = None) -> dict[str, Any]:
     except Exception as e:
         # === Audit 기록 (실패) ===
         try:
-            from selfhealing.services.audit_helpers import log_governance_task_audit
+            from selfhealing.services.audit import log_governance_task_audit
 
             log_governance_task_audit(
                 action="expiry_check",

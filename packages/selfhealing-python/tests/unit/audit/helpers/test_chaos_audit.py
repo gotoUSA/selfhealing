@@ -17,7 +17,7 @@ class TestLogChaosExperimentAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ):
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             record_id = log_chaos_experiment_audit(
                 experiment_id="chaos-abc123",
@@ -34,7 +34,7 @@ class TestLogChaosExperimentAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=1,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             log_chaos_experiment_audit(
                 experiment_id="chaos-test123",
@@ -58,7 +58,7 @@ class TestLogChaosExperimentAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=2,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             log_chaos_experiment_audit(
                 experiment_id="chaos-completed123",
@@ -76,7 +76,7 @@ class TestLogChaosExperimentAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=3,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             # Test various rollback-related events
             for event in ["rollback_started", "kill_requested", "auto_abort_ttl_expired", "auto_abort_stop_condition"]:
@@ -95,7 +95,7 @@ class TestLogChaosExperimentAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=4,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             log_chaos_experiment_audit(
                 experiment_id="chaos-inject123",
@@ -112,7 +112,7 @@ class TestLogChaosExperimentAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=5,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             log_chaos_experiment_audit(
                 experiment_id="chaos-dry123",
@@ -131,7 +131,7 @@ class TestLogChaosExperimentAudit:
         ), patch(
             "selfhealing.services.audit.chaos_audit.logger"
         ) as mock_logger:
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             log_chaos_experiment_audit(
                 experiment_id="chaos-log123",
@@ -150,7 +150,7 @@ class TestLogChaosExperimentAudit:
             "selfhealing.services.audit.chaos_audit._write_to_wal",
             return_value=7,
         ) as mock_wal:
-            from selfhealing.services.audit_helpers import log_chaos_experiment_audit
+            from selfhealing.services.audit import log_chaos_experiment_audit
 
             log_chaos_experiment_audit(
                 experiment_id="chaos-clean123",

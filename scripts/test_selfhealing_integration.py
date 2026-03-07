@@ -132,7 +132,7 @@ class SelfHealingIntegrationTest:
 
             django.setup()
 
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 CircuitBreakerService,
                 CircuitBreakerConfig,
             )
@@ -176,7 +176,7 @@ class SelfHealingIntegrationTest:
 
             django.setup()
 
-            from selfhealing.services.dlq_service import DLQService, DLQConfig
+            from selfhealing.services.dlq import DLQService, DLQConfig
             from selfhealing.adapters.memory import (
                 InMemoryFailedOperationRepository,
             )

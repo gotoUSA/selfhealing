@@ -23,7 +23,7 @@ class TestLogRetryAudit:
             ),
             patch("selfhealing.services.audit.retry_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             result = log_retry_audit(
                 domain="payment",
@@ -57,7 +57,7 @@ class TestLogRetryAudit:
             ),
             patch("selfhealing.services.audit.retry_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             result = log_retry_audit(
                 domain="payment",
@@ -89,7 +89,7 @@ class TestLogRetryAudit:
             ),
             patch("selfhealing.services.audit.retry_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain="payment",
@@ -116,7 +116,7 @@ class TestLogRetryAudit:
                 return_value=4,
             ) as mock_wal,
         ):
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain="payment",
@@ -141,7 +141,7 @@ class TestLogRetryAudit:
                 return_value=5,
             ) as mock_wal,
         ):
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain="payment",
@@ -166,7 +166,7 @@ class TestLogRetryAudit:
                 return_value=6,
             ) as mock_wal,
         ):
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain="payment",
@@ -191,7 +191,7 @@ class TestLogRetryAudit:
                 return_value=7,
             ) as mock_wal,
         ):
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain="payment",
@@ -222,7 +222,7 @@ class TestLogSystemControlAudit:
             ),
             patch("selfhealing.services.audit.retry_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_system_control_audit
+            from selfhealing.services.audit import log_system_control_audit
 
             result = log_system_control_audit(
                 action="enable",
@@ -254,7 +254,7 @@ class TestLogSystemControlAudit:
             ),
             patch("selfhealing.services.audit.retry_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_system_control_audit
+            from selfhealing.services.audit import log_system_control_audit
 
             log_system_control_audit(
                 action="disable",
@@ -280,7 +280,7 @@ class TestLogSystemControlAudit:
                 return_value=12,
             ) as mock_wal,
         ):
-            from selfhealing.services.audit_helpers import log_system_control_audit
+            from selfhealing.services.audit import log_system_control_audit
 
             log_system_control_audit(
                 action="enable_dry_run",
@@ -304,7 +304,7 @@ class TestLogSystemControlAudit:
                 return_value=13,
             ) as mock_wal,
         ):
-            from selfhealing.services.audit_helpers import log_system_control_audit
+            from selfhealing.services.audit import log_system_control_audit
 
             log_system_control_audit(
                 action="disable",
@@ -334,7 +334,7 @@ class TestLogRollbackAudit:
             ),
             patch("selfhealing.services.audit.retry_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_rollback_audit
+            from selfhealing.services.audit import log_rollback_audit
 
             result = log_rollback_audit(
                 request_id="rb-001",
@@ -366,7 +366,7 @@ class TestLogRollbackAudit:
             ),
             patch("selfhealing.services.audit.retry_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_rollback_audit
+            from selfhealing.services.audit import log_rollback_audit
 
             log_rollback_audit(
                 request_id="rb-002",
@@ -397,7 +397,7 @@ class TestLogRollbackAudit:
             ),
             patch("selfhealing.services.audit.retry_audit.logger") as mock_logger,
         ):
-            from selfhealing.services.audit_helpers import log_rollback_audit
+            from selfhealing.services.audit import log_rollback_audit
 
             log_rollback_audit(
                 request_id="rb-003",
@@ -425,7 +425,7 @@ class TestLogRollbackAudit:
                 return_value=23,
             ) as mock_wal,
         ):
-            from selfhealing.services.audit_helpers import log_rollback_audit
+            from selfhealing.services.audit import log_rollback_audit
 
             log_rollback_audit(
                 request_id="rb-004",
@@ -452,7 +452,7 @@ class TestLogRollbackAudit:
                 return_value=24,
             ) as mock_wal,
         ):
-            from selfhealing.services.audit_helpers import log_rollback_audit
+            from selfhealing.services.audit import log_rollback_audit
 
             log_rollback_audit(
                 request_id="rb-005",

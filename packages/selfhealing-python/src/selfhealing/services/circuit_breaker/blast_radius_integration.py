@@ -428,7 +428,7 @@ class BlastRadiusIntegration:
     ) -> None:
         """GOVERNANCE_BLOCKED Audit 기록."""
         try:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_governance_blocked_cb_audit,
             )
 

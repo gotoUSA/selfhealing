@@ -26,7 +26,7 @@ class CBOpenDLQScenario(IntegrationScenario):
     scenario_name = "cb_open_dlq_flow"
 
     def execute(self) -> ScenarioResult:
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             CircuitState,
             get_circuit_breaker_service,
         )

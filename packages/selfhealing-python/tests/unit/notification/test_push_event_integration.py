@@ -21,7 +21,7 @@ class TestDLQServicePushEvents:
         Purpose:
             Verify store_failure calls on_item_created event handler.
         """
-        from selfhealing.services.dlq_service import DLQConfig, DLQService
+        from selfhealing.services.dlq import DLQConfig, DLQService
 
         # Arrange
         mock_repo = MagicMock()
@@ -59,7 +59,7 @@ class TestDLQServicePushEvents:
         Purpose:
             Verify store_failure correctly calls event handler.
         """
-        from selfhealing.services.dlq_service import DLQConfig, DLQService
+        from selfhealing.services.dlq import DLQConfig, DLQService
 
         # Arrange
         mock_repo = MagicMock()

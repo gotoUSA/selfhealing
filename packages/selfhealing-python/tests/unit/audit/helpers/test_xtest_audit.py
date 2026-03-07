@@ -364,8 +364,8 @@ class TestXtestAuditImports:
         assert callable(log_xtest_cleanup_audit)
 
     def test_can_import_from_audit_helpers(self):
-        """selfhealing.services.audit_helpers에서 import 가능해야 함 (하위 호환성)."""
-        from selfhealing.services.audit_helpers import (
+        """selfhealing.services.audit에서 import 가능해야 함 (하위 호환성)."""
+        from selfhealing.services.audit import (
             log_xtest_cleanup_audit,
             log_xtest_injection_audit,
             log_xtest_operation_audit,

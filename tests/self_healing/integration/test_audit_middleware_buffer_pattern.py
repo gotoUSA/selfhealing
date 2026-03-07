@@ -236,7 +236,7 @@ class TestGovernanceChecksAuditIntegration:
         Purpose:
             _log_governance_blocked이 request가 있을 때 버퍼를 사용하는지 검증
         """
-        from selfhealing.services.governance_checks import _log_governance_blocked
+        from selfhealing.services.governance.checks import _log_governance_blocked
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
         
         # Act - 실제 시그니처: (block_reason, operation_name, details, service_name, domain, request)
@@ -263,9 +263,9 @@ class TestGovernanceChecksAuditIntegration:
         Purpose:
             request가 없을 때 직접 adapter를 호출하는지 검증
         """
-        from selfhealing.services.governance_checks import _log_governance_blocked
+        from selfhealing.services.governance.checks import _log_governance_blocked
         
-        with patch('selfhealing.services.governance_checks._get_audit_adapter') as mock_get_adapter:
+        with patch('selfhealing.services.governance.checks._get_audit_adapter') as mock_get_adapter:
             mock_adapter = MagicMock()
             mock_get_adapter.return_value = mock_adapter
             
@@ -569,9 +569,9 @@ class TestPhase3BackwardCompatibility:
         Purpose:
             governance_checks가 request 없이도 동작하는지 검증
         """
-        from selfhealing.services.governance_checks import _log_governance_blocked
+        from selfhealing.services.governance.checks import _log_governance_blocked
         
-        with patch('selfhealing.services.governance_checks._get_audit_adapter') as mock_get_adapter:
+        with patch('selfhealing.services.governance.checks._get_audit_adapter') as mock_get_adapter:
             mock_adapter = MagicMock()
             mock_get_adapter.return_value = mock_adapter
             

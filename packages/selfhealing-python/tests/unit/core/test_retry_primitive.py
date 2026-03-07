@@ -72,14 +72,14 @@ class TestRetryContextContract:
     def test_metric_labels_default_is_empty_dict(self):
         """metric_labels 기본값: 빈 딕셔너리."""
         ctx = RetryContext(
-            func_name="test", attempt=0, wait_time=0.0, elapsed_total=0.0
+            func_name="test", attempt=0, max_retries=3, wait_time=0.0, elapsed_total=0.0
         )
         assert ctx.metric_labels == {}
 
     def test_trace_id_default_is_none(self):
         """trace_id 기본값: None."""
         ctx = RetryContext(
-            func_name="test", attempt=0, wait_time=0.0, elapsed_total=0.0
+            func_name="test", attempt=0, max_retries=3, wait_time=0.0, elapsed_total=0.0
         )
         assert ctx.trace_id is None
 

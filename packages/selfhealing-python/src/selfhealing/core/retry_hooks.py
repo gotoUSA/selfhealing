@@ -38,7 +38,7 @@ def make_standard_on_retry(
             log_retry_audit(
                 domain=audit_domain,
                 attempt=ctx.attempt,
-                max_attempts=ctx.attempt + 1,
+                max_attempts=ctx.max_retries,
                 success=False,
                 wait_time=ctx.wait_time,
             )
@@ -73,7 +73,7 @@ def make_standard_on_exhausted(
             log_retry_audit(
                 domain=audit_domain,
                 attempt=ctx.attempt,
-                max_attempts=ctx.attempt + 1,
+                max_attempts=ctx.max_retries,
                 success=False,
                 error_type=type(exc).__name__,
                 error_message=str(exc)[:500],

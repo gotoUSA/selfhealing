@@ -24,7 +24,7 @@ from selfhealing.services.dlq.entry_operations import EntryOperationsMixin
 from selfhealing.services.dlq.query_operations import QueryOperationsMixin
 from selfhealing.services.dlq.replay_operations import ReplayOperationsMixin
 from selfhealing.services.dlq.store_operations import StoreOperationsMixin
-from selfhealing.services.dlq_models import (
+from selfhealing.services.dlq.models import (
     DLQConfig,
     DLQThrottleReplayResult,
 )

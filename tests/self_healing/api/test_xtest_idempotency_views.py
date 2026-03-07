@@ -121,7 +121,7 @@ class TestGenerateKeyView:
         mock_service = create_mock_idempotency_service()
 
         with patch(
-            "selfhealing.services.idempotency_service.get_idempotency_service",
+            "selfhealing.services.idempotency.get_idempotency_service",
             return_value=mock_service,
         ):
             view = GenerateKeyView.as_view()
@@ -151,7 +151,7 @@ class TestGenerateKeyView:
         mock_service = create_mock_idempotency_service()
 
         with patch(
-            "selfhealing.services.idempotency_service.get_idempotency_service",
+            "selfhealing.services.idempotency.get_idempotency_service",
             return_value=mock_service,
         ):
             view = GenerateKeyView.as_view()
@@ -256,7 +256,7 @@ class TestCheckDuplicateView:
 
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
-                "selfhealing.services.idempotency_service.get_idempotency_service",
+                "selfhealing.services.idempotency.get_idempotency_service",
                 return_value=mock_service,
             ):
                 view = CheckDuplicateView.as_view()
@@ -282,7 +282,7 @@ class TestCheckDuplicateView:
 
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
-                "selfhealing.services.idempotency_service.get_idempotency_service",
+                "selfhealing.services.idempotency.get_idempotency_service",
                 return_value=mock_service,
             ):
                 view = CheckDuplicateView.as_view()
@@ -486,7 +486,7 @@ class TestRegisterKeyView:
 
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
-                "selfhealing.services.idempotency_service.get_idempotency_service",
+                "selfhealing.services.idempotency.get_idempotency_service",
                 return_value=mock_service,
             ):
                 view = RegisterKeyView.as_view()
@@ -515,7 +515,7 @@ class TestRegisterKeyView:
 
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
-                "selfhealing.services.idempotency_service.get_idempotency_service",
+                "selfhealing.services.idempotency.get_idempotency_service",
                 return_value=mock_service,
             ):
                 view = RegisterKeyView.as_view()
@@ -664,7 +664,7 @@ class TestIdempotencyFlowIntegration:
 
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
-                "selfhealing.services.idempotency_service.get_idempotency_service",
+                "selfhealing.services.idempotency.get_idempotency_service",
                 return_value=mock_service,
             ):
                 # 1. 키 생성
@@ -716,7 +716,7 @@ class TestIdempotencyFlowIntegration:
 
         with patch("selfhealing.api.django.views.xtest.idempotency.cache", mock_cache):
             with patch(
-                "selfhealing.services.idempotency_service.get_idempotency_service",
+                "selfhealing.services.idempotency.get_idempotency_service",
                 return_value=mock_service,
             ):
                 # 1. 키 등록

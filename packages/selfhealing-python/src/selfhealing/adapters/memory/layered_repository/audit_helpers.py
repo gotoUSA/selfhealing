@@ -25,7 +25,7 @@ class AuditHelpersMixin:
     ) -> None:
         """L2 장애 발생 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.audit_helpers import log_storage_failure_audit
+            from selfhealing.services.audit import log_storage_failure_audit
 
             log_storage_failure_audit(
                 storage_type="l2",
@@ -46,7 +46,7 @@ class AuditHelpersMixin:
     def _log_l2_recovery_audit(self) -> None:
         """L2 복구 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.audit_helpers import log_storage_recovery_audit
+            from selfhealing.services.audit import log_storage_recovery_audit
 
             log_storage_recovery_audit(
                 storage_type="l2",
@@ -69,7 +69,7 @@ class AuditHelpersMixin:
     ) -> None:
         """드리프트 복구 완료 시 Audit 로그 기록. Fail-Open 원칙 적용."""
         try:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_drift_reconciliation_audit,
             )
 

@@ -11,7 +11,7 @@ Tests for:
 from datetime import timedelta
 from unittest.mock import Mock
 
-from selfhealing.services.error_budget_service import (
+from selfhealing.services.error_budget import (
     BURN_RATE_THRESHOLDS,
     ERROR_BUDGET_THRESHOLDS,
     DeploymentPolicyAdvisor,
@@ -566,7 +566,7 @@ class TestFailSafeResponses:
 
     def test_failsafe_verdict_response(self):
         """Test fail-safe verdict returns PROCEED (fail-open)."""
-        from selfhealing.services.error_budget_service import (
+        from selfhealing.services.error_budget import (
             get_failsafe_verdict_response,
         )
 
@@ -585,7 +585,7 @@ class TestFailSafeResponses:
 
     def test_failsafe_status_response(self):
         """Test fail-safe status returns healthy (fail-open)."""
-        from selfhealing.services.error_budget_service import (
+        from selfhealing.services.error_budget import (
             get_failsafe_status_response,
         )
 
@@ -606,7 +606,7 @@ class TestFailSafeResponses:
         Core principle: Error Budget 시스템 장애로 인해
         배포 파이프라인이 중단되면 안 됨.
         """
-        from selfhealing.services.error_budget_service import (
+        from selfhealing.services.error_budget import (
             get_failsafe_verdict_response,
         )
 

@@ -61,7 +61,7 @@ def run_scheduled_experiments() -> dict[str, Any]:
 
         # === Audit 기록 ===
         try:
-            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            from selfhealing.services.audit import log_chaos_scheduler_audit
 
             status = "completed" if result_dict.get("success", True) else "failed"
             log_chaos_scheduler_audit(
@@ -84,7 +84,7 @@ def run_scheduled_experiments() -> dict[str, Any]:
     except Exception as e:
         # === Audit 기록 (실패) ===
         try:
-            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            from selfhealing.services.audit import log_chaos_scheduler_audit
 
             log_chaos_scheduler_audit(
                 action="scheduled",
@@ -120,7 +120,7 @@ def generate_daily_resilience_report() -> dict[str, Any]:
 
         # === Audit 기록 ===
         try:
-            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            from selfhealing.services.audit import log_chaos_scheduler_audit
 
             log_chaos_scheduler_audit(
                 action="report_generated",
@@ -138,7 +138,7 @@ def generate_daily_resilience_report() -> dict[str, Any]:
     except Exception as e:
         # === Audit 기록 (실패) ===
         try:
-            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            from selfhealing.services.audit import log_chaos_scheduler_audit
 
             log_chaos_scheduler_audit(
                 action="report_generated",
@@ -173,7 +173,7 @@ def cleanup_expired_approvals() -> dict[str, Any]:
 
         # === Audit 기록 ===
         try:
-            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            from selfhealing.services.audit import log_chaos_scheduler_audit
 
             log_chaos_scheduler_audit(
                 action="cleanup",
@@ -193,7 +193,7 @@ def cleanup_expired_approvals() -> dict[str, Any]:
     except Exception as e:
         # === Audit 기록 (실패) ===
         try:
-            from selfhealing.services.audit_helpers import log_chaos_scheduler_audit
+            from selfhealing.services.audit import log_chaos_scheduler_audit
 
             log_chaos_scheduler_audit(
                 action="cleanup",
@@ -406,7 +406,7 @@ def hunt_zombie_experiments() -> dict[str, Any]:
     try:
         from selfhealing.services.chaos import get_chaos_scheduler
         from selfhealing.services.chaos.base import ExperimentStatus
-        from selfhealing.services.idempotency_service import (
+        from selfhealing.services.idempotency import (
             IdempotencyDomain,
             IdempotencyKey,
             IdempotencyService,

@@ -43,10 +43,10 @@ class TestPostmortemViewAudit:
 
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus,
-            patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service") as mock_cb,
+            patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service") as mock_cb,
             patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
             patch("selfhealing.api.django.views.xtest.base.get_healing_events", return_value=[]),
-            patch("selfhealing.services.postmortem_store.add_healing_incident"),
+            patch("selfhealing.services.postmortem.store.add_healing_incident"),
             patch("selfhealing.services.audit.base._write_to_wal", side_effect=mock_write_to_wal),
         ):
             mock_bus.return_value.get_history.return_value = []
@@ -85,7 +85,7 @@ class TestPostmortemViewAudit:
         with (
             patch.object(view, "check_chaos_permission", return_value=None),
             patch.object(view, "log_xtest_audit", side_effect=mock_log_xtest_audit),
-            patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service", return_value=mock_cb_service),
+            patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service", return_value=mock_cb_service),
             patch("selfhealing.api.django.views.xtest.base.add_healing_event"),
             patch("selfhealing.api.django.views.xtest.base.collect_system_snapshot", return_value={}),
         ):
@@ -124,7 +124,7 @@ class TestPostmortemViewAudit:
         with (
             patch.object(view, "check_chaos_permission", return_value=None),
             patch.object(view, "log_xtest_audit", side_effect=mock_log_xtest_audit),
-            patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service", return_value=mock_cb_service),
+            patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service", return_value=mock_cb_service),
         ):
             response = view.post(mock_request)
 

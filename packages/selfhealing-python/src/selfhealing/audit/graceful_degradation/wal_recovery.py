@@ -315,7 +315,7 @@ class HashChainWALRecovery:
             True if duplicate (should skip), False if new
         """
         try:
-            from selfhealing.services.idempotency_service import (
+            from selfhealing.services.idempotency import (
                 IdempotencyKey,
                 IdempotencyService,
             )
@@ -354,7 +354,7 @@ class HashChainWALRecovery:
             operation: 복구 작업 유형
         """
         try:
-            from selfhealing.services.idempotency_service import (
+            from selfhealing.services.idempotency import (
                 IdempotencyKey,
                 IdempotencyService,
             )

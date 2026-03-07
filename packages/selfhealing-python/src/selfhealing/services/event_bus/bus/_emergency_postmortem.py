@@ -93,19 +93,19 @@ def _create_individual_postmortem(
             collect_system_snapshot,
             get_healing_events,
         )
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             add_healing_incident,
         )
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             build_timeline as _build_timeline,
         )
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             collect_service_states as _collect_service_states,
         )
-        from selfhealing.services.postmortem_store import (
+        from selfhealing.services.postmortem.store import (
             generate_postmortem_data as _generate_postmortem_data,
         )
 
@@ -530,7 +530,7 @@ def _create_emergency_postmortem_sync(
 
     try:
         from selfhealing.api.django.views.xtest.base import collect_system_snapshot
-        from selfhealing.services.postmortem_store import add_healing_incident
+        from selfhealing.services.postmortem.store import add_healing_incident
 
         from . import get_event_bus
 

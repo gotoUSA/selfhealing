@@ -8,14 +8,14 @@ Tests for DLQService:
 
 from unittest.mock import Mock
 
-from selfhealing.services.dlq_models import (
+from selfhealing.services.dlq.models import (
     CleanupStats,
     DLQPaginatedResult,
     DlqReplayResult,
     ReplayResult,
     ResolveResult,
 )
-from selfhealing.services.dlq_service import (
+from selfhealing.services.dlq import (
     DLQConfig,
     DLQService,
     get_dlq_service,
@@ -161,7 +161,7 @@ class TestGetDLQService:
     def test_get_dlq_service_returns_instance(self):
         """Test get_dlq_service returns DLQService instance."""
         # Reset singleton
-        import selfhealing.services.dlq_service as dlq_module
+        import selfhealing.services.dlq as dlq_module
 
         dlq_module._dlq_service = None
 

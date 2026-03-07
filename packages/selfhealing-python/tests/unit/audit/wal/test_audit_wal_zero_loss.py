@@ -21,7 +21,7 @@ class TestAuditHelpersWAL:
     def setup_teardown(self):
         """각 테스트 전후로 WAL 상태 초기화."""
         # WAL 비활성화 상태에서 시작
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         audit_helpers.disable_wal()
         yield
@@ -29,7 +29,7 @@ class TestAuditHelpersWAL:
 
     def test_wal_initialization_with_env(self, tmp_path):
         """환경변수로 WAL 디렉토리 설정."""
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         wal_dir = str(tmp_path / "wal_test")
 
@@ -44,7 +44,7 @@ class TestAuditHelpersWAL:
 
     def test_log_dlq_store_writes_to_wal(self, tmp_path):
         """log_dlq_store_audit가 WAL에 먼저 기록."""
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         wal_dir = str(tmp_path / "wal_test")
 
@@ -67,7 +67,7 @@ class TestAuditHelpersWAL:
 
     def test_log_dlq_replay_writes_to_wal(self, tmp_path):
         """log_dlq_replay_audit가 WAL에 먼저 기록."""
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         wal_dir = str(tmp_path / "wal_test")
 
@@ -87,7 +87,7 @@ class TestAuditHelpersWAL:
 
     def test_log_cb_state_change_writes_to_wal(self, tmp_path):
         """log_cb_state_change_audit가 WAL에 먼저 기록."""
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         wal_dir = str(tmp_path / "wal_test")
 
@@ -106,7 +106,7 @@ class TestAuditHelpersWAL:
 
     def test_wal_disabled_returns_none(self):
         """WAL 비활성화 시 None 반환."""
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         audit_helpers.disable_wal()
 
@@ -121,7 +121,7 @@ class TestAuditHelpersWAL:
 
     def test_get_wal_stats(self, tmp_path):
         """WAL 통계 조회."""
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         wal_dir = str(tmp_path / "wal_test")
 
@@ -244,7 +244,7 @@ class TestAuditSyncWorker:
         worker = AuditSyncWorker(wal=wal, central_adapter=mock_adapter, config=config)
 
         # IdempotencyService import를 막아 재시도 로직만 테스트
-        with patch.dict("sys.modules", {"selfhealing.services.idempotency_service": None}):
+        with patch.dict("sys.modules", {"selfhealing.services.idempotency": None}):
             synced, failed = worker.sync_now()
 
         # 재시도 후 성공
@@ -492,7 +492,7 @@ class TestIntegrationWALFlow:
         from selfhealing.audit.reconciler import AuditReconciler
         from selfhealing.audit.resilience import AuditMetrics
         from selfhealing.audit.sync_worker import AuditSyncWorker
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         # 초기화 — 빠른 stop 후 reset (timeout=0.05s)
         audit_helpers.disable_wal()
@@ -521,7 +521,7 @@ class TestIntegrationWALFlow:
         """E2E: 이벤트 발생 → WAL 기록 → Sync → Reconcile."""
         from selfhealing.audit.resilience import AuditMetrics
         from selfhealing.audit.sync_worker import AuditSyncWorker, SyncWorkerConfig
-        from selfhealing.services import audit_helpers
+        from selfhealing.services import audit as audit_helpers
 
         # 1. WAL 활성화
         with patch.dict(os.environ, {"AUDIT_WAL_DIR": self.wal_dir}):

@@ -14,7 +14,7 @@ class TestCleanupServiceAudit:
 
     def test_archive_old_dlq_entries_calls_log_system_control_audit(self):
         """archive_old_dlq_entries가 log_system_control_audit를 호출."""
-        with patch("selfhealing.services.dlq_service.get_dlq_service") as mock_dlq:
+        with patch("selfhealing.services.dlq.get_dlq_service") as mock_dlq:
             dlq_svc = MagicMock()
             dlq_svc.archive_old_entries.return_value = 5
             mock_dlq.return_value = dlq_svc
@@ -51,7 +51,7 @@ class TestCleanupServiceAudit:
 
     def test_purge_archived_dlq_dry_run_calls_log_system_control_audit(self):
         """purge_archived_dlq_entries dry_run이 log_system_control_audit를 호출."""
-        with patch("selfhealing.services.dlq_service.get_dlq_service") as mock_dlq:
+        with patch("selfhealing.services.dlq.get_dlq_service") as mock_dlq:
             dlq_svc = MagicMock()
             dlq_svc.count_archived_older_than.return_value = 10
             mock_dlq.return_value = dlq_svc
@@ -69,7 +69,7 @@ class TestCleanupServiceAudit:
 
     def test_purge_archived_dlq_permanent_calls_log_system_control_audit(self):
         """purge_archived_dlq_entries 영구삭제가 log_system_control_audit를 호출."""
-        with patch("selfhealing.services.dlq_service.get_dlq_service") as mock_dlq:
+        with patch("selfhealing.services.dlq.get_dlq_service") as mock_dlq:
             dlq_svc = MagicMock()
             dlq_svc.purge_archived.return_value = 3
             mock_dlq.return_value = dlq_svc

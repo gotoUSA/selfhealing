@@ -482,7 +482,7 @@ class ChaosSchedulerService:
             ExecutionResult if duplicate, None otherwise
         """
         try:
-            from selfhealing.services.idempotency_service import (
+            from selfhealing.services.idempotency import (
                 IdempotencyKey,
                 get_idempotency_service,
             )
@@ -534,7 +534,7 @@ class ChaosSchedulerService:
             schedule: 스케줄 정보
         """
         try:
-            from selfhealing.services.idempotency_service import (
+            from selfhealing.services.idempotency import (
                 IdempotencyKey,
                 get_idempotency_service,
             )

@@ -119,6 +119,7 @@ class RetryContext:
     """
     func_name: str
     attempt: int
+    max_retries: int
     wait_time: float
     elapsed_total: float
     metric_labels: dict[str, str] = field(default_factory=dict)
@@ -181,6 +182,7 @@ def retry_with_backoff(
             ctx = RetryContext(
                 func_name=func_name,
                 attempt=attempt,
+                max_retries=config.max_retries,
                 wait_time=wait,
                 elapsed_total=total_wait,
                 metric_labels={"context": config.context_name},
@@ -213,6 +215,7 @@ def retry_with_backoff(
     exhausted_ctx = RetryContext(
         func_name=func_name,
         attempt=config.max_retries - 1,
+        max_retries=config.max_retries,
         wait_time=0.0,
         elapsed_total=total_wait,
         metric_labels={"context": config.context_name},
@@ -248,7 +251,7 @@ def make_standard_on_retry(audit_domain: str) -> Callable[[RetryContext, Excepti
             log_retry_audit(
                 domain=audit_domain,
                 attempt=ctx.attempt,
-                max_attempts=ctx.attempt + 1,
+                max_attempts=ctx.max_retries,
                 success=False,
                 wait_time=ctx.wait_time,
             )
@@ -276,7 +279,7 @@ def make_standard_on_exhausted(audit_domain: str) -> Callable[[RetryContext, Exc
             log_retry_audit(
                 domain=audit_domain,
                 attempt=ctx.attempt,
-                max_attempts=ctx.attempt + 1,
+                max_attempts=ctx.max_retries,
                 success=False,
                 error_type=type(exc).__name__,
                 error_message=str(exc)[:500],
@@ -489,7 +492,7 @@ NotificationAdapter의 기존 등록 패턴(`factory.py:167-170, 720-753`)을 �
 class ProviderRegistry:
     # 기존 notification 패턴과 동일
     _alerts: dict[str, type | Callable] = {}
-    _alert_instances: dict[str, object] = {}  # object for lazy TYPE_CHECKING import
+    _alert_instances: dict[str, AlertAdapter] = {}
     _default_alert: str = "stdout"
 
     @classmethod
@@ -500,15 +503,21 @@ class ProviderRegistry:
     def get_alert(cls, name: str | None = None) -> AlertAdapter:
         """Thread-safe singleton 조회. NotificationAdapter 패턴과 동일."""
         target = name or cls._default_alert
-        if target not in cls._alert_instances:
-            with cls._lock:
-                if target not in cls._alert_instances:
-                    if target not in cls._alerts:
-                        cls._auto_register_alert_adapters()
-                    factory = cls._alerts.get(target)
-                    if factory:
-                        cls._alert_instances[target] = factory()
-        return cls._alert_instances.get(target)
+        if target in cls._alert_instances:
+            return cls._alert_instances[target]
+        with cls._lock:
+            if target in cls._alert_instances:
+                return cls._alert_instances[target]
+            if target not in cls._alerts:
+                cls._auto_register_alert_adapters()
+            if target not in cls._alerts:
+                raise ValueError(
+                    f"Unknown alert adapter: {target}. "
+                    f"Available: {list(cls._alerts.keys())}"
+                )
+            instance = cls._alerts[target]()
+            cls._alert_instances[target] = instance
+            return instance
 
     @classmethod
     def _auto_register_alert_adapters(cls) -> None:

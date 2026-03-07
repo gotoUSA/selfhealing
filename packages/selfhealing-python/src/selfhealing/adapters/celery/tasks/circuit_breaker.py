@@ -557,7 +557,7 @@ def collect_cb_open_snapshot(
 
         # CB 상태 정보 추가 (Redis 기반이므로 Worker에서도 조회 가능)
         try:
-            from selfhealing.services.circuit_breaker_service import (
+            from selfhealing.services.circuit_breaker import (
                 get_circuit_breaker_service,
             )
 

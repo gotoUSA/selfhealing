@@ -32,7 +32,7 @@ class AuditHook:
     def on_success(self, policy_name: str, result: PolicyResult) -> None:
         """재시도 성공 시 Audit 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain=self._domain,
@@ -49,7 +49,7 @@ class AuditHook:
     def on_failure(self, policy_name: str, error: Exception, attempt: int) -> None:
         """재시도 실패 시 Audit 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain=self._domain,
@@ -68,7 +68,7 @@ class AuditHook:
     def on_retry(self, policy_name: str, attempt: int, delay: float) -> None:
         """재시도 예정 시 Audit 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain=self._domain,
@@ -86,7 +86,7 @@ class AuditHook:
     def on_reject(self, policy_name: str, reason: str) -> None:
         """Policy 거부 시 Audit 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit import log_retry_audit
 
             log_retry_audit(
                 domain=self._domain,

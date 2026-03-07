@@ -2,7 +2,7 @@
 Post-mortem Incident Storage Service.
 
 This is the canonical location for postmortem incident storage.
-Previously located at ``selfhealing.services.postmortem_store``.
+Previously located at ``selfhealing.services.postmortem.store``.
 
 실제 장애에 대한 Post-mortem 인시던트를 저장하고 조회합니다.
 

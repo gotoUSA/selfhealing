@@ -95,7 +95,7 @@ class TestBlastRadiusTestViewDomainFree:
 
         with (
             patch(
-                "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+                "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
                 return_value=mock_cb_service,
             ),
             patch("selfhealing.api.django.views.xtest.observability.add_healing_event"),
@@ -127,7 +127,7 @@ class TestBlastRadiusTestViewDomainFree:
 
         with (
             patch(
-                "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+                "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
                 return_value=mock_cb_service,
             ),
             patch("selfhealing.api.django.views.xtest.observability.add_healing_event"),
@@ -176,7 +176,7 @@ class TestMultiServiceBlastRadiusViewDomainFree:
         mock_cb_service.should_allow.return_value = True
 
         with patch(
-            "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+            "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
             return_value=mock_cb_service,
         ):
             response = api_client.post(
@@ -199,7 +199,7 @@ class TestMultiServiceBlastRadiusViewDomainFree:
         mock_cb_service = MagicMock()
 
         with patch(
-            "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+            "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
             return_value=mock_cb_service,
         ):
             response = api_client.post(
@@ -222,7 +222,7 @@ class TestMultiServiceBlastRadiusViewDomainFree:
         mock_cb_service.should_allow.return_value = True
 
         with patch(
-            "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+            "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
             return_value=mock_cb_service,
         ):
             response = api_client.post(

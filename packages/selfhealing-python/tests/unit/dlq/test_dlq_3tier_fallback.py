@@ -17,7 +17,7 @@ from unittest.mock import MagicMock, patch
 from selfhealing.services.dlq.store_operations import (
     StoreOperationsMixin,
 )
-from selfhealing.services.dlq_models import DLQConfig
+from selfhealing.services.dlq.models import DLQConfig
 
 
 class MockDLQService(StoreOperationsMixin):

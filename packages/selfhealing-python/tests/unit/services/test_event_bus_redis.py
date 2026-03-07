@@ -14,7 +14,7 @@ class TestEventChannel:
 
     def test_event_channel_values(self):
         """모든 채널 값 확인."""
-        from selfhealing.services.event_bus_redis import EventChannel
+        from selfhealing.services.event_bus.redis_bus import EventChannel
 
         assert EventChannel.CHAOS.value == "chaos"
         assert EventChannel.CONFIG.value == "config"
@@ -30,7 +30,7 @@ class TestEventTypeToChannel:
     def test_chaos_events_mapped_to_chaos_channel(self):
         """Chaos 이벤트는 chaos 채널로 매핑."""
         from selfhealing.services.event_bus import EventType
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -41,7 +41,7 @@ class TestEventTypeToChannel:
     def test_config_events_mapped_to_config_channel(self):
         """Config 이벤트는 config 채널로 매핑."""
         from selfhealing.services.event_bus import EventType
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -52,7 +52,7 @@ class TestEventTypeToChannel:
     def test_emergency_events_mapped_to_emergency_channel(self):
         """Emergency 이벤트는 emergency 채널로 매핑."""
         from selfhealing.services.event_bus import EventType
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -63,7 +63,7 @@ class TestEventTypeToChannel:
     def test_circuit_breaker_events_mapped_to_cb_channel(self):
         """CB 이벤트는 circuit_breaker 채널로 매핑."""
         from selfhealing.services.event_bus import EventType
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -74,7 +74,7 @@ class TestEventTypeToChannel:
     def test_global_events_mapped_to_global_channel(self):
         """글로벌 이벤트는 global 채널로 매핑."""
         from selfhealing.services.event_bus import EventType
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )
@@ -88,7 +88,7 @@ class TestSelfhealingEventChannels:
 
     def test_all_channels_defined(self):
         """모든 채널이 정의되어 있는지 확인."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             SELFHEALING_EVENT_CHANNELS,
             EventChannel,
         )
@@ -98,7 +98,7 @@ class TestSelfhealingEventChannels:
 
     def test_channel_key_format(self):
         """채널 키 형식 확인."""
-        from selfhealing.services.event_bus_redis import SELFHEALING_EVENT_CHANNELS
+        from selfhealing.services.event_bus.redis_bus import SELFHEALING_EVENT_CHANNELS
 
         for name, key in SELFHEALING_EVENT_CHANNELS.items():
             assert key.startswith("selfhealing:")
@@ -111,21 +111,21 @@ class TestRedisEventBusMultiChannel:
     @pytest.fixture(scope="class")
     def redis_bus(self):
         """RedisEventBus 인스턴스 (class-scoped로 재사용)."""
-        from selfhealing.services.event_bus_redis import RedisEventBus
+        from selfhealing.services.event_bus.redis_bus import RedisEventBus
 
         with patch.dict("os.environ", {"REDIS_URL": "", "CELERY_BROKER_URL": ""}, clear=False):
             return RedisEventBus(redis_url=None)
 
     def test_init_with_default_channels(self, redis_bus):
         """기본 채널로 초기화."""
-        from selfhealing.services.event_bus_redis import SELFHEALING_EVENT_CHANNELS
+        from selfhealing.services.event_bus.redis_bus import SELFHEALING_EVENT_CHANNELS
 
         assert redis_bus._channels == SELFHEALING_EVENT_CHANNELS
 
     def test_get_channel_for_event(self, redis_bus):
         """이벤트 타입에 맞는 채널 반환."""
         from selfhealing.services.event_bus import EventType
-        from selfhealing.services.event_bus_redis import SELFHEALING_EVENT_CHANNELS
+        from selfhealing.services.event_bus.redis_bus import SELFHEALING_EVENT_CHANNELS
 
         # Chaos 이벤트 → chaos 채널
         channel = redis_bus._get_channel_for_event(EventType.CHAOS_EXPERIMENT_STARTED)
@@ -138,7 +138,7 @@ class TestRedisEventBusMultiChannel:
     def test_get_channel_returns_global_for_unknown(self, redis_bus):
         """알 수 없는 이벤트 타입은 global 채널로."""
         from selfhealing.services.event_bus import EventType
-        from selfhealing.services.event_bus_redis import SELFHEALING_EVENT_CHANNELS
+        from selfhealing.services.event_bus.redis_bus import SELFHEALING_EVENT_CHANNELS
 
         # DLQ 이벤트는 매핑 안 됨 → global 채널
         channel = redis_bus._get_channel_for_event(EventType.DLQ_REPLAY_COMPLETED)
@@ -151,7 +151,7 @@ class TestRedisEventBusPublish:
     def test_publish_to_correct_channel(self):
         """이벤트 타입에 맞는 채널로 발행."""
         from selfhealing.services.event_bus import EventType, SelfHealingEvent
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             SELFHEALING_EVENT_CHANNELS,
             RedisEventBus,
         )

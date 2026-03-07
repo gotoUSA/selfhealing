@@ -576,7 +576,7 @@ class CircuitBreakerTracingManager:
 
         # Audit 로그 기록
         try:
-            from selfhealing.services.audit_helpers import (
+            from selfhealing.services.audit import (
                 log_cb_state_change_with_trace_audit,
             )
 
@@ -605,7 +605,7 @@ class CircuitBreakerTracingManager:
         except ImportError:
             # Fallback: 기존 audit 함수 사용
             try:
-                from selfhealing.services.audit_helpers import log_cb_state_change_audit
+                from selfhealing.services.audit import log_cb_state_change_audit
 
                 reason_with_trace = reason or ""
                 if triggering_info:

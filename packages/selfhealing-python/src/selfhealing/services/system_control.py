@@ -171,7 +171,7 @@ class SystemControlManager:
         Fail-Open 원칙: Audit 실패가 시스템 제어 로직을 중단시키지 않음.
         """
         try:
-            from selfhealing.services.audit_helpers import log_system_control_audit
+            from selfhealing.services.audit import log_system_control_audit
 
             log_system_control_audit(
                 action=action,

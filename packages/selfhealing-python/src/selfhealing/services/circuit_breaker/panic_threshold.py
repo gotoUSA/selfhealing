@@ -32,7 +32,7 @@ import structlog
 from selfhealing.services.circuit_breaker.models import PanicThresholdConfig
 
 if TYPE_CHECKING:
-    from selfhealing.services.circuit_breaker_service import CircuitBreakerService
+    from selfhealing.services.circuit_breaker import CircuitBreakerService
     from selfhealing.services.emergency_mode import EmergencyModeManager
 
 logger = structlog.get_logger()
@@ -321,7 +321,7 @@ class PanicThresholdMonitor:
     ) -> None:
         """Panic Threshold 발동 Audit 기록."""
         try:
-            from selfhealing.services.audit_helpers import log_panic_threshold_audit
+            from selfhealing.services.audit import log_panic_threshold_audit
 
             log_panic_threshold_audit(
                 open_rate=open_rate,

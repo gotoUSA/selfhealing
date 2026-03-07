@@ -3,7 +3,7 @@ DLQ + Throttle EventType 및 EventChannel 매핑 단위 테스트.
 
 테스트 대상:
 - selfhealing.services.event_bus.EventType (4개 신규 이벤트)
-- selfhealing.services.event_bus_redis.EVENT_TYPE_TO_CHANNEL 매핑
+- selfhealing.services.event_bus.redis_bus.EVENT_TYPE_TO_CHANNEL 매핑
 
 테스트 시나리오:
 1. 4개 신규 EventType 존재 확인
@@ -48,7 +48,7 @@ class TestThrottleDLQEventChannelMapping:
 
     def test_all_dlq_events_mapped_to_channel(self):
         """4개 DLQ 이벤트 모두 EVENT_TYPE_TO_CHANNEL에 매핑되어 있다."""
-        from selfhealing.services.event_bus_redis import EVENT_TYPE_TO_CHANNEL
+        from selfhealing.services.event_bus.redis_bus import EVENT_TYPE_TO_CHANNEL
 
         dlq_event_types = [
             EventType.THROTTLE_REJECTION_STORED,
@@ -62,7 +62,7 @@ class TestThrottleDLQEventChannelMapping:
 
     def test_dlq_events_mapped_to_throttle_channel(self):
         """DLQ 이벤트들이 THROTTLE 채널에 매핑된다."""
-        from selfhealing.services.event_bus_redis import (
+        from selfhealing.services.event_bus.redis_bus import (
             EVENT_TYPE_TO_CHANNEL,
             EventChannel,
         )

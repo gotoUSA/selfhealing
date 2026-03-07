@@ -125,7 +125,7 @@ class TestGovernanceChecksBufferPattern:
     
     def test_log_governance_blocked_signature_includes_request(self):
         """_log_governance_blocked가 request 파라미터를 지원해야 함."""
-        from selfhealing.services.governance_checks import _log_governance_blocked
+        from selfhealing.services.governance.checks import _log_governance_blocked
         import inspect
         
         sig = inspect.signature(_log_governance_blocked)
@@ -136,7 +136,7 @@ class TestGovernanceChecksBufferPattern:
     def test_log_governance_blocked_uses_buffer_when_request_provided(self):
         """request가 있으면 버퍼에 적재되어야 함."""
         from selfhealing.audit.event_buffer import RequestAuditBuffer, AuditEventType
-        from selfhealing.services.governance_checks import _log_governance_blocked
+        from selfhealing.services.governance.checks import _log_governance_blocked
         
         request = MockRequest()
         
@@ -229,7 +229,7 @@ class TestHybridPatternBackwardCompatibility:
     
     def test_log_governance_blocked_works_without_request(self):
         """request 없이도 동작해야 함 (Celery 등)."""
-        from selfhealing.services.governance_checks import _log_governance_blocked
+        from selfhealing.services.governance.checks import _log_governance_blocked
         
         # request 없이 호출 - 예외 없이 실행되어야 함
         _log_governance_blocked(
@@ -241,7 +241,7 @@ class TestHybridPatternBackwardCompatibility:
     
     def test_audit_helpers_work_without_request(self):
         """audit_helpers가 request 없이도 동작해야 함."""
-        from selfhealing.services.audit_helpers import (
+        from selfhealing.services.audit import (
             log_dlq_store_audit,
             log_cb_state_change_audit,
         )

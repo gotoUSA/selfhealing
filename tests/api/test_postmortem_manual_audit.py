@@ -50,7 +50,7 @@ class TestPostmortemManualAudit:
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus,
             patch(
-                "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+                "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
                 return_value=mock_cb_service,
             ),
             patch(
@@ -61,7 +61,7 @@ class TestPostmortemManualAudit:
                 "selfhealing.api.django.views.xtest.base.get_healing_events",
                 return_value=[],
             ),
-            patch("selfhealing.services.postmortem_store.add_healing_incident"),
+            patch("selfhealing.services.postmortem.store.add_healing_incident"),
             patch(
                 "selfhealing.services.audit.base._write_to_wal",
                 side_effect=mock_write_to_wal,
@@ -105,7 +105,7 @@ class TestPostmortemManualAudit:
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus,
             patch(
-                "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+                "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
                 return_value=mock_cb_service,
             ),
             patch(
@@ -116,7 +116,7 @@ class TestPostmortemManualAudit:
                 "selfhealing.api.django.views.xtest.base.get_healing_events",
                 return_value=[],
             ),
-            patch("selfhealing.services.postmortem_store.add_healing_incident"),
+            patch("selfhealing.services.postmortem.store.add_healing_incident"),
             patch(
                 "selfhealing.services.audit.base._write_to_wal",
                 side_effect=mock_write_to_wal,
@@ -152,7 +152,7 @@ class TestPostmortemManualAudit:
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus,
             patch(
-                "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+                "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
                 return_value=mock_cb_service,
             ),
             patch(
@@ -163,7 +163,7 @@ class TestPostmortemManualAudit:
                 "selfhealing.api.django.views.xtest.base.get_healing_events",
                 return_value=[],
             ),
-            patch("selfhealing.services.postmortem_store.add_healing_incident"),
+            patch("selfhealing.services.postmortem.store.add_healing_incident"),
             patch(
                 "selfhealing.services.audit.base._write_to_wal",
                 side_effect=mock_write_to_wal,
@@ -195,7 +195,7 @@ class TestPostmortemManualAudit:
         with (
             patch("selfhealing.services.event_bus.get_event_bus") as mock_bus,
             patch(
-                "selfhealing.services.circuit_breaker_service.get_circuit_breaker_service",
+                "selfhealing.services.circuit_breaker.get_circuit_breaker_service",
                 return_value=mock_cb_service,
             ),
             patch(
@@ -206,7 +206,7 @@ class TestPostmortemManualAudit:
                 "selfhealing.api.django.views.xtest.base.get_healing_events",
                 return_value=[],
             ),
-            patch("selfhealing.services.postmortem_store.add_healing_incident"),
+            patch("selfhealing.services.postmortem.store.add_healing_incident"),
             patch(
                 "selfhealing.services.audit.base._write_to_wal",
                 side_effect=mock_write_to_wal_error,

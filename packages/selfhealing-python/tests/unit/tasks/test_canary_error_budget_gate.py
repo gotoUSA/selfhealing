@@ -113,7 +113,7 @@ class TestAutoPromoteGovernance:
 
     def test_blocked_by_error_budget(self, watchdog):
         """에러 예산 부족 시 자동 프로모션 차단."""
-        from selfhealing.services.governance_checks import (
+        from selfhealing.services.governance.checks import (
             BlockReason,
             GovernanceCheckResult,
         )
@@ -124,7 +124,7 @@ class TestAutoPromoteGovernance:
             block_message="Error budget critically low (5.0%)",
         )
 
-        with patch("selfhealing.services.governance_checks.check_all_governance") as mock_gov:
+        with patch("selfhealing.services.governance.checks.check_all_governance") as mock_gov:
             mock_gov.return_value = blocked_result
 
             result = watchdog.auto_promote_eligible()
@@ -135,7 +135,7 @@ class TestAutoPromoteGovernance:
 
     def test_blocked_by_emergency_mode(self, watchdog):
         """비상 모드 시 자동 프로모션 차단."""
-        from selfhealing.services.governance_checks import (
+        from selfhealing.services.governance.checks import (
             BlockReason,
             GovernanceCheckResult,
         )
@@ -146,7 +146,7 @@ class TestAutoPromoteGovernance:
             block_message="Emergency mode LEVEL_2 is active",
         )
 
-        with patch("selfhealing.services.governance_checks.check_all_governance") as mock_gov:
+        with patch("selfhealing.services.governance.checks.check_all_governance") as mock_gov:
             mock_gov.return_value = blocked_result
 
             result = watchdog.auto_promote_eligible()
@@ -156,7 +156,7 @@ class TestAutoPromoteGovernance:
 
     def test_blocked_by_kill_switch(self, watchdog):
         """Kill Switch 활성화 시 자동 프로모션 차단."""
-        from selfhealing.services.governance_checks import (
+        from selfhealing.services.governance.checks import (
             BlockReason,
             GovernanceCheckResult,
         )
@@ -167,7 +167,7 @@ class TestAutoPromoteGovernance:
             block_message="Kill Switch is active",
         )
 
-        with patch("selfhealing.services.governance_checks.check_all_governance") as mock_gov:
+        with patch("selfhealing.services.governance.checks.check_all_governance") as mock_gov:
             mock_gov.return_value = blocked_result
 
             result = watchdog.auto_promote_eligible()
@@ -177,11 +177,11 @@ class TestAutoPromoteGovernance:
 
     def test_allowed_when_governance_passes(self, watchdog):
         """거버넌스 통과 시 정상 진행."""
-        from selfhealing.services.governance_checks import GovernanceCheckResult
+        from selfhealing.services.governance.checks import GovernanceCheckResult
 
         allowed_result = GovernanceCheckResult.allowed_result()
 
-        with patch("selfhealing.services.governance_checks.check_all_governance") as mock_gov:
+        with patch("selfhealing.services.governance.checks.check_all_governance") as mock_gov:
             mock_gov.return_value = allowed_result
             watchdog.service.get_active_rollouts.return_value = []
 
@@ -192,7 +192,7 @@ class TestAutoPromoteGovernance:
 
     def test_fail_closed_on_governance_error(self, watchdog):
         """거버넌스 체크 실패 시 Fail-Closed."""
-        with patch("selfhealing.services.governance_checks.check_all_governance") as mock_gov:
+        with patch("selfhealing.services.governance.checks.check_all_governance") as mock_gov:
             mock_gov.side_effect = Exception("Redis connection failed")
 
             result = watchdog.auto_promote_eligible()
@@ -329,13 +329,13 @@ class TestBreakGlass:
 
     def test_break_glass_bypasses_all_checks(self):
         """Break Glass 활성화 시 모든 체크 우회."""
-        from selfhealing.services.governance_checks import check_all_governance
+        from selfhealing.services.governance.checks import check_all_governance
 
         with patch("selfhealing.settings.governance.get_governance_settings") as mock_settings:
             mock_settings.return_value.break_glass_enabled = True
             mock_settings.return_value.break_glass_audit_required = True
 
-            with patch("selfhealing.services.governance_checks._log_governance_blocked"):
+            with patch("selfhealing.services.governance.checks._log_governance_blocked"):
                 result = check_all_governance(
                     check_kill_switch=True,
                     check_emergency=True,

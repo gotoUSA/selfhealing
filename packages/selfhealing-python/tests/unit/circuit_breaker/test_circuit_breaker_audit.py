@@ -45,7 +45,7 @@ class TestCircuitBreakerManualControlAudit:
     # =========================================================================
 
     @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_force_open_calls_audit(self, mock_audit, mock_system, service, mock_repository):
         """force_open 성공 시 audit 기록이 호출되어야 함."""
         # Setup
@@ -68,7 +68,7 @@ class TestCircuitBreakerManualControlAudit:
         assert "force_open" in call_args.kwargs["reason"]
 
     @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_force_open_already_open_no_audit(self, mock_audit, mock_system, service, mock_repository):
         """force_open 시 이미 open 상태면 audit 호출 안함."""
         # Setup - 이미 open 상태
@@ -86,7 +86,7 @@ class TestCircuitBreakerManualControlAudit:
     # =========================================================================
 
     @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_force_close_calls_audit(self, mock_audit, mock_system, service, mock_repository):
         """force_close 성공 시 audit 기록이 호출되어야 함."""
         # Setup
@@ -109,7 +109,7 @@ class TestCircuitBreakerManualControlAudit:
         assert "force_close" in call_args.kwargs["reason"]
 
     @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_force_close_already_closed_no_audit(self, mock_audit, mock_system, service, mock_repository):
         """force_close 시 이미 closed 상태면 audit 호출 안함."""
         # Setup
@@ -126,7 +126,7 @@ class TestCircuitBreakerManualControlAudit:
     # reset 테스트
     # =========================================================================
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_reset_calls_audit(self, mock_audit, service, mock_repository):
         """reset 성공 시 audit 기록이 호출되어야 함."""
         # Setup
@@ -148,7 +148,7 @@ class TestCircuitBreakerManualControlAudit:
         assert call_args.kwargs["new_state"] == "closed"
         assert "reset" in call_args.kwargs["reason"]
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_reset_same_state_no_audit(self, mock_audit, service, mock_repository):
         """reset 시 상태 변경 없으면 audit 호출 안함."""
         # Setup
@@ -193,7 +193,7 @@ class TestCircuitBreakerAutoRecoveryAudit:
     # should_allow: OPEN → HALF_OPEN 전환 테스트
     # =========================================================================
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_should_allow_open_to_half_open_calls_audit(self, mock_audit, service, mock_repository):
         """recovery_timeout 경과 후 OPEN → HALF_OPEN 전환 시 audit 호출."""
         from selfhealing.services.circuit_breaker.config import CircuitState
@@ -217,7 +217,7 @@ class TestCircuitBreakerAutoRecoveryAudit:
         assert "HALF_OPEN" in str(call_args.kwargs["new_state"]) or call_args.kwargs["new_state"] == CircuitState.HALF_OPEN
         assert "auto_recovery" in call_args.kwargs["reason"]
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_should_allow_open_not_expired_no_audit(self, mock_audit, service, mock_repository):
         """recovery_timeout 미경과 시 audit 호출 안함."""
         from selfhealing.services.circuit_breaker.config import CircuitState
@@ -239,7 +239,7 @@ class TestCircuitBreakerAutoRecoveryAudit:
     # record_success: HALF_OPEN → CLOSED 전환 테스트
     # =========================================================================
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_record_success_half_open_to_closed_calls_audit(self, mock_audit, service, mock_repository, mock_config):
         """HALF_OPEN에서 success_threshold 도달 시 CLOSED 전환 및 audit 호출."""
         # Setup - HALF_OPEN 상태
@@ -266,7 +266,7 @@ class TestCircuitBreakerAutoRecoveryAudit:
         assert call_args.kwargs["new_state"] == "closed"
         assert "auto_recovery" in call_args.kwargs["reason"]
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_record_success_not_enough_no_audit(self, mock_audit, service, mock_repository, mock_config):
         """HALF_OPEN에서 success_threshold 미달 시 audit 호출 안함."""
         # Setup - HALF_OPEN 상태
@@ -315,7 +315,7 @@ class TestCircuitBreakerAuditFailSafe:
         return svc
 
     @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_audit_failure_does_not_affect_force_open(self, mock_audit, mock_system, service, mock_repository):
         """Audit 실패해도 force_open은 정상 동작."""
         # Setup
@@ -330,7 +330,7 @@ class TestCircuitBreakerAuditFailSafe:
         assert result.new_state == "open"
 
     @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_audit_failure_does_not_affect_force_close(self, mock_audit, mock_system, service, mock_repository):
         """Audit 실패해도 force_close는 정상 동작."""
         # Setup
@@ -371,7 +371,7 @@ class TestCircuitBreakerAuditContent:
         return svc
 
     @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_force_open_audit_includes_reason(self, mock_audit, mock_system, service, mock_repository):
         """force_open audit에 reason이 포함되어야 함."""
         mock_repository.atomic_force_open.return_value = (True, "closed", "open")
@@ -383,7 +383,7 @@ class TestCircuitBreakerAuditContent:
         assert "force_open" in call_args.kwargs["reason"]
 
     @patch("selfhealing.services.circuit_breaker.manual_control._is_system_enabled", return_value=True)
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_force_open_audit_default_reason(self, mock_audit, mock_system, service, mock_repository):
         """force_open reason이 없으면 기본값 사용."""
         mock_repository.atomic_force_open.return_value = (True, "closed", "open")
@@ -442,7 +442,7 @@ class TestCircuitBreakerAutoOpenAudit:
         svc = CircuitBreakerService(config=mock_config, repository=mock_repository)
         return svc
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_auto_open_uses_audit_helpers(self, mock_audit, service):
         """
         자동 OPEN 시 audit_helpers.log_cb_state_change_audit 호출 확인.
@@ -469,7 +469,7 @@ class TestCircuitBreakerAutoOpenAudit:
         assert "auto_trigger" in call_args.kwargs["reason"]
         assert "failures=5" in call_args.kwargs["reason"]
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_auto_open_audit_includes_threshold_info(self, mock_audit, service):
         """auto-open reason에 threshold 정보가 포함되어야 함."""
         snapshot = {
@@ -485,7 +485,7 @@ class TestCircuitBreakerAutoOpenAudit:
         assert "threshold=10" in reason
         assert "failures=10" in reason
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_auto_open_audit_handles_missing_snapshot_fields(self, mock_audit, service):
         """snapshot에 필드가 없어도 에러 없이 처리."""
         empty_snapshot = {}
@@ -499,7 +499,7 @@ class TestCircuitBreakerAutoOpenAudit:
         # N/A로 대체되어야 함
         assert "N/A" in call_args.kwargs["reason"]
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_auto_open_audit_exception_handling(self, mock_audit, service):
         """audit 실패해도 CB 동작에는 영향 없어야 함."""
         mock_audit.side_effect = Exception("Audit system unavailable")
@@ -510,13 +510,13 @@ class TestCircuitBreakerAutoOpenAudit:
         # Verify audit was attempted
         mock_audit.assert_called_once()
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit", side_effect=ImportError)
+    @patch("selfhealing.services.audit.log_cb_state_change_audit", side_effect=ImportError)
     def test_auto_open_audit_import_error_handling(self, mock_audit, service):
         """audit_helpers import 실패 시에도 에러 없이 처리."""
         # Should not raise
         service._log_circuit_open_audit("payment", {"failure_count": 5})
 
-    @patch("selfhealing.services.audit_helpers.log_cb_state_change_audit")
+    @patch("selfhealing.services.audit.log_cb_state_change_audit")
     def test_auto_open_audit_not_using_legacy_log_config_change(self, mock_audit, service):
         """
         레거시 log_config_change가 아닌 audit_helpers 사용 확인.

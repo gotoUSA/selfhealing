@@ -39,7 +39,7 @@ from selfhealing.api.django.views.governance.status_views import (
 )
 
 # Service Layer
-from selfhealing.services.governance_api_service import (
+from selfhealing.services.governance.api_service import (
     GovernanceApiService,
     get_governance_api_service,
     reset_governance_api_service,

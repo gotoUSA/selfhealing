@@ -60,7 +60,7 @@ class TestTrafficHealthStatus:
 class TestCheckTrafficHealth:
     """check_traffic_health 함수 테스트."""
 
-    @patch("selfhealing.services.governance_checks.check_all_governance")
+    @patch("selfhealing.services.governance.checks.check_all_governance")
     @patch("selfhealing.services.error_budget_gate.get_error_budget_gate")
     def test_all_checks_pass_without_domain(self, mock_gate_getter, mock_governance):
         """도메인 없이 모든 체크 통과 시."""
@@ -83,9 +83,9 @@ class TestCheckTrafficHealth:
         assert "governance" in result.checks
         assert result.checks["governance"] is True
 
-    @patch("selfhealing.services.governance_checks.check_all_governance")
+    @patch("selfhealing.services.governance.checks.check_all_governance")
     @patch("selfhealing.services.error_budget_gate.get_error_budget_gate")
-    @patch("selfhealing.services.circuit_breaker_service.get_circuit_breaker_service")
+    @patch("selfhealing.services.circuit_breaker.get_circuit_breaker_service")
     def test_circuit_breaker_open_blocks(
         self, mock_cb_getter, mock_gate_getter, mock_governance
     ):
@@ -104,7 +104,7 @@ class TestCheckTrafficHealth:
         assert result.checks["circuit_breaker"] is False
         assert "open" in result.reason.lower()
 
-    @patch("selfhealing.services.governance_checks.check_all_governance")
+    @patch("selfhealing.services.governance.checks.check_all_governance")
     @patch("selfhealing.services.error_budget_gate.get_error_budget_gate")
     def test_error_budget_insufficient_blocks(self, mock_gate_getter, mock_governance):
         """에러 예산 부족 시 차단되는지 확인."""
@@ -122,7 +122,7 @@ class TestCheckTrafficHealth:
         assert result.checks["error_budget"] is False
         assert "budget" in result.reason.lower()
 
-    @patch("selfhealing.services.governance_checks.check_all_governance")
+    @patch("selfhealing.services.governance.checks.check_all_governance")
     @patch("selfhealing.services.error_budget_gate.get_error_budget_gate")
     def test_governance_blocked(self, mock_gate_getter, mock_governance):
         """거버넌스 체크 실패 시 차단되는지 확인."""

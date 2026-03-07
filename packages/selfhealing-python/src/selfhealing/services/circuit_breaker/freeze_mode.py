@@ -180,7 +180,7 @@ class FreezeModeManager:
 
         # Audit 기록
         try:
-            from selfhealing.services.audit_helpers import log_freeze_mode_audit
+            from selfhealing.services.audit import log_freeze_mode_audit
 
             log_freeze_mode_audit(
                 active=True,
@@ -237,7 +237,7 @@ class FreezeModeManager:
 
         # Audit 기록
         try:
-            from selfhealing.services.audit_helpers import log_freeze_mode_audit
+            from selfhealing.services.audit import log_freeze_mode_audit
 
             log_freeze_mode_audit(
                 active=False,

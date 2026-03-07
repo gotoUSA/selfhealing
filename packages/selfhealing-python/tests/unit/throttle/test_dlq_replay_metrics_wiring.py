@@ -159,7 +159,7 @@ class TestReplayMetricsWiring:
     def test_replay_success_increments_succeeded_metric(self, mock_metric):
         """Replay 성공 시 recovery_replay_total(result=succeeded) 메트릭이 증가한다."""
         from selfhealing.interfaces.repositories import FailedOperationData
-        from selfhealing.services.dlq_models import DLQThrottleReplayResult
+        from selfhealing.services.dlq.models import DLQThrottleReplayResult
 
         throttle = _make_throttle(initial_limit=100)
         mock_dlq = MagicMock()
@@ -185,7 +185,7 @@ class TestReplayMetricsWiring:
     def test_replay_failure_increments_failed_metric(self, mock_metric):
         """Replay 실패 시 recovery_replay_total(result=failed) 메트릭이 증가한다."""
         from selfhealing.interfaces.repositories import FailedOperationData
-        from selfhealing.services.dlq_models import DLQThrottleReplayResult
+        from selfhealing.services.dlq.models import DLQThrottleReplayResult
 
         throttle = _make_throttle(initial_limit=100)
         mock_dlq = MagicMock()

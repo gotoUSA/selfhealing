@@ -245,7 +245,7 @@ class TestChaosServiceLock:
 
     def test_for_chaos_service_lock_creation(self):
         """Test service lock key creation."""
-        from selfhealing.services.idempotency_service import IdempotencyKey
+        from selfhealing.services.idempotency import IdempotencyKey
         
         key = IdempotencyKey.for_chaos_service_lock("payment")
         
@@ -257,7 +257,7 @@ class TestChaosServiceLock:
 
     def test_service_lock_different_from_schedule_lock(self):
         """Test service lock is different from schedule lock."""
-        from selfhealing.services.idempotency_service import IdempotencyKey
+        from selfhealing.services.idempotency import IdempotencyKey
         
         service_lock = IdempotencyKey.for_chaos_service_lock("payment")
         schedule_lock = IdempotencyKey.for_chaos_experiment(
@@ -272,7 +272,7 @@ class TestChaosServiceLock:
 
     def test_service_lock_unique_per_service(self):
         """Test each service gets unique lock."""
-        from selfhealing.services.idempotency_service import IdempotencyKey
+        from selfhealing.services.idempotency import IdempotencyKey
         
         payment_lock = IdempotencyKey.for_chaos_service_lock("payment")
         order_lock = IdempotencyKey.for_chaos_service_lock("order")
@@ -415,7 +415,7 @@ class TestRedisEventBus:
 
     def test_redis_event_bus_creation(self):
         """Test RedisEventBus can be created."""
-        from selfhealing.services.event_bus_redis import RedisEventBus
+        from selfhealing.services.event_bus.redis_bus import RedisEventBus
         
         # Should not fail even without Redis
         bus = RedisEventBus(redis_url=None)
@@ -426,7 +426,7 @@ class TestRedisEventBus:
 
     def test_get_event_bus_local(self):
         """Test get_event_bus returns local bus when distributed=False."""
-        from selfhealing.services.event_bus_redis import get_event_bus
+        from selfhealing.services.event_bus.redis_bus import get_event_bus
         from selfhealing.services.event_bus import SelfHealingEventBus
         
         bus = get_event_bus(distributed=False)
@@ -434,7 +434,7 @@ class TestRedisEventBus:
 
     def test_subscribe_and_publish_local(self):
         """Test local subscription and publishing works."""
-        from selfhealing.services.event_bus_redis import RedisEventBus
+        from selfhealing.services.event_bus.redis_bus import RedisEventBus
         from selfhealing.services.event_bus import EventType, SelfHealingEvent
         
         bus = RedisEventBus(redis_url=None)

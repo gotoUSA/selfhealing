@@ -7,7 +7,7 @@ import time
 from unittest import mock
 
 from selfhealing.core.config import ErrorBudgetConfig
-from selfhealing.services.error_budget_service import (
+from selfhealing.services.error_budget import (
     FreezeDecisionRecorder,
     OverrideType,
 )

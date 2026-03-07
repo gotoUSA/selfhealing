@@ -238,13 +238,13 @@ class ServiceFactory:
     # Service creation methods
     def create_circuit_breaker_service(self):
         """Create CircuitBreakerService with proper repository."""
-        from selfhealing.services.circuit_breaker_service import CircuitBreakerService
+        from selfhealing.services.circuit_breaker import CircuitBreakerService
 
         return CircuitBreakerService(repository=self.get_circuit_breaker_repository())
 
     def create_dlq_service(self):
         """Create DLQService with proper repository."""
-        from selfhealing.services.dlq_service import DLQService
+        from selfhealing.services.dlq import DLQService
 
         return DLQService(repository=self.get_failed_operation_repository())
 

@@ -55,7 +55,7 @@ class TestAuditAccountability:
         
         # Create circuit breaker service
         from selfhealing.services import CircuitBreakerService
-        from selfhealing.services.circuit_breaker_service import CircuitBreakerConfig
+        from selfhealing.services.circuit_breaker import CircuitBreakerConfig
         self.circuit_breaker_service = CircuitBreakerService(
             config=CircuitBreakerConfig(enabled=True),
             repository=self.cb_repository,

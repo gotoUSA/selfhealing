@@ -24,20 +24,20 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from selfhealing.services.postmortem_store import (
+from selfhealing.services.postmortem.store import (
     add_healing_incident,
     get_healing_incidents,
     get_healing_incidents_count,
     get_incident_by_id,
 )
-from selfhealing.services.postmortem_store import (
+from selfhealing.services.postmortem.store import (
     build_timeline as _build_timeline,
 )
-from selfhealing.services.postmortem_store import (
+from selfhealing.services.postmortem.store import (
     # Helper functions
     collect_service_states as _collect_service_states,
 )
-from selfhealing.services.postmortem_store import (
+from selfhealing.services.postmortem.store import (
     generate_postmortem_data as _generate_postmortem_data,
 )
 
@@ -77,7 +77,7 @@ class PostmortemGeneratorView(APIView):
             collect_system_snapshot,
             get_healing_events,
         )
-        from selfhealing.services.circuit_breaker_service import (
+        from selfhealing.services.circuit_breaker import (
             get_circuit_breaker_service,
         )
         from selfhealing.services.event_bus import get_event_bus

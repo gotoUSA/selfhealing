@@ -2,8 +2,8 @@
 DLQ Throttle Replay Result 데이터클래스 단위 테스트.
 
 테스트 대상:
-- selfhealing.services.dlq_models.DLQThrottleReplayResult
-- selfhealing.services.dlq_models.DLQThrottleBatchReplayResult
+- selfhealing.services.dlq.models.DLQThrottleReplayResult
+- selfhealing.services.dlq.models.DLQThrottleBatchReplayResult
 
 테스트 시나리오:
 1. DLQThrottleReplayResult 기본값 검증
@@ -12,7 +12,7 @@ DLQ Throttle Replay Result 데이터클래스 단위 테스트.
 """
 
 
-from selfhealing.services.dlq_models import (
+from selfhealing.services.dlq.models import (
     DLQThrottleBatchReplayResult,
     DLQThrottleReplayResult,
 )

@@ -354,7 +354,7 @@ class TestRolloutWatchdog:
         mock_governance.allowed = True
 
         with patch(
-            "selfhealing.services.governance_checks.check_all_governance",
+            "selfhealing.services.governance.checks.check_all_governance",
             return_value=mock_governance,
         ):
             result = watchdog.auto_promote_eligible()

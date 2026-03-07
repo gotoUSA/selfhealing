@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 @pytest.fixture
 def mock_dlq_service():
     """Mock DLQ Service for cleanup tasks."""
-    with patch("selfhealing.services.dlq_service.get_dlq_service") as mock:
+    with patch("selfhealing.services.dlq.get_dlq_service") as mock:
         service = MagicMock()
         service.archive_old_entries.return_value = 15
         service.purge_archived.return_value = 5

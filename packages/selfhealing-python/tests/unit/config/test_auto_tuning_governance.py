@@ -25,7 +25,7 @@ class TestAutoTuningGovernanceIntegration:
     def test_start_blocked_by_kill_switch(self, mock_adapters):
         """Kill Switch 활성화 시 서비스 시작 차단."""
         from selfhealing.services.auto_tuning.service import AutoTuningService
-        from selfhealing.services.governance_checks import GovernanceCheckResult
+        from selfhealing.services.governance.checks import GovernanceCheckResult
 
         with patch(
             "selfhealing.services.auto_tuning.service.check_all_governance"
@@ -46,7 +46,7 @@ class TestAutoTuningGovernanceIntegration:
     def test_start_blocked_by_emergency_mode(self, mock_adapters):
         """Emergency Mode 중 서비스 시작 차단."""
         from selfhealing.services.auto_tuning.service import AutoTuningService
-        from selfhealing.services.governance_checks import GovernanceCheckResult
+        from selfhealing.services.governance.checks import GovernanceCheckResult
 
         with patch(
             "selfhealing.services.auto_tuning.service.check_all_governance"
@@ -66,7 +66,7 @@ class TestAutoTuningGovernanceIntegration:
     def test_start_blocked_by_error_budget(self, mock_adapters):
         """Error Budget 부족 시 서비스 시작 차단."""
         from selfhealing.services.auto_tuning.service import AutoTuningService
-        from selfhealing.services.governance_checks import GovernanceCheckResult
+        from selfhealing.services.governance.checks import GovernanceCheckResult
 
         with patch(
             "selfhealing.services.auto_tuning.service.check_all_governance"
@@ -85,7 +85,7 @@ class TestAutoTuningGovernanceIntegration:
     def test_start_allowed_when_governance_passes(self, mock_adapters):
         """Governance 체크 통과 시 서비스 정상 시작."""
         from selfhealing.services.auto_tuning.service import AutoTuningService
-        from selfhealing.services.governance_checks import GovernanceCheckResult
+        from selfhealing.services.governance.checks import GovernanceCheckResult
 
         with patch(
             "selfhealing.services.auto_tuning.service.check_all_governance"
@@ -111,7 +111,7 @@ class TestAutoTuningGovernanceIntegration:
     def test_check_governance_params(self, mock_adapters):
         """Governance 체크 시 올바른 파라미터가 전달되는지 확인."""
         from selfhealing.services.auto_tuning.service import AutoTuningService
-        from selfhealing.services.governance_checks import GovernanceCheckResult
+        from selfhealing.services.governance.checks import GovernanceCheckResult
 
         with patch(
             "selfhealing.services.auto_tuning.service.check_all_governance"
@@ -134,7 +134,7 @@ class TestAutoTuningGovernanceIntegration:
     def test_governance_check_for_module_adjustment(self, mock_adapters):
         """모듈별 조정 시 Governance 체크 메서드 호출 확인."""
         from selfhealing.services.auto_tuning.service import AutoTuningService
-        from selfhealing.services.governance_checks import GovernanceCheckResult
+        from selfhealing.services.governance.checks import GovernanceCheckResult
 
         with patch(
             "selfhealing.services.auto_tuning.service.check_all_governance"

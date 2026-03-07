@@ -120,7 +120,7 @@ class GenerateKeyView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        from selfhealing.services.idempotency_service import (
+        from selfhealing.services.idempotency import (
             IdempotencyDomain,
             IdempotencyKey,
             get_idempotency_service,
@@ -263,7 +263,7 @@ class CheckDuplicateView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        from selfhealing.services.idempotency_service import (
+        from selfhealing.services.idempotency import (
             IdempotencyDomain,
             IdempotencyKey,
             get_idempotency_service,
@@ -402,7 +402,7 @@ def _filter_tracked_keys(
     prefix_filter: str,
 ) -> list[str]:
     """도메인 및 프리픽스 필터 적용."""
-    from selfhealing.services.idempotency_service import IdempotencyDomain
+    from selfhealing.services.idempotency import IdempotencyDomain
 
     result = tracked_keys
 
@@ -421,7 +421,7 @@ def _filter_tracked_keys(
 
 def _aggregate_by_domain(tracked_keys: list[str]) -> dict[str, int]:
     """도메인별 키 집계."""
-    from selfhealing.services.idempotency_service import IdempotencyDomain
+    from selfhealing.services.idempotency import IdempotencyDomain
 
     by_domain: dict[str, int] = {}
     for key in tracked_keys:
@@ -606,7 +606,7 @@ class RegisterKeyView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        from selfhealing.services.idempotency_service import (
+        from selfhealing.services.idempotency import (
             IdempotencyDomain,
             IdempotencyKey,
             get_idempotency_service,
@@ -745,7 +745,7 @@ class ClearKeysView(XTestModeMixin, APIView):
         if denied:
             return denied
 
-        from selfhealing.services.idempotency_service import (
+        from selfhealing.services.idempotency import (
             IdempotencyDomain,
             IdempotencyKey,
         )

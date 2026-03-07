@@ -183,7 +183,7 @@ def _create_individual_postmortems(group) -> dict[str, Any]:
         from selfhealing.services.postmortem.integrity_sealer import (
             get_integrity_sealer,
         )
-        from selfhealing.services.postmortem_store import add_healing_incident
+        from selfhealing.services.postmortem.store import add_healing_incident
 
         sealer = get_integrity_sealer()
         created_ids = []
@@ -246,7 +246,7 @@ def _create_group_postmortem(group) -> dict[str, Any]:
         from selfhealing.services.postmortem.integrity_sealer import (
             get_integrity_sealer,
         )
-        from selfhealing.services.postmortem_store import add_healing_incident
+        from selfhealing.services.postmortem.store import add_healing_incident
 
         sealer = get_integrity_sealer()
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -715,19 +715,19 @@ def _process_cb_closed_postmortem(
         collect_system_snapshot,
         get_healing_events,
     )
-    from selfhealing.services.circuit_breaker_service import (
+    from selfhealing.services.circuit_breaker import (
         get_circuit_breaker_service,
     )
-    from selfhealing.services.postmortem_store import (
+    from selfhealing.services.postmortem.store import (
         add_healing_incident,
     )
-    from selfhealing.services.postmortem_store import (
+    from selfhealing.services.postmortem.store import (
         build_timeline as _build_timeline,
     )
-    from selfhealing.services.postmortem_store import (
+    from selfhealing.services.postmortem.store import (
         collect_service_states as _collect_service_states,
     )
-    from selfhealing.services.postmortem_store import (
+    from selfhealing.services.postmortem.store import (
         generate_postmortem_data as _generate_postmortem_data,
     )
     from selfhealing.settings.postmortem import get_postmortem_settings
@@ -862,7 +862,7 @@ def _process_emergency_postmortem(
     from selfhealing.services.event_bus.bus import (
         _generate_emergency_postmortem_data,
     )
-    from selfhealing.services.postmortem_store import add_healing_incident
+    from selfhealing.services.postmortem.store import add_healing_incident
     from selfhealing.settings.postmortem import get_postmortem_settings
 
     settings = get_postmortem_settings()
