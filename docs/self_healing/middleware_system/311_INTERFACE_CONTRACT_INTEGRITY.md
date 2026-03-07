@@ -138,7 +138,18 @@ class WebFrameworkInterface(ABC):
 - `get_all_states()`가 "Circuit Breaker **상태** 목록"이라는 의미를 명확히 전달
 - `get_all_states()`의 호출자가 더 많음 (statistics, celery tasks, services)
 
-#### 3.1.2 구현
+#### 3.1.2 Pagination 불요 판단
+
+`get_all_states()`는 `list[]` 반환을 유지한다. Pagination은 도입하지 않는다.
+
+**근거**:
+- CB 인스턴스 수는 서버 수가 아닌 `보호 대상 서비스 수 × Cell 수`로 결정됨
+- 일반 기업 10~200개, 대기업 + Cell Topology 시 최대 2,000개 수준
+- 50,000개(극단적 시나리오)에서도 ~25MB로 Python 프로세스 OOM 위험 없음
+- 20개 이상 호출자(panic_threshold, health_check, statistics 등)가 **전체 상태 기반 집계**를 수행하므로 Pagination 시 로직 재설계 필요
+- `PaginatedResult` 인프라가 `interfaces/statistics.py:78`에 이미 존재하므로, 추후 API 엔드포인트에서 필요 시 Service 계층에서 감싸면 됨
+
+#### 3.1.3 구현
 
 ```python
 # interfaces/repositories.py — CircuitBreakerStateRepository
@@ -161,7 +172,7 @@ def get_all(self) -> list[CircuitBreakerStateData]:
     return self.get_all_states()
 ```
 
-#### 3.1.3 수정 대상
+#### 3.1.4 수정 대상
 
 | 파일 | 변경 |
 |------|------|
@@ -177,12 +188,13 @@ def get_all(self) -> list[CircuitBreakerStateData]:
 
 #### 3.2.1 WebFrameworkInterface
 
-**결정**: 문서화 후 보류 (구현체 추가 불요)
+**결정**: 현 위치 유지 + docstring 추가 (이동/격리 불요)
 
 **근거**:
 - 현재 Django 전용으로 동작하며 프레임워크 마이그레이션 계획 없음
 - 인터페이스는 향후 FastAPI/Flask 마이그레이션을 위한 설계 문서 역할
 - 구현체 없이 유지하되, docstring에 상태 명시
+- `deprecated/` 또는 `docs/design_drafts/`로 이동 **불가** — 동일 파일의 10개 심볼(`HttpMethod`, `ContentType`, `RequestContext`, `ResponseContext` 등)이 `interfaces/__init__.py`의 `__all__`에 export 중이므로 이동 시 import path 파괴
 
 ```python
 # interfaces/web_framework.py — docstring 추가
@@ -231,8 +243,13 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
     # ... 나머지 메서드 구현
 ```
 
-**전제 조건**: Django SecurityIncident 모델이 존재해야 함.
-모델이 없으면 shopping/ testbed의 모델 또는 신규 마이그레이션이 필요.
+**전제 조건 확인 완료**: Django SecurityIncident 모델은 이미 존재한다.
+- Abstract 모델: `adapters/django/models/_abstract_security_incident.py`
+- Concrete 모델: `adapters/django/models/__init__.py:173-209` (`db_table="security_incidents"`)
+- Migration: `adapters/django/migrations/0002_add_dlq_and_security_models.py:385-503`
+- DTO: `interfaces/repositories.py:228-277` (`SecurityIncidentData`)
+
+따라서 이번 311 범위에서는 **DjangoSecurityIncidentRepository 구현 + ProviderRegistry 등록**만 수행한다.
 
 ---
 
@@ -285,43 +302,64 @@ __all__ = [
 
 ### 3.4 Phase 4: 어댑터 기능 균형 맞추기 (P2)
 
-#### 3.4.1 Drift Metrics 균일 적용
+#### 3.4.1 Drift Metrics 균일 적용 — Decorator 패턴
 
-**방법**: CacheProviderInterface에 optional metric hook 추가
+**방법**: `CacheProviderInterface`에 `record_metric()` 메서드를 추가하는 대신,
+Decorator 패턴(`MetricsAwareCacheAdapter`)을 도입하여 메트릭 수집 책임을 분리한다.
 
-```python
-# interfaces/cache_provider.py — 메서드 추가 (default 구현 포함)
-class CacheProviderInterface(ABC):
-    def record_metric(self, operation: str, key: str, hit: bool = True) -> None:
-        """Optional metric recording hook. Override to enable drift metrics."""
-        pass  # default: no-op
-```
+**근거**:
+- 캐시 오퍼레이션(비즈니스 로직)과 관측성(Observability)을 단일 클래스에 혼합하면 SRP 위반
+- Decorator로 분리하면 기존 Redis/Memcached/InMemory 어댑터 코드 **무변경**
+- Netflix Hystrix/Resilience4j의 DecoratorPattern과 동일한 엔터프라이즈 표준
 
-각 어댑터에서 override:
+**구현**:
 
 ```python
-# adapters/cache/redis_adapter.py
-class RedisCacheAdapter(CacheProviderInterface):
-    def record_metric(self, operation: str, key: str, hit: bool = True) -> None:
-        # Prometheus counter increment
-        from selfhealing.metrics.drift_metrics import record_cache_operation
-        record_cache_operation(operation=operation, backend="redis", hit=hit)
+# adapters/cache/metrics_decorator.py (신규)
+class MetricsAwareCacheAdapter(CacheProviderInterface):
+    """Decorator that adds drift metrics to any CacheProviderInterface."""
+
+    def __init__(self, delegate: CacheProviderInterface):
+        self._delegate = delegate
+
+    def get(self, key: str) -> Any | None:
+        result = self._delegate.get(key)
+        record_cache_get(backend=type(self._delegate).__name__, hit=result is not None)
+        return result
+
+    def set(self, key: str, value: Any, ttl=None) -> bool:
+        result = self._delegate.set(key, value, ttl)
+        record_cache_set(backend=type(self._delegate).__name__)
+        return result
+
+    # ... 나머지 메서드는 delegate에 위임
 ```
+
+**전환 방식**: Big Bang (점진적 전환 불가)
+- `InMemoryCacheAdapter`에 하드코딩된 기존 메트릭 코드(`memory_adapter.py:36-48` 및 산재된 `record_*` 호출) **전량 삭제**
+- ProviderRegistry/팩토리에서 모든 캐시 어댑터를 `MetricsAwareCacheAdapter`로 wrap하여 반환
+- 점진적 전환 시 메트릭 수집 경로가 2개(내부 하드코딩 + Decorator) 공존하여 중복 카운팅 위험이 있으므로 한 번에 전환
 
 #### 3.4.2 Lock Owner ID 표준화
 
-**표준 형식**: `{hostname}:{thread_id}:{unique_suffix}`
+**표준 형식**: `{hostname}:{pid}:{thread_id}:{unique_suffix}`
+
+PID를 포함하는 이유: Python 웹 애플리케이션(Gunicorn pre-fork, uWSGI 등)은 단일 호스트 내에서
+멀티 프로세스로 동작한다. `threading.get_ident()`는 프로세스 내에서만 고유하므로,
+서로 다른 Worker 프로세스에서 동일한 thread_id가 반환될 수 있다.
+UUID suffix가 충돌을 방지하지만, PID가 있으면 디버깅/감사 시 어떤 Worker가 락을 보유하는지 즉시 식별 가능하다.
 
 ```python
 # interfaces/cache_provider.py — DistributedLock 추가
 
+import os
 import socket
 import threading
 import uuid
 
 def generate_lock_owner_id() -> str:
     """표준 lock owner ID 생성. 모든 DistributedLock 구현에서 사용."""
-    return f"{socket.gethostname()}:{threading.get_ident()}:{uuid.uuid4().hex[:8]}"
+    return f"{socket.gethostname()}:{os.getpid()}:{threading.get_ident()}:{uuid.uuid4().hex[:8]}"
 ```
 
 | 어댑터 | 변경 |
@@ -387,6 +425,26 @@ def test_interfaces_exported_in_init():
                     )
 ```
 
+### 4.2 Abstract Property 검증 테스트
+
+`__isabstractmethod__` 기반 검사는 `@property` + `@abstractmethod` 조합도 감지한다.
+Python의 `property` descriptor는 `fget`의 `__isabstractmethod__`를 `property` 객체 자체로 전파하므로,
+Section 4.1의 테스트 로직이 이미 abstract property를 커버한다.
+
+현재 `interfaces/` 디렉토리에서 유일한 abstract property는 `web_framework.py:449`의
+`WebFrameworkInterface.framework_name`이며, 구현체가 0개이므로 실질적 검증 대상은 없다.
+
+단, 이 보장을 명시적으로 문서화하기 위해 확인 테스트 1개를 추가한다:
+
+```python
+def test_abstract_property_detected():
+    """Verify that @property @abstractmethod is caught by our detection logic."""
+    from selfhealing.interfaces.web_framework import WebFrameworkInterface
+    assert getattr(
+        WebFrameworkInterface.framework_name, '__isabstractmethod__', False
+    ) is True
+```
+
 ---
 
 ## 5. 구현 순서
@@ -396,8 +454,8 @@ def test_interfaces_exported_in_init():
 | 1 | `get_all` → `get_all_states` 통일 | 5-7 | P1 |
 | 2 | WebFrameworkInterface docstring + SecurityIncidentRepo Django 구현 | 2 | P1 |
 | 3 | `__init__.py` export 보완 | 1 | P2 |
-| 4 | Drift metrics 균일화 + Lock owner ID 표준화 | 4-5 | P2 |
-| 5 | Architecture Test 추가 | 1 신규 | P2 |
+| 4 | MetricsAwareCacheAdapter Decorator + InMemory 메트릭 코드 삭제 + Lock owner ID 표준화 (PID 포함) | 5-6 | P2 |
+| 5 | Architecture Test 추가 (abstract property 검증 포함) | 1 신규 | P2 |
 
 ---
 
@@ -406,8 +464,8 @@ def test_interfaces_exported_in_init():
 | 위험 | 영향 | 완화 |
 |------|------|------|
 | `get_all()` 제거 시 기존 호출자 break | 컴파일 에러 | deprecated wrapper 제공, 1 major 버전 유예 |
-| SecurityIncident Django 모델 미존재 | 구현 불가 | 모델 존재 여부 선 확인, 없으면 마이그레이션 먼저 |
-| Lock owner ID 변경 시 기존 lock 호환성 | 진행 중 lock 해제 불가 | rolling deploy 시 양쪽 형식 모두 수용하는 전환기 |
+| SecurityIncident Django 모델 미존재 | 구현 불가 | **해소됨**: Abstract/Concrete 모델 + Migration 모두 확인 완료 (`adapters/django/models/`, `migrations/0002`) |
+| Lock owner ID 변경 시 기존 lock 호환성 | 진행 중 lock 해제 불가 | **무중단 배포에 안전함**: 각 `DistributedLock` 인스턴스는 생성 시점의 `self._owner_id`를 보존하고, `release()`는 해당 값과의 동일성만 검증. 형식 변경이 기존 lock에 영향을 주지 않음 (Backward-compatible Unlock 로직 불필요) |
 
 ---
 
@@ -416,3 +474,4 @@ def test_interfaces_exported_in_init():
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
 | 2026-03-06 | 1.0.0 | 초안 작성 |
+| 2026-03-07 | 1.1.0 | 7개 리뷰 결과 반영: Pagination 불요 판단(3.1.2), SecurityIncident 모델 존재 확인(3.2.2), WebFrameworkInterface 이동 불가 근거(3.2.1), Decorator 패턴 채택 + Big Bang 전환(3.4.1), Lock Owner ID에 PID 추가(3.4.2), Lock 마이그레이션 안전성 확인(6. 위험 및 완화), Abstract Property 검증 커버리지 확인(4.2) |
