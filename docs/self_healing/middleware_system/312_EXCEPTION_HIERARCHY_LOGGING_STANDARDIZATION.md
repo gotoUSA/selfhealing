@@ -123,6 +123,10 @@ class SelfHealingError(Exception):
         super().__init__(message)
         self.code = code
 
+    def extra_context(self) -> dict[str, Any]:
+        """structlog 바인딩용 컨텍스트 반환. 서브클래스에서 override."""
+        return {"error_code": self.code} if self.code else {}
+
 
 class AdapterError(SelfHealingError):
     """Base exception for adapter-related errors."""
@@ -195,20 +199,19 @@ class CircuitBreakerOpenError(CircuitBreakerError):
 기존 `except CircuitBreakerOpenError`는 변경 없이 동작한다 (하위 타입 관계 유지).
 새로운 `except CircuitBreakerError`도 가능해진다 (상위 타입 catch).
 
-factory.py의 `ValueError` → `AdapterNotFoundError` 변경은 breaking change이므로:
-1. 먼저 `AdapterNotFoundError(ValueError, AdapterError)`로 양쪽 상속
-2. 다음 major 버전에서 `ValueError` 상속 제거
+factory.py의 `ValueError` → `AdapterNotFoundError` 변경은 breaking change이지만,
+프로덕션 배포 전이므로 **전환기 없이 즉시 전환**한다:
 
 ```python
-# 전환기 (v3.x)
-class AdapterNotFoundError(ValueError, AdapterError):
-    """Transitional: inherits both ValueError and AdapterError."""
-    pass
-
-# 목표 (v4.0)
+# 즉시 전환 (전환기 다중 상속 불필요)
 class AdapterNotFoundError(AdapterError):
+    """Raised when a requested adapter is not registered in ProviderRegistry."""
     pass
 ```
+
+> **결정 근거 (Q1)**: 프로덕션 오픈 전 단계에서 외부 소비자가 없으므로 하위 호환성
+> 유지는 불필요한 기술 부채. 다중 상속(ValueError, AdapterError)의 MRO 충돌 리스크를
+> 원천 차단하고, 호출부 코드를 일괄 수정하여 깔끔하게 전환한다.
 
 ---
 
@@ -355,12 +358,13 @@ class TestExceptionHierarchy:
         assert isinstance(err, ResilienceError)
         assert isinstance(err, SelfHealingError)
 
-    def test_adapter_not_found_is_value_error_during_transition(self):
-        """전환기: ValueError로도 잡을 수 있는지 확인."""
-        from selfhealing.core.exceptions import AdapterNotFoundError
+    def test_adapter_not_found_is_not_value_error(self):
+        """AdapterNotFoundError는 ValueError가 아닌 AdapterError 계열."""
+        from selfhealing.core.exceptions import AdapterNotFoundError, AdapterError, SelfHealingError
         err = AdapterNotFoundError("test")
-        assert isinstance(err, ValueError)  # 전환기 호환
+        assert isinstance(err, AdapterError)
         assert isinstance(err, SelfHealingError)
+        assert not isinstance(err, ValueError)
 
     def test_catch_all_selfhealing_errors(self):
         """SelfHealingError로 모든 라이브러리 에러를 포괄할 수 있는지 확인."""
@@ -413,14 +417,79 @@ class TestFactoryLogging:
 
 | 위험 | 영향 | 완화 |
 |------|------|------|
-| ValueError → AdapterNotFoundError가 breaking change | `except ValueError` 코드가 더 이상 catch 못함 | 전환기: `class AdapterNotFoundError(ValueError, AdapterError)` |
+| ValueError → AdapterNotFoundError가 breaking change | `except ValueError` 코드가 더 이상 catch 못함 | 프로덕션 전이므로 즉시 전환, 호출부 일괄 수정 |
 | 로깅 이벤트명 변경 시 기존 모니터링 대시보드 | 기존 alert/query 깨짐 | 변경 전 운영팀에 이벤트명 변경 공지, 대시보드 업데이트 |
 | 예외 계층 추가 시 import depth 증가 | 순환 참조 위험 | `core/exceptions.py`는 pure Python, 외부 의존성 없음 |
 
 ---
 
-## 7. 변경 이력
+## 7. 리뷰 결정 사항 (Q1–Q6)
+
+### Q1. Transitional Inheritance — Breaking Change 즉시 허용 ✅
+
+전환기 다중 상속(`AdapterNotFoundError(ValueError, AdapterError)`)을 삭제한다.
+프로덕션 배포 전 단계에서 외부 소비자가 없으므로 하위 호환성 유지는 불필요한 기술 부채이다.
+MRO 충돌 리스크를 원천 차단하고, 호출부 `except ValueError`를 `except AdapterNotFoundError`로 일괄 수정한다.
+
+- 2.1.3의 전환기 코드를 즉시 전환으로 변경 완료
+- 5.1의 `test_adapter_not_found_is_value_error_during_transition` 테스트 삭제 대상
+
+### Q2. Rich Exception Context — `extra_context()` 메서드 패턴 ⚠️ 수정 채택
+
+`__init__`에 `context: dict`를 추가하는 대신 `extra_context()` 메서드 패턴을 사용한다.
+
+- **기존 패턴과 일관성 유지**: 서브클래스는 개별 타입-안전 속성을 사용하되, `extra_context()`를 override하여 dict로 노출
+- **Middleware 통합**: `logger.error(msg, **err.extra_context())` 한 줄로 구조적 로그 바인딩
+- **선례**: `AutomationBlockedError.to_dict()`, `BulkheadFullError`의 개별 속성 패턴
+
+2.1.2의 `SelfHealingError` 구현에 `extra_context()` 메서드 추가 완료.
+
+### Q3. 명시적 예외 체이닝 — `raise ... from e` 룰 추가 ✅
+
+외부 예외를 도메인 예외로 감쌀 때 반드시 `raise DomainError(...) from original` 형태를 사용한다.
+
+- **Lint 강제**: `ruff` 룰 `B904` (`raise-without-from-inside-except`) 활성화 대상
+- **의도적 체인 끊기**: `raise DomainError(...) from None` — 코드 리뷰에서 이유를 주석으로 남길 것
+- **참조**: `docs/laws/LOGGING_STANDARDS.md` §2에 룰 명시
+
+### Q4. HTTP Status Code 매핑 — Web Adapter로 책임 한정 ❌
+
+도메인 예외(`core/exceptions.py`)에 `default_http_status`를 넣지 않는다.
+HTTP 매핑 책임은 `api/django/exceptions/classifier.py`의 `ExceptionClassifier`에 한정한다.
+
+- **근거**: 동일 예외도 컨텍스트에 따라 다른 HTTP 코드가 적절 (API vs Celery)
+- **확장성**: gRPC/GraphQL 추가 시 코어 수정 없이 각 어댑터에서 매핑
+- **구현 시**: 312에서 새로 도입하는 예외에 대한 매핑을 `_classify_custom_exception`에 추가
+
+### Q5. Structlog Processor 런타임 이벤트명 검증 — DEV/PROD 분리 채택 ⚠️ 수정 채택
+
+`settings/log_processors.py`에 이벤트명 검증 프로세서를 추가한다.
+
+- **DEV/TEST**: `SELFHEALING_STRICT_LOG_VALIDATION=true` → Exception 발생 (fail-fast)
+- **Production**: 위반을 Prometheus counter로 기록만 → 대시보드 모니터링
+- **파이프라인 위치**: `add_logger_name` 직후 (무거운 처리 전)
+- **참조**: `docs/laws/LOGGING_STANDARDS.md` §1에 이벤트명 컨벤션 정의
+
+### Q6. Suffix별 로그 레벨 — 가이드라인으로 관리 ❌ 런타임 강제 불채택
+
+런타임 강제 대신 `docs/laws/LOGGING_STANDARDS.md`에 가이드라인으로 문서화한다.
+
+| Suffix | 권장 최소 레벨 | 비고 |
+|--------|--------------|------|
+| `_failed` | `WARNING` | 단, retry 내부 중간 실패는 `DEBUG` 허용 |
+| `_exhausted` | `WARNING` | 모든 재시도 소진 |
+| `_error` | `ERROR` | 예상치 못한 에러 |
+| `_blocked` | `WARNING` | CB open, budget blocked 등 |
+| `_registered`, `_created` | `DEBUG` | 정상 흐름 |
+
+- **근거**: 동일 suffix라도 컨텍스트에 따라 적절한 레벨이 다름
+- **즉시 수정**: `connection_health.py:377` debug→warning, `sampling.py:139` info→warning
+
+---
+
+## 8. 변경 이력
 
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
 | 2026-03-06 | 1.0.0 | 초안 작성 |
+| 2026-03-07 | 1.1.0 | Q1–Q6 리뷰 결정 반영: 전환기 삭제, extra_context() 추가, 예외 체이닝/HTTP 매핑/로깅 검증/레벨 가이드라인 결정 |

@@ -46,6 +46,7 @@ Enterprise-grade Self-Healing library built on Django 5.2 + DRF + PostgreSQL 15 
 
 - `docs/laws/UNIT_TEST_GUIDELINES.md` — unit test rules and verification techniques
 - `docs/laws/INTEGRATION_TEST_GUIDELINES.md` — integration test rules and infra markers
+- `docs/laws/LOGGING_STANDARDS.md` — logging event name conventions, exception chaining rules, log level guidelines
 - `docs/self_healing/` — implementation plan documents (feature specs and design docs)
 
 ## Test Location Rules

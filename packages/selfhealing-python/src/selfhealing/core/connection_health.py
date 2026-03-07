@@ -69,20 +69,26 @@ class PartitionState:
     @property
     def is_partial_partition(self) -> bool:
         """True if some but not all connections are down"""
-        statuses = [self.db_available, self.cache_available] + list(self.external_apis.values())
+        statuses = [self.db_available, self.cache_available] + list(
+            self.external_apis.values()
+        )
         # Partial partition = some up AND some down
         return any(statuses) and not all(statuses)
 
     @property
     def is_full_partition(self) -> bool:
         """True if all connections are down"""
-        statuses = [self.db_available, self.cache_available] + list(self.external_apis.values())
+        statuses = [self.db_available, self.cache_available] + list(
+            self.external_apis.values()
+        )
         return not any(statuses) if statuses else False
 
     @property
     def is_healthy(self) -> bool:
         """True if all connections are healthy"""
-        statuses = [self.db_available, self.cache_available] + list(self.external_apis.values())
+        statuses = [self.db_available, self.cache_available] + list(
+            self.external_apis.values()
+        )
         return all(statuses) if statuses else True
 
     @property
@@ -99,7 +105,9 @@ class ConnectionHealthMonitor(ABC):
     """Abstract interface for connection health monitoring"""
 
     @abstractmethod
-    def check_health(self, connection_type: ConnectionType, name: str) -> ConnectionHealth:
+    def check_health(
+        self, connection_type: ConnectionType, name: str
+    ) -> ConnectionHealth:
         """Check health of a specific connection"""
         pass
 
@@ -109,7 +117,9 @@ class ConnectionHealthMonitor(ABC):
         pass
 
     @abstractmethod
-    def register_health_check(self, connection_type: ConnectionType, name: str, check_fn: Callable[[], bool]) -> None:
+    def register_health_check(
+        self, connection_type: ConnectionType, name: str, check_fn: Callable[[], bool]
+    ) -> None:
         """Register a health check function for a connection"""
         pass
 
@@ -143,7 +153,9 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         self._simulation_experiment_id: str | None = None
 
     @classmethod
-    def from_settings(cls, settings=None, **overrides) -> DefaultConnectionHealthMonitor:
+    def from_settings(
+        cls, settings=None, **overrides
+    ) -> DefaultConnectionHealthMonitor:
         """
         Settings 기반 인스턴스 생성.
 
@@ -158,7 +170,9 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
 
         s = settings or get_pool_monitor_settings()
         return cls(
-            failure_threshold=overrides.get("failure_threshold", s.connection_failure_threshold),
+            failure_threshold=overrides.get(
+                "failure_threshold", s.connection_failure_threshold
+            ),
         )
 
     def set_simulation_override(
@@ -237,7 +251,9 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         """현재 시뮬레이션과 연관된 실험 ID 반환."""
         return self._simulation_experiment_id
 
-    def register_health_check(self, connection_type: ConnectionType, name: str, check_fn: Callable[[], bool]) -> None:
+    def register_health_check(
+        self, connection_type: ConnectionType, name: str, check_fn: Callable[[], bool]
+    ) -> None:
         """Register a health check function for monitoring."""
         key = f"{connection_type.value}:{name}"
         self._health_checks[key] = check_fn
@@ -259,7 +275,9 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
             return True
         return False
 
-    def check_health(self, connection_type: ConnectionType, name: str) -> ConnectionHealth:
+    def check_health(
+        self, connection_type: ConnectionType, name: str
+    ) -> ConnectionHealth:
         """
         Check health of a specific connection.
 
@@ -269,7 +287,9 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
 
         # 시뮬레이션 오버라이드 체크
         if key in self._simulation_overrides:
-            logger.debug("connection_health.simulated_health_returned", override_key=key)
+            logger.debug(
+                "connection_health.simulated_health_returned", override_key=key
+            )
             return self._simulation_overrides[key]
 
         if key not in self._health_checks:
@@ -374,7 +394,9 @@ class DefaultConnectionHealthMonitor(ConnectionHealthMonitor):
         except ImportError:
             return {}
         except Exception as e:
-            logger.debug("connection_health.bulkhead_states_collection_failed", error=str(e))
+            logger.warning(
+                "connection_health.bulkhead_states_collection_failed", error=str(e)
+            )
             return {}
 
     def get_all_health_states(self) -> dict[str, ConnectionHealth]:

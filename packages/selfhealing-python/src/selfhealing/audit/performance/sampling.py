@@ -52,7 +52,9 @@ class SamplingConfig:
             sample_rate=overrides.get("sample_rate", s.sample_rate),
             min_samples=overrides.get("min_samples", s.min_samples),
             max_samples=overrides.get("max_samples", s.max_samples),
-            full_verify_on_failure=overrides.get("full_verify_on_failure", s.full_verify_on_failure),
+            full_verify_on_failure=overrides.get(
+                "full_verify_on_failure", s.full_verify_on_failure
+            ),
         )
 
 
@@ -136,7 +138,7 @@ class SamplingVerifier:
 
         if issues and self._config.full_verify_on_failure:
             # Sample failed - do full verification
-            logger.info("sampling_verifier.sample_verification_failed_performing")
+            logger.warning("sampling_verifier.sample_verification_failed_performing")
             return self._verify_full(entries)
 
         return len(issues) == 0, issues
