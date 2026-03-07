@@ -22,6 +22,7 @@ class MessageSeverity(str, Enum):
 
     CRITICAL = "critical"
     HIGH = "high"
+    WARNING = "warning"
     MEDIUM = "medium"
     LOW = "low"
     INFO = "info"

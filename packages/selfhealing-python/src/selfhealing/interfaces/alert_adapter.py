@@ -32,25 +32,14 @@ from typing import Any
 
 import structlog
 
+from selfhealing.interfaces.messaging_common import MessageSeverity
+
 logger = structlog.get_logger()
 
 
-class AlertSeverity(str, Enum):
-    """Alert severity levels.
-
-    .. deprecated::
-        Use MessageSeverity from interfaces.messaging_common instead.
-        Kept as backward-compatible alias.
-    """
-
-    CRITICAL = "critical"  # Immediate attention required
-    WARNING = "warning"  # Needs attention soon
-    INFO = "info"  # Informational
-
-
-# Backward-compatible alias: AlertSeverity values map to MessageSeverity
-# AlertSeverity has fewer members (no HIGH/MEDIUM/LOW), so it remains
-# as a separate Enum for type safety in Alert dataclass.
+# Backward-compatible alias: AlertSeverity는 MessageSeverity로 통합됨.
+# 기존 AlertSeverity.CRITICAL / .WARNING / .INFO 모두 MessageSeverity에 포함.
+AlertSeverity = MessageSeverity
 
 
 class AlertCategory(str, Enum):

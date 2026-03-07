@@ -451,6 +451,7 @@ class MessageSeverity(str, Enum):
     """AlertSeverity와 NotificationSeverity를 통합."""
     CRITICAL = "critical"
     HIGH = "high"
+    WARNING = "warning"
     MEDIUM = "medium"
     LOW = "low"
     INFO = "info"
@@ -538,17 +539,17 @@ def get_alert_adapter(name: str | None = None) -> AlertAdapter:
 | 파일 | 변경 |
 |------|------|
 | `interfaces/messaging_common.py` | 신규 생성 (`MessageSeverity`, `MessageChannel`) |
-| `interfaces/alert_adapter.py` | `AlertSeverity`는 별도 Enum 유지 (멤버 3개 vs `MessageSeverity` 5개), deprecated 주석 추가 |
+| `interfaces/alert_adapter.py` | `AlertSeverity = MessageSeverity` 별칭으로 통합 (WARNING 포함 6멤버). 기존 코드 하위 호환 유지 |
 | `interfaces/notification.py` | `NotificationSeverity` → `MessageSeverity`, `NotificationChannel` → `MessageChannel` import |
 | `factory.py` | `register_alert()`, `get_alert()`, `_auto_register_alert_adapters()` 추가 |
 | `adapters/alert/__init__.py` | `get_alert_adapter()` 편의 함수 추가 |
 | 기존 `NotificationSeverity`, `NotificationChannel` | `MessageSeverity`, `MessageChannel`의 deprecated alias로 유지 (backward-compatible) |
-| 기존 `AlertSeverity` | 별도 Enum 유지 (멤버 수 차이: CRITICAL/WARNING/INFO 3개). deprecated 주석만 추가 |
+| 기존 `AlertSeverity` | `MessageSeverity`의 backward-compatible alias (`AlertSeverity = MessageSeverity`) |
 
-**통합하지 않는 이유**:
+**타입 통합, 인터페이스 분리 유지**:
+- `AlertSeverity`는 `MessageSeverity`로 완전 통합 (WARNING 멤버 포함 6개)
 - AlertAdapter의 `resolve()` 메서드는 NotificationAdapter에 없으며, 경보 lifecycle 관리에 필수
-- 무리한 통합은 Single Responsibility 위반
-- 공통 타입만 추출하면 import 시 혼란 제거 + 향후 통합 가능성 확보
+- 타입(Enum)은 통합하되, 인터페이스(AlertAdapter vs NotificationAdapter)는 Single Responsibility 유지
 
 ---
 

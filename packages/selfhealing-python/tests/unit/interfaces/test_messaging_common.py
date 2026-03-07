@@ -9,7 +9,7 @@ Common Messaging Types 단위 테스트.
 - NotificationSeverity/NotificationChannel: 하위 호환 별칭
 
 테스트 대상: interfaces/alert_adapter.py
-- AlertSeverity: 하위 호환 (별도 Enum 유지)
+- AlertSeverity: MessageSeverity 하위 호환 별칭
 """
 
 from __future__ import annotations
@@ -29,9 +29,9 @@ from selfhealing.interfaces.notification import (
 class TestMessageSeverityContract:
     """MessageSeverity 열거형 멤버 계약 검증."""
 
-    def test_has_five_members(self):
-        """MessageSeverity는 5개 멤버를 가진다."""
-        assert len(MessageSeverity) == 5
+    def test_has_six_members(self):
+        """MessageSeverity는 6개 멤버를 가진다."""
+        assert len(MessageSeverity) == 6
 
     def test_critical_value(self):
         """CRITICAL 값: 'critical'."""
@@ -40,6 +40,10 @@ class TestMessageSeverityContract:
     def test_high_value(self):
         """HIGH 값: 'high'."""
         assert MessageSeverity.HIGH.value == "high"
+
+    def test_warning_value(self):
+        """WARNING 값: 'warning'."""
+        assert MessageSeverity.WARNING.value == "warning"
 
     def test_medium_value(self):
         """MEDIUM 값: 'medium'."""
@@ -132,22 +136,15 @@ class TestNotificationAliasesBehavior:
         assert NotificationSeverity.INFO.value == "info"
 
 
-class TestAlertSeverityContract:
-    """AlertSeverity 열거형 계약 검증."""
+class TestAlertSeverityAliasBehavior:
+    """AlertSeverity 하위 호환 별칭 동작 검증."""
 
-    def test_alert_severity_has_three_members(self):
-        """AlertSeverity는 3개 멤버(CRITICAL, WARNING, INFO)를 가진다."""
-        assert len(AlertSeverity) == 3
+    def test_alert_severity_is_message_severity(self):
+        """AlertSeverity는 MessageSeverity와 동일하다."""
+        assert AlertSeverity is MessageSeverity
 
-
-class TestAlertSeverityBackwardCompatBehavior:
-    """AlertSeverity 하위 호환 동작 검증."""
-
-    def test_alert_severity_values_overlap_with_message_severity(self):
-        """AlertSeverity의 값은 MessageSeverity와 겹친다."""
-        assert AlertSeverity.CRITICAL.value == MessageSeverity.CRITICAL.value
-        assert AlertSeverity.INFO.value == MessageSeverity.INFO.value
-
-    def test_alert_severity_is_separate_enum(self):
-        """AlertSeverity는 MessageSeverity와 별도 Enum이다."""
-        assert AlertSeverity is not MessageSeverity
+    def test_alert_severity_backward_compat_members(self):
+        """기존 AlertSeverity 멤버(CRITICAL, WARNING, INFO)에 접근 가능하다."""
+        assert AlertSeverity.CRITICAL.value == "critical"
+        assert AlertSeverity.WARNING.value == "warning"
+        assert AlertSeverity.INFO.value == "info"
