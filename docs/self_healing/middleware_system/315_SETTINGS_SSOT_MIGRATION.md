@@ -184,22 +184,25 @@ model_config = SettingsConfigDict(
 
 #### 2.3.2 도메인 그룹 구조
 
-| 그룹 | 파일 수 | 대표 settings |
-|------|---------|-------------|
-| `CoreGroup` | 5 | backoff, circuit_breaker, circuit_breaker_advanced, pool_monitor, admission_control |
-| `ServicesGroup` | 41 | chaos, dlq, retry, error_budget, canary, recovery, forensic, governance 등 |
-| `AuditGroup` | 8 | audit, audit_integrity, audit_reconciler, audit_sync, audit_watchdog, hash_chain, cascade_retention, event_journal |
-| `CoordinationGroup` | 3 | distributed_lock, leader_election, redis_key_guard |
-| `MultiRegionGroup` | 5 | namespace, namespace_emergency, cell_topology, propagation, regional_recovery_policy |
-| `MetricsGroup` | 5 | drift_detection, drift_threshold, metrics, safe_gauge, system_metrics_cache |
-| `ScalingGroup` | 10 | backpressure, event_buffer, l2_storage, rate_limit, ring_buffer, scale, state_cache, throttle 등 |
-| `ResilienceGroup` | 4 | bulkhead, hedging, resilient_recorder, resource_monitor |
-| `ObservabilityGroup` | 7 | correlation, correlation_engine, detection, kafka_producer, otel (구 observability.py) 등 |
-| `AdaptersGroup` | 8 | celery_task, config_shadow, http_client, layered_provider, notification, notification_channel, secrets, thread_management |
-| `SecurityGroup` | 4 | corruption_shield, domain_sensitivity, idempotency, security |
-| `SLOGroup` | 5 | dashboard, postmortem, sla, slo, steady_state |
-| `MetaGroup` | 6 | gate_fault, meta_watchdog, pipeline, resource_guard, runtime_feedback, safety_bounds |
-| `TestingGroup` | 6 | airgap, jitter, predictive_forecaster, sampling, stress_test, xtest_cleanup |
+> **참고**: "도메인 파일 수"는 해당 도메인에 속한 전체 settings 파일 수이며,
+> "그룹 속성 수"는 Root Field로 이미 노출된 21개를 제외한 `@cached_property` 수이다.
+
+| 그룹 | 도메인 파일 수 | 그룹 속성 수 | 대표 settings |
+|------|:------------:|:----------:|-------------|
+| `CoreGroup` | 5 | 4 | backoff, circuit_breaker_advanced, pool_monitor, admission_control (circuit_breaker는 Root Field) |
+| `ServicesGroup` | 41 | 29 | canary, recovery, replay_automation, runbook 등 (chaos, dlq, retry, error_budget, forensic, governance 등 12개는 Root Field) |
+| `AuditGroup` | 8 | 8 | audit, audit_integrity, audit_reconciler, audit_sync, audit_watchdog, hash_chain, cascade_retention, event_journal |
+| `CoordinationGroup` | 3 | 3 | distributed_lock, leader_election, redis_key_guard |
+| `MultiRegionGroup` | 5 | 3 | namespace_emergency, cell_topology, regional_recovery_policy (namespace, propagation은 Root Field) |
+| `MetricsGroup` | 5 | 3 | drift_detection, safe_gauge, system_metrics_cache (drift_threshold, metrics는 Root Field) |
+| `ScalingGroup` | 10 | 9 | backpressure, event_buffer, graceful_degradation, ring_buffer, scale, state_cache, throttle, throttle_sla_notification, rate_limit_throttle_integration (l2_storage, rate_limit은 Root Field) |
+| `ResilienceGroup` | 4 | 4 | bulkhead, hedging, resilient_recorder, resource_monitor |
+| `ObservabilityGroup` | 7 | 3 | correlation, correlation_engine, otel (detection, kafka_producer는 Root Field; log_processors, structlog_config은 observability/로 이동) |
+| `AdaptersGroup` | 8 | 5 | celery_task, config_shadow, http_client, notification_channel, secrets (notification, thread_management은 Root Field) |
+| `SecurityGroup` | 4 | 2 | corruption_shield, domain_sensitivity (idempotency, security는 Root Field) |
+| `SLOGroup` | 5 | 4 | dashboard, postmortem, slo, steady_state (sla는 Root Field) |
+| `MetaGroup` | 6 | 6 | gate_fault, meta_watchdog, pipeline, resource_guard, runtime_feedback, safety_bounds |
+| `TestingGroup` | 6 | 6 | airgap, jitter, predictive_forecaster, sampling, stress_test, xtest_cleanup |
 
 #### 2.3.3 그룹 객체 구현
 
@@ -350,7 +353,7 @@ class SelfHealingSettings(BaseSettings):
         return TestingGroup()
 
     @cached_property
-    def services(self) -> "ServicesGroup":
+    def services_group(self) -> "ServicesGroup":
         from selfhealing.settings.groups import ServicesGroup
         return ServicesGroup()
 
@@ -599,3 +602,4 @@ def get_backpressure_settings() -> BackpressureSettings:
 |------|------|----------|
 | 2026-03-07 | 1.0.0 | 초안 작성 (313 Q2 리뷰에서 분리) |
 | 2026-03-07 | 2.0.0 | 7건 리뷰 반영: Phase 0 추가, SharedEnvSource → load_dotenv 전환, 도메인 그룹 객체 도입, reset 개별 삭제 방식, to_full_dict() 직렬화 보완, 명명 규칙 사전 정리, 위험 테이블 수정 |
+| 2026-03-08 | 2.1.0 | /verify 검증 반영: §2.3.2 그룹 테이블에 Root Field 제외 "그룹 속성 수" 컬럼 추가, §2.3.4 `services` → `services_group` accessor 이름 코드 정합 |
