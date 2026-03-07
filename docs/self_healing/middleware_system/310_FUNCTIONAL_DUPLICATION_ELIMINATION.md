@@ -201,6 +201,14 @@ def retry_with_backoff(
 
             if attempt < config.max_retries - 1:
                 time.sleep(wait)
+        except Exception as e:
+            # Non-retryable exception: fail immediately
+            return RetryOutcome(
+                success=False,
+                exception=e,
+                attempts=attempt + 1,
+                total_wait_seconds=total_wait,
+            )
 
     exhausted_ctx = RetryContext(
         func_name=func_name,
@@ -236,7 +244,7 @@ def make_standard_on_retry(audit_domain: str) -> Callable[[RetryContext, Excepti
     def _on_retry(ctx: RetryContext, exc: Exception) -> None:
         # 1. Audit 로깅 (Fail-Open)
         try:
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit.retry_audit import log_retry_audit
             log_retry_audit(
                 domain=audit_domain,
                 attempt=ctx.attempt,
@@ -250,12 +258,12 @@ def make_standard_on_retry(audit_domain: str) -> Callable[[RetryContext, Excepti
         # 2. Prometheus 메트릭 (Fail-Open)
         try:
             from selfhealing.services.metrics.definitions import (
-                retry_attempts_total,
+                retry_attempts_histogram,
             )
-            retry_attempts_total.labels(
+            retry_attempts_histogram.labels(
                 domain=audit_domain,
                 **ctx.metric_labels,
-            ).inc()
+            ).observe(ctx.attempt + 1)
         except Exception:
             pass
     return _on_retry
@@ -264,7 +272,7 @@ def make_standard_on_exhausted(audit_domain: str) -> Callable[[RetryContext, Exc
     """최종 실패 시 Audit + 메트릭 기록 표준 팩토리."""
     def _on_exhausted(ctx: RetryContext, exc: Exception) -> None:
         try:
-            from selfhealing.services.audit_helpers import log_retry_audit
+            from selfhealing.services.audit.retry_audit import log_retry_audit
             log_retry_audit(
                 domain=audit_domain,
                 attempt=ctx.attempt,
@@ -480,7 +488,7 @@ NotificationAdapter의 기존 등록 패턴(`factory.py:167-170, 720-753`)을 �
 class ProviderRegistry:
     # 기존 notification 패턴과 동일
     _alerts: dict[str, type | Callable] = {}
-    _alert_instances: dict[str, AlertAdapter] = {}
+    _alert_instances: dict[str, object] = {}  # object for lazy TYPE_CHECKING import
     _default_alert: str = "stdout"
 
     @classmethod
@@ -530,11 +538,12 @@ def get_alert_adapter(name: str | None = None) -> AlertAdapter:
 | 파일 | 변경 |
 |------|------|
 | `interfaces/messaging_common.py` | 신규 생성 (`MessageSeverity`, `MessageChannel`) |
-| `interfaces/alert_adapter.py` | `AlertSeverity` → `MessageSeverity` import |
+| `interfaces/alert_adapter.py` | `AlertSeverity`는 별도 Enum 유지 (멤버 3개 vs `MessageSeverity` 5개), deprecated 주석 추가 |
 | `interfaces/notification.py` | `NotificationSeverity` → `MessageSeverity`, `NotificationChannel` → `MessageChannel` import |
 | `factory.py` | `register_alert()`, `get_alert()`, `_auto_register_alert_adapters()` 추가 |
 | `adapters/alert/__init__.py` | `get_alert_adapter()` 편의 함수 추가 |
-| 기존 `AlertSeverity`, `NotificationSeverity`, `NotificationChannel` | deprecated alias로 유지 (backward-compatible) |
+| 기존 `NotificationSeverity`, `NotificationChannel` | `MessageSeverity`, `MessageChannel`의 deprecated alias로 유지 (backward-compatible) |
+| 기존 `AlertSeverity` | 별도 Enum 유지 (멤버 수 차이: CRITICAL/WARNING/INFO 3개). deprecated 주석만 추가 |
 
 **통합하지 않는 이유**:
 - AlertAdapter의 `resolve()` 메서드는 NotificationAdapter에 없으며, 경보 lifecycle 관리에 필수

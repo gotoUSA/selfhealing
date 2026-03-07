@@ -132,12 +132,16 @@ class TestNotificationAliasesBehavior:
         assert NotificationSeverity.INFO.value == "info"
 
 
-class TestAlertSeverityBackwardCompatBehavior:
-    """AlertSeverity 하위 호환 검증."""
+class TestAlertSeverityContract:
+    """AlertSeverity 열거형 계약 검증."""
 
     def test_alert_severity_has_three_members(self):
         """AlertSeverity는 3개 멤버(CRITICAL, WARNING, INFO)를 가진다."""
         assert len(AlertSeverity) == 3
+
+
+class TestAlertSeverityBackwardCompatBehavior:
+    """AlertSeverity 하위 호환 동작 검증."""
 
     def test_alert_severity_values_overlap_with_message_severity(self):
         """AlertSeverity의 값은 MessageSeverity와 겹친다."""
