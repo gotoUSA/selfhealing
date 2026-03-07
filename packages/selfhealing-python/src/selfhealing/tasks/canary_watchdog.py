@@ -93,12 +93,24 @@ class CanaryWatchdogConfig:
 
         s = settings or get_canary_watchdog_settings()
         return cls(
-            zombie_threshold_minutes=overrides.get("zombie_threshold_minutes", s.zombie_threshold_minutes),
-            auto_rollback_after_minutes=overrides.get("auto_rollback_after_minutes", s.auto_rollback_after_minutes),
-            max_stage_duration_minutes=overrides.get("max_stage_duration_minutes", s.max_stage_duration_minutes),
-            enable_auto_promote=overrides.get("enable_auto_promote", s.enable_auto_promote),
-            enable_auto_rollback=overrides.get("enable_auto_rollback", s.enable_auto_rollback),
-            notification_enabled=overrides.get("notification_enabled", s.notification_enabled),
+            zombie_threshold_minutes=overrides.get(
+                "zombie_threshold_minutes", s.zombie_threshold_minutes
+            ),
+            auto_rollback_after_minutes=overrides.get(
+                "auto_rollback_after_minutes", s.auto_rollback_after_minutes
+            ),
+            max_stage_duration_minutes=overrides.get(
+                "max_stage_duration_minutes", s.max_stage_duration_minutes
+            ),
+            enable_auto_promote=overrides.get(
+                "enable_auto_promote", s.enable_auto_promote
+            ),
+            enable_auto_rollback=overrides.get(
+                "enable_auto_rollback", s.enable_auto_rollback
+            ),
+            notification_enabled=overrides.get(
+                "notification_enabled", s.notification_enabled
+            ),
             slack_channel=overrides.get("slack_channel", s.slack_channel),
         )
 
@@ -256,7 +268,7 @@ class RolloutWatchdog:
             )
 
         except Exception as e:
-            logger.exception("watchdog")
+            logger.exception("watchdog.scan_and_handle_failed")
             result.success = False
             result.errors.append(str(e))
 
@@ -353,7 +365,10 @@ class RolloutWatchdog:
             수행된 액션 ("notified", "auto_rolled_back", "none")
         """
         # 자동 롤백 조건: auto_rollback_after_minutes 초과
-        if self.config.enable_auto_rollback and zombie.stuck_minutes > self.config.auto_rollback_after_minutes:
+        if (
+            self.config.enable_auto_rollback
+            and zombie.stuck_minutes > self.config.auto_rollback_after_minutes
+        ):
             try:
                 success = self.service.rollback(
                     rollout.id,
@@ -479,7 +494,7 @@ class RolloutWatchdog:
                 return result
 
         except ImportError:
-            logger.debug("watchdog")
+            logger.debug("watchdog.governance_checks_unavailable")
             # Fail-Closed: Import 실패 시에도 차단 (보수적 정책)
             result.governance_blocked = True
             result.governance_block_reason = "GovernanceChecks module not available"
@@ -528,7 +543,7 @@ class RolloutWatchdog:
                     result.errors.append(f"{rollout.id}: {e}")
 
         except Exception as e:
-            logger.exception("watchdog")
+            logger.exception("watchdog.auto_promote_failed")
             result.success = False
             result.errors.append(str(e))
 
@@ -542,11 +557,15 @@ class RolloutWatchdog:
                 canary_pending_promotion_gauge,
             )
 
-            block_reason = governance.block_reason.value if governance.block_reason else "unknown"
+            block_reason = (
+                governance.block_reason.value if governance.block_reason else "unknown"
+            )
             canary_governance_blocked_total.labels(block_reason=block_reason).inc()
 
             pending_count = len(self.service.get_active_rollouts())
-            canary_pending_promotion_gauge.labels(reason=block_reason).set(pending_count)
+            canary_pending_promotion_gauge.labels(reason=block_reason).set(
+                pending_count
+            )
         except Exception as e:
             logger.debug(
                 "watchdog.metrics_recording_failed",

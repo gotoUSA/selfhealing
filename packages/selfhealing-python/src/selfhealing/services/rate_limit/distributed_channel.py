@@ -233,7 +233,7 @@ class DistributedRateLimitChannel:
             kafka_bus = self._ensure_kafka_bus()
             kafka_bus.start()
             self._running = True
-            logger.info("started")
+            logger.info("distributed_channel.started")
         except Exception as e:
             logger.exception(
                 "distributed_rate_limit_channel.start_failed",
@@ -249,7 +249,7 @@ class DistributedRateLimitChannel:
             if self._kafka_bus:
                 self._kafka_bus.stop()
             self._running = False
-            logger.info("stopped")
+            logger.info("distributed_channel.stopped")
         except Exception as e:
             logger.exception(
                 "distributed_rate_limit_channel.stop_failed",

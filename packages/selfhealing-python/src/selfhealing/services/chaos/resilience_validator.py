@@ -138,7 +138,7 @@ class DefaultCircuitBreakerStatusProvider:
 
             return get_cb_status(service_name)
         except ImportError:
-            logger.debug("watchdog")
+            logger.debug("resilience_validator.cb_status_unavailable")
             return {"state": "unknown", "service": service_name}
         except Exception as e:
             logger.warning(

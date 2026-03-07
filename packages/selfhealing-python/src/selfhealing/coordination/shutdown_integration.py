@@ -42,7 +42,7 @@ def register_for_graceful_shutdown(elector: LeaderElector) -> None:
     if elector not in _registered_electors:
         _registered_electors.append(elector)
         logger.debug(
-            "leader_elector.graceful_shutdown에_등록됨",
+            "leader_elector.graceful_shutdown_registered",
             elector=elector.resource_name,
         )
 
@@ -65,7 +65,7 @@ def unregister_from_graceful_shutdown(elector: LeaderElector) -> None:
     if elector in _registered_electors:
         _registered_electors.remove(elector)
         logger.debug(
-            "leader_elector.graceful_shutdown에서_해제됨",
+            "leader_elector.graceful_shutdown_unregistered",
             elector=elector.resource_name,
         )
 
@@ -79,14 +79,14 @@ def _setup_signal_handlers() -> None:
         signal.signal(signal.SIGTERM, _signal_handler)
         signal.signal(signal.SIGINT, _signal_handler)
 
-    logger.info("leader_elector.graceful_shutdown_핸들러가_등록되었습니다")
+    logger.info("leader_elector.graceful_shutdown_handlers_installed")
 
 
 def _signal_handler(signum: int, frame) -> None:
     """시그널 핸들러."""
     signal_name = signal.Signals(signum).name
     logger.info(
-        "leader_elector.시그널_수신_shutdown_시작",
+        "leader_elector.signal_received_shutdown_started",
         signal_name=signal_name,
     )
     _shutdown_all_electors()
@@ -99,17 +99,17 @@ def _shutdown_all_electors() -> None:
     for elector in list(_registered_electors):
         try:
             logger.info(
-                "leader_elector.종료",
+                "leader_elector.stopping",
                 elector=elector.resource_name,
             )
             elector.stop()
             logger.info(
-                "leader_elector.종료_완료",
+                "leader_elector.stopped",
                 elector=elector.resource_name,
             )
         except Exception as e:
             logger.exception(
-                "leader_elector.종료_실패",
+                "leader_elector.stop_failed",
                 elector=elector.resource_name,
                 error=e,
             )
@@ -133,7 +133,7 @@ def integrate_with_shutdown_coordinator() -> None:
 
             def on_shutdown_start(self) -> None:
                 """Shutdown 시작 시 리더십 반납."""
-                logger.info("leader_elector.shutdown_시작_리더십_반납")
+                logger.info("leader_elector.shutdown_started_releasing_leadership")
                 _shutdown_all_electors()
 
             def on_drain_complete(self) -> None:
@@ -144,9 +144,9 @@ def integrate_with_shutdown_coordinator() -> None:
                 """강제 종료 시 리더십 반납."""
                 _shutdown_all_electors()
 
-        logger.info("leader_elector.gracefulshutdowncoordinator_통합_준비_완료")
+        logger.info("leader_elector.graceful_shutdown_coordinator_integration_ready")
         return LeaderElectorShutdownHandler()
 
     except ImportError:
-        logger.debug("leader_elector.gracefulshutdowncoordinator를_찾을_없습니다")
+        logger.debug("leader_elector.graceful_shutdown_coordinator_not_found")
         return None

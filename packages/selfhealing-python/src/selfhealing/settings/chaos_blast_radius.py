@@ -152,7 +152,7 @@ class ChaosBlastRadiusSettings(BaseSettings):
     def warn_region_auto_approve(cls, v: bool) -> bool:
         """REGION 자동 승인은 위험함."""
         if v:
-            logger.warning("chaos_blast_radius.매우_위험합니다_region_레벨")
+            logger.warning("chaos_blast_radius.region_auto_approve_dangerous")
         return v
 
     @field_validator("max_traffic_percent_region")
@@ -161,7 +161,7 @@ class ChaosBlastRadiusSettings(BaseSettings):
         """REGION 트래픽이 높으면 경고."""
         if v > 20.0:
             logger.warning(
-                "chaos_blast_radius.위험한_수준입니다_이하를_권장합니다",
+                "chaos_blast_radius.region_traffic_percent_high",
                 setting_value=v,
             )
         return v

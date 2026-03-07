@@ -289,7 +289,8 @@ class RateController:
                     if self._check_starvation_relief_allowed():
                         watermark = min(watermark, STARVATION_RELIEF_WATERMARK)
                         logger.warning(
-                            "[RateController] Starvation relief: tier=%s, " "elapsed=%.0fs, relaxed_watermark=%.2f",
+                            "[RateController] Starvation relief: tier=%s, "
+                            "elapsed=%.0fs, relaxed_watermark=%.2f",
                             priority,
                             elapsed,
                             watermark,
@@ -327,7 +328,9 @@ class RateController:
 
         # 토큰 부족 시 전략에 따른 처리
         logger.info(
-            "[RateController] Rejected: priority=%s, " "reason=token_exhausted, " "token_ratio=%.2f",
+            "[RateController] Rejected: priority=%s, "
+            "reason=token_exhausted, "
+            "token_ratio=%.2f",
             priority,
             token_ratio,
         )
@@ -482,7 +485,7 @@ class RateController:
     def start(self) -> None:
         """Rate 조절 시작."""
         if not self._settings.backpressure_enabled:
-            logger.info("disabled")
+            logger.info("rate_controller.disabled")
             return
 
         if self._running:
@@ -495,14 +498,14 @@ class RateController:
             daemon=True,
         )
         self._worker.start()
-        logger.info("started")
+        logger.info("rate_controller.started")
 
     def stop(self) -> None:
         """Rate 조절 중지."""
         self._running = False
         if self._worker:
             self._worker.join(timeout=5.0)
-        logger.info("stopped")
+        logger.info("rate_controller.stopped")
 
 
 # =============================================================================

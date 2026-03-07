@@ -476,7 +476,7 @@ class IdempotencyKey:
 
             result = idempotency_service.check(key)
             if result.is_duplicate:
-                logger.info("Already executed by another region")
+                logger.info("idempotency.already_executed_another_region")
                 return
 
             # 실행

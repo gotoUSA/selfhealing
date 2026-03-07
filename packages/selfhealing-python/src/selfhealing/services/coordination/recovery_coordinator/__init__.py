@@ -97,7 +97,10 @@ class SessionVersionConflictError(Exception):
         self.session_id = session_id
         self.expected_version = expected
         self.actual_version = actual
-        super().__init__(f"Session version conflict: {session_id}, " f"expected v{expected}, actual v{actual}")
+        super().__init__(
+            f"Session version conflict: {session_id}, "
+            f"expected v{expected}, actual v{actual}"
+        )
 
 
 # Redis Lua 스크립트: version 기반 CAS (Compare-And-Set)
@@ -290,7 +293,7 @@ class RecoveryCoordinator(
             self._regional_policy_engine = get_regional_recovery_policy_engine()
             return self._regional_policy_engine
         except ImportError:
-            logger.warning("recovery")
+            logger.warning("recovery.regional_policy_engine_unavailable")
             return None
 
     def _get_idempotent_registry(self) -> IdempotentStepHandlerRegistry | None:
@@ -307,7 +310,7 @@ class RecoveryCoordinator(
             self._idempotent_registry = get_idempotent_step_handler_registry()
             return self._idempotent_registry
         except ImportError:
-            logger.warning("recovery")
+            logger.warning("recovery.idempotent_registry_unavailable")
             return None
 
     def _get_audit_recorder(self) -> RecoveryAuditRecorder:
@@ -337,7 +340,7 @@ class RecoveryCoordinator(
 
             return get_cascade_event_auditor()
         except ImportError:
-            logger.debug("recovery")
+            logger.debug("recovery.cascade_auditor_unavailable")
             return None
 
     def _record_cascade_event(
@@ -379,7 +382,11 @@ class RecoveryCoordinator(
                 "trigger_level": session.trigger_level,
                 "initiated_by": session.initiated_by,
                 "current_step_index": session.current_step_index,
-                "status": (session.status.value if hasattr(session.status, "value") else str(session.status)),
+                "status": (
+                    session.status.value
+                    if hasattr(session.status, "value")
+                    else str(session.status)
+                ),
             }
 
             cascade_event = cascade_auditor.record(
@@ -432,7 +439,8 @@ class RecoveryCoordinator(
         self,
         step_type: RecoveryStepType,
         handler: Callable[[RecoverySession, RecoveryStep], dict[str, Any]],
-        compensate: Callable[[RecoverySession, RecoveryStep], dict[str, Any]] | None = None,
+        compensate: Callable[[RecoverySession, RecoveryStep], dict[str, Any]]
+        | None = None,
     ) -> None:
         """
         커스텀 단계 핸들러 등록.
@@ -522,7 +530,9 @@ class RecoveryCoordinator(
             # 4. 분산 락 획득
             if not self._recovery_lock.acquire(namespace, session_id):
                 current_owner = self._recovery_lock.get_lock_owner(namespace)
-                raise ValueError(f"Failed to acquire recovery lock. " f"Current owner: {current_owner}")
+                raise ValueError(
+                    f"Failed to acquire recovery lock. Current owner: {current_owner}"
+                )
 
             # 5. 세션 생성
             session = RecoverySession(
@@ -607,7 +617,9 @@ class RecoveryCoordinator(
                 # 핸들러 선택
                 idempotent_registry = self._get_idempotent_registry()
 
-                if idempotent_registry and idempotent_registry.has_handler(step.step_type):
+                if idempotent_registry and idempotent_registry.has_handler(
+                    step.step_type
+                ):
                     handler_fn = lambda: idempotent_registry.execute(session, step)
                 else:
                     handler = self._step_handlers.get(step.step_type)
@@ -632,7 +644,9 @@ class RecoveryCoordinator(
                     elif result.get("already_applied"):
                         idempotent_info = " (already applied)"
 
-                    self._record_step_executed(session, step, success=True, result=result)
+                    self._record_step_executed(
+                        session, step, success=True, result=result
+                    )
 
                     logger.info(
                         "recovery.step_completed",
@@ -666,7 +680,9 @@ class RecoveryCoordinator(
                 stop_event.set()
 
                 step.status = RecoveryStatus.FAILED
-                step.error_message = str(StepTimeoutError(step.step_type.value, timeout))
+                step.error_message = str(
+                    StepTimeoutError(step.step_type.value, timeout)
+                )
 
                 self._record_step_executed(
                     session,
@@ -689,7 +705,9 @@ class RecoveryCoordinator(
                 step.status = RecoveryStatus.FAILED
                 step.error_message = str(e)
 
-                self._record_step_executed(session, step, success=False, error_message=str(e), result=None)
+                self._record_step_executed(
+                    session, step, success=False, error_message=str(e), result=None
+                )
 
                 self._fail_session(session, str(e))
 
@@ -737,7 +755,9 @@ class RecoveryCoordinator(
             # 1. 마지막 실패 세션 조회
             last_session = self.get_active_session(namespace)
             if not last_session or last_session.status != RecoveryStatus.FAILED:
-                raise ValueError(f"No failed recovery session to resume for namespace={namespace}")
+                raise ValueError(
+                    f"No failed recovery session to resume for namespace={namespace}"
+                )
 
             # 2. 최대 재개 횟수 검사 (무한 루프 방지)
             settings = get_recovery_coordinator_settings()

@@ -23,12 +23,12 @@ class WALDiskManagerMixin:
         # 우선순위 기반 Purge 시도
         if self._config.priority_based_purge:
             if self._purge_by_priority():
-                logger.info("wal")
+                logger.info("wal.purge_recovered")
                 return
 
         # Purge 실패 또는 비활성화 시 Fail-Open 모드 전환
         self._state = WALState.DISK_FULL_FAILOPEN
-        logger.critical("wal")
+        logger.critical("wal.disk_full_failopen")
 
         # 메트릭 기록
         try:
@@ -180,7 +180,7 @@ class WALDiskManagerMixin:
 
             if free_ratio > self._config.disk_recovery_threshold:
                 self._state = WALState.ACTIVE
-                logger.info("wal")
+                logger.info("wal.disk_recovered")
                 return True
         except Exception as e:
             logger.debug(

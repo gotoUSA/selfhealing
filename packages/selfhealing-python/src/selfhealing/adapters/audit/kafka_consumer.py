@@ -142,7 +142,8 @@ class BaseAuditConsumer(ABC):
             from confluent_kafka import Consumer
         except ImportError as e:
             raise ImportError(
-                "confluent-kafka is required for KafkaAuditConsumer. " "Install it with: pip install 'selfhealing[kafka]'"
+                "confluent-kafka is required for KafkaAuditConsumer. "
+                "Install it with: pip install 'selfhealing[kafka]'"
             ) from e
 
         consumer = Consumer(self._config.get_consumer_config())
@@ -225,7 +226,7 @@ class BaseAuditConsumer(ABC):
                     self._error_count += 1
 
         except KeyboardInterrupt:
-            logger.info("consumer")
+            logger.info("consumer.interrupted")
         finally:
             self.close()
 
@@ -580,7 +581,8 @@ class PostgreSQLSinkConsumer(IdempotentAuditConsumer):
                 self._db_connection = psycopg2.connect(self._sink_config.db_url)
             except ImportError as e:
                 raise ImportError(
-                    "psycopg2 is required for PostgreSQLSinkConsumer. " "Install it with: pip install psycopg2-binary"
+                    "psycopg2 is required for PostgreSQLSinkConsumer. "
+                    "Install it with: pip install psycopg2-binary"
                 ) from e
         return self._db_connection
 

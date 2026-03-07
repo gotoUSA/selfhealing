@@ -221,7 +221,7 @@ class MetricSnapshotStorage:
         try:
             if not self.file_path.exists():
                 self._snapshot = MetricSnapshot(source="new")
-                logger.debug("snapshot")
+                logger.debug("snapshot_storage.initialized")
                 return
 
             with open(self.file_path, encoding="utf-8") as f:

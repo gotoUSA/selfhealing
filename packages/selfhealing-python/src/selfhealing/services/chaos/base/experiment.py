@@ -132,7 +132,9 @@ class ChaosExperiment(abc.ABC):
         time.monotonic()는 시스템 시간 변경에 영향받지 않으므로,
         시간 조작 실험에서도 TTL이 정확하게 작동합니다.
         """
-        self._monotonic_ttl_helper = MonotonicTTLHelper(ttl_seconds=float(self._effective_ttl))
+        self._monotonic_ttl_helper = MonotonicTTLHelper(
+            ttl_seconds=float(self._effective_ttl)
+        )
         self._monotonic_ttl_helper.start()
 
         logger.debug(
@@ -248,7 +250,11 @@ class ChaosExperiment(abc.ABC):
         self._audit(
             "force_completed",
             {
-                "previous_status": (previous_status.value if hasattr(previous_status, "value") else str(previous_status)),
+                "previous_status": (
+                    previous_status.value
+                    if hasattr(previous_status, "value")
+                    else str(previous_status)
+                ),
                 "reason": reason,
                 "completed_at": self.completed_at.isoformat(),
             },
@@ -346,7 +352,9 @@ class ChaosExperiment(abc.ABC):
 
             status, stats = monitor.check_health()
             return {
-                "health_status": (status.value if hasattr(status, "value") else str(status)),
+                "health_status": (
+                    status.value if hasattr(status, "value") else str(status)
+                ),
                 "active_connections": stats.active_connections,
                 "available_connections": stats.available_connections,
                 "usage_percent": stats.usage_percent,
@@ -377,7 +385,7 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.cert_monitor_unavailable")
             return {"check_performed": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -409,7 +417,7 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.connection_health_unavailable")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -484,7 +492,11 @@ class ChaosExperiment(abc.ABC):
             status=self.status.value,
             started_at=self.started_at.isoformat() if self.started_at else "",
             completed_at=self.completed_at.isoformat(),
-            duration_seconds=((self.completed_at - self.started_at).total_seconds() if self.started_at else 0),
+            duration_seconds=(
+                (self.completed_at - self.started_at).total_seconds()
+                if self.started_at
+                else 0
+            ),
             steady_state_before=steady_state_before,
             steady_state_after=steady_state_after,
             steady_state_hypothesis_passed=True,
@@ -494,7 +506,9 @@ class ChaosExperiment(abc.ABC):
             expires_at=self._expires_at.isoformat() if self._expires_at else "",
         )
 
-        self._audit("experiment_completed", {"result": self.result.to_dict(), "dry_run": True})
+        self._audit(
+            "experiment_completed", {"result": self.result.to_dict(), "dry_run": True}
+        )
         logger.info(
             "dry_run.completed_dry_run_no",
             experiment_id=self.experiment_id,
@@ -522,7 +536,9 @@ class ChaosExperiment(abc.ABC):
                 {
                     "config": self._config_to_dict(),
                     "ttl_seconds": self._effective_ttl,
-                    "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
+                    "expires_at": (
+                        self._expires_at.isoformat() if self._expires_at else ""
+                    ),
                 },
             )
 
@@ -539,7 +555,9 @@ class ChaosExperiment(abc.ABC):
                 "chaos_injection_started",
                 {
                     "ttl_seconds": self._effective_ttl,
-                    "expires_at": (self._expires_at.isoformat() if self._expires_at else ""),
+                    "expires_at": (
+                        self._expires_at.isoformat() if self._expires_at else ""
+                    ),
                 },
             )
             injection_result = self.inject_chaos()
@@ -553,7 +571,9 @@ class ChaosExperiment(abc.ABC):
                 self.rollback()
                 abort_reason = "Kill switch activated"
                 if self._stop_condition_violation:
-                    abort_reason = f"Stop condition violated: {self._stop_condition_violation}"
+                    abort_reason = (
+                        f"Stop condition violated: {self._stop_condition_violation}"
+                    )
                 return self._create_aborted_result(abort_reason)
 
             self._audit("rollback_started", {})
@@ -716,7 +736,7 @@ class ChaosExperiment(abc.ABC):
             shield = get_corruption_shield()
             return shield.get_stats()
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.corruption_shield_unavailable")
             return {}
         except Exception as e:
             logger.warning(
@@ -737,10 +757,14 @@ class ChaosExperiment(abc.ABC):
 
             service = get_dlq_service()
             return {
-                "pending_count": (service.get_pending_count() if hasattr(service, "get_pending_count") else 0),
+                "pending_count": (
+                    service.get_pending_count()
+                    if hasattr(service, "get_pending_count")
+                    else 0
+                ),
             }
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.dlq_unavailable")
             return {}
         except Exception as e:
             logger.warning(
@@ -762,7 +786,7 @@ class ChaosExperiment(abc.ABC):
             throttle = get_adaptive_throttle()
             return throttle.get_stats() if hasattr(throttle, "get_stats") else {}
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.throttle_unavailable")
             return {}
         except Exception as e:
             logger.warning(
@@ -792,7 +816,7 @@ class ChaosExperiment(abc.ABC):
             state = manager.get_state()
             return state.to_dict()
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.emergency_mode_unavailable")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -823,7 +847,7 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.tiering_cb_unavailable")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -846,7 +870,7 @@ class ChaosExperiment(abc.ABC):
 
             return get_current_state()
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.rate_limit_unavailable")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -881,7 +905,7 @@ class ChaosExperiment(abc.ABC):
                 "timestamp": now().isoformat(),
             }
         except ImportError:
-            logger.debug("chaos")
+            logger.debug("chaos.tiering_registry_unavailable")
             return {"available": False, "reason": "module_not_available"}
         except Exception as e:
             logger.warning(
@@ -977,7 +1001,11 @@ class ChaosExperiment(abc.ABC):
             {
                 "passed": passed,
                 "violations": violations,
-                "expected": (self.failure_hypothesis.to_dict() if hasattr(self.failure_hypothesis, "to_dict") else {}),
+                "expected": (
+                    self.failure_hypothesis.to_dict()
+                    if hasattr(self.failure_hypothesis, "to_dict")
+                    else {}
+                ),
                 "actual": {
                     "recovery_time": actual_recovery_time,
                     "canary_stage": actual_canary_stage,
@@ -1014,7 +1042,8 @@ class ChaosExperiment(abc.ABC):
                     "violations": violations,
                     "expected_recovery_time": expected_recovery_time,
                     "actual_recovery_time": actual_recovery_time,
-                    "recovery_time_delta": actual_recovery_time - expected_recovery_time,
+                    "recovery_time_delta": actual_recovery_time
+                    - expected_recovery_time,
                     "expected_canary_stage": (
                         self.failure_hypothesis.expected_canary_stage
                         if hasattr(self.failure_hypothesis, "expected_canary_stage")
@@ -1155,7 +1184,9 @@ class ChaosExperiment(abc.ABC):
 
         self._kill_requested = True
         self._stop_condition_violation = "SLA breach threshold exceeded"
-        self._audit("auto_rollback_triggered", {"reason": "SLA breach threshold exceeded"})
+        self._audit(
+            "auto_rollback_triggered", {"reason": "SLA breach threshold exceeded"}
+        )
         return True
 
     def _monitor_with_kill_switch(self) -> dict[str, int]:
@@ -1184,7 +1215,9 @@ class ChaosExperiment(abc.ABC):
                 metrics[key] += current_metrics.get(key, 0)
 
             should_stop = (
-                self._handle_stop_condition_check(stop_checker) if stop_checker else self._handle_sla_breach_fallback()
+                self._handle_stop_condition_check(stop_checker)
+                if stop_checker
+                else self._handle_sla_breach_fallback()
             )
             if should_stop:
                 break

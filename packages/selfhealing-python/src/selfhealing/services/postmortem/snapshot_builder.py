@@ -112,7 +112,9 @@ class SnapshotBuilder:
             # Redis HASH에서 조회 후 타입 변환
             snapshot = {}
             for field_name, value in data.items():
-                field_key = field_name.decode() if isinstance(field_name, bytes) else field_name
+                field_key = (
+                    field_name.decode() if isinstance(field_name, bytes) else field_name
+                )
                 field_value = value.decode() if isinstance(value, bytes) else value
                 # 숫자 변환 시도
                 try:
@@ -157,7 +159,9 @@ class SnapshotBuilder:
                 cb_states = {}
                 for name in cb_service.get_all_services():
                     status = cb_service.get_status(name)
-                    cb_states[name] = status.get("state", "UNKNOWN") if status else "UNKNOWN"
+                    cb_states[name] = (
+                        status.get("state", "UNKNOWN") if status else "UNKNOWN"
+                    )
                 snapshot["cb_states"] = cb_states
             except Exception as e:
                 logger.debug(
@@ -169,14 +173,20 @@ class SnapshotBuilder:
             return snapshot
 
         except ImportError:
-            logger.warning("available")
-            return {"timestamp": datetime.now(timezone.utc).isoformat(), "error": "snapshot_unavailable"}
+            logger.warning("snapshot_builder.collect_snapshot_unavailable")
+            return {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "error": "snapshot_unavailable",
+            }
         except Exception as e:
             logger.exception(
                 "snapshot_builder.failed_collect_close_snapshot",
                 error=e,
             )
-            return {"timestamp": datetime.now(timezone.utc).isoformat(), "error": str(e)}
+            return {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "error": str(e),
+            }
 
     def _query_prometheus_peaks(self) -> dict[str, Any]:
         """Prometheus에서 피크 메트릭 조회."""
@@ -277,7 +287,9 @@ class SnapshotBuilder:
             )
             return {}
 
-    def build(self, timeline_events: list[dict[str, Any]] | None = None) -> TimelineSnapshot:
+    def build(
+        self, timeline_events: list[dict[str, Any]] | None = None
+    ) -> TimelineSnapshot:
         """
         타임라인 스냅샷 빌드.
 
@@ -316,7 +328,9 @@ class SnapshotBuilder:
 
         return self._snapshot
 
-    def build_dict(self, timeline_events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    def build_dict(
+        self, timeline_events: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         """딕셔너리 형태로 스냅샷 빌드."""
         snapshot = self.build(timeline_events)
         return snapshot.to_dict()

@@ -89,7 +89,7 @@ class DLQConsumerCoordinator:
     def start(self) -> None:
         """DLQ Consumer 시작 (Leader Election 시작)."""
         logger.info(
-            "dlq_consumer.시작",
+            "dlq_consumer.started",
             resource_name=self._resource_name,
         )
         self._stop_event.clear()
@@ -98,7 +98,7 @@ class DLQConsumerCoordinator:
     def stop(self) -> None:
         """DLQ Consumer 중지 (Leader Election 중지)."""
         logger.info(
-            "dlq_consumer.중지",
+            "dlq_consumer.stopping",
             resource_name=self._resource_name,
         )
         self._stop_event.set()
@@ -110,14 +110,14 @@ class DLQConsumerCoordinator:
 
         self._elector.stop()
         logger.info(
-            "dlq_consumer.중지됨",
+            "dlq_consumer.stopped",
             resource_name=self._resource_name,
         )
 
     def _on_become_leader(self) -> None:
         """리더가 되었을 때 DLQ 처리 시작."""
         logger.info(
-            "dlq_consumer.리더가_dlq_처리_시작",
+            "dlq_consumer.leader_dlq_processing_started",
         )
         self._consuming = True
         self._start_consume_loop()
@@ -125,7 +125,7 @@ class DLQConsumerCoordinator:
     def _on_lose_leader(self) -> None:
         """리더십을 잃었을 때 DLQ 처리 중단."""
         logger.info(
-            "dlq_consumer.리더십_상실_dlq_처리",
+            "dlq_consumer.leadership_lost_dlq_processing",
         )
         self._consuming = False
 
@@ -143,13 +143,13 @@ class DLQConsumerCoordinator:
 
     def _consume_loop(self) -> None:
         """DLQ 소비 루프."""
-        logger.info("dlq_consumer.소비_루프_시작")
+        logger.info("dlq_consumer.consume_loop_started")
 
         while self._consuming and not self._stop_event.is_set():
             try:
                 # Lease 유효성 확인 (Self-Fencing)
                 if not self._elector.is_leader():
-                    logger.warning("dlq_consumer.리더십_확인_실패_소비")
+                    logger.warning("dlq_consumer.leadership_check_failed")
                     break
 
                 # DLQ 처리
@@ -157,7 +157,7 @@ class DLQConsumerCoordinator:
 
                 if processed > 0:
                     logger.info(
-                        "dlq_consumer.dlq_항목_처리됨",
+                        "dlq_consumer.dlq_entries_processed",
                         processed=processed,
                     )
 
@@ -166,12 +166,12 @@ class DLQConsumerCoordinator:
 
             except Exception as e:
                 logger.exception(
-                    "dlq_consumer.소비_루프_오류",
+                    "dlq_consumer.consume_loop_error",
                     error=e,
                 )
                 self._stop_event.wait(timeout=self._process_interval)
 
-        logger.info("dlq_consumer.소비_루프_종료")
+        logger.info("dlq_consumer.consume_loop_stopped")
 
     def _process_dlq_batch(self) -> int:
         """
@@ -200,7 +200,7 @@ class DLQConsumerCoordinator:
             for entry in pending_entries:
                 # 매 항목 처리 전 리더십 확인
                 if not self._consuming or not self._elector.is_leader():
-                    logger.warning("dlq_consumer.리더십_상실_배치_처리")
+                    logger.warning("dlq_consumer.leadership_lost_batch_processing")
                     break
 
                 try:
@@ -214,14 +214,14 @@ class DLQConsumerCoordinator:
                         processed += 1
                     else:
                         logger.warning(
-                            "dlq_consumer.dlq_재처리_실패",
+                            "dlq_consumer.dlq_replay_failed",
                             entry_id=entry.id,
                             result_error=result.error,
                         )
 
                 except Exception as e:
                     logger.error(
-                        "dlq_consumer.dlq_처리_오류",
+                        "dlq_consumer.dlq_processing_error",
                         entry_id=entry.id,
                         error=e,
                     )
@@ -230,11 +230,11 @@ class DLQConsumerCoordinator:
 
         except ImportError:
             # 서비스가 없는 경우 (테스트 환경)
-            logger.debug("dlq_consumer.dlq_서비스_없음_테스트")
+            logger.debug("dlq_consumer.dlq_service_unavailable_test")
             return 0
         except Exception as e:
             logger.exception(
-                "dlq_consumer.배치_처리_오류",
+                "dlq_consumer.batch_processing_error",
                 error=e,
             )
             return 0

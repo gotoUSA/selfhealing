@@ -1154,4 +1154,6 @@ class ChaosSchedulerService:
 
     def _record_audit(self, event_type: str, data: dict[str, Any]) -> None:
         """Record audit event."""
-        logger.info(f"[ChaosSchedulerAudit] {event_type}", extra={"audit_data": data})  # noqa: G004
+        logger.info(
+            "chaos_scheduler.audit_event", event_type=event_type, audit_data=data
+        )

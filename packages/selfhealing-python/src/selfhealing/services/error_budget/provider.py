@@ -150,7 +150,7 @@ class CheckOnUseMultiplierProvider:
 
                 self._emergency_tracker = get_namespaced_emergency_tracker()
             except ImportError:
-                logger.warning("provider")
+                logger.warning("provider.emergency_tracker_unavailable")
         return self._emergency_tracker
 
     def _get_precedence_resolver(self) -> Any:
@@ -163,7 +163,7 @@ class CheckOnUseMultiplierProvider:
 
                 self._precedence_resolver = MultiplierPrecedenceResolver()
             except ImportError:
-                logger.debug("provider")
+                logger.debug("provider.precedence_resolver_unavailable")
         return self._precedence_resolver
 
     def get_current_multiplier(
@@ -193,7 +193,9 @@ class CheckOnUseMultiplierProvider:
             domain_multiplier = self._get_domain_multiplier(domain)
 
         # 가중치 결합
-        final_multiplier = self._combine_multipliers(level_multiplier, domain_multiplier)
+        final_multiplier = self._combine_multipliers(
+            level_multiplier, domain_multiplier
+        )
 
         # Emergency ID 조회
         emergency_id = self._get_current_emergency_id(namespace)

@@ -225,7 +225,7 @@ class SessionBasedReauthProvider(ReauthenticationProvider):
 
         if not hasattr(request, "session"):
             # No session available, can't check
-            logger.warning("reauth")
+            logger.warning("reauthentication.no_session_available")
             return False
 
         now = datetime.now(timezone.utc)
@@ -448,8 +448,12 @@ class RequiresReauthenticationPermission:
             from django.conf import settings
 
             config = ReauthenticationConfig(
-                max_idle_minutes=getattr(settings, "SELFHEALING_REAUTH_MAX_IDLE_MINUTES", 15),
-                max_session_minutes=getattr(settings, "SELFHEALING_REAUTH_MAX_SESSION_MINUTES", 60),
+                max_idle_minutes=getattr(
+                    settings, "SELFHEALING_REAUTH_MAX_IDLE_MINUTES", 15
+                ),
+                max_session_minutes=getattr(
+                    settings, "SELFHEALING_REAUTH_MAX_SESSION_MINUTES", 60
+                ),
                 enabled=getattr(settings, "SELFHEALING_REAUTH_ENABLED", True),
             )
 

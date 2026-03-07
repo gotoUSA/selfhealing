@@ -106,7 +106,7 @@ class SystemMetricsCache:
             if self._timer:
                 self._timer.cancel()
                 self._timer = None
-            logger.info("stopped")
+            logger.info("system_metrics_cache.stopped")
 
     def is_running(self) -> bool:
         """캐시 워커 실행 여부."""
@@ -123,7 +123,11 @@ class SystemMetricsCache:
         캐시가 max_age_seconds를 초과하면 source="stale"로 표시.
         """
         cached = self._cached
-        age = time.monotonic() - self._last_refresh if self._last_refresh > 0 else float("inf")
+        age = (
+            time.monotonic() - self._last_refresh
+            if self._last_refresh > 0
+            else float("inf")
+        )
 
         if age > self._max_age_seconds:
             return CachedMetrics(

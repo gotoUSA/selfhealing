@@ -109,6 +109,14 @@ class LoggingSettings(BaseSettings):
     )
 
     # ==========================================================================
+    # Event Name Validation (312 Q5, 314 Audit)
+    # ==========================================================================
+    strict_log_validation: bool = Field(
+        default=False,
+        description="Strict log event name validation. True = ValueError on violation (dev/test).",
+    )
+
+    # ==========================================================================
     # Log Volume Control (281_LOG_RATE_LIMITER, 282_LOG_SAMPLING)
     # ==========================================================================
     log_rate_limit_window: int = Field(
@@ -129,7 +137,10 @@ class LoggingSettings(BaseSettings):
     )
     log_sampling_events: str = Field(
         default="",
-        description=("Comma-separated event names to apply sampling. " "Empty = apply to all DEBUG/INFO logs."),
+        description=(
+            "Comma-separated event names to apply sampling. "
+            "Empty = apply to all DEBUG/INFO logs."
+        ),
     )
 
     @field_validator(
@@ -147,7 +158,9 @@ class LoggingSettings(BaseSettings):
         """Validate log level is one of the valid options."""
         v_upper = v.upper()
         if v_upper not in VALID_LOG_LEVELS:
-            raise ValueError(f"Invalid log level '{v}'. Must be one of: {VALID_LOG_LEVELS}")
+            raise ValueError(
+                f"Invalid log level '{v}'. Must be one of: {VALID_LOG_LEVELS}"
+            )
         return v_upper
 
 

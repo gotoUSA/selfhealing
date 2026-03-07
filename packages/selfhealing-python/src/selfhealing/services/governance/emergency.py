@@ -176,7 +176,11 @@ class EmergencyModeTracker:
 
         backend = self._get_backend()
         data = backend.get(EMERGENCY_STATE_STORAGE_KEY)
-        self._state = GovernanceEmergencyState.from_dict(data) if data else GovernanceEmergencyState()
+        self._state = (
+            GovernanceEmergencyState.from_dict(data)
+            if data
+            else GovernanceEmergencyState()
+        )
         return self._state
 
     def _save_state(self, state: GovernanceEmergencyState) -> None:
@@ -360,8 +364,13 @@ class EmergencyModeTracker:
             # Calculate expiry time
             expires_at = activated_at + timedelta(hours=expiry_hours)
 
-            should_warn = hours_elapsed >= warning_hours and state.warning_sent_at is None
-            should_final_warn = hours_elapsed >= final_warning_hours and state.final_warning_sent_at is None
+            should_warn = (
+                hours_elapsed >= warning_hours and state.warning_sent_at is None
+            )
+            should_final_warn = (
+                hours_elapsed >= final_warning_hours
+                and state.final_warning_sent_at is None
+            )
             should_auto_restore = hours_elapsed >= expiry_hours
 
             return {
@@ -387,7 +396,7 @@ class EmergencyModeTracker:
             state = self._load_state()
             state.warning_sent_at = datetime.now(timezone.utc).isoformat()
             self._save_state(state)
-            logger.info("governance")
+            logger.info("governance.warning_sent")
 
     def mark_final_warning_sent(self) -> None:
         """Mark that final warning notification has been sent."""
@@ -395,7 +404,7 @@ class EmergencyModeTracker:
             state = self._load_state()
             state.final_warning_sent_at = datetime.now(timezone.utc).isoformat()
             self._save_state(state)
-            logger.info("governance")
+            logger.info("governance.final_warning_sent")
 
     def acknowledge_warning(self, acknowledged_by: str) -> dict[str, Any]:
         """
@@ -440,7 +449,7 @@ class EmergencyModeTracker:
             reason="Emergency mode auto-expired after configured duration",
         )
 
-        logger.warning("governance")
+        logger.warning("governance.auto_restored_to_normal")
 
         return result
 

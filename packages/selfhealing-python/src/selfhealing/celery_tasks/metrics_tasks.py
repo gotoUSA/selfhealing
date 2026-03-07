@@ -35,7 +35,7 @@ def collect_self_healing_metrics(self) -> dict:
     """
     from selfhealing.services import collect_all_metrics
 
-    logger.debug("metrics")
+    logger.debug("metrics_tasks.collection_started")
 
     try:
         metrics = collect_all_metrics()

@@ -118,16 +118,16 @@ class KafkaAuditProducer:
             self._producer = Producer(config)
 
             logger.info(
-                "kafka_producer.초기화_완료",
+                "kafka_producer.initialized",
                 bootstrap_servers=self._settings.bootstrap_servers,
                 producer_idempotent=self._settings.producer_idempotent,
             )
         except ImportError:
-            logger.exception("kafka_producer.confluent_kafka_패키지가_설치되지")
+            logger.exception("kafka_producer.confluent_kafka_not_installed")
             raise
         except Exception as e:
             logger.exception(
-                "kafka_producer.초기화_실패",
+                "kafka_producer.initialization_failed",
                 error=e,
             )
             raise
@@ -177,13 +177,13 @@ class KafkaAuditProducer:
                 self._stats["messages_failed"] += 1
                 self._stats["last_error"] = str(err)
                 logger.error(
-                    "kafka_producer.전송_실패",
+                    "kafka_producer.delivery_failed",
                     error=err,
                 )
             else:
                 self._stats["messages_delivered"] += 1
                 logger.debug(
-                    "kafka_producer.전송_완료",
+                    "kafka_producer.delivery_completed",
                     delivered_topic=report.topic,
                     partition=report.partition,
                     offset=report.offset,
@@ -195,7 +195,7 @@ class KafkaAuditProducer:
                 user_callback(report)
             except Exception as e:
                 logger.exception(
-                    "kafka_producer.사용자_콜백_오류",
+                    "kafka_producer.user_callback_error",
                     error=e,
                 )
 
@@ -205,7 +205,7 @@ class KafkaAuditProducer:
                 self._on_delivery(report)
             except Exception as e:
                 logger.exception(
-                    "kafka_producer.콜백_오류",
+                    "kafka_producer.callback_error",
                     error=e,
                 )
 
@@ -238,7 +238,7 @@ class KafkaAuditProducer:
             전송 시작 성공 여부 (실제 전송 완료는 콜백에서 확인)
         """
         if not self._producer:
-            logger.error("kafka_producer.producer가_초기화되지_않았습니다")
+            logger.error("kafka_producer.producer_not_initialized")
             return False
 
         try:
@@ -267,7 +267,9 @@ class KafkaAuditProducer:
                 all_headers.update(headers)
 
             # confluent-kafka는 헤더를 리스트 형식으로 요구
-            header_list = [(k, v) for k, v in all_headers.items()] if all_headers else None
+            header_list = (
+                [(k, v) for k, v in all_headers.items()] if all_headers else None
+            )
 
             # 메시지 전송
             self._producer.produce(
@@ -276,7 +278,9 @@ class KafkaAuditProducer:
                 key=key.encode("utf-8") if key else None,
                 headers=header_list,
                 partition=partition if partition is not None else -1,
-                callback=lambda err, msg: self._delivery_callback(err, msg, on_delivery),
+                callback=lambda err, msg: self._delivery_callback(
+                    err, msg, on_delivery
+                ),
             )
 
             with self._lock:
@@ -286,7 +290,7 @@ class KafkaAuditProducer:
 
         except Exception as e:
             logger.exception(
-                "kafka_producer.발행_오류",
+                "kafka_producer.publish_error",
                 error=e,
             )
             with self._lock:
@@ -340,7 +344,7 @@ class KafkaAuditProducer:
         remaining = self._producer.flush(timeout)
         if remaining > 0:
             logger.warning(
-                "kafka_producer.플러시_메시지가_버퍼에_남음",
+                "kafka_producer.flush_messages_remaining",
                 remaining=remaining,
             )
         return remaining
@@ -368,11 +372,11 @@ class KafkaAuditProducer:
             remaining = self.flush(timeout=30.0)
             if remaining > 0:
                 logger.warning(
-                    "kafka_producer.메시지가_미전송_상태로_종료",
+                    "kafka_producer.closed_with_unsent_messages",
                     remaining=remaining,
                 )
             self._producer = None
-            logger.info("종료됨")
+            logger.info("kafka_producer.closed")
 
     def get_stats(self) -> dict[str, Any]:
         """전송 통계 반환."""

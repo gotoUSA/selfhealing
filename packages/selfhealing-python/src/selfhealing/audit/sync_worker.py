@@ -309,7 +309,7 @@ class AuditSyncWorker:
                 daemon=True,
             )
             self._thread.start()
-            logger.info("started")
+            logger.info("sync_worker.started")
             return True
 
     def stop(self, timeout: float = 1.0) -> None:
@@ -331,7 +331,7 @@ class AuditSyncWorker:
             if self._thread.is_alive():
                 logger.warning("audit_sync_worker.thread_stop_gracefully")
 
-        logger.info("stopped")
+        logger.info("sync_worker.stopped")
 
     def _run_loop(self) -> None:
         """메인 동기화 루프."""

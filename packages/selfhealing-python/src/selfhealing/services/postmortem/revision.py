@@ -283,7 +283,9 @@ class PostmortemRevisionManager:
             from selfhealing.audit.integrity.local_manager import HashChainManager
 
             if self._hash_chain_state_file:
-                self._hash_chain_manager = HashChainManager(state_file=self._hash_chain_state_file)
+                self._hash_chain_manager = HashChainManager(
+                    state_file=self._hash_chain_state_file
+                )
             else:
                 try:
                     default_path = Path("./data/postmortem_revision_chain.json")
@@ -351,7 +353,9 @@ class PostmortemRevisionManager:
         if self._use_redis():
             # ZSET에 리비전 ID 추가 (score = revision_number)
             zset_key = self.REVISIONS_ZSET_KEY.format(incident_id=revision.incident_id)
-            self._redis_client.zadd(zset_key, {revision.revision_id: revision.revision_number})
+            self._redis_client.zadd(
+                zset_key, {revision.revision_id: revision.revision_number}
+            )
 
             # HASH에 리비전 상세 저장
             hash_key = self.REVISION_HASH_KEY.format(revision_id=revision.revision_id)
@@ -379,7 +383,9 @@ class PostmortemRevisionManager:
             count = self._redis_client.zcard(zset_key)
             if count > self._max_revisions:
                 # 가장 오래된 리비전 삭제
-                to_remove = self._redis_client.zrange(zset_key, 0, count - self._max_revisions - 1)
+                to_remove = self._redis_client.zrange(
+                    zset_key, 0, count - self._max_revisions - 1
+                )
                 for revision_id in to_remove:
                     if isinstance(revision_id, bytes):
                         revision_id = revision_id.decode()
@@ -432,7 +438,9 @@ class PostmortemRevisionManager:
 
         # 봉인 상태 확인
         if self.is_sealed(incident_id):
-            raise ValueError(f"Postmortem '{incident_id}' is sealed. Cannot create new revision.")
+            raise ValueError(
+                f"Postmortem '{incident_id}' is sealed. Cannot create new revision."
+            )
 
         # 이전 리비전 조회
         prev_revision = self._get_previous_revision(incident_id)
@@ -507,7 +515,9 @@ class PostmortemRevisionManager:
         if self._use_redis():
             zset_key = self.REVISIONS_ZSET_KEY.format(incident_id=incident_id)
             # score(revision_number)로 조회
-            revision_ids = self._redis_client.zrangebyscore(zset_key, revision_number, revision_number)
+            revision_ids = self._redis_client.zrangebyscore(
+                zset_key, revision_number, revision_number
+            )
             if not revision_ids:
                 return None
 
@@ -634,7 +644,9 @@ class PostmortemRevisionManager:
 
         target_revision = self.get_revision(incident_id, target_revision_number)
         if not target_revision:
-            raise ValueError(f"Revision {target_revision_number} not found for {incident_id}")
+            raise ValueError(
+                f"Revision {target_revision_number} not found for {incident_id}"
+            )
 
         # 롤백 리비전 생성
         return self.create_revision(
@@ -860,7 +872,7 @@ def migrate_existing_postmortems(
     try:
         from selfhealing.services.postmortem.store import get_healing_incidents
     except ImportError:
-        logger.warning("migration")
+        logger.warning("migration.store_module_unavailable")
         return result
 
     offset = 0
@@ -879,7 +891,7 @@ def migrate_existing_postmortems(
             incident_id = incident.get("incident_id")
 
             if not incident_id:
-                logger.warning("migration")
+                logger.warning("migration.missing_incident_id")
                 result["failed"] += 1
                 continue
 

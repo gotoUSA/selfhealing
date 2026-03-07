@@ -74,7 +74,7 @@ class SelfHealingMetrics:
         self._initialized = False
 
         if not PROMETHEUS_AVAILABLE:
-            logger.warning("metrics")
+            logger.warning("prometheus.unavailable")
             return
 
         # =============================================================================

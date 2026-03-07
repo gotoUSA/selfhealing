@@ -79,10 +79,16 @@ class ReconcilerConfig:
 
         s = settings or get_audit_reconciler_settings()
         return cls(
-            check_interval_seconds=overrides.get("check_interval_seconds", s.check_interval_seconds),
-            check_window_seconds=overrides.get("check_window_seconds", s.check_window_seconds),
+            check_interval_seconds=overrides.get(
+                "check_interval_seconds", s.check_interval_seconds
+            ),
+            check_window_seconds=overrides.get(
+                "check_window_seconds", s.check_window_seconds
+            ),
             resend_batch_size=overrides.get("resend_batch_size", s.resend_batch_size),
-            max_resend_attempts=overrides.get("max_resend_attempts", s.max_resend_attempts),
+            max_resend_attempts=overrides.get(
+                "max_resend_attempts", s.max_resend_attempts
+            ),
             alert_threshold=overrides.get("alert_threshold", s.alert_threshold),
         )
 
@@ -292,7 +298,7 @@ class AuditReconciler:
                 daemon=True,
             )
             self._thread.start()
-            logger.info("started")
+            logger.info("reconciler.started")
             return True
 
     def stop(self, timeout: float = 1.0) -> None:
@@ -314,7 +320,7 @@ class AuditReconciler:
             if self._thread.is_alive():
                 logger.warning("audit_reconciler.thread_stop_gracefully")
 
-        logger.info("stopped")
+        logger.info("reconciler.stopped")
 
     def _run_loop(self) -> None:
         """메인 검증 루프."""
@@ -383,7 +389,9 @@ class AuditReconciler:
                 return result
 
             # 누락 엔트리 식별
-            missing_entries = self._identify_missing_entries(recent_entries, adapter, result)
+            missing_entries = self._identify_missing_entries(
+                recent_entries, adapter, result
+            )
             result.missing_count = len(missing_entries)
 
             # 누락 콜백 호출

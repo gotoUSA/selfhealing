@@ -1,10 +1,10 @@
 """
-event_name_validator 프로세서 (312 Q5) 단위 테스트.
+event_name_validator 프로세서 (312 Q5, 314 Audit) 단위 테스트.
 
 검증 대상:
 - event_name_validator(): 이벤트명 컨벤션 검증 프로세서
-- _EVENT_NAME_PATTERN: 이벤트명 정규식 패턴
-- strict vs production 모드 분기
+- _EVENT_NAME_PATTERN: 이벤트명 정규식 패턴 (314에서 digits 허용으로 변경)
+- strict vs production 모드 분기 (314에서 LoggingSettings 통합)
 
 기법 분류:
 - 계약 검증: _EVENT_NAME_PATTERN 매칭 규칙
@@ -22,6 +22,7 @@ import pytest
 from selfhealing.settings.log_processors import (
     _EVENT_NAME_PATTERN,
     event_name_validator,
+    reset_strict_validation_cache,
 )
 
 # =============================================================================
@@ -41,6 +42,9 @@ class TestEventNamePatternContract:
             "audit.entry_logged",
             "retry.attempt_failed",
             "service.fallback_adapter",
+            "k8s_ingress_traffic_router.kubernetes_package_installed",
+            "s3_worm_backend.cannot_place_legal_hold",
+            "watchdog.redis_recovery_stage1",
         ],
     )
     def test_valid_event_names_match_pattern(self, valid_name):
@@ -56,6 +60,8 @@ class TestEventNamePatternContract:
             "Registry.cache_registered",
             "registry cache_registered",
             "123.abc",
+            "_foo.bar",
+            "foo._bar",
             "",
         ],
     )
@@ -70,41 +76,52 @@ class TestEventNamePatternContract:
 
 
 class TestEventNameValidatorStrictBehavior:
-    """SELFHEALING_STRICT_LOG_VALIDATION=true 시 위반에 ValueError를 발생시킨다."""
+    """strict_log_validation=True 시 위반에 ValueError를 발생시킨다."""
 
     @pytest.fixture(autouse=True)
-    def _reset_counter(self):
-        """Prometheus counter 상태를 리셋한다."""
+    def _reset_state(self):
+        """Prometheus counter와 strict validation 캐시를 리셋한다."""
         import selfhealing.settings.log_processors as mod
 
         mod._violation_counter_initialized = False
         mod._violation_counter = None
+        reset_strict_validation_cache()
         yield
         mod._violation_counter_initialized = False
         mod._violation_counter = None
+        reset_strict_validation_cache()
 
-    def test_valid_event_passes_in_strict_mode(self, monkeypatch):
+    def test_valid_event_passes_in_strict_mode(self):
         """올바른 이벤트명은 strict 모드에서도 통과해야 한다."""
-        monkeypatch.setenv("SELFHEALING_STRICT_LOG_VALIDATION", "true")
-
-        result = event_name_validator(
-            None, "info", {"event": "registry.cache_registered"}
-        )
+        with patch(
+            "selfhealing.settings.logging_config.get_logging_settings"
+        ) as mock_settings:
+            mock_settings.return_value.strict_log_validation = True
+            result = event_name_validator(
+                None, "info", {"event": "registry.cache_registered"}
+            )
         assert result["event"] == "registry.cache_registered"
 
-    def test_invalid_event_raises_value_error_in_strict_mode(self, monkeypatch):
+    def test_invalid_event_raises_value_error_in_strict_mode(self):
         """위반 이벤트명은 strict 모드에서 ValueError를 발생시켜야 한다."""
-        monkeypatch.setenv("SELFHEALING_STRICT_LOG_VALIDATION", "true")
+        with patch(
+            "selfhealing.settings.logging_config.get_logging_settings"
+        ) as mock_settings:
+            mock_settings.return_value.strict_log_validation = True
+            with pytest.raises(ValueError, match="violates naming convention"):
+                event_name_validator(None, "info", {"event": "BadEventName"})
 
-        with pytest.raises(ValueError, match="violates naming convention"):
-            event_name_validator(None, "info", {"event": "BadEventName"})
-
-    def test_strict_mode_accepts_various_true_values(self, monkeypatch):
-        """SELFHEALING_STRICT_LOG_VALIDATION은 'true', '1', 'yes'를 모두 인식해야 한다."""
-        for val in ("true", "1", "yes", "TRUE", "Yes"):
-            monkeypatch.setenv("SELFHEALING_STRICT_LOG_VALIDATION", val)
+    def test_strict_mode_caches_result(self):
+        """strict_log_validation 값은 캐싱되어 반복 조회하지 않아야 한다."""
+        with patch(
+            "selfhealing.settings.logging_config.get_logging_settings"
+        ) as mock_settings:
+            mock_settings.return_value.strict_log_validation = True
             with pytest.raises(ValueError):
                 event_name_validator(None, "info", {"event": "invalid"})
+
+        with pytest.raises(ValueError):
+            event_name_validator(None, "info", {"event": "also_invalid"})
 
 
 # =============================================================================
@@ -116,47 +133,55 @@ class TestEventNameValidatorProductionBehavior:
     """Production 모드(기본값)에서는 위반해도 로그를 통과시킨다."""
 
     @pytest.fixture(autouse=True)
-    def _reset_counter(self):
-        """Prometheus counter 상태를 리셋한다."""
+    def _reset_state(self):
+        """Prometheus counter와 strict validation 캐시를 리셋한다."""
         import selfhealing.settings.log_processors as mod
 
         mod._violation_counter_initialized = False
         mod._violation_counter = None
+        reset_strict_validation_cache()
         yield
         mod._violation_counter_initialized = False
         mod._violation_counter = None
+        reset_strict_validation_cache()
 
-    def test_invalid_event_passes_in_production_mode(self, monkeypatch):
+    def test_invalid_event_passes_in_production_mode(self):
         """위반 이벤트명이 production 모드에서는 ValueError 없이 통과한다."""
-        monkeypatch.delenv("SELFHEALING_STRICT_LOG_VALIDATION", raising=False)
-
-        result = event_name_validator(None, "info", {"event": "BadEvent"})
+        with patch(
+            "selfhealing.settings.logging_config.get_logging_settings"
+        ) as mock_settings:
+            mock_settings.return_value.strict_log_validation = False
+            result = event_name_validator(None, "info", {"event": "BadEvent"})
         assert result["event"] == "BadEvent"
 
-    def test_prometheus_counter_incremented_on_violation(self, monkeypatch):
+    def test_prometheus_counter_incremented_on_violation(self):
         """Production 모드에서 위반 시 Prometheus counter가 증가해야 한다."""
-        monkeypatch.delenv("SELFHEALING_STRICT_LOG_VALIDATION", raising=False)
-
-        mock_counter = MagicMock()
         with patch(
-            "selfhealing.settings.log_processors._get_violation_counter",
-            return_value=mock_counter,
-        ):
-            event_name_validator(None, "info", {"event": "BadEvent"})
+            "selfhealing.settings.logging_config.get_logging_settings"
+        ) as mock_settings:
+            mock_settings.return_value.strict_log_validation = False
+            mock_counter = MagicMock()
+            with patch(
+                "selfhealing.settings.log_processors._get_violation_counter",
+                return_value=mock_counter,
+            ):
+                event_name_validator(None, "info", {"event": "BadEvent"})
 
         mock_counter.labels.assert_called_once_with(event_name="BadEvent")
         mock_counter.labels.return_value.inc.assert_called_once()
 
-    def test_no_error_when_prometheus_unavailable(self, monkeypatch):
+    def test_no_error_when_prometheus_unavailable(self):
         """Prometheus가 없어도 에러 없이 통과해야 한다."""
-        monkeypatch.delenv("SELFHEALING_STRICT_LOG_VALIDATION", raising=False)
-
         with patch(
-            "selfhealing.settings.log_processors._get_violation_counter",
-            return_value=None,
-        ):
-            result = event_name_validator(None, "info", {"event": "BadEvent"})
-            assert isinstance(result, dict)
+            "selfhealing.settings.logging_config.get_logging_settings"
+        ) as mock_settings:
+            mock_settings.return_value.strict_log_validation = False
+            with patch(
+                "selfhealing.settings.log_processors._get_violation_counter",
+                return_value=None,
+            ):
+                result = event_name_validator(None, "info", {"event": "BadEvent"})
+                assert isinstance(result, dict)
 
 
 # =============================================================================

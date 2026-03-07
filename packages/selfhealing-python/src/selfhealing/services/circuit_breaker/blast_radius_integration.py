@@ -149,7 +149,7 @@ class BlastRadiusIntegration:
         self._last_assessment: BlastRadiusAssessment | None = None
         self._initialized = True
 
-        logger.debug("initialized")
+        logger.debug("blast_radius_integration.initialized")
 
     @classmethod
     def reset_instance(cls) -> None:

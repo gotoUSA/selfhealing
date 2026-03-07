@@ -645,12 +645,12 @@ class SelfHealingEventBus:
     def enable(self):
         """이벤트 버스 활성화."""
         self._enabled = True
-        logger.info("enabled")
+        logger.info("event_bus.enabled")
 
     def disable(self):
         """이벤트 버스 비활성화."""
         self._enabled = False
-        logger.info("disabled")
+        logger.info("event_bus.disabled")
 
     def is_enabled(self) -> bool:
         """활성화 여부."""

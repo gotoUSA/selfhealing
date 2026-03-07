@@ -98,7 +98,9 @@ class PolicyComposer(Generic[T]):
 
     def add(self, policy: ResiliencePolicy) -> PolicyComposer[T]:
         """Policy 추가. 추가 순서가 바깥→안쪽 실행 순서."""
-        if isinstance(policy, AsyncResiliencePolicy) and not isinstance(policy, ResiliencePolicy):
+        if isinstance(policy, AsyncResiliencePolicy) and not isinstance(
+            policy, ResiliencePolicy
+        ):
             raise TypeError(
                 f"Cannot add async policy '{policy.name}' to sync PolicyComposer. "
                 f"Use AsyncPolicyComposer or compose_async() instead."
@@ -168,7 +170,12 @@ class PolicyComposer(Generic[T]):
                     )
             except Exception as e:
                 # Fail-Open: Guard 실패 시 통과 허용
-                logger.warning("Guard '%s' failed (fail-open): %s", guard.name, e)
+                logger.warning(
+                    "policy_composer.guard_execution_failed",
+                    guard_name=guard.name,
+                    error=str(e),
+                    mode="fail-open",
+                )
 
         # Step 2: Policy 체인 실행
         result = self._execute_policy_chain(func, *args, context=context, **kwargs)
@@ -229,7 +236,9 @@ class PolicyComposer(Generic[T]):
                 # FallbackPolicy: _apply_fallback() 기반 조건부 래퍼
                 # func 1회만 실행 보장 (inner() 결과 재사용)
                 # _FallbackApplied 시그널로 SUCCESS_WITH_FALLBACK outcome 전파
-                def fallback_wrapper(inner: Callable = outer_fn, fb: FallbackPolicy = current_policy) -> T:
+                def fallback_wrapper(
+                    inner: Callable = outer_fn, fb: FallbackPolicy = current_policy
+                ) -> T:
                     try:
                         value = inner()
                         return value
@@ -237,7 +246,9 @@ class PolicyComposer(Generic[T]):
                         raise  # 하위 FallbackPolicy의 시그널을 그대로 전파
                     except Exception as e:
                         # predicate 확인 → _apply_fallback 직접 호출
-                        check_result = PolicyResult(value=None, outcome=PolicyOutcome.FAILURE, error=e)
+                        check_result = PolicyResult(
+                            value=None, outcome=PolicyOutcome.FAILURE, error=e
+                        )
                         if fb._predicate(check_result):
                             fb_result = fb._apply_fallback(
                                 original_error=e,
@@ -250,14 +261,18 @@ class PolicyComposer(Generic[T]):
                 wrapped = fallback_wrapper
             else:
                 # 일반 Policy: execute()로 래핑
-                def policy_wrapper(inner: Callable = outer_fn, p: ResiliencePolicy = current_policy) -> T:
+                def policy_wrapper(
+                    inner: Callable = outer_fn, p: ResiliencePolicy = current_policy
+                ) -> T:
                     result = p.execute(inner, context=context)
                     if result.success:
                         return result.value  # type: ignore[return-value]
                     elif result.error:
                         raise result.error
                     else:
-                        raise PolicyRejectedException(f"Policy '{p.name}' rejected: {result.outcome}")
+                        raise PolicyRejectedException(
+                            f"Policy '{p.name}' rejected: {result.outcome}"
+                        )
 
                 wrapped = policy_wrapper
 
@@ -517,7 +532,9 @@ class AsyncPolicyComposer(Generic[T]):
                     except _FallbackApplied:
                         raise  # 하위 AsyncFallbackPolicy의 시그널을 그대로 전파
                     except Exception as e:
-                        check_result = PolicyResult(value=None, outcome=PolicyOutcome.FAILURE, error=e)
+                        check_result = PolicyResult(
+                            value=None, outcome=PolicyOutcome.FAILURE, error=e
+                        )
                         if fb._predicate(check_result):
                             fb_result = await fb._apply_fallback(
                                 original_error=e,
@@ -540,7 +557,9 @@ class AsyncPolicyComposer(Generic[T]):
                     elif result.error:
                         raise result.error
                     else:
-                        raise PolicyRejectedException(f"Policy '{p.name}' rejected: {result.outcome}")
+                        raise PolicyRejectedException(
+                            f"Policy '{p.name}' rejected: {result.outcome}"
+                        )
 
                 wrapped = async_policy_wrapper
 

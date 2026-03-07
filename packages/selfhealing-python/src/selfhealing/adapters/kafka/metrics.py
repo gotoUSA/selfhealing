@@ -54,7 +54,7 @@ def _get_time_lag_gauge() -> Any | None:
                 ["topic", "partition", "consumer_group"],
             )
         except ImportError:
-            logger.debug("kafka_metrics.prometheus_client_미설치")
+            logger.debug("kafka_metrics.prometheus_client_not_installed")
     return _TIME_LAG_GAUGE
 
 
@@ -72,7 +72,7 @@ def _get_processing_latency_histogram() -> Any | None:
                 buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0],
             )
         except ImportError:
-            logger.debug("kafka_metrics.prometheus_client_미설치")
+            logger.debug("kafka_metrics.prometheus_client_not_installed")
     return _PROCESSING_LATENCY_HISTOGRAM
 
 
@@ -89,7 +89,7 @@ def _get_offset_lag_gauge() -> Any | None:
                 ["topic", "partition", "consumer_group"],
             )
         except ImportError:
-            logger.debug("kafka_metrics.prometheus_client_미설치")
+            logger.debug("kafka_metrics.prometheus_client_not_installed")
     return _OFFSET_LAG_GAUGE
 
 
@@ -223,14 +223,14 @@ class TimeLagTracker:
         # 임계값 체크
         if time_lag >= self._critical_threshold:
             logger.error(
-                "time_lag_tracker.심각_time_lag",
+                "time_lag_tracker.critical_time_lag",
                 time_lag=time_lag,
                 topic=topic,
                 partition=partition,
             )
         elif time_lag >= self._alert_threshold:
             logger.warning(
-                "time_lag_tracker.경고_time_lag",
+                "time_lag_tracker.warning_time_lag",
                 time_lag=time_lag,
                 topic=topic,
                 partition=partition,

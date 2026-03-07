@@ -71,7 +71,7 @@ class ApprovalMixin:
                 trigger_level=session.trigger_level,
             )
         except ImportError:
-            logger.warning("recovery")
+            logger.warning("recovery.approval_manager_unavailable")
         except Exception as e:
             logger.exception(
                 "recovery.failed_create_approval_request",
@@ -177,7 +177,10 @@ class ApprovalMixin:
             budget_info = self._get_budget_info(namespace)
 
             # 안정성 판단: 가중치가 1.0이고 버짓 잔여량이 충분하면 안정
-            is_stable = abs(current_multiplier - 1.0) < 0.001 and budget_info.get("remaining_percent", 100) > 10
+            is_stable = (
+                abs(current_multiplier - 1.0) < 0.001
+                and budget_info.get("remaining_percent", 100) > 10
+            )
 
             return {
                 "stable": is_stable,
@@ -188,7 +191,7 @@ class ApprovalMixin:
                 "budget_used_minutes": budget_info.get("used_minutes", 0),
             }
         except ImportError:
-            logger.warning("recovery")
+            logger.warning("recovery.crisis_multiplier_unavailable")
             return {
                 "stable": True,
                 "current_multiplier": 1.0,

@@ -50,7 +50,7 @@ def collect_self_healing_metrics(self) -> dict:
     Returns:
         Dictionary with collected metric values
     """
-    logger.debug("metrics")
+    logger.debug("celery_monitoring.collection_started")
 
     try:
         from selfhealing.factory import ProviderRegistry

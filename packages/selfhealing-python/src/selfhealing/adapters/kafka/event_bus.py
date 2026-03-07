@@ -169,7 +169,7 @@ class KafkaEventBus:
             self._handlers[topic].append(handler)
 
             logger.info(
-                "kafka_event_bus.핸들러_등록",
+                "kafka_event_bus.handler_registered",
                 topic=topic,
             )
 
@@ -185,7 +185,7 @@ class KafkaEventBus:
                     results.append(handler(event))
                 except Exception as e:
                     logger.exception(
-                        "kafka_event_bus.핸들러_오류",
+                        "kafka_event_bus.handler_error",
                         error=e,
                     )
                     results.append(False)
@@ -201,7 +201,7 @@ class KafkaEventBus:
     def start(self) -> None:
         """Event Bus 시작."""
         if self._running:
-            logger.warning("kafka_event_bus.이미_실행")
+            logger.warning("kafka_event_bus.already_running")
             return
 
         self._running = True
@@ -214,7 +214,7 @@ class KafkaEventBus:
                     consumer.start_background()
                     self._consumers[topic] = consumer
 
-        logger.info("kafka_event_bus.시작됨")
+        logger.info("kafka_event_bus.started")
 
     def stop(self) -> None:
         """Event Bus 정지."""
@@ -226,7 +226,7 @@ class KafkaEventBus:
                 consumer.stop()
             self._consumers.clear()
 
-        logger.info("kafka_event_bus.정지됨")
+        logger.info("kafka_event_bus.stopped")
 
     def close(self) -> None:
         """Event Bus 종료."""
@@ -236,7 +236,7 @@ class KafkaEventBus:
             self._producer.close()
             self._producer = None
 
-        logger.info("kafka_event_bus.종료됨")
+        logger.info("kafka_event_bus.closed")
 
     def flush(self, timeout: float = 10.0) -> None:
         """

@@ -293,7 +293,9 @@ class EventLoggingConfig:
         """Validate and normalize log level."""
         level = level.upper()
         if level not in self.VALID_LEVELS:
-            raise ValueError(f"Invalid log level: {level}. " f"Valid levels: {self.VALID_LEVELS}")
+            raise ValueError(
+                f"Invalid log level: {level}. Valid levels: {self.VALID_LEVELS}"
+            )
         return level
 
     def _get_value(self, key: str) -> str:
@@ -437,11 +439,15 @@ class MetricCollectionSettings(BaseSettings):
 
     # Jitter 설정 (Thundering Herd 방지)
     jitter_enabled: bool = Field(default=True, description="Jitter 활성화")
-    jitter_max_delay_seconds: float = Field(default=60.0, ge=0.0, description="최대 지연 시간 (초)")
+    jitter_max_delay_seconds: float = Field(
+        default=60.0, ge=0.0, description="최대 지연 시간 (초)"
+    )
 
     # 어댑터 설정
     adapter_type: str = Field(default="null", description="django, redis, null")
-    redis_prefix: str = Field(default="sh:metrics:", description="Redis 어댑터용 키 프리픽스")
+    redis_prefix: str = Field(
+        default="sh:metrics:", description="Redis 어댑터용 키 프리픽스"
+    )
 
     # Drift 감지 (거버넌스 레벨)
     drift_detection_enabled: bool = Field(default=True, description="Drift 감지 활성화")
@@ -531,13 +537,19 @@ class L2StorageConfig(BaseSettings):
     )
 
     # 어댑터별 타임아웃 (ms)
-    redis_timeout_ms: int = Field(default=50, ge=1, description="Redis: 빠름, 50ms면 충분")
-    database_timeout_ms: int = Field(default=200, ge=1, description="DB: 부하 시 느려짐, 200ms 필요")
+    redis_timeout_ms: int = Field(
+        default=50, ge=1, description="Redis: 빠름, 50ms면 충분"
+    )
+    database_timeout_ms: int = Field(
+        default=200, ge=1, description="DB: 부하 시 느려짐, 200ms 필요"
+    )
     fallback_timeout_ms: int = Field(default=100, ge=1, description="알 수 없는 어댑터")
 
     # Shadow Logging 설정
     shadow_log_enabled: bool = Field(default=True, description="Shadow Log 활성화")
-    shadow_log_max_entries: int = Field(default=1000, ge=1, description="최대 보관 항목 수")
+    shadow_log_max_entries: int = Field(
+        default=1000, ge=1, description="최대 보관 항목 수"
+    )
 
     # Drift Reconciliation 설정 (Thundering Herd 방지)
     # 기존 환경변수: SELFHEALING_L2_RECONCILIATION_JITTER_MIN (하위 호환)
@@ -571,7 +583,9 @@ class L2StorageConfig(BaseSettings):
             "SELFHEALING_L2_HEALTH_CHECK_INTERVAL_SECONDS",
         ),
     )
-    health_check_timeout_ms: int = Field(default=100, ge=1, description="헬스체크 타임아웃")
+    health_check_timeout_ms: int = Field(
+        default=100, ge=1, description="헬스체크 타임아웃"
+    )
 
     def get_timeout_for_adapter(self, adapter_type: str) -> float:
         """
@@ -699,7 +713,9 @@ class L2StorageRuntimeConfig:
         ),
     }
 
-    def _validate_and_update_field(self, key: str, value: int | float | bool | None) -> tuple[bool, int | float | bool | None]:
+    def _validate_and_update_field(
+        self, key: str, value: int | float | bool | None
+    ) -> tuple[bool, int | float | bool | None]:
         """Validate and update a single config field. Returns (updated, value)."""
         if value is None:
             return False, None
@@ -810,7 +826,9 @@ class L2StorageRuntimeConfig:
             "database": self.get_database_timeout_ms(),
             "django": self.get_database_timeout_ms(),
         }
-        return timeouts.get(adapter_type.lower(), self.get_fallback_timeout_ms()) / 1000.0
+        return (
+            timeouts.get(adapter_type.lower(), self.get_fallback_timeout_ms()) / 1000.0
+        )
 
     def to_dict(self) -> dict:
         """Export current configuration as dict."""
@@ -820,9 +838,15 @@ class L2StorageRuntimeConfig:
             "fallback_timeout_ms": self.get_fallback_timeout_ms(),
             "shadow_log_enabled": self.get_shadow_log_enabled(),
             "shadow_log_max_entries": self.get_shadow_log_max_entries(),
-            "reconciliation_jitter_min_seconds": self._get_value("reconciliation_jitter_min_seconds"),
-            "reconciliation_jitter_max_seconds": self._get_value("reconciliation_jitter_max_seconds"),
-            "health_check_interval_seconds": self._get_value("health_check_interval_seconds"),
+            "reconciliation_jitter_min_seconds": self._get_value(
+                "reconciliation_jitter_min_seconds"
+            ),
+            "reconciliation_jitter_max_seconds": self._get_value(
+                "reconciliation_jitter_max_seconds"
+            ),
+            "health_check_interval_seconds": self._get_value(
+                "health_check_interval_seconds"
+            ),
             "health_check_timeout_ms": self._get_value("health_check_timeout_ms"),
             "last_updated": self._last_updated,
         }
@@ -875,7 +899,7 @@ class ConfigDriftMonitor:
 
         # 환경변수 변경 확인 후 필요시 캐시 무효화
         if monitor.check_and_invalidate("circuit_breaker", "SELFHEALING_CB_"):
-            logger.info("Config changed, cache invalidated")
+            logger.info("config.cache_invalidated")
 
         # 설정 조회 (drift 체크 포함)
         settings = get_circuit_breaker_settings_safe()

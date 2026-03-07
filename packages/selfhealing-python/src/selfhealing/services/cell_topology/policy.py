@@ -168,7 +168,7 @@ class CellEvacuationPolicy:
 
             if below_count < self._settings.evacuation_consecutive_count:
                 logger.debug(
-                    "Cell %s health=%.2f <= %.2f, " "below_count=%d/%d",
+                    "Cell %s health=%.2f <= %.2f, below_count=%d/%d",
                     cell_id,
                     health_score,
                     threshold,
@@ -182,7 +182,10 @@ class CellEvacuationPolicy:
                 return False
 
             # === 연속 카운터 도달 — DRAINING 전환 ===
-            reason = f"Health score {health_score:.2f} <= {threshold} " f"for {below_count} consecutive ticks"
+            reason = (
+                f"Health score {health_score:.2f} <= {threshold} "
+                f"for {below_count} consecutive ticks"
+            )
             logger.warning(
                 "Cell %s: %s, transitioning ACTIVE -> DRAINING",
                 cell_id,
@@ -207,7 +210,8 @@ class CellEvacuationPolicy:
             # 신규 트래픽 차단은 CellRegistry.get_cell_for_key()의
             # Hash Ring 순회에서 DRAINING Cell이 자동 skip됨으로써 달성된다.
             logger.info(
-                "Cell %s: DRAINING 전환 완료 — " "신규 트래픽은 Hash Ring 라우팅에서 차단됨",
+                "Cell %s: DRAINING 전환 완료 — "
+                "신규 트래픽은 Hash Ring 라우팅에서 차단됨",
                 cell_id,
             )
 
@@ -286,7 +290,7 @@ class CellEvacuationPolicy:
         if last_change.get("to") != CellState.DRAINING.value:
             # metadata가 없거나 불일치 — 보수적으로 skip
             logger.warning(
-                "Cell %s: DRAINING but metadata mismatch, " "waiting for next tick",
+                "Cell %s: DRAINING but metadata mismatch, waiting for next tick",
                 cell_id,
             )
             return False
@@ -299,7 +303,10 @@ class CellEvacuationPolicy:
             return False
 
         elapsed = time.time() - drain_started
-        required = self._settings.evacuation_traffic_drain_seconds + self._settings.evacuation_drain_grace_seconds
+        required = (
+            self._settings.evacuation_traffic_drain_seconds
+            + self._settings.evacuation_drain_grace_seconds
+        )
 
         if elapsed < required:
             logger.debug(
@@ -338,13 +345,18 @@ class CellEvacuationPolicy:
         # 서비스 재배치 로깅
         affected = cell.metadata.get("evacuation_affected_services", [])
         logger.info(
-            "Cell %s: ISOLATED — %d services redistributed via " "Consistent Hash Ring",
-            cell_id,
-            len(affected),
+            "cell_topology.cell_isolated_services_redistributed",
+            cell_id=cell_id,
+            services_count=len(affected),
         )
         for svc in affected:
             new_cell = registry.get_cell_for_key(svc)
-            logger.info("  Service '%s': %s -> %s", svc, cell_id, new_cell)
+            logger.info(
+                "cell_topology.service_redistributed",
+                service=svc,
+                from_cell=cell_id,
+                to_cell=new_cell,
+            )
 
         return True
 
@@ -375,7 +387,7 @@ class CellEvacuationPolicy:
 
             if above_count < self._settings.recovery_consecutive_count:
                 logger.debug(
-                    "Cell %s health=%.2f >= %.2f, " "above_count=%d/%d",
+                    "Cell %s health=%.2f >= %.2f, above_count=%d/%d",
                     cell_id,
                     health_score,
                     recovery_threshold,
@@ -385,7 +397,10 @@ class CellEvacuationPolicy:
                 return False
 
             # === 연속 카운터 도달 — ACTIVE 복구 ===
-            reason = f"Health score {health_score:.2f} >= {recovery_threshold} " f"for {above_count} consecutive ticks"
+            reason = (
+                f"Health score {health_score:.2f} >= {recovery_threshold} "
+                f"for {above_count} consecutive ticks"
+            )
             logger.info(
                 "Cell %s: %s, restoring ISOLATED -> ACTIVE",
                 cell_id,
@@ -563,7 +578,9 @@ class CellEvacuationPolicy:
             )
             self._notify_blast_radius_sync(cell_id, affected_services)
 
-    def _notify_blast_radius_sync(self, cell_id: str, affected_services: list[str]) -> None:
+    def _notify_blast_radius_sync(
+        self, cell_id: str, affected_services: list[str]
+    ) -> None:
         """BlastRadiusService 동기 폴백."""
         try:
             from selfhealing.services.blast_radius.models import (

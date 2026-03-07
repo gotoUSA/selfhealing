@@ -179,7 +179,7 @@ class ComplianceService:
         # DORA-003 자동 검사 함수 등록 (Resilience Testing 요구사항)
         self._register_resilience_testing_check()
 
-        logger.info("initialized")
+        logger.info("compliance_service.initialized")
 
     def _log_compliance_audit(
         self,
@@ -250,7 +250,7 @@ class ComplianceService:
             recent_experiments = scheduler.get_execution_history(limit=500)
 
             if not recent_experiments:
-                logger.warning("compliance")
+                logger.warning("compliance.no_recent_experiments")
                 return False
 
             # 최근 30일 필터링
@@ -266,7 +266,9 @@ class ComplianceService:
                 if hasattr(exp, "executed_at") and exp.executed_at:
                     try:
                         if isinstance(exp.executed_at, str):
-                            exp_time = datetime.fromisoformat(exp.executed_at.replace("Z", "+00:00"))
+                            exp_time = datetime.fromisoformat(
+                                exp.executed_at.replace("Z", "+00:00")
+                            )
                         else:
                             exp_time = exp.executed_at
 
@@ -410,7 +412,11 @@ class ComplianceService:
                 check_id=check_id,
                 stage_name=stage_name,
                 standard=check.standard,
-                severity=(ViolationSeverity.HIGH if check.required else ViolationSeverity.MEDIUM),
+                severity=(
+                    ViolationSeverity.HIGH
+                    if check.required
+                    else ViolationSeverity.MEDIUM
+                ),
                 message=f"{check.name} 검사 실패",
                 details=details,
                 remediation=f"{check.description}을 확인하세요",
@@ -429,7 +435,11 @@ class ComplianceService:
                 check_id=check_id,
                 passed=False,
                 violation_id=violation.violation_id,
-                severity=(violation.severity.value if hasattr(violation.severity, "value") else str(violation.severity)),
+                severity=(
+                    violation.severity.value
+                    if hasattr(violation.severity, "value")
+                    else str(violation.severity)
+                ),
                 message=violation.message,
             )
             return violation

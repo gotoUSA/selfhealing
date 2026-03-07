@@ -51,7 +51,7 @@ class AdjustmentRecorder:
         if self.enable_persistence:
             self._load_from_file()
 
-        logger.info("initialized")
+        logger.info("adjustment_recorder.initialized")
 
     def record(
         self,
@@ -213,7 +213,9 @@ class AdjustmentRecorder:
             )
             return session
 
-    def end_session(self, state: TuningState = TuningState.COMPLETED) -> TuningSession | None:
+    def end_session(
+        self, state: TuningState = TuningState.COMPLETED
+    ) -> TuningSession | None:
         """현재 세션 종료"""
         with self._lock:
             if not self._current_session_id:

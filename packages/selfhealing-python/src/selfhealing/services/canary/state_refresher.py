@@ -126,7 +126,7 @@ class EmergencyStateRefresher:
             self._thread = threading.Thread(target=self._run, daemon=True)
             self._thread.start()
 
-            logger.info("started")
+            logger.info("state_refresher.started")
             return True
 
     def stop(self) -> None:
@@ -147,7 +147,7 @@ class EmergencyStateRefresher:
 
             self._thread = None
 
-            logger.info("stopped")
+            logger.info("state_refresher.stopped")
 
     def force_refresh(self) -> dict[str, Any] | None:
         """

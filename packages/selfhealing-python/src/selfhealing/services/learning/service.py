@@ -171,7 +171,11 @@ class ParameterBlacklist:
 
         with self._lock:
             # 만료된 항목 제거
-            expired_keys = [k for k, v in self._blacklist.items() if v.expires_at and now_time > v.expires_at]
+            expired_keys = [
+                k
+                for k, v in self._blacklist.items()
+                if v.expires_at and now_time > v.expires_at
+            ]
             for k in expired_keys:
                 del self._blacklist[k]
 
@@ -215,7 +219,9 @@ class ParameterBlacklist:
             if stored:
                 with self._lock:
                     for key, entry_dict in stored.items():
-                        self._blacklist[key] = BlacklistedParameter.from_dict(entry_dict)
+                        self._blacklist[key] = BlacklistedParameter.from_dict(
+                            entry_dict
+                        )
                 logger.info(
                     "parameter_blacklist.loaded_entries_storage",
                     blacklist_count=len(self._blacklist),
@@ -237,7 +243,9 @@ class ParameterBlacklist:
 
         try:
             with self._lock:
-                serialized = {key: entry.to_dict() for key, entry in self._blacklist.items()}
+                serialized = {
+                    key: entry.to_dict() for key, entry in self._blacklist.items()
+                }
 
             self._backend.set(self.STORAGE_KEY, serialized)
             logger.debug(
@@ -285,7 +293,7 @@ class LearningService:
 
         self._initialized = True
 
-        logger.info("initialized")
+        logger.info("learning_service.initialized")
 
     def start_session(self, stage_name: str) -> LearningSession:
         """
@@ -484,7 +492,9 @@ class LearningService:
     def _detect_anomaly(self, metric: PerformanceMetric) -> None:
         """이상 탐지"""
         # 같은 메트릭의 최근 값들 가져오기
-        recent_values = [m.value for m in self._metrics[-100:] if m.metric_name == metric.metric_name]
+        recent_values = [
+            m.value for m in self._metrics[-100:] if m.metric_name == metric.metric_name
+        ]
 
         if len(recent_values) < 10:
             return
@@ -593,7 +603,9 @@ class LearningService:
             for p in patterns:
                 pattern_names[p.name].append(stage)
 
-        common_patterns = {name: stages for name, stages in pattern_names.items() if len(stages) > 1}
+        common_patterns = {
+            name: stages for name, stages in pattern_names.items() if len(stages) > 1
+        }
 
         return {
             "total_stages": len(patterns_by_stage),
@@ -767,6 +779,9 @@ class LearningService:
             True if manual only mode
         """
         for pattern in self._patterns.values():
-            if pattern.name == f"ManualOnlyMode:{module}" and pattern.features.get("manual_only") is True:
+            if (
+                pattern.name == f"ManualOnlyMode:{module}"
+                and pattern.features.get("manual_only") is True
+            ):
                 return True
         return False

@@ -294,12 +294,12 @@ class LeaderScheduler:
 
     def _on_become_leader(self) -> None:
         """리더가 되었을 때 스케줄러 루프 시작."""
-        logger.info("scheduler")
+        logger.info("scheduler.became_leader")
         self._start_scheduler_loop()
 
     def _on_lose_leader(self) -> None:
         """리더십을 잃었을 때 스케줄러 루프 중단."""
-        logger.info("scheduler")
+        logger.info("scheduler.lost_leader")
 
     def _start_scheduler_loop(self) -> None:
         """스케줄러 루프 시작 (별도 스레드)."""
@@ -315,13 +315,13 @@ class LeaderScheduler:
 
     def _scheduler_loop(self) -> None:
         """스케줄러 메인 루프."""
-        logger.info("scheduler")
+        logger.info("scheduler.loop_started")
 
         while self._running and not self._stop_event.is_set():
             try:
                 # 리더십 확인
                 if not self._elector.is_leader():
-                    logger.debug("scheduler")
+                    logger.debug("scheduler.awaiting_leadership")
                     self._stop_event.wait(timeout=self._tick_interval)
                     continue
 
@@ -343,7 +343,7 @@ class LeaderScheduler:
                 )
                 self._stop_event.wait(timeout=self._tick_interval)
 
-        logger.info("scheduler")
+        logger.info("scheduler.loop_ended")
 
     def _execute_job(self, job: ScheduledJob) -> None:
         """

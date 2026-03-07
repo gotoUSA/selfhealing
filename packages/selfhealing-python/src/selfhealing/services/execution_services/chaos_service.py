@@ -162,7 +162,7 @@ class ChaosExecutionService(GovernanceCheckMixin):
             )
 
         except Exception as e:
-            logger.exception("error")
+            logger.exception("chaos_service.run_scheduled_error")
             result.errors.append({"error": str(e)})
 
         return result
@@ -234,10 +234,18 @@ class ChaosExecutionService(GovernanceCheckMixin):
                 return {
                     "id": exp_id,
                     "status": "executed",
-                    "result": (exec_result.to_dict() if hasattr(exec_result, "to_dict") else str(exec_result)),
+                    "result": (
+                        exec_result.to_dict()
+                        if hasattr(exec_result, "to_dict")
+                        else str(exec_result)
+                    ),
                 }
             else:
-                error_msg = str(exec_result.error) if hasattr(exec_result, "error") else "Unknown error"
+                error_msg = (
+                    str(exec_result.error)
+                    if hasattr(exec_result, "error")
+                    else "Unknown error"
+                )
                 logger.error(
                     "chaos_execution_service.failed_execute",
                     exp_id=exp_id,

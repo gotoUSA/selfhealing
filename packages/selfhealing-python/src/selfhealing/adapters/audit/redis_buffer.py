@@ -954,7 +954,9 @@ def create_redis_audit_buffer(
         return RedisAuditBuffer(
             redis_client=redis_client,
             fallback_adapter=fallback,
-            on_fallback=lambda e: logger.warning(f"Redis audit fallback: {e}"),  # noqa: G004
+            on_fallback=lambda e: logger.warning(
+                "redis_audit_buffer.fallback_triggered", error=str(e)
+            ),
             **kwargs,
         )
 

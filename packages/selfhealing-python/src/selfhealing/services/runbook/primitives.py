@@ -138,14 +138,14 @@ def _handle_config_set(ctx: RunbookStepContext) -> StepResult:
         )
 
         logger.info(
-            "primitive.config_set.success",
+            "primitive.config_set_success",
             runbook_id=ctx.runbook_id,
             key=params.key,
         )
         return StepResult.succeeded({"config_type": config_type, "updated": result})
 
     except Exception as exc:
-        logger.error("primitive.config_set.failed", error=str(exc))
+        logger.error("primitive.config_set_failed", error=str(exc))
         return StepResult.failed(
             error=f"config.set failed: {exc}",
             error_code="CONFIG_SET_ERROR",
@@ -195,7 +195,7 @@ def _handle_assert_metric(ctx: RunbookStepContext) -> StepResult:
             )
 
         logger.info(
-            "primitive.assert_metric.passed",
+            "primitive.assert_metric_passed",
             metric=params.metric_name,
             value=metric_value,
         )
@@ -208,7 +208,7 @@ def _handle_assert_metric(ctx: RunbookStepContext) -> StepResult:
         )
 
     except Exception as exc:
-        logger.error("primitive.assert_metric.failed", error=str(exc))
+        logger.error("primitive.assert_metric_failed", error=str(exc))
         return StepResult.failed(
             error=f"assert.metric failed: {exc}",
             error_code="ASSERT_METRIC_ERROR",
@@ -249,7 +249,7 @@ def _handle_notify_send(ctx: RunbookStepContext) -> StepResult:
         result = manager.notify(payload)
 
         logger.info(
-            "primitive.notify_send.success",
+            "primitive.notify_send_success",
             runbook_id=ctx.runbook_id,
             title=params.title,
         )
@@ -261,7 +261,7 @@ def _handle_notify_send(ctx: RunbookStepContext) -> StepResult:
         )
 
     except Exception as exc:
-        logger.error("primitive.notify_send.failed", error=str(exc))
+        logger.error("primitive.notify_send_failed", error=str(exc))
         return StepResult.failed(
             error=f"notify.send failed: {exc}",
             error_code="NOTIFY_SEND_ERROR",
@@ -286,7 +286,7 @@ def _handle_recovery_start(ctx: RunbookStepContext) -> StepResult:
         )
 
         logger.info(
-            "primitive.recovery_start.success",
+            "primitive.recovery_start_success",
             runbook_id=ctx.runbook_id,
             namespace=params.namespace,
             trigger_level=params.trigger_level,
@@ -299,13 +299,13 @@ def _handle_recovery_start(ctx: RunbookStepContext) -> StepResult:
         )
 
     except ValueError as exc:
-        logger.warning("primitive.recovery_start.rejected", error=str(exc))
+        logger.warning("primitive.recovery_start_rejected", error=str(exc))
         return StepResult.failed(
             error=f"recovery.start rejected: {exc}",
             error_code="RECOVERY_START_REJECTED",
         )
     except Exception as exc:
-        logger.error("primitive.recovery_start.failed", error=str(exc))
+        logger.error("primitive.recovery_start_failed", error=str(exc))
         return StepResult.failed(
             error=f"recovery.start failed: {exc}",
             error_code="RECOVERY_START_ERROR",
@@ -342,7 +342,7 @@ def _handle_emergency_activate(ctx: RunbookStepContext) -> StepResult:
         )
 
         logger.info(
-            "primitive.emergency_activate.success",
+            "primitive.emergency_activate_success",
             runbook_id=ctx.runbook_id,
             level=params.level,
         )
@@ -355,7 +355,7 @@ def _handle_emergency_activate(ctx: RunbookStepContext) -> StepResult:
         )
 
     except Exception as exc:
-        logger.error("primitive.emergency_activate.failed", error=str(exc))
+        logger.error("primitive.emergency_activate_failed", error=str(exc))
         return StepResult.failed(
             error=f"emergency.activate failed: {exc}",
             error_code="EMERGENCY_ACTIVATE_ERROR",
@@ -377,7 +377,7 @@ def _handle_emergency_deactivate(ctx: RunbookStepContext) -> StepResult:
         )
 
         logger.info(
-            "primitive.emergency_deactivate.success",
+            "primitive.emergency_deactivate_success",
             runbook_id=ctx.runbook_id,
         )
         return StepResult.succeeded(
@@ -388,7 +388,7 @@ def _handle_emergency_deactivate(ctx: RunbookStepContext) -> StepResult:
         )
 
     except Exception as exc:
-        logger.error("primitive.emergency_deactivate.failed", error=str(exc))
+        logger.error("primitive.emergency_deactivate_failed", error=str(exc))
         return StepResult.failed(
             error=f"emergency.deactivate failed: {exc}",
             error_code="EMERGENCY_DEACTIVATE_ERROR",
@@ -484,14 +484,14 @@ def _handle_wait_stabilize(ctx: RunbookStepContext) -> StepResult:
                     )
 
         logger.info(
-            "primitive.wait_stabilize.done",
+            "primitive.wait_stabilize_done",
             runbook_id=ctx.runbook_id,
             seconds=params.seconds,
         )
         return StepResult.succeeded({"waited_seconds": params.seconds})
 
     except Exception as exc:
-        logger.error("primitive.wait_stabilize.failed", error=str(exc))
+        logger.error("primitive.wait_stabilize_failed", error=str(exc))
         return StepResult.failed(
             error=f"wait.stabilize failed: {exc}",
             error_code="WAIT_STABILIZE_ERROR",
@@ -517,7 +517,7 @@ def _query_metric(
             return provider.query(metric_name, labels=labels)
     except Exception as exc:
         logger.debug(
-            "primitive.query_metric.provider_failed", metric=metric_name, error=str(exc)
+            "primitive.query_metric_provider_failed", metric=metric_name, error=str(exc)
         )
 
     try:
@@ -526,10 +526,10 @@ def _query_metric(
         return get_metric_value(metric_name)
     except Exception as exc:
         logger.debug(
-            "primitive.query_metric.fallback_failed", metric=metric_name, error=str(exc)
+            "primitive.query_metric_fallback_failed", metric=metric_name, error=str(exc)
         )
 
-    logger.warning("primitive.query_metric.unavailable", metric=metric_name)
+    logger.warning("primitive.query_metric_unavailable", metric=metric_name)
     return None
 
 

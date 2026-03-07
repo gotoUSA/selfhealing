@@ -175,7 +175,10 @@ class RegionHealthMonitor:
 
         # 1. API 헬스 체크
         api_health = self._check_api_health(endpoint, start)
-        if api_health.status in (RegionHealthStatus.UNHEALTHY, RegionHealthStatus.UNREACHABLE):
+        if api_health.status in (
+            RegionHealthStatus.UNHEALTHY,
+            RegionHealthStatus.UNREACHABLE,
+        ):
             return api_health
 
         # 2. 복제 지연 체크 (API 정상일 때만)
@@ -402,7 +405,11 @@ class RegionHealthMonitor:
             HEALTHY 상태인 리전 이름 목록
         """
         with self._lock:
-            return [region for region, health in self._health_states.items() if health.status == RegionHealthStatus.HEALTHY]
+            return [
+                region
+                for region, health in self._health_states.items()
+                if health.status == RegionHealthStatus.HEALTHY
+            ]
 
     def get_region_health(self, region: str) -> RegionHealth | None:
         """
@@ -581,7 +588,7 @@ class RegionHealthMonitor:
         )
         self._heartbeat_worker.start()
 
-        logger.info("started")
+        logger.info("health_monitor.started")
 
     def stop(self) -> None:
         """
@@ -593,7 +600,7 @@ class RegionHealthMonitor:
         self._stop_event.set()
         if self._worker:
             self._worker.join(timeout=2.0)
-        logger.info("stopped")
+        logger.info("health_monitor.stopped")
 
     def is_running(self) -> bool:
         """모니터링 실행 중인지 확인."""

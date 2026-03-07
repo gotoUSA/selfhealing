@@ -153,7 +153,7 @@ class HPAMetricsExporter:
                 daemon=True,
             )
             self._worker.start()
-            logger.info("started")
+            logger.info("hpa_exporter.started")
 
     def stop(self) -> None:
         """Exporter 중지."""
@@ -165,7 +165,7 @@ class HPAMetricsExporter:
             self._worker.join(timeout=2.0)
             self._worker = None
 
-        logger.info("stopped")
+        logger.info("hpa_exporter.stopped")
 
     def is_running(self) -> bool:
         """실행 중 여부 반환."""

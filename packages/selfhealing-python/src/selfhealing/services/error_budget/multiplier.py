@@ -128,7 +128,9 @@ class CrisisMultiplierConfig:
         )
     """
 
-    multipliers: dict[EmergencyLevel, float] = field(default_factory=lambda: dict(DEFAULT_CRISIS_MULTIPLIERS))
+    multipliers: dict[EmergencyLevel, float] = field(
+        default_factory=lambda: dict(DEFAULT_CRISIS_MULTIPLIERS)
+    )
     """Emergency Level별 가중치 매핑."""
 
     enabled: bool = True
@@ -197,7 +199,9 @@ class CrisisMultiplierConfig:
             설정 딕셔너리
         """
         return {
-            "multipliers": {level.name: value for level, value in self.multipliers.items()},
+            "multipliers": {
+                level.name: value for level, value in self.multipliers.items()
+            },
             "enabled": self.enabled,
             "max_multiplier": self.max_multiplier,
         }
@@ -250,7 +254,9 @@ class CrisisMultiplierProvider:
         """
         self.config = config or CrisisMultiplierConfig()
         self._emergency_tracker = None
-        self._cache_ttl = cache_ttl if cache_ttl is not None else _get_multiplier_cache_ttl()
+        self._cache_ttl = (
+            cache_ttl if cache_ttl is not None else _get_multiplier_cache_ttl()
+        )
 
         # 캐시 상태
         self._cached_multiplier: float | None = None
@@ -377,7 +383,9 @@ class CrisisMultiplierProvider:
         Returns:
             레벨명 -> 가중치 매핑
         """
-        return {level.name: self.config.get_multiplier(level) for level in EmergencyLevel}
+        return {
+            level.name: self.config.get_multiplier(level) for level in EmergencyLevel
+        }
 
     def get_combined_multiplier(
         self,
@@ -427,7 +435,7 @@ class CrisisMultiplierProvider:
 
                 error_weight = get_weight_for_error_code(error_code)
             except ImportError:
-                logger.warning("available")
+                logger.warning("multiplier.exception_weights_unavailable")
 
         # 3. 결합 정책 조회
         try:

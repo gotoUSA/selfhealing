@@ -48,7 +48,7 @@ class StepHandlerMixin:
                 provider = get_crisis_multiplier_provider()
                 provider.reset_multiplier(session.namespace)
             except ImportError:
-                logger.warning("recovery")
+                logger.warning("recovery.crisis_multiplier_unavailable")
 
             return {"success": True, "multiplier": target}
         except Exception as e:
@@ -67,8 +67,12 @@ class StepHandlerMixin:
         settings = get_recovery_coordinator_settings()
 
         # step.params에서 값이 없으면 settings에서 기본값 사용
-        duration_minutes = step.params.get("duration_minutes", settings.stability_check_duration_minutes)
-        error_rate_threshold = step.params.get("error_rate_threshold", settings.stability_check_error_rate_threshold)
+        duration_minutes = step.params.get(
+            "duration_minutes", settings.stability_check_duration_minutes
+        )
+        error_rate_threshold = step.params.get(
+            "error_rate_threshold", settings.stability_check_error_rate_threshold
+        )
 
         # Health Check 상태로 전환
         session.status = RecoveryStatus.HEALTH_CHECK
@@ -104,7 +108,9 @@ class StepHandlerMixin:
         resume_paused_only = step.params.get("resume_paused_only", True)
 
         # Whitelist 기반 필터링 (기본: error_budget만 재개)
-        triggered_by_whitelist = step.params.get("triggered_by_whitelist", ["error_budget"])
+        triggered_by_whitelist = step.params.get(
+            "triggered_by_whitelist", ["error_budget"]
+        )
 
         # 순차 재개 설정
         staggered_enabled = step.params.get("staggered_enabled", True)
@@ -143,7 +149,7 @@ class StepHandlerMixin:
                     "triggered_by_whitelist": triggered_by_whitelist,
                 }
             except (ImportError, AttributeError):
-                logger.warning("recovery")
+                logger.warning("recovery.canary_service_unavailable")
                 return {"success": True, "resumed_count": 0, "skipped": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -174,7 +180,7 @@ class StepHandlerMixin:
                     reason=reason,
                 )
             except (ImportError, AttributeError):
-                logger.warning("recovery")
+                logger.warning("recovery.governance_tracker_unavailable")
                 return {"success": True, "mode": "NORMAL", "skipped": True}
 
             return {"success": True, "mode": "NORMAL"}

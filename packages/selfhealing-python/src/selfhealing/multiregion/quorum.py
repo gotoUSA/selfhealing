@@ -207,7 +207,10 @@ class QuorumWitness:
         except Exception as e:
             # ConditionalCheckFailedException 처리
             error_name = type(e).__name__
-            if "ConditionalCheckFailedException" in error_name or "ConditionalCheckFailed" in str(e):
+            if (
+                "ConditionalCheckFailedException" in error_name
+                or "ConditionalCheckFailed" in str(e)
+            ):
                 logger.warning(
                     "quorum.primary_lease_denied_another",
                     region=self._region,
@@ -359,14 +362,14 @@ class QuorumWitness:
             daemon=True,
         )
         self._renew_thread.start()
-        logger.info("quorum")
+        logger.info("quorum.auto_renew_started")
 
     def stop_auto_renew(self) -> None:
         """자동 갱신 중지."""
         self._renew_running = False
         if self._renew_thread:
             self._renew_thread.join(timeout=5.0)
-        logger.info("quorum")
+        logger.info("quorum.auto_renew_stopped")
 
 
 class InMemoryQuorumWitness:
@@ -401,7 +404,10 @@ class InMemoryQuorumWitness:
 
         with InMemoryQuorumWitness._global_lock:
             # 기존 리스가 없거나 만료됨
-            if InMemoryQuorumWitness._global_lease is None or not InMemoryQuorumWitness._global_lease.is_valid():
+            if (
+                InMemoryQuorumWitness._global_lease is None
+                or not InMemoryQuorumWitness._global_lease.is_valid()
+            ):
                 InMemoryQuorumWitness._global_lease = QuorumLease(
                     region=self._region,
                     acquired_at=now,
@@ -437,7 +443,10 @@ class InMemoryQuorumWitness:
     def release_lease(self) -> None:
         """리스 해제."""
         with InMemoryQuorumWitness._global_lock:
-            if InMemoryQuorumWitness._global_lease and InMemoryQuorumWitness._global_lease.region == self._region:
+            if (
+                InMemoryQuorumWitness._global_lease
+                and InMemoryQuorumWitness._global_lease.region == self._region
+            ):
                 InMemoryQuorumWitness._global_lease = None
                 logger.info(
                     "lease_released",
@@ -447,7 +456,10 @@ class InMemoryQuorumWitness:
     def get_current_primary(self) -> str | None:
         """현재 Primary 리전 조회."""
         with InMemoryQuorumWitness._global_lock:
-            if InMemoryQuorumWitness._global_lease and InMemoryQuorumWitness._global_lease.is_valid():
+            if (
+                InMemoryQuorumWitness._global_lease
+                and InMemoryQuorumWitness._global_lease.is_valid()
+            ):
                 return InMemoryQuorumWitness._global_lease.region
             return None
 

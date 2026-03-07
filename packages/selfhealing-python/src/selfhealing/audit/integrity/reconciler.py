@@ -90,7 +90,7 @@ class HashChainReconciler:
 
             if not degraded_entries:
                 result["status"] = "no_degraded_entries"
-                logger.info("reconciler")
+                logger.info("integrity_reconciler.no_degraded_entries")
                 return result
 
             # Step 2: Get current Redis chain state
@@ -296,7 +296,11 @@ class HashChainReconciler:
             Statistics dictionary
         """
         return {
-            "last_reconciliation": (self._last_reconciliation.isoformat() if self._last_reconciliation else None),
+            "last_reconciliation": (
+                self._last_reconciliation.isoformat()
+                if self._last_reconciliation
+                else None
+            ),
             "log_dir": str(self._log_dir),
         }
 

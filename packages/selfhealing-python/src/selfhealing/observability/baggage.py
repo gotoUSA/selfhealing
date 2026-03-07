@@ -105,10 +105,12 @@ def sync_contextvars_to_baggage() -> object | None:
                 getter = _resolve_import(entry["getter"])
                 value = getter()
                 if value is not None:
-                    ctx = baggage.set_baggage(f"{BAGGAGE_PREFIX}.{key}", str(value), context=ctx)
+                    ctx = baggage.set_baggage(
+                        f"{BAGGAGE_PREFIX}.{key}", str(value), context=ctx
+                    )
             except Exception:
                 # 개별 ContextVar 실패가 전체 동기화를 중단하지 않음
-                logger.debug("Failed to sync ContextVar '%s' to baggage", key, exc_info=True)
+                logger.debug("baggage.contextvar_sync_failed", key=key, exc_info=True)
 
         return context.attach(ctx)
     except ImportError:
@@ -129,7 +131,7 @@ def detach_baggage_token(token: object) -> None:
 
         context.detach(token)
     except Exception:
-        logger.debug("Failed to detach baggage token", exc_info=True)
+        logger.debug("baggage.detach_failed", exc_info=True)
 
 
 def restore_contextvars_from_baggage() -> None:
@@ -156,4 +158,6 @@ def restore_contextvars_from_baggage() -> None:
                 contextvar = _resolve_import(entry["contextvar"])
                 contextvar.set(value)
             except Exception:
-                logger.debug("Failed to restore ContextVar '%s' from baggage", key, exc_info=True)
+                logger.debug(
+                    "baggage.contextvar_restore_failed", key=key, exc_info=True
+                )

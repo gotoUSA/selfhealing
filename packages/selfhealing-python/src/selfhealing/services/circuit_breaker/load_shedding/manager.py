@@ -80,7 +80,7 @@ class LoadSheddingManager:
         self._audit_callback: Callable[[SheddingAuditEntry], None] | None = None
         self._initialized = True
 
-        logger.debug("initialized")
+        logger.debug("load_shedding_manager.initialized")
 
     @classmethod
     def reset_instance(cls) -> None:
@@ -187,7 +187,11 @@ class LoadSheddingManager:
 
     def _get_critical_services(self) -> list[ServiceConfig]:
         """critical 서비스 목록 조회."""
-        return [config for config in self._service_configs.values() if config.criticality == "critical"]
+        return [
+            config
+            for config in self._service_configs.values()
+            if config.criticality == "critical"
+        ]
 
     def get_critical_services_error_rate(self) -> float:
         """critical 서비스들의 평균 에러율 계산."""
@@ -195,7 +199,10 @@ class LoadSheddingManager:
         if not critical_services:
             return 0.0
 
-        total_error_rate = sum(self._error_rate_provider.get_error_rate(s.service_id) for s in critical_services)
+        total_error_rate = sum(
+            self._error_rate_provider.get_error_rate(s.service_id)
+            for s in critical_services
+        )
         return total_error_rate / len(critical_services)
 
     # =========================================================================
@@ -232,7 +239,9 @@ class LoadSheddingManager:
         if applicable_level is None:
             return 100.0
 
-        return max(applicable_level.traffic_limit, service_config.min_traffic_percentage)
+        return max(
+            applicable_level.traffic_limit, service_config.min_traffic_percentage
+        )
 
     def _find_applicable_level(
         self,
@@ -240,7 +249,9 @@ class LoadSheddingManager:
         service_criticality: str,
     ) -> SheddingLevel | None:
         """현재 에러율과 서비스 criticality에 맞는 Shedding 레벨 찾기."""
-        for level in sorted(self._policy.levels, key=lambda l: l.error_rate, reverse=True):
+        for level in sorted(
+            self._policy.levels, key=lambda l: l.error_rate, reverse=True
+        ):
             if critical_error_rate >= level.error_rate:
                 if service_criticality in level.shed_criticality:
                     return level
@@ -261,7 +272,9 @@ class LoadSheddingManager:
                 allowed_traffic_percent=100.0,
                 is_shed=False,
                 reason="No shedding applied",
-                service_criticality=(service_config.criticality if service_config else None),
+                service_criticality=(
+                    service_config.criticality if service_config else None
+                ),
             )
 
         if allowed_percent <= 0.0:
@@ -272,7 +285,9 @@ class LoadSheddingManager:
                 is_shed=True,
                 reason=f"Fully shed - {current_level}",
                 current_level=current_level,
-                service_criticality=(service_config.criticality if service_config else None),
+                service_criticality=(
+                    service_config.criticality if service_config else None
+                ),
             )
 
         allow = random.random() * 100 < allowed_percent
@@ -282,7 +297,11 @@ class LoadSheddingManager:
             allow_request=allow,
             allowed_traffic_percent=allowed_percent,
             is_shed=True,
-            reason=(f"Probabilistic shedding - {current_level}" if not allow else "Request allowed"),
+            reason=(
+                f"Probabilistic shedding - {current_level}"
+                if not allow
+                else "Request allowed"
+            ),
             current_level=current_level,
             service_criticality=service_config.criticality if service_config else None,
         )
@@ -291,7 +310,9 @@ class LoadSheddingManager:
         """현재 Shedding 레벨 설명 조회."""
         critical_error_rate = self.get_critical_services_error_rate()
 
-        for i, level in enumerate(sorted(self._policy.levels, key=lambda l: l.error_rate, reverse=True)):
+        for i, level in enumerate(
+            sorted(self._policy.levels, key=lambda l: l.error_rate, reverse=True)
+        ):
             if critical_error_rate >= level.error_rate:
                 return level.description or f"Level {len(self._policy.levels) - i}"
 

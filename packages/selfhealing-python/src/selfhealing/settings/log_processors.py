@@ -1,9 +1,9 @@
 """
 structlog 프로세서 — 로그 볼륨 제어 및 이벤트명 검증.
 
-Event Name Validation (Q5):
+Event Name Validation (Q5, 314 Audit):
     이벤트명이 ``{component}.{entity}_{action}`` 컨벤션을 따르는지 검증.
-    DEV/TEST: SELFHEALING_STRICT_LOG_VALIDATION=true → ValueError (fail-fast)
+    DEV/TEST: SELFHEALING_LOGGING_STRICT_LOG_VALIDATION=true → ValueError (fail-fast)
     Production: 위반을 Prometheus counter로 기록만.
 
 Rate Limiter (De-dup):
@@ -18,7 +18,7 @@ Sampling:
 
 설정:
     LoggingSettings 에서 환경변수로 제어:
-    - SELFHEALING_STRICT_LOG_VALIDATION=true/false
+    - SELFHEALING_LOGGING_STRICT_LOG_VALIDATION=true/false
     - SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW=10
     - SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX=100
     - SELFHEALING_LOGGING_LOG_SAMPLING_RATE=1.0
@@ -32,7 +32,6 @@ Reference:
 
 from __future__ import annotations
 
-import os
 import random
 import re
 import threading
@@ -45,7 +44,7 @@ import structlog
 # Event Name Validation 프로세서 (Q5)
 # =============================================================================
 
-_EVENT_NAME_PATTERN = re.compile(r"^[a-z_]+\.[a-z_]+$")
+_EVENT_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 
 _violation_counter_initialized = False
 _violation_counter = None
@@ -70,13 +69,27 @@ def _get_violation_counter():
     return _violation_counter
 
 
+_strict_validation_cached: bool | None = None
+
+
 def _is_strict_validation() -> bool:
-    """SELFHEALING_STRICT_LOG_VALIDATION 환경변수를 확인한다."""
-    return os.environ.get("SELFHEALING_STRICT_LOG_VALIDATION", "").lower() in (
-        "true",
-        "1",
-        "yes",
-    )
+    """LoggingSettings의 strict_log_validation 설정을 캐싱하여 O(1) 조회한다."""
+    global _strict_validation_cached
+    if _strict_validation_cached is not None:
+        return _strict_validation_cached
+    try:
+        from selfhealing.settings.logging_config import get_logging_settings
+
+        _strict_validation_cached = get_logging_settings().strict_log_validation
+    except Exception:
+        _strict_validation_cached = False
+    return _strict_validation_cached
+
+
+def reset_strict_validation_cache() -> None:
+    """strict validation 캐시를 초기화한다. 테스트용."""
+    global _strict_validation_cached
+    _strict_validation_cached = None
 
 
 def event_name_validator(

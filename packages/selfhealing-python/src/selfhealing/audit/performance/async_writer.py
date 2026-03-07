@@ -77,7 +77,7 @@ class AsyncAuditWriter:
             name="AsyncAuditWriter",
         )
         self._thread.start()
-        logger.info("started")
+        logger.info("async_writer.started")
 
     def stop(self, timeout: float = 5.0) -> None:
         """Stop background writer thread."""

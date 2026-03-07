@@ -152,7 +152,9 @@ class RegionFailover:
             on_failover: 페일오버 시 호출되는 콜백
         """
         self._settings = settings or get_multiregion_settings()
-        self._health_monitor = health_monitor or RegionHealthMonitor(settings=self._settings)
+        self._health_monitor = health_monitor or RegionHealthMonitor(
+            settings=self._settings
+        )
         self._quorum_witness = quorum_witness
         self._on_failover = on_failover
 
@@ -197,19 +199,21 @@ class RegionFailover:
         healthy = self._health_monitor.get_healthy_regions()
 
         if not healthy:
-            logger.error("failover")
+            logger.error("failover.no_healthy_regions")
             return None
 
         # 현재 Primary 제외
         candidates = [r for r in healthy if r != self._current_primary]
 
         if not candidates:
-            logger.error("failover")
+            logger.error("failover.no_failover_candidates")
             return None
 
         # 우선순위 기준 정렬 (우선순위 낮을수록 높은 우선순위)
         endpoints = {e.region: e for e in self._settings.get_peer_endpoints()}
-        candidates.sort(key=lambda r: endpoints.get(r, type("", (), {"priority": 100})()).priority)
+        candidates.sort(
+            key=lambda r: endpoints.get(r, type("", (), {"priority": 100})()).priority
+        )
 
         return candidates[0]
 
@@ -262,7 +266,7 @@ class RegionFailover:
         """
         with self._lock:
             if self._state == FailoverState.FAILOVER_IN_PROGRESS:
-                logger.warning("failover")
+                logger.warning("failover.already_in_progress")
                 return False
 
             self._state = FailoverState.FAILOVER_IN_PROGRESS
@@ -278,7 +282,7 @@ class RegionFailover:
             # 1. Quorum 획득 (Split-brain 방지)
             if self._quorum_witness:
                 if not self._quorum_witness.try_acquire_primary():
-                    logger.error("failover")
+                    logger.error("failover.quorum_acquisition_failed")
                     with self._lock:
                         self._state = FailoverState.NORMAL
                     return False
@@ -447,7 +451,9 @@ class RegionFailover:
                 # 타겟 리전 값은 API를 통해 조회
                 remote_val = self._fetch_remote_state(target_region, key)
                 if local_val != remote_val:
-                    issues.append(f"Key '{key}' mismatch: " f"local={local_val}, remote={remote_val}")
+                    issues.append(
+                        f"Key '{key}' mismatch: local={local_val}, remote={remote_val}"
+                    )
         except Exception as e:
             logger.warning(
                 "failover.consistency_check_partial",
@@ -541,7 +547,9 @@ class RegionFailover:
                         method="GET",
                         headers={"Accept": "application/json"},
                     )
-                    with urllib.request.urlopen(req, timeout=5, context=ssl_ctx) as resp:
+                    with urllib.request.urlopen(
+                        req, timeout=5, context=ssl_ctx
+                    ) as resp:
                         if resp.status == 200:
                             return json.loads(resp.read())
                 except Exception as e:
@@ -583,7 +591,7 @@ class RegionFailover:
                 )
             )
         except ImportError:
-            logger.warning("failover")
+            logger.warning("failover.escalation_unavailable")
         except Exception as e:
             logger.exception(
                 "failover.alert_error",
@@ -633,11 +641,11 @@ class RegionFailover:
 
         # Quorum 획득 시도 (Split-brain 방지)
         if not self._quorum_witness:
-            logger.warning("failover")
+            logger.warning("failover.no_quorum_witness")
             return
 
         if not self._quorum_witness.try_acquire_primary():
-            logger.info("failover")
+            logger.info("failover.quorum_denied")
             return
 
         # 승격 성공 → 페일오버 실행
@@ -669,7 +677,7 @@ class RegionFailover:
     def start(self) -> None:
         """페일오버 모니터링 시작."""
         if not self._settings.enabled or not self._settings.failover_enabled:
-            logger.info("failover_disabled")
+            logger.info("failover.disabled")
             return
 
         if self._running:
@@ -686,7 +694,7 @@ class RegionFailover:
             daemon=True,
         )
         self._worker.start()
-        logger.info("failover_started")
+        logger.info("failover.started")
 
     def stop(self) -> None:
         """페일오버 모니터링 중지."""
@@ -695,7 +703,7 @@ class RegionFailover:
         if self._worker:
             self._worker.join(timeout=2.0)
         self._health_monitor.stop()
-        logger.info("failover_stopped")
+        logger.info("failover.stopped")
 
     def is_running(self) -> bool:
         """실행 중인지 확인."""

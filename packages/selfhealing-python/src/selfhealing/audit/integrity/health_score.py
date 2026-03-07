@@ -218,7 +218,7 @@ class IntegrityHealthScore:
             logger.debug("health_score.prometheus_metrics_initialized")
 
         except ImportError:
-            logger.debug("available")
+            logger.debug("health_score.prometheus_unavailable")
             self._prometheus_initialized = True  # Don't retry
 
     def record_recovery(

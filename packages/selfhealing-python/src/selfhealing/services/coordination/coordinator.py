@@ -157,7 +157,9 @@ class EmergencyCoordinator:
             해당 네임스페이스의 Emergency 상태
         """
         if namespace not in self._namespace_states:
-            self._namespace_states[namespace] = ScopedEmergencyState(namespace=namespace)
+            self._namespace_states[namespace] = ScopedEmergencyState(
+                namespace=namespace
+            )
         return self._namespace_states[namespace]
 
     def _check_transition_guards(
@@ -172,7 +174,9 @@ class EmergencyCoordinator:
 
         # 쿨다운 확인
         last_at = self._last_transition_at.get(namespace)
-        cooldown_ok, cooldown_reason = self._anti_flapping_guard.check_cooldown_elapsed(last_transition_at=last_at)
+        cooldown_ok, cooldown_reason = self._anti_flapping_guard.check_cooldown_elapsed(
+            last_transition_at=last_at
+        )
         if not cooldown_ok:
             logger.warning(
                 "coordinator.level_change_blocked_cooldown",
@@ -312,7 +316,9 @@ class EmergencyCoordinator:
             )
 
         # 5. 액션 실행
-        results = self._execute_actions_with_partial_failure(actions, namespace, trigger_event_id)
+        results = self._execute_actions_with_partial_failure(
+            actions, namespace, trigger_event_id
+        )
 
         # 6. Cascade Event 기록 (Phase 7)
         self._record_cascade_event(
@@ -355,7 +361,7 @@ class EmergencyCoordinator:
         """
         if not self._cascade_auditor:
             # cascade_auditor가 주입되지 않으면 기록 생략
-            logger.debug("coordinator")
+            logger.debug("coordinator.cascade_auditor_not_set")
             return
 
         try:
@@ -581,7 +587,7 @@ class EmergencyCoordinator:
             auditor: CascadeEventAuditor 인스턴스
         """
         self._cascade_auditor = auditor
-        logger.info("coordinator")
+        logger.info("coordinator.cascade_auditor_set")
 
     def get_cascade_auditor(self) -> CascadeEventAuditor | None:
         """

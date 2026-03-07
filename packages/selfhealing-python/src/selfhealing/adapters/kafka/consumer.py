@@ -134,17 +134,15 @@ class KafkaAuditConsumer:
             self._consumer.subscribe(full_topics)
 
             logger.info(
-                "kafka_consumer.토픽_구독_완료",
+                "kafka_consumer.topics_subscribed",
                 full_topics=full_topics,
             )
         except ImportError:
-            logger.exception(
-                "[KafkaConsumer] confluent-kafka 패키지가 설치되지 않았습니다. " "설치: pip install 'selfhealing[kafka]'"
-            )
+            logger.exception("kafka_consumer.confluent_kafka_not_installed")
             raise
         except Exception as e:
             logger.exception(
-                "kafka_consumer.초기화_실패",
+                "kafka_consumer.initialization_failed",
                 error=e,
             )
             raise
@@ -187,7 +185,9 @@ class KafkaAuditConsumer:
 
             # 타임스탬프 추출 (ms -> s)
             timestamp_tuple = msg.timestamp()
-            timestamp = timestamp_tuple[1] / 1000.0 if timestamp_tuple[0] != 0 else time.time()
+            timestamp = (
+                timestamp_tuple[1] / 1000.0 if timestamp_tuple[0] != 0 else time.time()
+            )
 
             return ConsumedEvent(
                 topic=msg.topic(),
@@ -200,7 +200,7 @@ class KafkaAuditConsumer:
             )
         except Exception as e:
             logger.exception(
-                "kafka_consumer.메시지_파싱_오류",
+                "kafka_consumer.message_parse_error",
                 error=e,
             )
             return None
@@ -222,14 +222,14 @@ class KafkaAuditConsumer:
                     return self._event_handler(event)
                 except Exception as e:
                     logger.exception(
-                        "kafka_consumer.핸들러_오류",
+                        "kafka_consumer.handler_error",
                         error=e,
                     )
                     return False
             else:
                 # 핸들러 없으면 로깅만
                 logger.debug(
-                    "kafka_consumer.수신",
+                    "kafka_consumer.received",
                     event_topic=event.topic,
                     partition=event.partition,
                     offset=event.offset,
@@ -260,14 +260,14 @@ class KafkaAuditConsumer:
                 )
 
             logger.debug(
-                "kafka_consumer.커밋_완료",
+                "kafka_consumer.commit_completed",
                 event_topic=event.topic,
                 partition=event.partition,
                 offset=event.offset,
             )
         except Exception as e:
             logger.exception(
-                "kafka_consumer.커밋_오류",
+                "kafka_consumer.commit_error",
                 error=e,
             )
 
@@ -296,7 +296,7 @@ class KafkaAuditConsumer:
                 return None
             else:
                 logger.error(
-                    "kafka_consumer.폴링_오류",
+                    "kafka_consumer.poll_error",
                     kafka_error=msg.error(),
                 )
                 return None
@@ -348,7 +348,7 @@ class KafkaAuditConsumer:
         stop() 호출 전까지 무한 루프로 메시지를 소비합니다.
         """
         self._running = True
-        logger.info("kafka_consumer.consumer_루프_시작")
+        logger.info("kafka_consumer.consumer_loop_started")
 
         while self._running:
             try:
@@ -370,19 +370,19 @@ class KafkaAuditConsumer:
 
             except Exception as e:
                 logger.exception(
-                    "kafka_consumer.루프_오류",
+                    "kafka_consumer.loop_error",
                     error=e,
                 )
                 with self._lock:
                     self._stats["last_error"] = str(e)
                 time.sleep(1.0)  # 에러 시 잠시 대기
 
-        logger.info("kafka_consumer.consumer_루프_종료")
+        logger.info("kafka_consumer.consumer_loop_stopped")
 
     def start_background(self) -> None:
         """백그라운드 스레드에서 Consumer 시작."""
         if self._worker_thread and self._worker_thread.is_alive():
-            logger.warning("kafka_consumer.이미_실행")
+            logger.warning("kafka_consumer.already_running")
             return
 
         self._worker_thread = threading.Thread(
@@ -391,7 +391,7 @@ class KafkaAuditConsumer:
             daemon=True,
         )
         self._worker_thread.start()
-        logger.info("kafka_consumer.백그라운드_스레드_시작")
+        logger.info("kafka_consumer.background_thread_started")
 
     def stop(self, timeout: float = 10.0) -> None:
         """
@@ -405,9 +405,9 @@ class KafkaAuditConsumer:
         if self._worker_thread and self._worker_thread.is_alive():
             self._worker_thread.join(timeout=timeout)
             if self._worker_thread.is_alive():
-                logger.warning("kafka_consumer.스레드가_시간_종료되지_않음")
+                logger.warning("kafka_consumer.thread_join_timeout")
 
-        logger.info("kafka_consumer.정지됨")
+        logger.info("kafka_consumer.stopped")
 
     def close(self) -> None:
         """Consumer 종료."""
@@ -417,7 +417,7 @@ class KafkaAuditConsumer:
             self._consumer.close()
             self._consumer = None
 
-        logger.info("kafka_consumer.종료됨")
+        logger.info("kafka_consumer.closed")
 
     def get_stats(self) -> dict[str, Any]:
         """소비 통계 반환."""
