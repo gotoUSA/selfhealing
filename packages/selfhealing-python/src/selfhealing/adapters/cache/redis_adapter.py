@@ -24,6 +24,7 @@ import structlog
 from selfhealing.interfaces.cache_provider import (
     CacheProviderInterface,
     DistributedLock,
+    generate_lock_owner_id,
 )
 
 logger = structlog.get_logger()

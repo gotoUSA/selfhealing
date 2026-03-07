@@ -181,6 +181,7 @@ def get_all(self) -> list[CircuitBreakerStateData]:
 | `adapters/memory/circuit_breaker.py` | `get_all()` 구현 제거 |
 | `adapters/ipc/cb_state_snapshot.py` | `get_all()` 호출을 `get_all_states()` 호출로 변경 |
 | `adapters/memory/layered_repository/` | `get_all()` 호출을 `get_all_states()` 호출로 변경 |
+| `services/metrics/updaters.py` | `get_all()` 호출을 `get_all_states()` 호출로 변경 |
 
 ---
 
@@ -266,9 +267,10 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
 # Event Journal Interface
 # =============================================================================
 from selfhealing.interfaces.event_journal import (
-    EventJournalEntry,
-    EventJournalFilter,
     EventJournalRepository,
+    JournalEntry,
+    JournalQueryFilter,
+    JournalQueryResult,
 )
 
 # =============================================================================
@@ -287,8 +289,9 @@ __all__ = [
 
     # Event Journal
     "EventJournalRepository",
-    "EventJournalEntry",
-    "EventJournalFilter",
+    "JournalEntry",
+    "JournalQueryFilter",
+    "JournalQueryResult",
 
     # Notification
     "Notification",
