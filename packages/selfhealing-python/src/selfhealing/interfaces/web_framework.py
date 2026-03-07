@@ -292,9 +292,7 @@ class ResponseContext:
         return cls.error(message, status_code=404, error_code="NOT_FOUND")
 
     @classmethod
-    def unauthorized(
-        cls, message: str = "Authentication required"
-    ) -> ResponseContext:
+    def unauthorized(cls, message: str = "Authentication required") -> ResponseContext:
         """
         Create 401 Unauthorized response.
 
@@ -419,16 +417,15 @@ class PermissionDeniedError(WebFrameworkError):
 
 class WebFrameworkInterface(ABC):
     """
-    Abstract interface for web framework adapters.
+    Abstract interface for web framework integration.
 
-    This interface defines the contract for HTTP framework
-    adapters, enabling the self-healing system to work with
-    different web frameworks interchangeably.
+    NOTE: No production implementation exists yet. Django is used directly.
+    This interface is preserved as a design contract for future framework
+    migration (Django -> FastAPI, Flask, etc.).
 
-    Implementations:
-        - DjangoRESTAdapter (current)
-        - FastAPIAdapter (planned)
-        - FlaskAdapter (planned)
+    When implementing:
+    - See adapters/django/ for reference patterns
+    - Register via ProviderRegistry.register_web_framework()
 
     Example:
         >>> framework = ProviderRegistry.get_framework()

@@ -50,11 +50,12 @@ from selfhealing.interfaces.audit_adapter import (  # Enums; Data Classes; Inter
 # =============================================================================
 # Cache Provider Interface
 # =============================================================================
-from selfhealing.interfaces.cache_provider import (  # Lock interface; Exceptions; Interface
+from selfhealing.interfaces.cache_provider import (  # Lock interface; Exceptions; Interface; Utility
     CacheProviderInterface,
     DistributedLock,
     LockAcquisitionError,
     LockNotOwnedError,
+    generate_lock_owner_id,
 )
 
 # =============================================================================
@@ -67,6 +68,16 @@ from selfhealing.interfaces.config_provider import (  # Interface; Default imple
 )
 
 # =============================================================================
+# Event Journal Interface
+# =============================================================================
+from selfhealing.interfaces.event_journal import (
+    EventJournalRepository,
+    JournalEntry,
+    JournalQueryFilter,
+    JournalQueryResult,
+)
+
+# =============================================================================
 # ML Strategy Interfaces (AI/ML 확장 기반)
 # =============================================================================
 from selfhealing.interfaces.ml_strategy import (  # Protocols
@@ -75,6 +86,16 @@ from selfhealing.interfaces.ml_strategy import (  # Protocols
     ClassificationStrategy,
     ForecastStrategy,
     StrategyLifecycle,
+)
+
+# =============================================================================
+# Notification Interface
+# =============================================================================
+from selfhealing.interfaces.notification import (
+    Notification,
+    NotificationAdapter,
+    NotificationChannel,
+    NotificationSeverity,
 )
 
 # =============================================================================
@@ -207,6 +228,8 @@ __all__ = [
     "LockNotOwnedError",
     # Interface
     "CacheProviderInterface",
+    # Utility
+    "generate_lock_owner_id",
     # =========================================================================
     # Task Queue Interface
     # =========================================================================
@@ -329,4 +352,18 @@ __all__ = [
     "ClassificationStrategy",
     "BatchCapable",
     "StrategyLifecycle",
+    # =========================================================================
+    # Event Journal Interface
+    # =========================================================================
+    "EventJournalRepository",
+    "JournalEntry",
+    "JournalQueryFilter",
+    "JournalQueryResult",
+    # =========================================================================
+    # Notification Interface
+    # =========================================================================
+    "Notification",
+    "NotificationAdapter",
+    "NotificationChannel",
+    "NotificationSeverity",
 ]

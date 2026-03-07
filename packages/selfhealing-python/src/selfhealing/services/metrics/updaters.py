@@ -167,12 +167,14 @@ def update_circuit_breaker_gauges(
             parse_composite_cb_name,
         )
 
-        all_states = repository.get_all()
+        all_states = repository.get_all_states()
         states = {}
         for cb in all_states:
             base_service, cell_id = parse_composite_cb_name(cb.service_name)
             state_value = {"closed": 0, "open": 1, "half_open": 2}.get(cb.state, 0)
-            circuit_breaker_state.labels(service=base_service, cell_id=cell_id).set(state_value)
+            circuit_breaker_state.labels(service=base_service, cell_id=cell_id).set(
+                state_value
+            )
             states[cb.service_name] = cb.state
 
         logger.debug(
@@ -242,7 +244,9 @@ def update_retry_success_rates(
 
 
 @contextmanager
-def track_recovery_time(domain: str, resolution_type: str) -> Generator[None, None, None]:
+def track_recovery_time(
+    domain: str, resolution_type: str
+) -> Generator[None, None, None]:
     """
     Context manager to track recovery time.
 
@@ -259,7 +263,9 @@ def track_recovery_time(domain: str, resolution_type: str) -> Generator[None, No
     finally:
         end = now()
         duration = (end - start).total_seconds()
-        recovery_time_seconds.labels(domain=domain, resolution_type=resolution_type).observe(duration)
+        recovery_time_seconds.labels(
+            domain=domain, resolution_type=resolution_type
+        ).observe(duration)
 
 
 # =============================================================================

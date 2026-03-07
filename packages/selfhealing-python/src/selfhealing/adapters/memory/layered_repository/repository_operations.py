@@ -149,10 +149,6 @@ class RepositoryOperationsMixin:
         """L1에서 open 상태 조회."""
         return self._l1.get_all_open()
 
-    def get_all(self) -> list[CircuitBreakerStateData]:
-        """L1에서 전체 조회."""
-        return self._l1.get_all()
-
     def delete(self, service_name: str) -> bool:
         """L1에서 삭제. L2도 동기화."""
         result = self._l1.delete(service_name)
@@ -204,7 +200,9 @@ class RepositoryOperationsMixin:
         ttl_minutes: int = 90,
     ) -> tuple:
         """L1에서 강제 open 후 L2 동기화."""
-        result = self._l1.atomic_force_open(service_name, reason, controlled_by_id, ttl_minutes)
+        result = self._l1.atomic_force_open(
+            service_name, reason, controlled_by_id, ttl_minutes
+        )
 
         if result[0]:
             updated = self._l1.get_by_service_name(service_name)
@@ -254,7 +252,9 @@ class RepositoryOperationsMixin:
         expires_at: datetime | None = None,
     ) -> bool:
         """L1에서 수동 제어 설정 후 L2 동기화."""
-        result = self._l1.set_manual_control(service_name, state, controlled_by_id, reason, expires_at)
+        result = self._l1.set_manual_control(
+            service_name, state, controlled_by_id, reason, expires_at
+        )
 
         if result:
             updated = self._l1.get_by_service_name(service_name)
@@ -263,7 +263,9 @@ class RepositoryOperationsMixin:
 
         return result
 
-    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
+    def clear_manual_control(
+        self, service_name: str, preserve_reason: bool = False
+    ) -> bool:
         """L1에서 수동 제어 해제 후 L2 동기화."""
         result = self._l1.clear_manual_control(service_name, preserve_reason)
 
@@ -279,11 +281,10 @@ class RepositoryOperationsMixin:
         result = self._l1.pop(service_name, None) is not None
         if self._l2:
             try:
-                if hasattr(self._l2, 'delete_state'):
+                if hasattr(self._l2, "delete_state"):
                     self._l2.delete_state(service_name)
-                elif hasattr(self._l2, 'pop'):
+                elif hasattr(self._l2, "pop"):
                     self._l2.pop(service_name, None)
             except Exception:
                 pass
         return result
-

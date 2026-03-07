@@ -15,7 +15,6 @@ Related:
 from __future__ import annotations
 
 import json
-import threading
 import time
 from datetime import timedelta
 from typing import Any
@@ -69,7 +68,7 @@ class RedisDistributedLock(DistributedLock):
         self._sleep_interval = sleep_interval
 
         # Unique owner ID for this lock instance
-        self._owner_id = f"{threading.get_ident()}:{id(self)}:{time.time()}"
+        self._owner_id = generate_lock_owner_id()
         self._acquired = False
 
     def acquire(
@@ -213,7 +212,9 @@ class RedisDistributedLock(DistributedLock):
         """
 
         try:
-            result = self._redis.eval(lua_script, 1, self._name, self._owner_id, additional_ms)
+            result = self._redis.eval(
+                lua_script, 1, self._name, self._owner_id, additional_ms
+            )
             return result == 1
         except Exception as e:
             logger.exception(
@@ -517,7 +518,9 @@ class RedisCacheAdapter(CacheProviderInterface):
             return True
 
         try:
-            prefixed_mapping = {self._make_key(k): self._serialize(v) for k, v in mapping.items()}
+            prefixed_mapping = {
+                self._make_key(k): self._serialize(v) for k, v in mapping.items()
+            }
 
             # MSET doesn't support TTL, so we use pipeline
             if ttl:
@@ -658,7 +661,14 @@ class RedisCacheAdapter(CacheProviderInterface):
             raw_keys = self._redis.keys(full_pattern)
             # Remove prefix from returned keys
             prefix_len = len(self._key_prefix)
-            return [(k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:]) for k in raw_keys]
+            return [
+                (
+                    k.decode("utf-8")[prefix_len:]
+                    if isinstance(k, bytes)
+                    else k[prefix_len:]
+                )
+                for k in raw_keys
+            ]
         except Exception as e:
             logger.exception(
                 "redis_cache.keys_error",
@@ -677,7 +687,14 @@ class RedisCacheAdapter(CacheProviderInterface):
             full_pattern = self._make_key(pattern)
             cursor, raw_keys = self._redis.scan(0, match=full_pattern, count=count)
             prefix_len = len(self._key_prefix)
-            keys = [(k.decode("utf-8")[prefix_len:] if isinstance(k, bytes) else k[prefix_len:]) for k in raw_keys]
+            keys = [
+                (
+                    k.decode("utf-8")[prefix_len:]
+                    if isinstance(k, bytes)
+                    else k[prefix_len:]
+                )
+                for k in raw_keys
+            ]
             return (cursor, keys)
         except Exception as e:
             logger.exception(

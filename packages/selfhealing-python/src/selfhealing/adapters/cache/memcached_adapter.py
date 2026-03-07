@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import time
-import uuid
 from datetime import timedelta
 from typing import Any
 
@@ -52,7 +51,7 @@ class MemcachedDistributedLock(DistributedLock):
         self._name = f"lock:{name}"
         self._timeout = int(timeout.total_seconds())
         self._blocking_timeout = blocking_timeout
-        self._token = str(uuid.uuid4())
+        self._token = generate_lock_owner_id()
         self._acquired = False
 
     def acquire(self, blocking: bool = True, timeout: float | None = None) -> bool:

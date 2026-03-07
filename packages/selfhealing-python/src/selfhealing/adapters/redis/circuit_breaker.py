@@ -320,7 +320,9 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """Get all states from memory (degraded mode)."""
         results = []
         for key, value in self._backend._memory.items():
-            if key.startswith(self.KEY_PREFIX) and not key.endswith(self.HISTORY_SUFFIX):
+            if key.startswith(self.KEY_PREFIX) and not key.endswith(
+                self.HISTORY_SUFFIX
+            ):
                 service_name = key[len(self.KEY_PREFIX) :]
                 if isinstance(value, dict):
                     results.append(self._to_data(service_name, value))
@@ -437,7 +439,11 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         """Convert dict to CircuitBreakerStateData."""
         raw_metadata = data.get("metadata", "{}")
         try:
-            metadata = json.loads(raw_metadata) if isinstance(raw_metadata, str) else raw_metadata
+            metadata = (
+                json.loads(raw_metadata)
+                if isinstance(raw_metadata, str)
+                else raw_metadata
+            )
         except (json.JSONDecodeError, TypeError):
             metadata = {}
 
@@ -449,11 +455,17 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             success_count=self._parse_int(data.get("success_count", 0)),
             last_failure_at=self._parse_datetime(data.get("last_failure_at")),
             opened_at=self._parse_datetime(data.get("opened_at")),
-            manually_controlled=self._parse_bool(data.get("manually_controlled", "False")),
+            manually_controlled=self._parse_bool(
+                data.get("manually_controlled", "False")
+            ),
             controlled_by_id=self._parse_int(data.get("controlled_by_id")),
             control_reason=data.get("control_reason", ""),
-            manual_override_expires_at=self._parse_datetime(data.get("manual_override_expires_at")),
-            half_open_request_count=self._parse_int(data.get("half_open_request_count", 0)),
+            manual_override_expires_at=self._parse_datetime(
+                data.get("manual_override_expires_at")
+            ),
+            half_open_request_count=self._parse_int(
+                data.get("half_open_request_count", 0)
+            ),
             metadata=metadata if isinstance(metadata, dict) else {},
             created_at=self._parse_datetime(data.get("created_at")),
             updated_at=self._parse_datetime(data.get("updated_at")),
@@ -530,7 +542,9 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         self.increment_success(service_name)
         return self.get_or_create(service_name)
 
-    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
+    def clear_manual_control(
+        self, service_name: str, preserve_reason: bool = False
+    ) -> bool:
         """
         Clear manual control from circuit breaker.
 
@@ -554,15 +568,6 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             updates["control_reason"] = ""
 
         return self._backend.hset(self._make_key(service_name), updates)
-
-    def get_all(self) -> list[CircuitBreakerStateData]:
-        """
-        Get all circuit breaker states (alias for get_all_states).
-
-        Returns:
-            List of all CircuitBreakerStateData
-        """
-        return self.get_all_states()
 
     def reset(self, service_name: str) -> bool:
         """
@@ -625,7 +630,9 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         success = self._backend.hset(self._make_key(service_name), updates)
 
         if success:
-            self._record_history(service_name, new_state, now, note=f"force_open: {reason}")
+            self._record_history(
+                service_name, new_state, now, note=f"force_open: {reason}"
+            )
 
         return (success, previous_state, new_state)
 
@@ -669,7 +676,9 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         success = self._backend.hset(self._make_key(service_name), updates)
 
         if success:
-            self._record_history(service_name, new_state, now, note=f"force_close: {reason}")
+            self._record_history(
+                service_name, new_state, now, note=f"force_close: {reason}"
+            )
 
         return (success, previous_state, new_state)
 
@@ -712,7 +721,9 @@ class RedisCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         success = self._backend.hset(self._make_key(service_name), updates)
 
         if success:
-            self._record_history(service_name, new_state, now, note=f"atomic_reset: {reason}")
+            self._record_history(
+                service_name, new_state, now, note=f"atomic_reset: {reason}"
+            )
 
         return (success, previous_state, new_state)
 

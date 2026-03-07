@@ -64,7 +64,9 @@ class L2SyncMixin:
             self._handle_l2_error("sync", service_name, e, state.state)
             return False
 
-    def _sync_to_l2_async(self, service_name: str, state: CircuitBreakerStateData) -> None:
+    def _sync_to_l2_async(
+        self, service_name: str, state: CircuitBreakerStateData
+    ) -> None:
         """L2로 비동기 동기화 (백그라운드, 타임아웃 적용)."""
         if not self._l2:
             return
@@ -101,7 +103,7 @@ class L2SyncMixin:
         if not self._l2:
             return {"success": False, "reason": "L2 not configured"}
 
-        all_states = self._l1.get_all()
+        all_states = self._l1.get_all_states()
         success_count = 0
         failure_count = 0
 

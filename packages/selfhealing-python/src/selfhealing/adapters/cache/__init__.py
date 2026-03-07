@@ -12,6 +12,9 @@ Available Adapters:
 from selfhealing.adapters.cache.memory_adapter import (
     InMemoryCacheAdapter,
 )
+from selfhealing.adapters.cache.metrics_decorator import (
+    MetricsAwareCacheAdapter,
+)
 from selfhealing.adapters.cache.redis_adapter import (
     RedisCacheAdapter,
 )
@@ -19,4 +22,5 @@ from selfhealing.adapters.cache.redis_adapter import (
 __all__ = [
     "RedisCacheAdapter",
     "InMemoryCacheAdapter",
+    "MetricsAwareCacheAdapter",
 ]

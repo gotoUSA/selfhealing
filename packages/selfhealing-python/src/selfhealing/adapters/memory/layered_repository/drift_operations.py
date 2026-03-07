@@ -59,7 +59,7 @@ class DriftOperationsMixin:
         l2_wins_count = 0
         errors = []
 
-        l1_states = self._l1.get_all()
+        l1_states = self._l1.get_all_states()
 
         for l1_state in l1_states:
             try:

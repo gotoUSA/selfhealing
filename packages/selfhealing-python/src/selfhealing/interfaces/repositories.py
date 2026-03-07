@@ -634,7 +634,9 @@ class CircuitBreakerStateRepository(ABC):
         ...
 
     @abstractmethod
-    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
+    def clear_manual_control(
+        self, service_name: str, preserve_reason: bool = False
+    ) -> bool:
         """Clear manual control from a circuit breaker
 
         Args:
@@ -644,14 +646,13 @@ class CircuitBreakerStateRepository(ABC):
         ...
 
     @abstractmethod
-    def get_all(self) -> list[CircuitBreakerStateData]:
-        """Get all circuit breaker states"""
-        ...
-
-    @abstractmethod
     def get_all_states(self) -> list[CircuitBreakerStateData]:
         """Get all circuit breaker states"""
         ...
+
+    def get_all(self) -> list[CircuitBreakerStateData]:
+        """Deprecated: Use get_all_states() instead."""
+        return self.get_all_states()
 
     @abstractmethod
     def reset(self, service_name: str) -> bool:

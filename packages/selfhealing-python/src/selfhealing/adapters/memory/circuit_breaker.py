@@ -103,8 +103,12 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 id=entry.id,
                 service_name=service_name,
                 state=state,
-                failure_count=(failure_count if failure_count is not None else entry.failure_count),
-                success_count=(success_count if success_count is not None else entry.success_count),
+                failure_count=(
+                    failure_count if failure_count is not None else entry.failure_count
+                ),
+                success_count=(
+                    success_count if success_count is not None else entry.success_count
+                ),
                 last_failure_at=entry.last_failure_at,
                 opened_at=opened_at if opened_at is not None else entry.opened_at,
                 manually_controlled=entry.manually_controlled,
@@ -194,7 +198,11 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
                 failure_count=entry.failure_count,
                 success_count=entry.success_count,
                 last_failure_at=entry.last_failure_at,
-                opened_at=(_now() if state == CircuitBreakerStateEnum.OPEN.value else entry.opened_at),
+                opened_at=(
+                    _now()
+                    if state == CircuitBreakerStateEnum.OPEN.value
+                    else entry.opened_at
+                ),
                 manually_controlled=True,
                 controlled_by_id=controlled_by_id,
                 control_reason=reason,
@@ -206,7 +214,9 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             self._storage[service_name] = updated
             return True
 
-    def clear_manual_control(self, service_name: str, preserve_reason: bool = False) -> bool:
+    def clear_manual_control(
+        self, service_name: str, preserve_reason: bool = False
+    ) -> bool:
         """Clear manual control override.
 
         수동 제어 플래그만 해제한다. 상태(state)와 카운터(failure_count, success_count)는
@@ -324,8 +334,9 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             return updated
 
     def get_all_states(self) -> list[CircuitBreakerStateData]:
-        """Get all circuit breaker states (alias for get_all)."""
-        return self.get_all()
+        """Get all circuit breaker states."""
+        with self._lock:
+            return list(self._storage.values())
 
     def reset(self, service_name: str) -> bool:
         """Reset circuit breaker to initial closed state."""
@@ -367,7 +378,9 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
             entry = self.get_or_create(service_name)
             previous_state = entry.state
 
-            expires_at = _now() + timedelta(minutes=ttl_minutes) if ttl_minutes > 0 else None
+            expires_at = (
+                _now() + timedelta(minutes=ttl_minutes) if ttl_minutes > 0 else None
+            )
 
             updated = CircuitBreakerStateData(
                 id=entry.id,
@@ -454,12 +467,11 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
     def get_all_open(self) -> list[CircuitBreakerStateData]:
         """Get all open circuit breakers."""
         with self._lock:
-            return [entry for entry in self._storage.values() if entry.state == CircuitBreakerStateEnum.OPEN.value]
-
-    def get_all(self) -> list[CircuitBreakerStateData]:
-        """Get all circuit breaker states."""
-        with self._lock:
-            return list(self._storage.values())
+            return [
+                entry
+                for entry in self._storage.values()
+                if entry.state == CircuitBreakerStateEnum.OPEN.value
+            ]
 
     def delete(self, service_name: str) -> bool:
         """Delete a circuit breaker state."""

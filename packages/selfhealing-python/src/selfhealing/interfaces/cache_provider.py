@@ -13,9 +13,22 @@ Design Principles:
 
 from __future__ import annotations
 
+import os
+import socket
+import threading
+import uuid
 from abc import ABC, abstractmethod
 from datetime import timedelta
 from typing import Any
+
+
+def generate_lock_owner_id() -> str:
+    """Standard lock owner ID for all DistributedLock implementations."""
+    return (
+        f"{socket.gethostname()}:{os.getpid()}"
+        f":{threading.get_ident()}:{uuid.uuid4().hex[:8]}"
+    )
+
 
 # ============================================================================
 # Distributed Lock Interface

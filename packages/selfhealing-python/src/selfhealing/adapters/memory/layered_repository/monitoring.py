@@ -26,7 +26,7 @@ class MonitoringMixin:
 
         return {
             "l1_type": "memory",
-            "l1_count": len(self._l1.get_all()),
+            "l1_count": len(self._l1.get_all_states()),
             "l2_enabled": self._l2 is not None,
             "l2_type": type(self._l2).__name__ if self._l2 else None,
             "l2_adapter_type": self._adapter_type,

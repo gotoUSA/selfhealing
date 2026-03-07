@@ -92,6 +92,23 @@ class ProviderRegistry:
     _instances: dict[str, object] = {}
 
     # =========================================================================
+    # Internal Helpers
+    # =========================================================================
+
+    @staticmethod
+    def _wrap_cache_with_metrics(
+        cache: CacheProviderInterface,
+    ) -> CacheProviderInterface:
+        """Wrap cache adapter with MetricsAwareCacheAdapter for uniform metrics."""
+        from selfhealing.adapters.cache.metrics_decorator import (
+            MetricsAwareCacheAdapter,
+        )
+
+        if isinstance(cache, MetricsAwareCacheAdapter):
+            return cache
+        return MetricsAwareCacheAdapter(cache)
+
+    # =========================================================================
     # Registration Methods
     # =========================================================================
 
@@ -360,7 +377,7 @@ class ProviderRegistry:
                         f"Unknown cache provider: {name}. "
                         f"Available: {list(cls._cache_providers.keys())}"
                     )
-                instance = cls._cache_providers[name]()
+                instance = cls._wrap_cache_with_metrics(cls._cache_providers[name]())
                 cls._instances[key] = instance
                 return instance
 
@@ -369,7 +386,7 @@ class ProviderRegistry:
                 f"Unknown cache provider: {name}. "
                 f"Available: {list(cls._cache_providers.keys())}"
             )
-        return cls._cache_providers[name]()
+        return cls._wrap_cache_with_metrics(cls._cache_providers[name]())
 
     @classmethod
     def get_queue(
@@ -1107,6 +1124,18 @@ def _auto_register_adapters() -> None:
 
         ProviderRegistry.register_event_journal_repo(
             "memory", _create_memory_journal_repo
+        )
+    except ImportError:
+        pass
+
+    # Django-based repositories
+    try:
+        from selfhealing.adapters.django.security_incident import (
+            DjangoSecurityIncidentRepository,
+        )
+
+        ProviderRegistry.register_security_repo(
+            "django", DjangoSecurityIncidentRepository
         )
     except ImportError:
         pass
