@@ -183,7 +183,13 @@ class CapacityReservationService:
         self._stop_event.set()
 
         if self._scheduler_thread is not None:
-            self._scheduler_thread.join(timeout=10)
+            from selfhealing.settings.thread_management import (
+                get_thread_management_settings,
+            )
+
+            self._scheduler_thread.join(
+                timeout=get_thread_management_settings().join_timeout_long
+            )
             self._scheduler_thread = None
 
         for event in self._calendar.get_active():
@@ -254,5 +260,11 @@ class CapacityReservationService:
                     cls._instance._scheduler_thread is not None
                     and cls._instance._scheduler_thread.is_alive()
                 ):
-                    cls._instance._scheduler_thread.join(timeout=5)
+                    from selfhealing.settings.thread_management import (
+                        get_thread_management_settings,
+                    )
+
+                    cls._instance._scheduler_thread.join(
+                        timeout=get_thread_management_settings().join_timeout
+                    )
             cls._instance = None

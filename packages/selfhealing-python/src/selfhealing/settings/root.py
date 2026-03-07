@@ -32,6 +32,7 @@ class FallbackPolicy(str, Enum):
 
 from selfhealing.settings.chaos import ChaosSettings
 from selfhealing.settings.circuit_breaker import CircuitBreakerSettings
+from selfhealing.settings.detection import DetectionSettings
 from selfhealing.settings.dlq import DLQSettings
 from selfhealing.settings.drift_threshold import DriftThresholdSettings
 from selfhealing.settings.error_budget import ErrorBudgetSettings
@@ -48,6 +49,7 @@ from selfhealing.settings.rate_limit import RateLimitSettings
 from selfhealing.settings.retry import RetrySettings
 from selfhealing.settings.security import SecuritySettings
 from selfhealing.settings.sla import SLASettings
+from selfhealing.settings.thread_management import ThreadManagementSettings
 
 _root_logger = structlog.get_logger()
 
@@ -145,6 +147,14 @@ class SelfHealingSettings(BaseSettings):
     propagation: PropagationSettings = Field(
         default_factory=PropagationSettings,
         description="Cross-cluster propagation configuration",
+    )
+    thread: ThreadManagementSettings = Field(
+        default_factory=ThreadManagementSettings,
+        description="Thread join timeout configuration",
+    )
+    detection: DetectionSettings = Field(
+        default_factory=DetectionSettings,
+        description="Anomaly detection and correlation engine configuration",
     )
 
     # ==========================================================================

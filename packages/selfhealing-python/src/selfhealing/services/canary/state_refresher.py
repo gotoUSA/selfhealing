@@ -139,7 +139,11 @@ class EmergencyStateRefresher:
             self._stop_event.set()
 
             if self._thread and self._thread.is_alive():
-                self._thread.join(timeout=5.0)
+                from selfhealing.settings.thread_management import (
+                    get_thread_management_settings,
+                )
+
+                self._thread.join(timeout=get_thread_management_settings().join_timeout)
 
             self._thread = None
 
@@ -174,7 +178,9 @@ class EmergencyStateRefresher:
 
                 # 레벨 상승 시 활성 롤아웃 일시 중지
                 if new_level > old_level and self._canary_service:
-                    self._pause_all_active_rollouts(reason=f"Emergency level increased to {result.emergency_level_name}")
+                    self._pause_all_active_rollouts(
+                        reason=f"Emergency level increased to {result.emergency_level_name}"
+                    )
 
                 return {
                     "namespace": namespace,

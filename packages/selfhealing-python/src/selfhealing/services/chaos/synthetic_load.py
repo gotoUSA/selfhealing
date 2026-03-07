@@ -416,7 +416,13 @@ class SyntheticLoadGenerator:
         self._stop_event.set()
 
         if graceful and self._worker_thread:
-            self._worker_thread.join(timeout=5.0)
+            from selfhealing.settings.thread_management import (
+                get_thread_management_settings,
+            )
+
+            self._worker_thread.join(
+                timeout=get_thread_management_settings().join_timeout
+            )
 
         self._state = GeneratorState.STOPPED
 

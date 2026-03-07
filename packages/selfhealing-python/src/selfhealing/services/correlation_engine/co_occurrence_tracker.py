@@ -161,12 +161,14 @@ class CoOccurrenceTracker:
         self._max_pairs: int = getattr(settings, "max_tracked_pairs", 1000)
         self._min_co_occurrences: int = getattr(settings, "min_co_occurrences", 3)
         self._zscore_threshold: float = getattr(settings, "zscore_threshold", 2.5)
-        self._simultaneous_threshold: float = getattr(settings, "simultaneous_threshold_seconds", 0.001)
+        self._simultaneous_threshold: float = getattr(
+            settings, "simultaneous_threshold_seconds", 0.001
+        )
 
         # 이벤트 타입별 최근 발생 시각 버퍼
         max_event_buffer: int = getattr(settings, "max_event_buffer", 500)
-        self._event_timestamps: dict[str, collections.deque[float]] = collections.defaultdict(
-            lambda: collections.deque(maxlen=max_event_buffer)
+        self._event_timestamps: dict[str, collections.deque[float]] = (
+            collections.defaultdict(lambda: collections.deque(maxlen=max_event_buffer))
         )
 
         # 이벤트 쌍별 동시발생 카운트 시계열
@@ -179,8 +181,8 @@ class CoOccurrenceTracker:
         self._pair_detectors: dict[str, ZScoreDetector] = {}
 
         # 이벤트 쌍별 시간 간격 추적 (signed gap 보존)
-        self._pair_time_gaps: dict[str, collections.deque[float]] = collections.defaultdict(
-            lambda: collections.deque(maxlen=TIME_GAPS_MAXLEN)
+        self._pair_time_gaps: dict[str, collections.deque[float]] = (
+            collections.defaultdict(lambda: collections.deque(maxlen=TIME_GAPS_MAXLEN))
         )
 
         # 이벤트 쌍별 HoltLinear 트렌드 예측기
@@ -243,7 +245,9 @@ class CoOccurrenceTracker:
         최대 _max_accumulated_results개까지 보관하고 초과 시 오래된 결과를 제거한다.
         """
         # 기존 결과를 pair.key 기반 dict로 변환 (중복 시 최신 값 우선)
-        result_map: dict[str, CorrelationResult] = {r.pair.key: r for r in self._accumulated_results}
+        result_map: dict[str, CorrelationResult] = {
+            r.pair.key: r for r in self._accumulated_results
+        }
         # 새 결과로 덮어쓰기
         for r in new_results:
             result_map[r.pair.key] = r
@@ -268,7 +272,9 @@ class CoOccurrenceTracker:
 
     # ─── 이벤트 기록 (Hot Path) ───
 
-    def record_event(self, event_type: str, timestamp: float, service_name: str) -> None:
+    def record_event(
+        self, event_type: str, timestamp: float, service_name: str
+    ) -> None:
         """이벤트 발생 기록 → 동시발생 쌍 업데이트.
 
         Thread-Safety:
@@ -320,7 +326,12 @@ class CoOccurrenceTracker:
 
         # ZScore 탐지기 초기화 (첫 동시발생)
         if key not in self._pair_detectors:
-            self._pair_detectors[key] = ZScoreDetector(window=100, threshold=self._zscore_threshold)
+            from selfhealing.settings.detection import get_detection_settings
+
+            self._pair_detectors[key] = ZScoreDetector(
+                window=get_detection_settings().correlation_window_size,
+                threshold=self._zscore_threshold,
+            )
             logger.debug(
                 "first_co_occurrence_detected",
                 co_occurrence_pair_key=key,
@@ -371,7 +382,9 @@ class CoOccurrenceTracker:
                 # 방향성 추론
                 direction = self._infer_direction(pair, time_gaps)
 
-                correlation_score = min(1.0, abs(z_score) / (self._zscore_threshold * 2))
+                correlation_score = min(
+                    1.0, abs(z_score) / (self._zscore_threshold * 2)
+                )
 
                 results.append(
                     CorrelationResult(
@@ -397,7 +410,9 @@ class CoOccurrenceTracker:
 
         return results
 
-    def _count_co_occurrences_in_window(self, pair_key: str, current_time: float) -> int:
+    def _count_co_occurrences_in_window(
+        self, pair_key: str, current_time: float
+    ) -> int:
         """시간 윈도우 내 동시발생 카운트를 계산한다.
 
         pair_time_gaps에 기록된 gap 중 윈도우 내 gap을 카운팅한다.
@@ -438,7 +453,9 @@ class CoOccurrenceTracker:
 
     # ─── 방향성 추론 ───
 
-    def _infer_direction(self, pair: EventPairKey, time_gaps: list[float]) -> str | None:
+    def _infer_direction(
+        self, pair: EventPairKey, time_gaps: list[float]
+    ) -> str | None:
         """시간 간격의 부호로 인과 방향을 추론한다.
 
         부호 규칙:
@@ -461,7 +478,9 @@ class CoOccurrenceTracker:
             return None
 
         # Microsecond Collision: 동시 도착한 이벤트는 방향성 판단에서 제외
-        meaningful_gaps = [g for g in time_gaps if abs(g) >= self._simultaneous_threshold]
+        meaningful_gaps = [
+            g for g in time_gaps if abs(g) >= self._simultaneous_threshold
+        ]
         if len(meaningful_gaps) < 5:
             return "mutual"  # 대부분 동시 도착 → 공통 원인 가능성
 
@@ -498,7 +517,9 @@ class CoOccurrenceTracker:
             "pair": pair_key,
             "current_frequency": len(self._pair_time_gaps.get(pair_key, [])),
             "predicted_frequency_5_ticks_ahead": predicted,
-            "trend_direction": ("increasing" if forecaster.get_trend_slope() > 0 else "decreasing"),
+            "trend_direction": (
+                "increasing" if forecaster.get_trend_slope() > 0 else "decreasing"
+            ),
             "confidence": confidence,
         }
 
@@ -618,7 +639,9 @@ class CoOccurrenceTracker:
                 oldest_key = min(
                     self._pair_detectors,
                     key=lambda k: (
-                        self._pair_detectors[k].last_updated if hasattr(self._pair_detectors[k], "last_updated") else 0
+                        self._pair_detectors[k].last_updated
+                        if hasattr(self._pair_detectors[k], "last_updated")
+                        else 0
                     ),
                 )
                 del self._pair_detectors[oldest_key]
@@ -649,8 +672,12 @@ class CoOccurrenceTracker:
 
             backend = get_state_backend()
             state: dict[str, Any] = {
-                "pair_detectors": {key: det.to_dict() for key, det in self._pair_detectors.items()},
-                "pair_time_gaps": {key: list(gaps) for key, gaps in self._pair_time_gaps.items()},
+                "pair_detectors": {
+                    key: det.to_dict() for key, det in self._pair_detectors.items()
+                },
+                "pair_time_gaps": {
+                    key: list(gaps) for key, gaps in self._pair_time_gaps.items()
+                },
                 "pair_time_gaps_maxlen": TIME_GAPS_MAXLEN,
                 "saved_at": time.time(),
             }
@@ -697,7 +724,9 @@ class CoOccurrenceTracker:
             # pair_time_gaps 복원: maxlen 메타데이터로 deque 재생성
             gaps_maxlen = state.get("pair_time_gaps_maxlen", TIME_GAPS_MAXLEN)
             for key, gaps_list in state.get("pair_time_gaps", {}).items():
-                restored: collections.deque[float] = collections.deque(maxlen=gaps_maxlen)
+                restored: collections.deque[float] = collections.deque(
+                    maxlen=gaps_maxlen
+                )
                 restored.extend(gaps_list)
                 self._pair_time_gaps[key] = restored
 
@@ -705,7 +734,9 @@ class CoOccurrenceTracker:
             for pair_key in self._pair_detectors:
                 if pair_key not in self._pair_forecasters:
                     self._pair_forecasters[pair_key] = HoltLinearForecaster()
-                self._pair_forecasters[pair_key].load_state(f"correlation:trend:{pair_key}")
+                self._pair_forecasters[pair_key].load_state(
+                    f"correlation:trend:{pair_key}"
+                )
 
             logger.info(
                 "[CoOccurrenceTracker] State restored: %d pairs",

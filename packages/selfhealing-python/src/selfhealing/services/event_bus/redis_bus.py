@@ -372,9 +372,16 @@ class RedisEventBus:
         )
 
         topic = "selfhealing.routing.events"
-        producer.send(topic, value=event.to_dict()).get(timeout=10)
-        producer.flush(timeout=5)
-        producer.close(timeout=5)
+        from selfhealing.settings.thread_management import (
+            get_thread_management_settings,
+        )
+
+        _thread_settings = get_thread_management_settings()
+        producer.send(topic, value=event.to_dict()).get(
+            timeout=_thread_settings.join_timeout_long
+        )
+        producer.flush(timeout=_thread_settings.join_timeout)
+        producer.close(timeout=_thread_settings.join_timeout)
 
         logger.info(
             "redis_event_bus.event_published_kafka_fallback",
@@ -416,7 +423,9 @@ class RedisEventBus:
     def _get_channel_for_event(self, event_type: EventType) -> str:
         """EventType에 맞는 Redis 채널 반환."""
         channel_enum = EVENT_TYPE_TO_CHANNEL.get(event_type, EventChannel.GLOBAL)
-        return self._channels.get(channel_enum.value, self._channels[EventChannel.GLOBAL.value])
+        return self._channels.get(
+            channel_enum.value, self._channels[EventChannel.GLOBAL.value]
+        )
 
     def get_channel(self, channel: EventChannel) -> str:
         """특정 채널의 Redis 키 반환."""

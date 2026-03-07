@@ -44,6 +44,13 @@ class HttpClientSettings(BaseSettings):
         description="외부 API 호출 기본 타임아웃 (초)",
     )
 
+    webhook_timeout: float = Field(
+        default=10.0,
+        ge=1.0,
+        le=60.0,
+        description="Timeout for outbound webhook HTTP calls (notifier, etc.)",
+    )
+
 
 # =============================================================================
 # Singleton Pattern

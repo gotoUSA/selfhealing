@@ -64,14 +64,24 @@ class ZScoreDetector:
 
     표준편차가 0에 가까운 경우(모든 값이 동일) 이상으로 판정하지 않는다.
 
+    Hybrid Window (Count + Time):
+        max_age_seconds가 설정되면 개수 윈도우와 시간 윈도우를 동시 적용한다.
+        트래픽 저하 시 오래된 데이터가 Z-Score 계산에 포함되는 것을 방지한다.
+
     Args:
         threshold: Z-Score 임계값 (기본 3.0 = 99.7% 신뢰구간).
         window: 이동 윈도우 크기 (기본 100개).
+        max_age_seconds: 데이터 포인트 최대 보존 시간 (초). None이면 시간 제한 없음.
     """
 
     MIN_STD_DEV = 1e-10
 
-    def __init__(self, threshold: float = 3.0, window: int = 100):
+    def __init__(
+        self,
+        threshold: float = 3.0,
+        window: int = 100,
+        max_age_seconds: float | None = None,
+    ):
         if threshold <= 0:
             raise ValueError(f"threshold는 양수여야 합니다: {threshold}")
         if window < 3:
@@ -79,7 +89,28 @@ class ZScoreDetector:
 
         self._threshold = threshold
         self._window = window
+        self._max_age_seconds = max_age_seconds
         self._values: collections.deque[float] = collections.deque(maxlen=window)
+        self._timestamps: collections.deque[float] = collections.deque(maxlen=window)
+
+    def _evict_stale(self) -> None:
+        """max_age_seconds 초과 데이터 포인트를 좌측에서 제거."""
+        if self._max_age_seconds is None or not self._timestamps:
+            return
+        import time
+
+        cutoff = time.monotonic() - self._max_age_seconds
+        while self._timestamps and self._timestamps[0] < cutoff:
+            self._timestamps.popleft()
+            self._values.popleft()
+
+    def _append_value(self, value: float) -> None:
+        """값과 타임스탬프를 동시에 추가."""
+        self._values.append(value)
+        if self._max_age_seconds is not None:
+            import time
+
+            self._timestamps.append(time.monotonic())
 
     def is_anomaly(self, value: float) -> tuple[bool, float]:
         """
@@ -92,7 +123,8 @@ class ZScoreDetector:
             (is_anomaly, z_score) 튜플.
             윈도우에 데이터가 3개 미만인 경우 (False, 0.0) 반환.
         """
-        self._values.append(value)
+        self._append_value(value)
+        self._evict_stale()
 
         if len(self._values) < 3:
             return False, 0.0
@@ -117,10 +149,13 @@ class ZScoreDetector:
         Returns:
             ZScoreResult 상세 결과.
         """
-        self._values.append(value)
+        self._append_value(value)
+        self._evict_stale()
 
         if len(self._values) < 3:
-            return ZScoreResult(is_anomaly=False, z_score=0.0, mean=value, std_dev=0.0, value=value)
+            return ZScoreResult(
+                is_anomaly=False, z_score=0.0, mean=value, std_dev=0.0, value=value
+            )
 
         mean = sum(self._values) / len(self._values)
         variance = sum((v - mean) ** 2 for v in self._values) / len(self._values)
@@ -141,6 +176,7 @@ class ZScoreDetector:
 
     def get_statistics(self) -> dict[str, Any]:
         """현재 윈도우의 통계 정보 반환."""
+        self._evict_stale()
         if not self._values:
             return {"count": 0, "mean": 0.0, "std_dev": 0.0}
 
@@ -179,7 +215,7 @@ class ZScoreDetector:
         is_anomaly()가 내부적으로 값을 추가하므로
         별도 업데이트가 필요 없는 경우 이 메서드만 호출한다.
         """
-        self._values.append(value)
+        self._append_value(value)
 
     def get_feature_schema(self) -> dict[str, str] | None:
         """통계 기반 전략이므로 context 스키마 없음."""
@@ -188,18 +224,22 @@ class ZScoreDetector:
     def reset(self) -> None:
         """윈도우 데이터 초기화."""
         self._values.clear()
+        self._timestamps.clear()
 
     def to_dict(self) -> dict:
         """학습 상태를 dict로 직렬화한다.
 
         Returns:
-            threshold, window, values를 포함하는 dict.
+            threshold, window, values 등을 포함하는 dict.
         """
-        return {
+        result: dict[str, Any] = {
             "values": list(self._values),
             "threshold": self._threshold,
             "window": self._window,
         }
+        if self._max_age_seconds is not None:
+            result["max_age_seconds"] = self._max_age_seconds
+        return result
 
     @classmethod
     def from_dict(cls, data: dict) -> ZScoreDetector:
@@ -214,7 +254,11 @@ class ZScoreDetector:
         Returns:
             복원된 ZScoreDetector 인스턴스.
         """
-        det = cls(threshold=data["threshold"], window=data["window"])
+        det = cls(
+            threshold=data["threshold"],
+            window=data["window"],
+            max_age_seconds=data.get("max_age_seconds"),
+        )
         det._values.extend(data["values"])
         return det
 
@@ -284,7 +328,9 @@ class IQRDetector:
         ceil_k = min(floor_k + 1, n - 1)
         frac = k - floor_k
 
-        return sorted_data[floor_k] + frac * (sorted_data[ceil_k] - sorted_data[floor_k])
+        return sorted_data[floor_k] + frac * (
+            sorted_data[ceil_k] - sorted_data[floor_k]
+        )
 
     def is_anomaly(self, value: float) -> tuple[bool, float]:
         """

@@ -158,6 +158,13 @@ from selfhealing.settings.decision_engine import (
     get_decision_engine_settings,
     reset_decision_engine_settings,
 )
+
+# 313: Detection Settings
+from selfhealing.settings.detection import (
+    DetectionSettings,
+    get_detection_settings,
+    reset_detection_settings,
+)
 from selfhealing.settings.distributed_lock import (
     DistributedLockSettings,
     get_distributed_lock_settings,
@@ -418,6 +425,13 @@ from selfhealing.settings.state_cache import (
     StateCacheSettings,
     get_state_cache_settings,
     reset_state_cache_settings,
+)
+
+# 313: Thread Management Settings
+from selfhealing.settings.thread_management import (
+    ThreadManagementSettings,
+    get_thread_management_settings,
+    reset_thread_management_settings,
 )
 from selfhealing.settings.throttle import (
     ThrottleSettings,
@@ -730,4 +744,12 @@ __all__ = [
     "ErrorBudgetGateSettings",
     "get_error_budget_gate_settings",
     "reset_error_budget_gate_settings",
+    # 313: Thread Management
+    "ThreadManagementSettings",
+    "get_thread_management_settings",
+    "reset_thread_management_settings",
+    # 313: Detection
+    "DetectionSettings",
+    "get_detection_settings",
+    "reset_detection_settings",
 ]

@@ -73,7 +73,9 @@ class PartitionStatus:
     global_redis_url: str | None = None
     """Global Redis URL (마스킹됨)."""
 
-    checked_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    checked_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     """확인 시각."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -105,7 +107,9 @@ class ReconciliationAction:
     namespace: str = ""
     """대상 네임스페이스."""
 
-    executed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    executed_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     """실행 시각."""
 
     success: bool = True
@@ -145,7 +149,9 @@ class ReconciliationResult:
     regional_state_mode: str = "UNKNOWN"
     """Regional Emergency 모드."""
 
-    executed_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    executed_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     """실행 시각."""
 
     def to_dict(self) -> dict[str, Any]:
@@ -305,7 +311,11 @@ class PartitionReconciliationService:
 
                 return PartitionStatus(
                     is_partitioned=self._is_partitioned,
-                    last_heartbeat_at=(self._last_global_heartbeat.isoformat() if self._last_global_heartbeat else None),
+                    last_heartbeat_at=(
+                        self._last_global_heartbeat.isoformat()
+                        if self._last_global_heartbeat
+                        else None
+                    ),
                     partition_duration_seconds=duration,
                     error_message=str(e),
                     global_redis_url=self._get_masked_redis_url(),
@@ -475,7 +485,9 @@ class PartitionReconciliationService:
             self._action_history.append(action)
             # 히스토리 크기 제한
             if len(self._action_history) > MAX_RECONCILIATION_ACTIONS:
-                self._action_history = self._action_history[-MAX_RECONCILIATION_ACTIONS:]
+                self._action_history = self._action_history[
+                    -MAX_RECONCILIATION_ACTIONS:
+                ]
 
         logger.warning(
             "partition_reconciliation.action",
@@ -516,7 +528,13 @@ class PartitionReconciliationService:
         self._heartbeat_running = False
 
         if self._heartbeat_thread and self._heartbeat_thread.is_alive():
-            self._heartbeat_thread.join(timeout=5.0)
+            from selfhealing.settings.thread_management import (
+                get_thread_management_settings,
+            )
+
+            self._heartbeat_thread.join(
+                timeout=get_thread_management_settings().join_timeout
+            )
 
         logger.info("partition_reconciliation.heartbeat_loop_stopped")
 
@@ -535,7 +553,9 @@ class PartitionReconciliationService:
                         partition_duration_seconds=status.partition_duration_seconds,
                     )
                 elif not status.is_partitioned and was_partitioned:
-                    logger.info("partition_reconciliation.partition_recovered_triggering_reconciliation")
+                    logger.info(
+                        "partition_reconciliation.partition_recovered_triggering_reconciliation"
+                    )
                     self.reconcile_after_recovery()
 
                 was_partitioned = status.is_partitioned

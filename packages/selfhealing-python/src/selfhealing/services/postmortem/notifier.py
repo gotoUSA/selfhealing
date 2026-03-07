@@ -85,7 +85,9 @@ class PostmortemNotificationPayload:
     namespace: str = "default"
     """네임스페이스."""
 
-    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    created_at: str = field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     """생성 시각."""
 
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -416,7 +418,11 @@ class PostmortemNotifier:
                 method="POST",
             )
 
-            with urllib.request.urlopen(request, timeout=10) as response:
+            from selfhealing.settings.http_client import get_http_client_settings
+
+            with urllib.request.urlopen(
+                request, timeout=get_http_client_settings().webhook_timeout
+            ) as response:
                 if response.status == 200:
                     logger.info(
                         "postmortem_notifier.slack_notification_sent",
@@ -465,8 +471,13 @@ class PostmortemNotifier:
             manager.notify(
                 NotificationPayload(
                     title=payload.title,
-                    message=(f"Service: {payload.service_name}, " f"Duration: {int(payload.duration_seconds / 60)}min"),
-                    priority=priority_map.get(payload.severity, NotificationPriority.MEDIUM),
+                    message=(
+                        f"Service: {payload.service_name}, "
+                        f"Duration: {int(payload.duration_seconds / 60)}min"
+                    ),
+                    priority=priority_map.get(
+                        payload.severity, NotificationPriority.MEDIUM
+                    ),
                     category=NotificationCategory.OPERATIONS,
                     source="postmortem_notifier",
                     dedup_key=f"postmortem:{payload.incident_id}",
@@ -511,7 +522,11 @@ class PostmortemNotifier:
                 method="POST",
             )
 
-            with urllib.request.urlopen(request, timeout=10) as response:
+            from selfhealing.settings.http_client import get_http_client_settings
+
+            with urllib.request.urlopen(
+                request, timeout=get_http_client_settings().webhook_timeout
+            ) as response:
                 return response.status == 200
 
         except Exception as e:

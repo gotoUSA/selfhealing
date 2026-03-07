@@ -132,9 +132,12 @@ class WildcardObserver:
         )
 
         # 이벤트 발생률 이상 탐지 — ZScoreDetector
+        from selfhealing.settings.detection import get_detection_settings
+
+        _detection = get_detection_settings()
         self._rate_detector = ZScoreDetector(
             threshold=settings.zscore_threshold,
-            window=100,
+            window=_detection.correlation_window_size,
         )
 
         # 통계 카운터
@@ -207,7 +210,13 @@ class WildcardObserver:
         # 1) Consumer 스레드 종료 신호
         self._stop_event.set()
         if self._consumer_thread and self._consumer_thread.is_alive():
-            self._consumer_thread.join(timeout=5.0)
+            from selfhealing.settings.thread_management import (
+                get_thread_management_settings,
+            )
+
+            self._consumer_thread.join(
+                timeout=get_thread_management_settings().join_timeout
+            )
         self._consumer_thread = None
 
         # 2) 전체 EventType 순회하며 구독 해제 — 개별 try-except로 보호
@@ -309,7 +318,10 @@ class WildcardObserver:
                 "type": "event_rate_anomaly",
                 "current_rate_per_minute": recent_count,
                 "z_score": z_score,
-                "message": (f"이벤트 발생률 이상: 최근 1분간 {recent_count}건 " f"(Z-Score={z_score:.2f})"),
+                "message": (
+                    f"이벤트 발생률 이상: 최근 1분간 {recent_count}건 "
+                    f"(Z-Score={z_score:.2f})"
+                ),
                 "timestamp": current_time,
             }
         return None
