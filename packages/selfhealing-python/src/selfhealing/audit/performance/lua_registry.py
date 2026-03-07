@@ -104,14 +104,8 @@ class LuaScriptRegistry:
     @staticmethod
     def _validate_same_slot(keys: list[str]) -> None:
         """Validate that all keys map to the same hash slot (Redis Cluster safety)."""
-        tags = set()
-        has_explicit_tag = False
-        for k in keys:
-            tag = LuaScriptRegistry._extract_hash_tag(k)
-            if tag != k:
-                has_explicit_tag = True
-            tags.add(tag)
-        if has_explicit_tag and len(tags) > 1:
+        tags = {LuaScriptRegistry._extract_hash_tag(k) for k in keys}
+        if len(tags) > 1:
             raise ValueError(
                 f"Keys span multiple hash slots: {keys}. "
                 f"Use {{hash_tag}} to group related keys."

@@ -260,9 +260,9 @@ class TestAuditExporter:
         # CSV 내용 확인
         with open(output_file) as f:
             content = f.read().strip()
-            lines = [l for l in content.split('\n') if l.strip()]
+            lines = [l for l in content.split("\n") if l.strip()]
             assert len(lines) == 4  # 헤더 + 3 엔트리
-            assert "audit_id" in lines[0]  # 헤더
+            assert "timestamp" in lines[0]  # 헤더
 
     def test_export_to_http(self, sample_log_file):
         """HTTP로 내보내기."""
@@ -352,9 +352,12 @@ class TestCLI:
 
     def test_main_stdout(self, sample_log_file, capsys):
         """stdout 출력."""
-        result = main([
-            "--input", str(sample_log_file),
-        ])
+        result = main(
+            [
+                "--input",
+                str(sample_log_file),
+            ]
+        )
 
         assert result == 0
 
@@ -363,10 +366,14 @@ class TestCLI:
 
     def test_main_with_filters(self, sample_log_file, capsys):
         """필터 적용."""
-        result = main([
-            "--input", str(sample_log_file),
-            "--actions", "config_change",
-        ])
+        result = main(
+            [
+                "--input",
+                str(sample_log_file),
+                "--actions",
+                "config_change",
+            ]
+        )
 
         assert result == 0
 
@@ -378,30 +385,42 @@ class TestCLI:
         """파일 출력."""
         output_file = temp_dir / "output.jsonl"
 
-        result = main([
-            "--input", str(sample_log_file),
-            "--target", "file",
-            "--output", str(output_file),
-        ])
+        result = main(
+            [
+                "--input",
+                str(sample_log_file),
+                "--target",
+                "file",
+                "--output",
+                str(output_file),
+            ]
+        )
 
         assert result == 0
         assert output_file.exists()
 
     def test_main_missing_output(self, sample_log_file, capsys):
         """파일 타겟인데 출력 경로 없음."""
-        result = main([
-            "--input", str(sample_log_file),
-            "--target", "file",
-        ])
+        result = main(
+            [
+                "--input",
+                str(sample_log_file),
+                "--target",
+                "file",
+            ]
+        )
 
         assert result == 1  # 에러
 
     def test_main_verbose(self, sample_log_file, capsys):
         """Verbose 모드."""
-        result = main([
-            "--input", str(sample_log_file),
-            "-v",
-        ])
+        result = main(
+            [
+                "--input",
+                str(sample_log_file),
+                "-v",
+            ]
+        )
 
         assert result == 0
 

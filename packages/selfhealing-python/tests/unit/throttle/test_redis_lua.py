@@ -64,17 +64,17 @@ class TestRedisThrottleLimitManager:
     def test_get_limit_key(self):
         """limit 키 생성 확인."""
         key = self.manager._get_limit_key("payment_api")
-        assert key == "test:throttle:limit:payment_api"
+        assert key == "test:throttle:limit:{payment_api}"
 
     def test_get_safe_limit_key(self):
         """안전 limit 키 생성 확인."""
         key = self.manager._get_safe_limit_key("payment_api")
-        assert key == "test:throttle:last_safe_limit:payment_api"
+        assert key == "test:throttle:last_safe_limit:{payment_api}"
 
     def test_get_rtt_key(self):
         """RTT 키 생성 확인."""
         key = self.manager._get_rtt_key("payment_api")
-        assert key == "test:throttle:rtt:payment_api"
+        assert key == "test:throttle:rtt:{payment_api}"
 
     def test_update_limit_atomic(self):
         """원자적 limit 업데이트."""
