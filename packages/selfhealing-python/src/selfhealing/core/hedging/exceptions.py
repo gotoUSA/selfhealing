@@ -7,8 +7,10 @@ Hedging Exceptions - 헷징 전략 관련 예외 클래스.
 
 from __future__ import annotations
 
+from selfhealing.core.exceptions import ResilienceError
 
-class HedgingError(Exception):
+
+class HedgingError(ResilienceError):
     """헷징 기본 예외 클래스."""
 
     pass

@@ -1,5 +1,10 @@
 """
-structlog 프로세서 — 로그 볼륨 제어.
+structlog 프로세서 — 로그 볼륨 제어 및 이벤트명 검증.
+
+Event Name Validation (Q5):
+    이벤트명이 ``{component}.{entity}_{action}`` 컨벤션을 따르는지 검증.
+    DEV/TEST: SELFHEALING_STRICT_LOG_VALIDATION=true → ValueError (fail-fast)
+    Production: 위반을 Prometheus counter로 기록만.
 
 Rate Limiter (De-dup):
     동일 이벤트가 윈도우 내에 max_count 이상 반복되면 묵음 처리하고,
@@ -13,6 +18,7 @@ Sampling:
 
 설정:
     LoggingSettings 에서 환경변수로 제어:
+    - SELFHEALING_STRICT_LOG_VALIDATION=true/false
     - SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW=10
     - SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX=100
     - SELFHEALING_LOGGING_LOG_SAMPLING_RATE=1.0
@@ -21,16 +27,92 @@ Sampling:
 Reference:
     - docs/self_healing/middleware_system/281_LOG_RATE_LIMITER.md
     - docs/self_healing/middleware_system/282_LOG_SAMPLING.md
+    - docs/self_healing/middleware_system/312_EXCEPTION_HIERARCHY_LOGGING_STANDARDIZATION.md
 """
 
 from __future__ import annotations
 
+import os
 import random
+import re
 import threading
 import time
 from typing import Any
 
 import structlog
+
+# =============================================================================
+# Event Name Validation 프로세서 (Q5)
+# =============================================================================
+
+_EVENT_NAME_PATTERN = re.compile(r"^[a-z_]+\.[a-z_]+$")
+
+_violation_counter_initialized = False
+_violation_counter = None
+
+
+def _get_violation_counter():
+    """Prometheus counter를 lazy-init한다."""
+    global _violation_counter_initialized, _violation_counter
+    if _violation_counter_initialized:
+        return _violation_counter
+    _violation_counter_initialized = True
+    try:
+        from prometheus_client import Counter
+
+        _violation_counter = Counter(
+            "selfhealing_log_convention_violations_total",
+            "Count of log events violating naming convention",
+            ["event_name"],
+        )
+    except ImportError:
+        _violation_counter = None
+    return _violation_counter
+
+
+def _is_strict_validation() -> bool:
+    """SELFHEALING_STRICT_LOG_VALIDATION 환경변수를 확인한다."""
+    return os.environ.get("SELFHEALING_STRICT_LOG_VALIDATION", "").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+
+
+def event_name_validator(
+    logger: Any,
+    method_name: str,
+    event_dict: dict[str, Any],
+) -> dict[str, Any]:
+    """이벤트명이 ``component.entity_action`` 컨벤션을 따르는지 검증한다.
+
+    Pipeline position: add_logger_name 직후 (무거운 처리 전).
+
+    DEV/TEST (SELFHEALING_STRICT_LOG_VALIDATION=true):
+        컨벤션 위반 시 ValueError 발생 (fail-fast).
+    Production (기본값):
+        위반을 Prometheus counter로 기록만 하고 로그를 통과시킨다.
+    """
+    event_name = event_dict.get("event", "")
+    if not event_name or not isinstance(event_name, str):
+        return event_dict
+
+    if _EVENT_NAME_PATTERN.match(event_name):
+        return event_dict
+
+    # Convention violation detected
+    if _is_strict_validation():
+        raise ValueError(
+            f"Log event name '{event_name}' violates naming convention. "
+            f"Expected pattern: 'component.entity_action' (lowercase, dot-separated)"
+        )
+
+    counter = _get_violation_counter()
+    if counter is not None:
+        counter.labels(event_name=event_name).inc()
+
+    return event_dict
+
 
 # =============================================================================
 # Rate Limiter (De-dup) 프로세서

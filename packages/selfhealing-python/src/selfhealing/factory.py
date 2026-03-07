@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from selfhealing.core.exceptions import AdapterNotFoundError
+
 if TYPE_CHECKING:
     from selfhealing.interfaces.alert_adapter import AlertAdapter
     from selfhealing.interfaces.audit_adapter import AuditLogAdapter
@@ -117,8 +119,8 @@ class ProviderRegistry:
         """Register a cache provider adapter."""
         cls._cache_providers[name] = provider_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.cache_registered",
+            name=name,
         )
 
     @classmethod
@@ -126,8 +128,8 @@ class ProviderRegistry:
         """Register a task queue adapter."""
         cls._task_queues[name] = provider_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.queue_registered",
+            name=name,
         )
 
     @classmethod
@@ -135,8 +137,8 @@ class ProviderRegistry:
         """Register a failed operation repository."""
         cls._failed_op_repos[name] = repo_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.failed_operation_repo_registered",
+            name=name,
         )
 
     @classmethod
@@ -144,8 +146,8 @@ class ProviderRegistry:
         """Register a circuit breaker state repository."""
         cls._circuit_breaker_repos[name] = repo_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.circuit_breaker_repo_registered",
+            name=name,
         )
 
     @classmethod
@@ -153,8 +155,8 @@ class ProviderRegistry:
         """Register a security incident repository."""
         cls._security_repos[name] = repo_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.security_repo_registered",
+            name=name,
         )
 
     @classmethod
@@ -162,8 +164,8 @@ class ProviderRegistry:
         """Register an event journal repository."""
         cls._event_journal_repos[name] = repo_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.event_journal_repo_registered",
+            name=name,
         )
 
     @classmethod
@@ -171,8 +173,8 @@ class ProviderRegistry:
         """Register an audit log adapter."""
         cls._audit_adapters[name] = adapter_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.audit_adapter_registered",
+            name=name,
         )
 
     @classmethod
@@ -180,8 +182,8 @@ class ProviderRegistry:
         """Register a traffic routing adapter."""
         cls._traffic_routing_adapters[name] = adapter_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.traffic_routing_registered",
+            name=name,
         )
 
     @classmethod
@@ -201,8 +203,8 @@ class ProviderRegistry:
         """Correlation Engine 상관관계 분석 전략 등록."""
         cls._correlation_strategies[name] = strategy_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.correlation_strategy_registered",
+            name=name,
         )
 
     @classmethod
@@ -210,8 +212,8 @@ class ProviderRegistry:
         """Correlation Engine 근본 원인 분석 전략 등록."""
         cls._root_cause_strategies[name] = strategy_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.root_cause_strategy_registered",
+            name=name,
         )
 
     @classmethod
@@ -219,8 +221,8 @@ class ProviderRegistry:
         """Correlation Engine DAG 구축 전략 등록."""
         cls._graph_build_strategies[name] = strategy_class
         logger.debug(
-            "cell_registry.bulkheads_registered",
-            factory_name=name,
+            "registry.graph_build_strategy_registered",
+            name=name,
         )
 
     @classmethod
@@ -373,7 +375,7 @@ class ProviderRegistry:
                 if key in cls._instances:
                     return cls._instances[key]
                 if name not in cls._cache_providers:
-                    raise ValueError(
+                    raise AdapterNotFoundError(
                         f"Unknown cache provider: {name}. "
                         f"Available: {list(cls._cache_providers.keys())}"
                     )
@@ -382,7 +384,7 @@ class ProviderRegistry:
                 return instance
 
         if name not in cls._cache_providers:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown cache provider: {name}. "
                 f"Available: {list(cls._cache_providers.keys())}"
             )
@@ -414,7 +416,7 @@ class ProviderRegistry:
                 if key in cls._instances:
                     return cls._instances[key]
                 if name not in cls._task_queues:
-                    raise ValueError(
+                    raise AdapterNotFoundError(
                         f"Unknown task queue: {name}. "
                         f"Available: {list(cls._task_queues.keys())}"
                     )
@@ -423,7 +425,7 @@ class ProviderRegistry:
                 return instance
 
         if name not in cls._task_queues:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown task queue: {name}. "
                 f"Available: {list(cls._task_queues.keys())}"
             )
@@ -446,7 +448,7 @@ class ProviderRegistry:
                 if key in cls._instances:
                     return cls._instances[key]
                 if name not in cls._failed_op_repos:
-                    raise ValueError(
+                    raise AdapterNotFoundError(
                         f"Unknown repository: {name}. "
                         f"Available: {list(cls._failed_op_repos.keys())}"
                     )
@@ -455,7 +457,7 @@ class ProviderRegistry:
                 return instance
 
         if name not in cls._failed_op_repos:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown repository: {name}. "
                 f"Available: {list(cls._failed_op_repos.keys())}"
             )
@@ -478,7 +480,7 @@ class ProviderRegistry:
                 if key in cls._instances:
                     return cls._instances[key]
                 if name not in cls._circuit_breaker_repos:
-                    raise ValueError(
+                    raise AdapterNotFoundError(
                         f"Unknown repository: {name}. "
                         f"Available: {list(cls._circuit_breaker_repos.keys())}"
                     )
@@ -487,7 +489,7 @@ class ProviderRegistry:
                 return instance
 
         if name not in cls._circuit_breaker_repos:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown repository: {name}. "
                 f"Available: {list(cls._circuit_breaker_repos.keys())}"
             )
@@ -510,7 +512,7 @@ class ProviderRegistry:
                 if key in cls._instances:
                     return cls._instances[key]
                 if name not in cls._security_repos:
-                    raise ValueError(
+                    raise AdapterNotFoundError(
                         f"Unknown repository: {name}. "
                         f"Available: {list(cls._security_repos.keys())}"
                     )
@@ -519,7 +521,7 @@ class ProviderRegistry:
                 return instance
 
         if name not in cls._security_repos:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown repository: {name}. "
                 f"Available: {list(cls._security_repos.keys())}"
             )
@@ -545,7 +547,7 @@ class ProviderRegistry:
                 if key in cls._instances:
                     return cls._instances[key]
                 if name not in cls._event_journal_repos:
-                    raise ValueError(
+                    raise AdapterNotFoundError(
                         f"Unknown event journal repository: {name}. "
                         f"Available: {list(cls._event_journal_repos.keys())}"
                     )
@@ -554,7 +556,7 @@ class ProviderRegistry:
                 return instance
 
         if name not in cls._event_journal_repos:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown event journal repository: {name}. "
                 f"Available: {list(cls._event_journal_repos.keys())}"
             )
@@ -617,7 +619,7 @@ class ProviderRegistry:
             AuditLogAdapter instance
 
         Raises:
-            ValueError: If no adapter registered with the given name
+            AdapterNotFoundError: If no adapter registered with the given name
         """
 
         name = name or cls._default_audit
@@ -632,7 +634,7 @@ class ProviderRegistry:
             cls._auto_register_audit_adapters()
 
         if name not in cls._audit_adapters:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown audit adapter: {name}. "
                 f"Available: {list(cls._audit_adapters.keys())}"
             )
@@ -687,7 +689,7 @@ class ProviderRegistry:
             TrafficRoutingAdapter instance
 
         Raises:
-            ValueError: If no adapter registered with the given name
+            AdapterNotFoundError: If no adapter registered with the given name
         """
 
         name = name or cls._default_traffic_routing
@@ -702,7 +704,7 @@ class ProviderRegistry:
             cls._auto_register_traffic_routing_adapters()
 
         if name not in cls._traffic_routing_adapters:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown traffic routing adapter: {name}. "
                 f"Available: {list(cls._traffic_routing_adapters.keys())}"
             )
@@ -769,7 +771,7 @@ class ProviderRegistry:
                 cls._auto_register_notification_adapters()
 
             if name not in cls._notifications:
-                raise ValueError(
+                raise AdapterNotFoundError(
                     f"Unknown notification adapter: {name}. "
                     f"Available: {list(cls._notifications.keys())}"
                 )
@@ -825,7 +827,7 @@ class ProviderRegistry:
                 cls._auto_register_alert_adapters()
 
             if target not in cls._alerts:
-                raise ValueError(
+                raise AdapterNotFoundError(
                     f"Unknown alert adapter: {target}. "
                     f"Available: {list(cls._alerts.keys())}"
                 )
@@ -863,10 +865,10 @@ class ProviderRegistry:
             전략 클래스 (인스턴스화는 호출부 책임)
 
         Raises:
-            ValueError: 등록되지 않은 전략 이름
+            AdapterNotFoundError: 등록되지 않은 전략 이름
         """
         if name not in cls._correlation_strategies:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown correlation strategy: {name}. "
                 f"Available: {list(cls._correlation_strategies.keys())}"
             )
@@ -876,7 +878,7 @@ class ProviderRegistry:
     def get_root_cause_strategy(cls, name: str) -> type:
         """등록된 Root Cause 분석 전략 클래스를 반환한다."""
         if name not in cls._root_cause_strategies:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown root cause strategy: {name}. "
                 f"Available: {list(cls._root_cause_strategies.keys())}"
             )
@@ -886,7 +888,7 @@ class ProviderRegistry:
     def get_graph_build_strategy(cls, name: str) -> type:
         """등록된 Graph Build 전략 클래스를 반환한다."""
         if name not in cls._graph_build_strategies:
-            raise ValueError(
+            raise AdapterNotFoundError(
                 f"Unknown graph build strategy: {name}. "
                 f"Available: {list(cls._graph_build_strategies.keys())}"
             )
@@ -965,7 +967,7 @@ class ProviderRegistry:
         cls._instances.clear()
         cls._notification_instances.clear()
         cls._alert_instances.clear()
-        logger.debug("registry")
+        logger.debug("registry.instances_cleared", scope="instances")
 
     @classmethod
     def reset(cls) -> None:
@@ -999,7 +1001,7 @@ class ProviderRegistry:
         cls._default_traffic_routing = "logging"
         cls._default_notification = "logging"
         cls._default_alert = "stdout"
-        logger.debug("registry")
+        logger.debug("registry.instances_cleared", scope="all")
 
     # =========================================================================
     # Health Check

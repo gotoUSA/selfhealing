@@ -28,7 +28,9 @@ class TestRetryEntry:
 
     def test_retry_entry_success(self):
         """Test successful retry increments count."""
-        mock_entry = TestDataFactory.mock_failed_operation(id=1, status="pending", retry_count=1)
+        mock_entry = TestDataFactory.mock_failed_operation(
+            id=1, status="pending", retry_count=1
+        )
 
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = mock_entry
@@ -46,17 +48,21 @@ class TestRetryEntry:
         mock_repo.increment_retry_count.assert_called_once_with(1)
 
     def test_retry_entry_not_found(self):
-        """Test retry on non-existent entry raises ValueError."""
+        """Test retry on non-existent entry raises DLQEntryNotFoundError."""
+        from selfhealing.core.exceptions import DLQEntryNotFoundError
+
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = None
 
         service = DLQService(repository=mock_repo)
 
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(DLQEntryNotFoundError, match="not found"):
             service.retry_entry(pk=999)
 
     def test_retry_entry_resolved_fails(self):
-        """Test retry on already resolved entry raises ValueError."""
+        """Test retry on already resolved entry raises DLQError."""
+        from selfhealing.core.exceptions import DLQError
+
         mock_entry = TestDataFactory.mock_failed_operation(id=1, status="resolved")
 
         mock_repo = Mock()
@@ -64,11 +70,13 @@ class TestRetryEntry:
 
         service = DLQService(repository=mock_repo)
 
-        with pytest.raises(ValueError, match="already resolved"):
+        with pytest.raises(DLQError, match="already resolved"):
             service.retry_entry(pk=1)
 
     def test_retry_entry_archived_fails(self):
-        """Test retry on archived entry raises ValueError."""
+        """Test retry on archived entry raises DLQError."""
+        from selfhealing.core.exceptions import DLQError
+
         mock_entry = TestDataFactory.mock_failed_operation(id=1, status="archived")
 
         mock_repo = Mock()
@@ -76,7 +84,7 @@ class TestRetryEntry:
 
         service = DLQService(repository=mock_repo)
 
-        with pytest.raises(ValueError, match="archived"):
+        with pytest.raises(DLQError, match="archived"):
             service.retry_entry(pk=1)
 
 
@@ -104,17 +112,21 @@ class TestResolveEntry:
         )
 
     def test_resolve_entry_not_found(self):
-        """Test resolve on non-existent entry raises ValueError."""
+        """Test resolve on non-existent entry raises DLQEntryNotFoundError."""
+        from selfhealing.core.exceptions import DLQEntryNotFoundError
+
         mock_repo = Mock()
         mock_repo.get_by_id.return_value = None
 
         service = DLQService(repository=mock_repo)
 
-        with pytest.raises(ValueError, match="not found"):
+        with pytest.raises(DLQEntryNotFoundError, match="not found"):
             service.resolve_entry(pk=999)
 
     def test_resolve_entry_already_resolved(self):
-        """Test resolve on already resolved entry raises ValueError."""
+        """Test resolve on already resolved entry raises DLQError."""
+        from selfhealing.core.exceptions import DLQError
+
         mock_entry = TestDataFactory.mock_failed_operation(id=1, status="resolved")
 
         mock_repo = Mock()
@@ -122,7 +134,7 @@ class TestResolveEntry:
 
         service = DLQService(repository=mock_repo)
 
-        with pytest.raises(ValueError, match="already resolved"):
+        with pytest.raises(DLQError, match="already resolved"):
             service.resolve_entry(pk=1)
 
 
@@ -170,9 +182,16 @@ class TestGetEntry:
         result = service.get_entry(pk=5)
 
         expected_fields = [
-            "id", "domain", "failure_type", "status",
-            "retry_count", "created_at", "resolved_at",
-            "error_code", "error_message", "snapshot_data"
+            "id",
+            "domain",
+            "failure_type",
+            "status",
+            "retry_count",
+            "created_at",
+            "resolved_at",
+            "error_code",
+            "error_message",
+            "snapshot_data",
         ]
         for field in expected_fields:
             assert field in result, f"Missing field: {field}"

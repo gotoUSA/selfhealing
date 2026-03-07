@@ -40,7 +40,9 @@ class TestProviderRegistryTrafficRoutingBehavior:
 
         class DummyRouter(TrafficRoutingAdapter):
             def switch_primary(self, from_region: str, to_region: str) -> RoutingChange:
-                return RoutingChange(success=True, from_region=from_region, to_region=to_region)
+                return RoutingChange(
+                    success=True, from_region=from_region, to_region=to_region
+                )
 
             def rollback(self, routing_change: RoutingChange) -> bool:
                 return True
@@ -54,9 +56,13 @@ class TestProviderRegistryTrafficRoutingBehavior:
         assert isinstance(adapter, DummyRouter)
         assert adapter.get_current_routing()["provider"] == "dummy"
 
-    def test_get_unknown_adapter_raises_value_error(self) -> None:
-        """등록되지 않은 어댑터 조회 시 ValueError."""
-        with pytest.raises(ValueError, match="Unknown traffic routing adapter"):
+    def test_get_unknown_adapter_raises_adapter_not_found_error(self) -> None:
+        """등록되지 않은 어댑터 조회 시 AdapterNotFoundError."""
+        from selfhealing.core.exceptions import AdapterNotFoundError
+
+        with pytest.raises(
+            AdapterNotFoundError, match="Unknown traffic routing adapter"
+        ):
             ProviderRegistry.get_traffic_routing(name="nonexistent")
 
     def test_singleton_behavior(self) -> None:

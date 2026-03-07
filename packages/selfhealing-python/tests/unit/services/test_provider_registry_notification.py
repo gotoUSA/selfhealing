@@ -118,9 +118,11 @@ class TestProviderRegistryNotificationBehavior:
         result = ProviderRegistry.get_notification(None)
         assert isinstance(result, LoggingNotificationAdapter)
 
-    def test_get_notification_unknown_name_raises_value_error(self):
-        """get_notification with unknown name raises ValueError."""
-        with pytest.raises(ValueError, match="Unknown notification adapter"):
+    def test_get_notification_unknown_name_raises_adapter_not_found_error(self):
+        """get_notification with unknown name raises AdapterNotFoundError."""
+        from selfhealing.core.exceptions import AdapterNotFoundError
+
+        with pytest.raises(AdapterNotFoundError, match="Unknown notification adapter"):
             ProviderRegistry.get_notification("nonexistent_channel")
 
     def test_auto_register_notification_adapters_registers_defaults(self):

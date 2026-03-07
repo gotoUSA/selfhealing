@@ -8,8 +8,10 @@ Bulkhead Exceptions - 리소스 격리 관련 예외 클래스.
 
 from __future__ import annotations
 
+from selfhealing.core.exceptions import ResilienceError
 
-class BulkheadError(Exception):
+
+class BulkheadError(ResilienceError):
     """Bulkhead 기본 예외 클래스."""
 
     pass
@@ -37,7 +39,10 @@ class BulkheadFullError(BulkheadError):
         self.bulkhead_name = bulkhead_name
         self.max_concurrent = max_concurrent
         self.active_count = active_count
-        super().__init__(f"Bulkhead '{bulkhead_name}' is full: " f"{active_count}/{max_concurrent} active")
+        super().__init__(
+            f"Bulkhead '{bulkhead_name}' is full: "
+            f"{active_count}/{max_concurrent} active"
+        )
 
 
 class BulkheadTimeoutError(BulkheadError):

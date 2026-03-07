@@ -18,6 +18,7 @@ import pytest
 # 수정 1: get_audit_adapter() 함수 테스트
 # =============================================================================
 
+
 class TestGetAuditAdapter:
     """get_audit_adapter() 함수 테스트."""
 
@@ -30,7 +31,7 @@ class TestGetAuditAdapter:
 
         assert adapter is not None
         # AuditLogAdapter 인터페이스를 구현해야 함
-        assert hasattr(adapter, 'log')
+        assert hasattr(adapter, "log")
 
     def test_set_audit_adapter(self):
         """set_audit_adapter로 커스텀 어댑터 설정."""
@@ -90,6 +91,7 @@ class TestGetAuditAdapter:
 # =============================================================================
 # 수정 2+확장1: ContextType 스키마 테스트
 # =============================================================================
+
 
 class TestContextType:
     """ContextType Enum 및 AuditEntry 통합 테스트."""
@@ -191,6 +193,7 @@ class TestContextType:
 # 수정 3: ProviderRegistry audit adapter 등록 테스트
 # =============================================================================
 
+
 class TestProviderRegistryAuditAdapter:
     """ProviderRegistry audit adapter 등록 테스트."""
 
@@ -240,13 +243,14 @@ class TestProviderRegistryAuditAdapter:
 
         ProviderRegistry.reset()
 
-    def test_get_audit_adapter_unknown_raises(self):
-        """등록되지 않은 adapter 요청 시 ValueError."""
+    def test_get_audit_adapter_unknown_raises_adapter_not_found_error(self):
+        """등록되지 않은 adapter 요청 시 AdapterNotFoundError."""
+        from selfhealing.core.exceptions import AdapterNotFoundError
         from selfhealing.factory import ProviderRegistry
 
         ProviderRegistry.reset()
 
-        with pytest.raises(ValueError, match="Unknown audit adapter"):
+        with pytest.raises(AdapterNotFoundError, match="Unknown audit adapter"):
             ProviderRegistry.get_audit_adapter("nonexistent_adapter_xyz")
 
         ProviderRegistry.reset()
@@ -255,6 +259,7 @@ class TestProviderRegistryAuditAdapter:
 # =============================================================================
 # 수정 5+확장2: WAL Group Commit 테스트
 # =============================================================================
+
 
 class TestWALGroupCommit:
     """WAL Group Commit 기능 테스트."""
@@ -368,6 +373,7 @@ class TestWALGroupCommit:
 # =============================================================================
 # 확장 3: Fail-Open 정책 테스트
 # =============================================================================
+
 
 class TestFailOpenPolicy:
     """ContinuousAuditRecorder Fail-Open 정책 테스트."""
@@ -502,6 +508,7 @@ class TestFailOpenPolicy:
 # =============================================================================
 # 통합 테스트
 # =============================================================================
+
 
 class TestAuditSystemIntegration:
     """Audit 시스템 통합 테스트."""

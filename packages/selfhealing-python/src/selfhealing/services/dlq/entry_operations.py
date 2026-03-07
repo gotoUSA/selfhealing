@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from selfhealing.core.exceptions import DLQEntryNotFoundError, DLQError
 from selfhealing.core.timezone import now
 
 if TYPE_CHECKING:
@@ -40,18 +41,19 @@ class EntryOperationsMixin:
                 - message: str
 
         Raises:
-            ValueError: If entry not found or already resolved/archived
+            DLQEntryNotFoundError: If entry not found
+            DLQError: If entry is already resolved/archived or operation fails
         """
         entry = self.repository.get_by_id(pk)
 
         if entry is None:
-            raise ValueError(f"DLQ entry {pk} not found")
+            raise DLQEntryNotFoundError(f"DLQ entry {pk} not found")
 
         if entry.status == "resolved":
-            raise ValueError("Cannot retry an already resolved entry")
+            raise DLQError("Cannot retry an already resolved entry")
 
         if entry.status == "archived":
-            raise ValueError("Cannot retry an archived entry")
+            raise DLQError("Cannot retry an archived entry")
 
         old_count = entry.retry_count
 
@@ -59,7 +61,7 @@ class EntryOperationsMixin:
         success = self.repository.increment_retry_count(pk)
 
         if not success:
-            raise ValueError(f"Failed to increment retry count for entry {pk}")
+            raise DLQError(f"Failed to increment retry count for entry {pk}")
 
         logger.info(
             "dlq_service.retry_triggered_entry",
@@ -94,18 +96,19 @@ class EntryOperationsMixin:
                 - notes: str
 
         Raises:
-            ValueError: If entry not found or already resolved/archived
+            DLQEntryNotFoundError: If entry not found
+            DLQError: If entry is already resolved/archived or operation fails
         """
         entry = self.repository.get_by_id(pk)
 
         if entry is None:
-            raise ValueError(f"DLQ entry {pk} not found")
+            raise DLQEntryNotFoundError(f"DLQ entry {pk} not found")
 
         if entry.status == "resolved":
-            raise ValueError("Entry is already resolved")
+            raise DLQError("Entry is already resolved")
 
         if entry.status == "archived":
-            raise ValueError("Cannot resolve an archived entry")
+            raise DLQError("Cannot resolve an archived entry")
 
         old_status = entry.status
 
@@ -117,7 +120,7 @@ class EntryOperationsMixin:
         )
 
         if not success:
-            raise ValueError(f"Failed to resolve entry {pk}")
+            raise DLQError(f"Failed to resolve entry {pk}")
 
         resolved_at = now()
 

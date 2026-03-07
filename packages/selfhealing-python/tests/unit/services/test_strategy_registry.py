@@ -2,7 +2,7 @@
 Tests for ProviderRegistry strategy 등록/조회 — Correlation Engine 전략 관리.
 
 테스트 분류 (UNIT_TEST_GUIDELINES §0):
-- Contract: 미등록 전략 조회 시 ValueError
+- Contract: 미등록 전략 조회 시 AdapterNotFoundError
 - Behavior: register/get 라운드트립, reset 후 격리
 
 참조 소스:
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import pytest
 
+from selfhealing.core.exceptions import AdapterNotFoundError
 from selfhealing.factory import ProviderRegistry
 
 # =============================================================================
@@ -54,21 +55,21 @@ class _DummyGraphBuildStrategy:
 
 
 class TestCorrelationStrategyRegistryContract:
-    """미등록 전략 조회 시 ValueError 발생 계약."""
+    """미등록 전략 조회 시 AdapterNotFoundError 발생 계약."""
 
-    def test_unknown_correlation_strategy_raises_value_error(self):
-        """등록되지 않은 correlation 전략 조회 시 ValueError."""
-        with pytest.raises(ValueError, match="Unknown correlation strategy"):
+    def test_unknown_correlation_strategy_raises_adapter_not_found_error(self):
+        """등록되지 않은 correlation 전략 조회 시 AdapterNotFoundError."""
+        with pytest.raises(AdapterNotFoundError, match="Unknown correlation strategy"):
             ProviderRegistry.get_correlation_strategy("nonexistent")
 
-    def test_unknown_root_cause_strategy_raises_value_error(self):
-        """등록되지 않은 root cause 전략 조회 시 ValueError."""
-        with pytest.raises(ValueError, match="Unknown root cause strategy"):
+    def test_unknown_root_cause_strategy_raises_adapter_not_found_error(self):
+        """등록되지 않은 root cause 전략 조회 시 AdapterNotFoundError."""
+        with pytest.raises(AdapterNotFoundError, match="Unknown root cause strategy"):
             ProviderRegistry.get_root_cause_strategy("nonexistent")
 
-    def test_unknown_graph_build_strategy_raises_value_error(self):
-        """등록되지 않은 graph build 전략 조회 시 ValueError."""
-        with pytest.raises(ValueError, match="Unknown graph build strategy"):
+    def test_unknown_graph_build_strategy_raises_adapter_not_found_error(self):
+        """등록되지 않은 graph build 전략 조회 시 AdapterNotFoundError."""
+        with pytest.raises(AdapterNotFoundError, match="Unknown graph build strategy"):
             ProviderRegistry.get_graph_build_strategy("nonexistent")
 
 
@@ -82,7 +83,9 @@ class TestStrategyRegistryBehavior:
 
     def test_register_and_get_correlation_strategy(self):
         """correlation 전략 등록 후 조회하면 동일 클래스를 반환한다."""
-        ProviderRegistry.register_correlation_strategy("zscore", _DummyCorrelationStrategy)
+        ProviderRegistry.register_correlation_strategy(
+            "zscore", _DummyCorrelationStrategy
+        )
 
         result = ProviderRegistry.get_correlation_strategy("zscore")
         assert result is _DummyCorrelationStrategy
@@ -103,7 +106,9 @@ class TestStrategyRegistryBehavior:
 
     def test_overwrite_registration(self):
         """동일 이름으로 재등록하면 최신 클래스로 대체된다."""
-        ProviderRegistry.register_correlation_strategy("test", _DummyCorrelationStrategy)
+        ProviderRegistry.register_correlation_strategy(
+            "test", _DummyCorrelationStrategy
+        )
         ProviderRegistry.register_correlation_strategy("test", _DummyRootCauseStrategy)
 
         result = ProviderRegistry.get_correlation_strategy("test")
@@ -111,25 +116,41 @@ class TestStrategyRegistryBehavior:
 
     def test_reset_clears_all_strategies(self):
         """reset() 후 등록된 전략이 모두 제거된다."""
-        ProviderRegistry.register_correlation_strategy("test_c", _DummyCorrelationStrategy)
+        ProviderRegistry.register_correlation_strategy(
+            "test_c", _DummyCorrelationStrategy
+        )
         ProviderRegistry.register_root_cause_strategy("test_r", _DummyRootCauseStrategy)
-        ProviderRegistry.register_graph_build_strategy("test_g", _DummyGraphBuildStrategy)
+        ProviderRegistry.register_graph_build_strategy(
+            "test_g", _DummyGraphBuildStrategy
+        )
 
         ProviderRegistry.reset()
 
-        with pytest.raises(ValueError):
+        with pytest.raises(AdapterNotFoundError):
             ProviderRegistry.get_correlation_strategy("test_c")
-        with pytest.raises(ValueError):
+        with pytest.raises(AdapterNotFoundError):
             ProviderRegistry.get_root_cause_strategy("test_r")
-        with pytest.raises(ValueError):
+        with pytest.raises(AdapterNotFoundError):
             ProviderRegistry.get_graph_build_strategy("test_g")
 
     def test_multiple_strategies_independent(self):
         """correlation, root_cause, graph_build 전략은 서로 독립적이다."""
-        ProviderRegistry.register_correlation_strategy("alpha", _DummyCorrelationStrategy)
+        ProviderRegistry.register_correlation_strategy(
+            "alpha", _DummyCorrelationStrategy
+        )
         ProviderRegistry.register_root_cause_strategy("alpha", _DummyRootCauseStrategy)
-        ProviderRegistry.register_graph_build_strategy("alpha", _DummyGraphBuildStrategy)
+        ProviderRegistry.register_graph_build_strategy(
+            "alpha", _DummyGraphBuildStrategy
+        )
 
-        assert ProviderRegistry.get_correlation_strategy("alpha") is _DummyCorrelationStrategy
-        assert ProviderRegistry.get_root_cause_strategy("alpha") is _DummyRootCauseStrategy
-        assert ProviderRegistry.get_graph_build_strategy("alpha") is _DummyGraphBuildStrategy
+        assert (
+            ProviderRegistry.get_correlation_strategy("alpha")
+            is _DummyCorrelationStrategy
+        )
+        assert (
+            ProviderRegistry.get_root_cause_strategy("alpha") is _DummyRootCauseStrategy
+        )
+        assert (
+            ProviderRegistry.get_graph_build_strategy("alpha")
+            is _DummyGraphBuildStrategy
+        )
