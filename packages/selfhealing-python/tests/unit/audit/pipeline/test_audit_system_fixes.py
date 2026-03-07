@@ -234,10 +234,12 @@ class TestProviderRegistryAuditAdapter:
         ProviderRegistry.reset()
 
         # 자동 등록 트리거
+        from selfhealing.core.exceptions import AdapterNotFoundError
+
         try:
             adapter = ProviderRegistry.get_audit_adapter("stdout")
             assert adapter is not None
-        except ValueError:
+        except AdapterNotFoundError:
             # 자동 등록이 안 된 경우도 허용 (import 문제)
             pass
 

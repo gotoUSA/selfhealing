@@ -99,7 +99,7 @@ SelfHealingError (Exception)
 │   ├── IPCConnectionError
 │   └── IPCProtocolError
 ├── RunbookError
-│   └── RunbookNotFoundError
+│   └── (RunbookNotFoundError — 별도 마이그레이션 예정, services/runbook/exceptions.py에 유지)
 └── ConfigurationError                # 설정 관련 에러
     └── SettingsValidationError
 ```
@@ -230,7 +230,7 @@ class AdapterNotFoundError(AdapterError):
 | `register_security_repo()` | `"cell_registry.bulkheads_registered"` | `"registry.security_repo_registered"` |
 | `register_event_journal_repo()` | `"cell_registry.bulkheads_registered"` | `"registry.event_journal_repo_registered"` |
 | `register_audit_adapter()` | `"cell_registry.bulkheads_registered"` | `"registry.audit_adapter_registered"` |
-| `register_alert_adapter()` | `"cell_registry.bulkheads_registered"` | `"registry.alert_adapter_registered"` |
+| `register_alert()` | `"cell_registry.bulkheads_registered"` | `"registry.alert_registered"` |
 
 #### 2.2.2 로깅 이벤트명 컨벤션 정의
 
