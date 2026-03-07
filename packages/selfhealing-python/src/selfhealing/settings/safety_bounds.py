@@ -46,8 +46,7 @@ class SafetyBoundsSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_BOUNDS_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
         env_nested_delimiter="__",
@@ -282,35 +281,15 @@ class SafetyBoundsSettings(BaseSettings):
         )
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_safety_bounds_settings() -> "SafetyBoundsSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: SafetyBoundsSettings | None = None
-
-
-def get_safety_bounds_settings() -> SafetyBoundsSettings:
-    """
-    캐시된 SafetyBoundsSettings 인스턴스 반환.
-
-    Returns:
-        SafetyBoundsSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = SafetyBoundsSettings()
-        logger.debug(
-            "[SafetyBoundsSettings] Loaded: "  # noqa: G004
-            f"timeout_ms={_settings.timeout_ms_min}-{_settings.timeout_ms_max}, "
-            f"retry_count={_settings.retry_count_min}-{_settings.retry_count_max}"
-        )
-    return _settings
-
+    return get_config().meta.safety_bounds
 
 def reset_safety_bounds_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
-    """
-    global _settings
-    _settings = None
-    logger.debug("safety_bounds_settings.reset")
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().meta.__dict__["safety_bounds"]
+    except KeyError:
+        pass

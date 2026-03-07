@@ -28,7 +28,7 @@ class TestLoggerProviderInitialization:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -36,7 +36,7 @@ class TestLoggerProviderInitialization:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry, uninstrument_logging
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         uninstrument_logging()
         reset_opentelemetry()
@@ -293,7 +293,7 @@ class TestLoggerProviderWithMissingDependencies:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -301,7 +301,7 @@ class TestLoggerProviderWithMissingDependencies:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()

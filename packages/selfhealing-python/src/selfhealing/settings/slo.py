@@ -35,8 +35,7 @@ class SLOSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_SLO_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -89,19 +88,15 @@ class SLOSettings(BaseSettings):
         return v
 
 
-# Singleton instance (cached)
-_settings: SLOSettings | None = None
+def get_slo_settings() -> "SLOSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_slo_settings() -> SLOSettings:
-    """Get cached SLOSettings instance."""
-    global _settings
-    if _settings is None:
-        _settings = SLOSettings()
-    return _settings
-
+    return get_config().slo_group.slo
 
 def reset_slo_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().slo_group.__dict__["slo"]
+    except KeyError:
+        pass

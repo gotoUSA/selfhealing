@@ -57,8 +57,7 @@ class DomainSensitivitySettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_DOMAIN_SENSITIVITY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -149,21 +148,15 @@ class DomainSensitivitySettings(BaseSettings):
         }
 
 
-# ==========================================================================
-# Singleton 관리
-# ==========================================================================
-_domain_sensitivity_settings: DomainSensitivitySettings | None = None
+def get_domain_sensitivity_settings() -> "DomainSensitivitySettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_domain_sensitivity_settings() -> DomainSensitivitySettings:
-    """Get cached DomainSensitivitySettings instance."""
-    global _domain_sensitivity_settings
-    if _domain_sensitivity_settings is None:
-        _domain_sensitivity_settings = DomainSensitivitySettings()
-    return _domain_sensitivity_settings
-
+    return get_config().security_group.domain_sensitivity
 
 def reset_domain_sensitivity_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _domain_sensitivity_settings
-    _domain_sensitivity_settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().security_group.__dict__["domain_sensitivity"]
+    except KeyError:
+        pass

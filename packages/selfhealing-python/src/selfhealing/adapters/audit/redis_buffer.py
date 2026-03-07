@@ -45,7 +45,7 @@ _SAFETY_LTRIM_THRESHOLD = int(os.environ.get("SELFHEALING_SAFETY_LTRIM", "100000
 def _get_audit_buffer_ttl() -> int:
     """AuditSettings에서 Redis 버퍼 TTL을 가져온다."""
     try:
-        from selfhealing.settings.audit_settings import get_audit_settings
+        from selfhealing.settings.audit import get_audit_settings
 
         return get_audit_settings().buffer_redis_ttl
     except Exception:

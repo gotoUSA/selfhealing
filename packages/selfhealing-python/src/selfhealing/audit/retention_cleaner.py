@@ -62,7 +62,7 @@ class WALRetentionCleaner:
     def _get_retention_from_settings(self) -> int:
         """설정에서 retention_days 로드."""
         try:
-            from selfhealing.settings.audit_settings import get_audit_settings
+            from selfhealing.settings.audit import get_audit_settings
 
             settings = get_audit_settings()
             return getattr(settings, "retention_days", DEFAULT_RETENTION_DAYS)

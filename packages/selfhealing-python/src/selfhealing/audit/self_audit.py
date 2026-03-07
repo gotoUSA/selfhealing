@@ -135,7 +135,7 @@ class SelfAuditLogger:
     def _get_max_recent_events() -> int:
         """Settings에서 max_recent_events 조회."""
         try:
-            from selfhealing.settings.audit_settings import get_audit_settings
+            from selfhealing.settings.audit import get_audit_settings
 
             return get_audit_settings().self_audit_max_recent_events
         except Exception:
@@ -145,7 +145,7 @@ class SelfAuditLogger:
     def _get_default_limit() -> int:
         """Settings에서 default_limit 조회."""
         try:
-            from selfhealing.settings.audit_settings import get_audit_settings
+            from selfhealing.settings.audit import get_audit_settings
 
             return get_audit_settings().self_audit_default_limit
         except Exception:
@@ -155,7 +155,7 @@ class SelfAuditLogger:
     def _get_max_failure_rate() -> float:
         """Settings에서 max_failure_rate 조회."""
         try:
-            from selfhealing.settings.audit_settings import get_audit_settings
+            from selfhealing.settings.audit import get_audit_settings
 
             return get_audit_settings().self_audit_max_failure_rate
         except Exception:

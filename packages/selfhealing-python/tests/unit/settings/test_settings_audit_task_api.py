@@ -20,19 +20,19 @@ class TestAuditSettingsPhase3Extension:
 
     def setup_method(self):
         """Reset settings before each test."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         reset_audit_settings()
 
     def teardown_method(self):
         """Reset settings after each test."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         reset_audit_settings()
 
     def test_self_audit_default_values(self):
         """Test self_audit related default values."""
-        from selfhealing.settings.audit_settings import get_audit_settings
+        from selfhealing.settings.audit import get_audit_settings
 
         settings = get_audit_settings()
 
@@ -42,7 +42,7 @@ class TestAuditSettingsPhase3Extension:
 
     def test_cascade_rate_window_default(self):
         """Test cascade_rate_window_seconds default value."""
-        from selfhealing.settings.audit_settings import get_audit_settings
+        from selfhealing.settings.audit import get_audit_settings
 
         settings = get_audit_settings()
 
@@ -50,7 +50,7 @@ class TestAuditSettingsPhase3Extension:
 
     def test_self_audit_env_override(self):
         """Test environment variable override for self_audit settings."""
-        from selfhealing.settings.audit_settings import (
+        from selfhealing.settings.audit import (
             get_audit_settings,
             reset_audit_settings,
         )
@@ -324,7 +324,7 @@ class TestSelfAuditSettingsIntegration:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.audit.self_audit import SelfAuditLogger
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         SelfAuditLogger.reset_instance()
         reset_audit_settings()
@@ -332,7 +332,7 @@ class TestSelfAuditSettingsIntegration:
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.audit.self_audit import SelfAuditLogger
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         SelfAuditLogger.reset_instance()
         reset_audit_settings()
@@ -363,7 +363,7 @@ class TestCascadeLoadSheddingSettingsIntegration:
     def setup_method(self):
         """Reset settings before each test."""
         from selfhealing.audit.cascade_load_shedding import reset_cascade_load_shedding
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         reset_cascade_load_shedding()
         reset_audit_settings()
@@ -371,7 +371,7 @@ class TestCascadeLoadSheddingSettingsIntegration:
     def teardown_method(self):
         """Reset settings after each test."""
         from selfhealing.audit.cascade_load_shedding import reset_cascade_load_shedding
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         reset_cascade_load_shedding()
         reset_audit_settings()
@@ -391,7 +391,7 @@ class TestCascadeLoadSheddingSettingsIntegration:
             CascadeLoadShedding,
             reset_cascade_load_shedding,
         )
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         with mock.patch.dict(
             os.environ,

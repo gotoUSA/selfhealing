@@ -31,8 +31,7 @@ class BackoffSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_BACKOFF_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -165,31 +164,15 @@ class BackoffSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_backoff_settings() -> "BackoffSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: BackoffSettings | None = None
-
-
-def get_backoff_settings() -> BackoffSettings:
-    """
-    캐시된 BackoffSettings 인스턴스 반환.
-
-    Returns:
-        BackoffSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = BackoffSettings()
-    return _settings
-
+    return get_config().core.backoff
 
 def reset_backoff_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
+    from selfhealing.settings.root import get_config
 
-    환경 변수 변경 후 설정을 다시 로드하려면 이 함수를 호출하세요.
-    """
-    global _settings
-    _settings = None
+    try:
+        del get_config().core.__dict__["backoff"]
+    except KeyError:
+        pass

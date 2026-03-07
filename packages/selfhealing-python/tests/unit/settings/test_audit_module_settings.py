@@ -250,21 +250,21 @@ class TestAuditSettingsExtensions:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
         reset_audit_settings()
         yield
         reset_audit_settings()
 
     def test_compliance_max_retention_days_default(self):
         """compliance_max_retention_days 기본값 365일 검증."""
-        from selfhealing.settings.audit_settings import AuditSettings
+        from selfhealing.settings.audit import AuditSettings
 
         settings = AuditSettings()
         assert settings.compliance_max_retention_days == 365
 
     def test_compliance_max_retention_days_env_override(self, monkeypatch):
         """compliance_max_retention_days 환경변수 오버라이드 검증."""
-        from selfhealing.settings.audit_settings import AuditSettings
+        from selfhealing.settings.audit import AuditSettings
 
         monkeypatch.setenv("SELFHEALING_AUDIT_COMPLIANCE_MAX_RETENTION_DAYS", "1825")
 
@@ -273,7 +273,7 @@ class TestAuditSettingsExtensions:
 
     def test_compliance_max_retention_days_validation_range(self):
         """compliance_max_retention_days 범위 검증."""
-        from selfhealing.settings.audit_settings import AuditSettings
+        from selfhealing.settings.audit import AuditSettings
 
         # 최소 90일
         with pytest.raises(ValidationError):

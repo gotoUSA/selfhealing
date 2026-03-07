@@ -27,7 +27,7 @@ import structlog
 from selfhealing.core.apply_strategy import ApplyOptions, ApplyStrategy
 from selfhealing.core.state_backend import get_state_backend
 from selfhealing.services.audit import log_config_apply_audit
-from selfhealing.settings.audit_settings import get_audit_settings
+from selfhealing.settings.audit import get_audit_settings
 
 logger = structlog.get_logger()
 

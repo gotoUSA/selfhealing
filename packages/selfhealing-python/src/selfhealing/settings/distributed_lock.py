@@ -38,8 +38,7 @@ class DistributedLockSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_DISTRIBUTED_LOCK_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -125,19 +124,15 @@ class DistributedLockSettings(BaseSettings):
         return self.timeout_minutes * 60 * 1000
 
 
-# Singleton instance (cached)
-_settings: DistributedLockSettings | None = None
+def get_distributed_lock_settings() -> "DistributedLockSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_distributed_lock_settings() -> DistributedLockSettings:
-    """Get cached DistributedLockSettings instance."""
-    global _settings
-    if _settings is None:
-        _settings = DistributedLockSettings()
-    return _settings
-
+    return get_config().coordination.distributed_lock
 
 def reset_distributed_lock_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().coordination.__dict__["distributed_lock"]
+    except KeyError:
+        pass

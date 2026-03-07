@@ -32,8 +32,7 @@ class XTestCleanupSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_XTEST_CLEANUP_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -140,35 +139,21 @@ class XTestCleanupSettings(BaseSettings):
 # Settings Instance Factory
 # =============================================================================
 
-_xtest_cleanup_settings: XTestCleanupSettings | None = None
 
+def get_xtest_cleanup_settings() -> "XTestCleanupSettings":
+    from selfhealing.settings.root import get_config
 
-def get_xtest_cleanup_settings() -> XTestCleanupSettings:
-    """
-    X-Test Cleanup 설정 싱글톤 인스턴스 반환.
-
-    Returns:
-        XTestCleanupSettings 인스턴스
-    """
-    global _xtest_cleanup_settings
-    if _xtest_cleanup_settings is None:
-        _xtest_cleanup_settings = XTestCleanupSettings()
-        logger.debug(
-            "x_test_cleanup.settings_loaded",
-            _xtest_cleanup_settings=_xtest_cleanup_settings.session_ttl_hours,
-            cleanup_interval_minutes=_xtest_cleanup_settings.cleanup_interval_minutes,
-        )
-    return _xtest_cleanup_settings
-
-
-def reset_xtest_cleanup_settings() -> None:
-    """설정 캐시 초기화 (테스트용)."""
-    global _xtest_cleanup_settings
-    _xtest_cleanup_settings = None
-
-
+    return get_config().testing.xtest_cleanup
 __all__ = [
     "XTestCleanupSettings",
     "get_xtest_cleanup_settings",
     "reset_xtest_cleanup_settings",
 ]
+
+def reset_xtest_cleanup_settings() -> None:
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().testing.__dict__["xtest_cleanup"]
+    except KeyError:
+        pass

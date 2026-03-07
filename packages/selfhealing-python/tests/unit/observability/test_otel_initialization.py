@@ -24,7 +24,7 @@ class TestOpenTelemetryInitialization:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -32,7 +32,7 @@ class TestOpenTelemetryInitialization:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -172,7 +172,7 @@ class TestOpenTelemetryWithOtelInstalled:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -183,7 +183,7 @@ class TestOpenTelemetryWithOtelInstalled:
             reset_opentelemetry,
             shutdown_opentelemetry,
         )
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         shutdown_opentelemetry()
         reset_opentelemetry()

@@ -13,7 +13,6 @@ Environment Variables:
 
 from __future__ import annotations
 
-import threading
 
 import structlog
 from pydantic import Field
@@ -32,8 +31,7 @@ class HedgingSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_HEDGING_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -128,26 +126,15 @@ class HedgingSettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton
-# =============================================================================
+def get_hedging_settings() -> "HedgingSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: HedgingSettings | None = None
-_settings_lock = threading.Lock()
-
-
-def get_hedging_settings() -> HedgingSettings:
-    """HedgingSettings 싱글톤 반환."""
-    global _settings
-    if _settings is None:
-        with _settings_lock:
-            if _settings is None:
-                _settings = HedgingSettings()
-    return _settings
-
+    return get_config().resilience.hedging
 
 def reset_hedging_settings() -> None:
-    """싱글톤 초기화 (테스트용)."""
-    global _settings
-    with _settings_lock:
-        _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().resilience.__dict__["hedging"]
+    except KeyError:
+        pass

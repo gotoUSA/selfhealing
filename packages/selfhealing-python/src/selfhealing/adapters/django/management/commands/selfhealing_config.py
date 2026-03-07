@@ -73,7 +73,9 @@ class Command(BaseCommand):
         elif options["secrets"]:
             self._show_secrets()
         else:
-            self.stdout.write(self.style.WARNING("옵션을 지정해주세요. --help로 사용법을 확인하세요."))
+            self.stdout.write(
+                self.style.WARNING("옵션을 지정해주세요. --help로 사용법을 확인하세요.")
+            )
 
     def _get_root_settings(self):
         """SelfHealingSettings 로드."""
@@ -99,7 +101,12 @@ class Command(BaseCommand):
             self._output_data(data, fmt)
 
     def _model_to_dict(self, model) -> dict[str, Any]:
-        """Pydantic 모델을 dict로 변환 (중첩 처리)."""
+        """Pydantic 모델을 dict로 변환 (중첩 처리).
+
+        Root settings uses to_full_dict() to include cached_property groups.
+        """
+        if hasattr(model, "to_full_dict"):
+            return model.to_full_dict()
         if hasattr(model, "model_dump"):
             return model.model_dump()
         return dict(model)
@@ -107,7 +114,9 @@ class Command(BaseCommand):
     def _output_data(self, data: dict[str, Any], fmt: str):
         """포맷에 따라 출력."""
         if fmt == "json":
-            self.stdout.write(json.dumps(data, indent=2, default=str, ensure_ascii=False))
+            self.stdout.write(
+                json.dumps(data, indent=2, default=str, ensure_ascii=False)
+            )
         elif fmt == "table":
             self._output_table(data)
         else:
@@ -158,14 +167,20 @@ class Command(BaseCommand):
 
             if config.circuit_breaker.failure_threshold > 50:
                 warnings.append(
-                    f"failure_threshold({config.circuit_breaker.failure_threshold})가 " "높습니다. 50 이하를 권장합니다."
+                    f"failure_threshold({config.circuit_breaker.failure_threshold})가 "
+                    "높습니다. 50 이하를 권장합니다."
                 )
 
             if config.retry.max_retries > 10:
-                warnings.append(f"max_retries({config.retry.max_retries})가 높습니다. " "10 이하를 권장합니다.")
+                warnings.append(
+                    f"max_retries({config.retry.max_retries})가 높습니다. "
+                    "10 이하를 권장합니다."
+                )
 
             if config.dlq.max_items > 50000:
-                warnings.append(f"DLQ max_items({config.dlq.max_items})가 매우 높습니다.")
+                warnings.append(
+                    f"DLQ max_items({config.dlq.max_items})가 매우 높습니다."
+                )
 
             if errors:
                 for err in errors:
@@ -178,7 +193,9 @@ class Command(BaseCommand):
             if not errors and not warnings:
                 self.stdout.write(self.style.SUCCESS("✅ 모든 설정이 정상입니다."))
             elif not errors:
-                self.stdout.write(self.style.SUCCESS(f"\n✅ 검증 완료 (경고 {len(warnings)}개)"))
+                self.stdout.write(
+                    self.style.SUCCESS(f"\n✅ 검증 완료 (경고 {len(warnings)}개)")
+                )
             else:
                 raise CommandError(f"검증 실패: {len(errors)}개 오류")
 
@@ -280,7 +297,9 @@ class Command(BaseCommand):
                         if len(value_str) > 40:
                             value_str = value_str[:37] + "..."
 
-                        self.stdout.write(f"  {field_name:<30} {value_str:<40} [{style(source)}]")
+                        self.stdout.write(
+                            f"  {field_name:<30} {value_str:<40} [{style(source)}]"
+                        )
                 except Exception as e:
                     self.stdout.write(self.style.ERROR(f"  분석 실패: {e}"))
 
@@ -299,11 +318,15 @@ class Command(BaseCommand):
 
             for name, is_set in summary.items():
                 if is_set:
-                    self.stdout.write(self.style.SUCCESS(f"  ✅ {name}: 설정됨 (마스킹됨)"))
+                    self.stdout.write(
+                        self.style.SUCCESS(f"  ✅ {name}: 설정됨 (마스킹됨)")
+                    )
                 else:
                     self.stdout.write(self.style.WARNING(f"  ⚠️  {name}: 미설정"))
 
-            self.stdout.write(self.style.NOTICE("\n참고: 실제 값은 보안상 표시되지 않습니다."))
+            self.stdout.write(
+                self.style.NOTICE("\n참고: 실제 값은 보안상 표시되지 않습니다.")
+            )
 
         except ImportError as e:
             raise CommandError(f"secrets 모듈을 로드할 수 없습니다: {e}")

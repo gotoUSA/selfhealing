@@ -28,8 +28,7 @@ class HttpClientSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_HTTP_CLIENT_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -52,31 +51,15 @@ class HttpClientSettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_http_client_settings() -> "HttpClientSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: HttpClientSettings | None = None
-
-
-def get_http_client_settings() -> HttpClientSettings:
-    """
-    캐시된 HttpClientSettings 인스턴스 반환.
-
-    Returns:
-        HttpClientSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = HttpClientSettings()
-    return _settings
-
+    return get_config().adapters.http_client
 
 def reset_http_client_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
+    from selfhealing.settings.root import get_config
 
-    환경 변수 변경 후 설정을 다시 로드하려면 이 함수를 호출하세요.
-    """
-    global _settings
-    _settings = None
+    try:
+        del get_config().adapters.__dict__["http_client"]
+    except KeyError:
+        pass

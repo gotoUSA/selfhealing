@@ -6,8 +6,15 @@ Unified Pydantic Settings replacing core/config.py:SelfHealingConfig.
 All sub-settings are composed here for single-point access.
 """
 
+from dotenv import load_dotenv
+
+load_dotenv(
+    override=False
+)  # .env -> os.environ (1 time, existing env vars take priority)
+
 import os
 from enum import Enum
+from functools import cached_property  # noqa: F811
 from typing import Any
 
 import structlog
@@ -41,7 +48,7 @@ from selfhealing.settings.governance import GovernanceSettings
 from selfhealing.settings.idempotency import IdempotencySettings
 from selfhealing.settings.kafka_producer import KafkaProducerSettings
 from selfhealing.settings.l2_storage import L2StorageSettings
-from selfhealing.settings.logging_config import LoggingSettings
+from selfhealing.settings.logging_settings import LoggingSettings
 from selfhealing.settings.metrics import MetricsSettings
 from selfhealing.settings.namespace import NamespaceSettings
 from selfhealing.settings.notification import NotificationSettings
@@ -68,8 +75,7 @@ class SelfHealingSettings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -231,6 +237,128 @@ class SelfHealingSettings(BaseSettings):
                     "Set SELFHEALING_CLUSTER_ID environment variable to your cluster name."
                 )
         return self
+
+    # ==========================================================================
+    # Domain groups (cached_property, lazy initialization)
+    # ==========================================================================
+    @cached_property
+    def core(self) -> "CoreGroup":
+        from selfhealing.settings.groups import CoreGroup
+
+        return CoreGroup()
+
+    @cached_property
+    def scaling(self) -> "ScalingGroup":
+        from selfhealing.settings.groups import ScalingGroup
+
+        return ScalingGroup()
+
+    @cached_property
+    def audit_group(self) -> "AuditGroup":
+        from selfhealing.settings.groups import AuditGroup
+
+        return AuditGroup()
+
+    @cached_property
+    def coordination(self) -> "CoordinationGroup":
+        from selfhealing.settings.groups import CoordinationGroup
+
+        return CoordinationGroup()
+
+    @cached_property
+    def multi_region(self) -> "MultiRegionGroup":
+        from selfhealing.settings.groups import MultiRegionGroup
+
+        return MultiRegionGroup()
+
+    @cached_property
+    def metrics_group(self) -> "MetricsGroup":
+        from selfhealing.settings.groups import MetricsGroup
+
+        return MetricsGroup()
+
+    @cached_property
+    def resilience(self) -> "ResilienceGroup":
+        from selfhealing.settings.groups import ResilienceGroup
+
+        return ResilienceGroup()
+
+    @cached_property
+    def obs(self) -> "ObservabilityGroup":
+        from selfhealing.settings.groups import ObservabilityGroup
+
+        return ObservabilityGroup()
+
+    @cached_property
+    def adapters(self) -> "AdaptersGroup":
+        from selfhealing.settings.groups import AdaptersGroup
+
+        return AdaptersGroup()
+
+    @cached_property
+    def security_group(self) -> "SecurityGroup":
+        from selfhealing.settings.groups import SecurityGroup
+
+        return SecurityGroup()
+
+    @cached_property
+    def slo_group(self) -> "SLOGroup":
+        from selfhealing.settings.groups import SLOGroup
+
+        return SLOGroup()
+
+    @cached_property
+    def meta(self) -> "MetaGroup":
+        from selfhealing.settings.groups import MetaGroup
+
+        return MetaGroup()
+
+    @cached_property
+    def testing(self) -> "TestingGroup":
+        from selfhealing.settings.groups import TestingGroup
+
+        return TestingGroup()
+
+    @cached_property
+    def services_group(self) -> "ServicesGroup":
+        from selfhealing.settings.groups import ServicesGroup
+
+        return ServicesGroup()
+
+    # ==========================================================================
+    # Full serialization (model_dump supplement for cached_property groups)
+    # ==========================================================================
+    def to_full_dict(self) -> dict[str, Any]:
+        """model_dump() + cached_property groups for full serialization.
+
+        Used by CLI --inspect, Admin API, etc. to view all settings.
+        Only includes already-initialized cached_properties (lazy principle).
+        """
+        result = self.model_dump()
+        for name in self._cached_property_names():
+            if name in self.__dict__:
+                val = self.__dict__[name]
+                result[name] = self._group_to_dict(val)
+        return result
+
+    @classmethod
+    def _cached_property_names(cls) -> list[str]:
+        return [
+            name for name, val in vars(cls).items() if isinstance(val, cached_property)
+        ]
+
+    @staticmethod
+    def _group_to_dict(group: Any) -> dict[str, Any]:
+        """Serialize only initialized cached_properties of a group object."""
+        result: dict[str, Any] = {}
+        for name, val in vars(type(group)).items():
+            if isinstance(val, cached_property) and name in group.__dict__:
+                prop_val = group.__dict__[name]
+                if hasattr(prop_val, "model_dump"):
+                    result[name] = prop_val.model_dump()
+                else:
+                    result[name] = prop_val
+        return result
 
     # ==========================================================================
     # Convenience methods for backward compatibility

@@ -20,7 +20,7 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_CB_ADV_",
-        env_file=".env",
+        env_file=None,
         extra="ignore",
     )
 
@@ -145,21 +145,15 @@ class CircuitBreakerAdvancedSettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton pattern
-# =============================================================================
-_settings: CircuitBreakerAdvancedSettings | None = None
+def get_circuit_breaker_advanced_settings() -> "CircuitBreakerAdvancedSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_circuit_breaker_advanced_settings() -> CircuitBreakerAdvancedSettings:
-    """Get cached CircuitBreakerAdvancedSettings instance."""
-    global _settings
-    if _settings is None:
-        _settings = CircuitBreakerAdvancedSettings()
-    return _settings
-
+    return get_config().core.circuit_breaker_advanced
 
 def reset_circuit_breaker_advanced_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().core.__dict__["circuit_breaker_advanced"]
+    except KeyError:
+        pass

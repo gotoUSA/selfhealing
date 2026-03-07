@@ -139,27 +139,17 @@ class OpenTelemetrySettings(BaseSettings):
 
 
 # Global settings instance (cached)
-_settings_instance: OpenTelemetrySettings | None = None
 
 
-def get_otel_settings() -> OpenTelemetrySettings:
-    """
-    Get the OpenTelemetry settings singleton.
+def get_otel_settings() -> "OpenTelemetrySettings":
+    from selfhealing.settings.root import get_config
 
-    Returns:
-        Cached OpenTelemetrySettings instance
-    """
-    global _settings_instance
-    if _settings_instance is None:
-        _settings_instance = OpenTelemetrySettings()
-    return _settings_instance
-
+    return get_config().obs.otel
 
 def reset_otel_settings() -> None:
-    """
-    Reset the OpenTelemetry settings singleton.
+    from selfhealing.settings.root import get_config
 
-    Used primarily for testing to ensure fresh settings.
-    """
-    global _settings_instance
-    _settings_instance = None
+    try:
+        del get_config().obs.__dict__["otel"]
+    except KeyError:
+        pass

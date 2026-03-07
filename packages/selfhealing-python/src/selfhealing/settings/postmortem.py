@@ -47,8 +47,7 @@ class PostmortemSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_POSTMORTEM_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -311,26 +310,10 @@ class PostmortemSettings(BaseSettings):
     )
 
 
-# ==========================================================================
-# Singleton 관리
-# ==========================================================================
-_postmortem_settings: PostmortemSettings | None = None
+def get_postmortem_settings() -> "PostmortemSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_postmortem_settings() -> PostmortemSettings:
-    """Get cached PostmortemSettings instance."""
-    global _postmortem_settings
-    if _postmortem_settings is None:
-        _postmortem_settings = PostmortemSettings()
-    return _postmortem_settings
-
-
-def reset_postmortem_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _postmortem_settings
-    _postmortem_settings = None
-
-
+    return get_config().slo_group.postmortem
 # ==========================================================================
 # Deprecated Alias (하위 호환성)
 # ==========================================================================
@@ -389,3 +372,11 @@ __all__ = [
     "get_postmortem_settings",
     "reset_postmortem_settings",
 ]
+
+def reset_postmortem_settings() -> None:
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().slo_group.__dict__["postmortem"]
+    except KeyError:
+        pass

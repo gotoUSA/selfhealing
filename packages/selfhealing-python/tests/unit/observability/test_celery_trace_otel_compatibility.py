@@ -17,7 +17,7 @@ class TestGenerateCeleryTraceIdOtelCompatibility:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -25,7 +25,7 @@ class TestGenerateCeleryTraceIdOtelCompatibility:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -65,7 +65,7 @@ class TestGetCeleryTraceIdWithOtelContext:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -73,7 +73,7 @@ class TestGetCeleryTraceIdWithOtelContext:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()

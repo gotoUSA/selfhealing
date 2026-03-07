@@ -44,8 +44,7 @@ class AuditIntegritySettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_AUDIT_INTEGRITY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -255,21 +254,15 @@ class AuditIntegritySettings(BaseSettings):
         return self
 
 
-# ==========================================================================
-# Singleton 관리
-# ==========================================================================
-_audit_integrity_settings: AuditIntegritySettings | None = None
+def get_audit_integrity_settings() -> "AuditIntegritySettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_audit_integrity_settings() -> AuditIntegritySettings:
-    """Get cached AuditIntegritySettings instance."""
-    global _audit_integrity_settings
-    if _audit_integrity_settings is None:
-        _audit_integrity_settings = AuditIntegritySettings()
-    return _audit_integrity_settings
-
+    return get_config().audit_group.audit_integrity
 
 def reset_audit_integrity_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _audit_integrity_settings
-    _audit_integrity_settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().audit_group.__dict__["audit_integrity"]
+    except KeyError:
+        pass

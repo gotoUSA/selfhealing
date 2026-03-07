@@ -162,7 +162,7 @@ class TestRedisAuditBufferTtlIntegration:
         """
         AuditBuffer log가 TTL과 함께 저장되는지 확인.
         """
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
         from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
 
         reset_audit_settings()
@@ -283,7 +283,7 @@ class TestSettingsEnvVarTtlIntegration:
         """
         SELFHEALING_AUDIT_BUFFER_REDIS_TTL 환경 변수가 실제 Redis에 적용되는지 확인.
         """
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
         from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
 
         # 환경 변수 설정 (1시간)

@@ -61,6 +61,33 @@ def pytest_unconfigure(config):
 
 
 @pytest.fixture(autouse=True, scope="function")
+def auto_reset_all_settings():
+    """
+    모든 테스트 전후에 Root Settings 싱글톤을 자동으로 리셋하는 fixture.
+
+    SSOT (315_SETTINGS_SSOT_MIGRATION): 모든 settings가 Root를 통해 접근되므로
+    reset_config() 한 번으로 전체 settings 캐시가 무효화됩니다.
+    개별 settings 모듈의 reset 함수들은 cached_property 삭제로 동작하므로
+    Root 리셋이 가장 확실한 전체 격리 수단입니다.
+    """
+    _reset_root_config()
+
+    yield
+
+    _reset_root_config()
+
+
+def _reset_root_config():
+    """Root Settings 싱글톤 리셋."""
+    root_mod = sys.modules.get("selfhealing.settings.root")
+    if root_mod is not None:
+        try:
+            root_mod.reset_config()
+        except (AttributeError, TypeError):
+            pass
+
+
+@pytest.fixture(autouse=True, scope="function")
 def auto_reset_audit_settings():
     """
     모든 테스트 전후에 Audit 관련 Settings 싱글톤을 자동으로 리셋하는 fixture.
@@ -99,7 +126,7 @@ def _reset_all_audit_settings():
         "selfhealing.settings.audit_integrity": "reset_audit_integrity_settings",
         "selfhealing.settings.cascade_retention": "reset_cascade_retention_settings",
         "selfhealing.settings.resilient_recorder": "reset_resilient_recorder_settings",
-        "selfhealing.settings.audit_settings": "reset_audit_settings",
+        "selfhealing.settings.audit": "reset_audit_settings",
         "selfhealing.settings.audit_watchdog": "reset_audit_watchdog_settings",
     }
 
@@ -241,7 +268,11 @@ def _isolate_logging_state_session():
     _saved: dict[str, tuple[int, bool, list]] = {}
     for name, logger_obj in _logging.Logger.manager.loggerDict.items():
         if isinstance(logger_obj, _logging.Logger) and name.startswith("selfhealing"):
-            _saved[name] = (logger_obj.level, logger_obj.propagate, list(logger_obj.handlers))
+            _saved[name] = (
+                logger_obj.level,
+                logger_obj.propagate,
+                list(logger_obj.handlers),
+            )
             logger_obj.propagate = True
             logger_obj.handlers = []
 
@@ -298,7 +329,10 @@ def auto_reset_watchdog_singleton():
         yield
         # Teardown: 테스트 중 모듈이 로드되었을 수 있으므로 재확인
         aw_module = sys.modules.get("selfhealing.audit.audit_watchdog")
-        if aw_module is not None and getattr(aw_module, "_watchdog_instance", None) is not None:
+        if (
+            aw_module is not None
+            and getattr(aw_module, "_watchdog_instance", None) is not None
+        ):
             _cleanup_watchdog(aw_module)
         return
 
@@ -404,12 +438,16 @@ def pytest_collection_modifyitems(config, items):
     DB가 없는 환경에서는 skip됩니다.
     """
     # DB 연결 가능 여부 확인
-    db_available = os.environ.get("SELFHEALING_TEST_DB_AVAILABLE", "false").lower() == "true"
+    db_available = (
+        os.environ.get("SELFHEALING_TEST_DB_AVAILABLE", "false").lower() == "true"
+    )
 
     if db_available:
         return  # DB가 있으면 skip하지 않음
 
-    skip_db = pytest.mark.skip(reason="Database not available (set SELFHEALING_TEST_DB_AVAILABLE=true to run)")
+    skip_db = pytest.mark.skip(
+        reason="Database not available (set SELFHEALING_TEST_DB_AVAILABLE=true to run)"
+    )
 
     for item in items:
         if "django_db" in [marker.name for marker in item.iter_markers()]:

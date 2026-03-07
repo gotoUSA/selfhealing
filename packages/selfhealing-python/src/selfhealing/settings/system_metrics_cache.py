@@ -21,8 +21,7 @@ class SystemMetricsCacheSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_SYSTEM_METRICS_CACHE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -59,22 +58,15 @@ class SystemMetricsCacheSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_system_metrics_cache_settings() -> "SystemMetricsCacheSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: SystemMetricsCacheSettings | None = None
-
-
-def get_system_metrics_cache_settings() -> SystemMetricsCacheSettings:
-    """캐시된 SystemMetricsCacheSettings 인스턴스 반환."""
-    global _settings
-    if _settings is None:
-        _settings = SystemMetricsCacheSettings()
-    return _settings
-
+    return get_config().metrics_group.system_metrics_cache
 
 def reset_system_metrics_cache_settings() -> None:
-    """테스트용: 캐시된 설정 초기화."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().metrics_group.__dict__["system_metrics_cache"]
+    except KeyError:
+        pass

@@ -48,7 +48,7 @@ class TestPydanticConsistencyWithLegacy:
     def test_logging_consistency(self):
         """LoggingConfig와 LoggingSettings 기본값 일치."""
         from selfhealing.core.config import LoggingConfig
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         legacy = LoggingConfig()
         pydantic = LoggingSettings()

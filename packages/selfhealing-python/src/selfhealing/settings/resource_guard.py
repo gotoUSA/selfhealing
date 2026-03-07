@@ -30,8 +30,7 @@ class ResourceGuardSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_RESOURCE_GUARD_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -75,37 +74,15 @@ class ResourceGuardSettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_resource_guard_settings() -> "ResourceGuardSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: ResourceGuardSettings | None = None
-
-
-def get_resource_guard_settings() -> ResourceGuardSettings:
-    """
-    캐시된 ResourceGuardSettings 인스턴스 반환.
-
-    Returns:
-        ResourceGuardSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = ResourceGuardSettings()
-        logger.debug(
-            "[ResourceGuardSettings] Loaded: "  # noqa: G004
-            f"cpu_threshold={_settings.cpu_threshold}, "
-            f"memory_threshold={_settings.memory_threshold}, "
-            f"enabled={_settings.resource_check_enabled}, "
-            f"retry_after={_settings.retry_after_seconds}"
-        )
-    return _settings
-
+    return get_config().meta.resource_guard
 
 def reset_resource_guard_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
-    """
-    global _settings
-    _settings = None
-    logger.debug("resource_guard_settings.reset")
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().meta.__dict__["resource_guard"]
+    except KeyError:
+        pass

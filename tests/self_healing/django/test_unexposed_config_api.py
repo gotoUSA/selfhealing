@@ -430,7 +430,7 @@ class TestLoggingConfigView:
 
         with (
             patch("selfhealing.settings.structlog_config._apply_component_log_levels") as mock_apply,
-            patch("selfhealing.settings.logging_config.reset_logging_settings") as mock_reset,
+            patch("selfhealing.settings.logging_settings.reset_logging_settings") as mock_reset,
         ):
             # When
             view = LoggingConfigView.as_view()
@@ -454,7 +454,7 @@ class TestLoggingConfigView:
 
         with (
             patch("selfhealing.settings.structlog_config._apply_component_log_levels") as mock_apply,
-            patch("selfhealing.settings.logging_config.reset_logging_settings") as mock_reset,
+            patch("selfhealing.settings.logging_settings.reset_logging_settings") as mock_reset,
         ):
             # When
             view = LoggingConfigView.as_view()

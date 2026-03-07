@@ -52,8 +52,7 @@ class SecretsSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_SECRET_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
     )
 
@@ -158,35 +157,29 @@ class SecretsSettings(BaseSettings):
             "encryption_key": bool(self.encryption_key.get_secret_value()),
             "audit_signing_key": bool(self.audit_signing_key.get_secret_value()),
             "aws_access_key_id": bool(self.aws_access_key_id.get_secret_value()),
-            "aws_secret_access_key": bool(self.aws_secret_access_key.get_secret_value()),
+            "aws_secret_access_key": bool(
+                self.aws_secret_access_key.get_secret_value()
+            ),
         }
 
 
-# =============================================================================
-# Singleton pattern
-# =============================================================================
-_secrets: SecretsSettings | None = None
+def get_secrets_settings() -> "SecretsSettings":
+    from selfhealing.settings.root import get_config
+
+    return get_config().adapters.secrets
+# Backward-compatible alias
+get_secrets = get_secrets_settings
 
 
-def get_secrets() -> SecretsSettings:
-    """
-    Get the global SecretsSettings instance.
+def reset_secrets_settings() -> None:
+    from selfhealing.settings.root import get_config
 
-    Returns:
-        SecretsSettings singleton
-    """
-    global _secrets
-    if _secrets is None:
-        _secrets = SecretsSettings()
-    return _secrets
-
-
-def reset_secrets() -> None:
-    """
-    Reset cached secrets (for testing).
-    """
-    global _secrets
-    _secrets = None
+    try:
+        del get_config().adapters.__dict__["secrets"]
+    except KeyError:
+        pass
+# Backward-compatible alias
+reset_secrets = reset_secrets_settings
 
 
 def validate_required_secrets(secrets: SecretsSettings | None = None) -> dict:

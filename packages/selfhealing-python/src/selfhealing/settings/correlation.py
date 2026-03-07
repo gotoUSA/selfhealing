@@ -30,8 +30,7 @@ class CorrelationSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_CORRELATION_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -139,22 +138,15 @@ class CorrelationSettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_correlation_settings() -> "CorrelationSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: CorrelationSettings | None = None
-
-
-def get_correlation_settings() -> CorrelationSettings:
-    """캐시된 CorrelationSettings 인스턴스 반환."""
-    global _settings
-    if _settings is None:
-        _settings = CorrelationSettings()
-    return _settings
-
+    return get_config().obs.correlation
 
 def reset_correlation_settings() -> None:
-    """테스트용: 캐시된 설정 초기화."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().obs.__dict__["correlation"]
+    except KeyError:
+        pass

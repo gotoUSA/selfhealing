@@ -39,8 +39,7 @@ class AntiFlappingSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_ANTI_FLAPPING_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -143,22 +142,15 @@ class AntiFlappingSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_anti_flapping_settings() -> "AntiFlappingSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: AntiFlappingSettings | None = None
-
-
-def get_anti_flapping_settings() -> AntiFlappingSettings:
-    """Get cached AntiFlappingSettings instance."""
-    global _settings
-    if _settings is None:
-        _settings = AntiFlappingSettings()
-    return _settings
-
+    return get_config().services_group.anti_flapping
 
 def reset_anti_flapping_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().services_group.__dict__["anti_flapping"]
+    except KeyError:
+        pass

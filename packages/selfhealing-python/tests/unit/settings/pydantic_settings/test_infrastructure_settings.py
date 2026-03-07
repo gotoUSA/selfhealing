@@ -136,7 +136,7 @@ class TestAuditSettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         reset_audit_settings()
         yield
@@ -144,7 +144,7 @@ class TestAuditSettings:
 
     def test_default_values(self):
         """기본값 검증."""
-        from selfhealing.settings.audit_settings import AuditSettings
+        from selfhealing.settings.audit import AuditSettings
 
         settings = AuditSettings()
 
@@ -154,7 +154,7 @@ class TestAuditSettings:
 
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
-        from selfhealing.settings.audit_settings import AuditSettings
+        from selfhealing.settings.audit import AuditSettings
 
         monkeypatch.setenv("SELFHEALING_AUDIT_MAX_HISTORY", "200")
 
@@ -164,7 +164,7 @@ class TestAuditSettings:
 
     def test_validation_history_range(self):
         """history 범위 검증."""
-        from selfhealing.settings.audit_settings import AuditSettings
+        from selfhealing.settings.audit import AuditSettings
 
         with pytest.raises(ValidationError):
             AuditSettings(max_history=5)  # < 10
@@ -174,7 +174,7 @@ class TestAuditSettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.audit_settings import get_audit_settings
+        from selfhealing.settings.audit import get_audit_settings
 
         settings1 = get_audit_settings()
         settings2 = get_audit_settings()

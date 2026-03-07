@@ -21,7 +21,7 @@ class EventJournalSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_JOURNAL_",
-        env_file=".env",
+        env_file=None,
         extra="ignore",
     )
 

@@ -41,8 +41,7 @@ class ResilientRecorderSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_RESILIENT_RECORDER_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -159,31 +158,15 @@ class ResilientRecorderSettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton Pattern (cached settings)
-# =============================================================================
+def get_resilient_recorder_settings() -> "ResilientRecorderSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: ResilientRecorderSettings | None = None
-
-
-def get_resilient_recorder_settings() -> ResilientRecorderSettings:
-    """
-    Get cached ResilientRecorderSettings instance.
-
-    Returns:
-        ResilientRecorderSettings: Singleton instance
-    """
-    global _settings
-    if _settings is None:
-        _settings = ResilientRecorderSettings()
-    return _settings
-
+    return get_config().resilience.resilient_recorder
 
 def reset_resilient_recorder_settings() -> None:
-    """
-    Reset cached settings (for testing).
+    from selfhealing.settings.root import get_config
 
-    Call this after modifying environment variables to reload settings.
-    """
-    global _settings
-    _settings = None
+    try:
+        del get_config().resilience.__dict__["resilient_recorder"]
+    except KeyError:
+        pass

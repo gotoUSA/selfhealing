@@ -29,8 +29,7 @@ class DriftDetectionSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_DRIFT_DETECTION_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -90,31 +89,15 @@ class DriftDetectionSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_drift_detection_settings() -> "DriftDetectionSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: DriftDetectionSettings | None = None
-
-
-def get_drift_detection_settings() -> DriftDetectionSettings:
-    """
-    캐시된 DriftDetectionSettings 인스턴스 반환.
-
-    Returns:
-        DriftDetectionSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = DriftDetectionSettings()
-    return _settings
-
+    return get_config().metrics_group.drift_detection
 
 def reset_drift_detection_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
+    from selfhealing.settings.root import get_config
 
-    환경 변수 변경 후 설정을 다시 로드하려면 이 함수를 호출하세요.
-    """
-    global _settings
-    _settings = None
+    try:
+        del get_config().metrics_group.__dict__["drift_detection"]
+    except KeyError:
+        pass

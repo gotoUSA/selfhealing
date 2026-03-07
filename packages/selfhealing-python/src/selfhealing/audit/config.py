@@ -219,7 +219,7 @@ COMPLIANCE_RETENTION_DAYS = {
 
 def _get_default_max_retention() -> int:
     """Get default max retention days from settings."""
-    from selfhealing.settings.audit_settings import get_audit_settings
+    from selfhealing.settings.audit import get_audit_settings
 
     return get_audit_settings().compliance_max_retention_days
 

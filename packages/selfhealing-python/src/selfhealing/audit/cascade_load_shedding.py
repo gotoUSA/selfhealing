@@ -141,7 +141,7 @@ class CascadeLoadShedding:
     def _get_rate_window_seconds() -> float:
         """Settings에서 rate_window_seconds 조회."""
         try:
-            from selfhealing.settings.audit_settings import get_audit_settings
+            from selfhealing.settings.audit import get_audit_settings
 
             return get_audit_settings().cascade_rate_window_seconds
         except Exception:

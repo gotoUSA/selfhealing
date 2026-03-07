@@ -40,8 +40,7 @@ class NotificationChannelSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_NOTIFICATION_CHANNEL_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -153,19 +152,15 @@ class NotificationChannelSettings(BaseSettings):
         return v
 
 
-# Singleton instance (cached)
-_settings: NotificationChannelSettings | None = None
+def get_notification_channel_settings() -> "NotificationChannelSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_notification_channel_settings() -> NotificationChannelSettings:
-    """Get cached NotificationChannelSettings instance."""
-    global _settings
-    if _settings is None:
-        _settings = NotificationChannelSettings()
-    return _settings
-
+    return get_config().adapters.notification_channel
 
 def reset_notification_channel_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().adapters.__dict__["notification_channel"]
+    except KeyError:
+        pass

@@ -12,7 +12,6 @@ Moved from: scaling/config.py (위치 통일)
 from __future__ import annotations
 
 from enum import Enum
-from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -73,8 +72,7 @@ class BackpressureSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_BACKPRESSURE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -288,12 +286,15 @@ class BackpressureSettings(BaseSettings):
         return base * multiplier.get(level, 1)
 
 
-@lru_cache(maxsize=1)
-def get_backpressure_settings() -> BackpressureSettings:
-    """설정 싱글톤 반환."""
-    return BackpressureSettings()
+def get_backpressure_settings() -> "BackpressureSettings":
+    from selfhealing.settings.root import get_config
 
+    return get_config().scaling.backpressure
 
 def reset_backpressure_settings() -> None:
-    """설정 캐시 리셋 (테스트용)."""
-    get_backpressure_settings.cache_clear()
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().scaling.__dict__["backpressure"]
+    except KeyError:
+        pass

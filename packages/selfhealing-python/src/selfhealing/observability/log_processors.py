@@ -78,7 +78,7 @@ def _is_strict_validation() -> bool:
     if _strict_validation_cached is not None:
         return _strict_validation_cached
     try:
-        from selfhealing.settings.logging_config import get_logging_settings
+        from selfhealing.settings.logging_settings import get_logging_settings
 
         _strict_validation_cached = get_logging_settings().strict_log_validation
     except Exception:
@@ -142,7 +142,7 @@ _NEVER_SUPPRESS_LEVELS = frozenset({"error", "critical"})
 def _get_rate_limit_settings() -> tuple[int, int]:
     """Rate limit 설정을 로드한다. 실패 시 안전한 기본값 반환."""
     try:
-        from selfhealing.settings.logging_config import get_logging_settings
+        from selfhealing.settings.logging_settings import get_logging_settings
 
         settings = get_logging_settings()
         return (
@@ -228,7 +228,7 @@ _SAMPLING_TARGET_LEVELS = frozenset({"debug", "info"})
 def _get_sampling_settings() -> tuple[float, frozenset[str]]:
     """샘플링 설정을 로드한다. 실패 시 안전한 기본값 반환."""
     try:
-        from selfhealing.settings.logging_config import get_logging_settings
+        from selfhealing.settings.logging_settings import get_logging_settings
 
         settings = get_logging_settings()
         rate = getattr(settings, "log_sampling_rate", 1.0)

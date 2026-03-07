@@ -23,7 +23,7 @@ class ConfigShadowSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_SHADOW_",
-        env_file=".env",
+        env_file=None,
         extra="ignore",
     )
 
@@ -88,18 +88,15 @@ class ConfigShadowSettings(BaseSettings):
     )
 
 
-_settings: ConfigShadowSettings | None = None
+def get_config_shadow_settings() -> "ConfigShadowSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_config_shadow_settings() -> ConfigShadowSettings:
-    """ConfigShadowSettings 싱글톤 반환."""
-    global _settings
-    if _settings is None:
-        _settings = ConfigShadowSettings()
-    return _settings
-
+    return get_config().adapters.config_shadow
 
 def reset_config_shadow_settings() -> None:
-    """싱글톤 리셋 (테스트용)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().adapters.__dict__["config_shadow"]
+    except KeyError:
+        pass

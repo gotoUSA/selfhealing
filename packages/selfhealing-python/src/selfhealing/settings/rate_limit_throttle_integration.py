@@ -19,7 +19,6 @@ Environment Variables:
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Literal
 
 import structlog
@@ -39,8 +38,7 @@ class RateLimitThrottleIntegrationSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_RATE_LIMIT_THROTTLE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -160,17 +158,26 @@ class RateLimitThrottleIntegrationSettings(BaseSettings):
             return self.reduction_ratio_1
 
 
-@lru_cache(maxsize=1)
-def get_rate_limit_throttle_settings() -> RateLimitThrottleIntegrationSettings:
-    """
-    Rate Limit Throttle Integration 설정 싱글톤 반환.
+def get_rate_limit_throttle_integration_settings() -> (
+    RateLimitThrottleIntegrationSettings
+):
+    from selfhealing.settings.root import get_config
 
-    Returns:
-        RateLimitThrottleIntegrationSettings 인스턴스
-    """
-    return RateLimitThrottleIntegrationSettings()
+    return get_config().scaling.rate_limit_throttle_integration
 
 
-def clear_settings_cache() -> None:
-    """설정 캐시 초기화 (테스트용)."""
-    get_rate_limit_throttle_settings.cache_clear()
+# Backward-compatible alias
+get_rate_limit_throttle_settings = get_rate_limit_throttle_integration_settings
+
+
+def reset_rate_limit_throttle_integration_settings() -> None:
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().scaling.__dict__["rate_limit_throttle_integration"]
+    except KeyError:
+        pass
+
+
+# Backward-compatible alias
+clear_settings_cache = reset_rate_limit_throttle_integration_settings

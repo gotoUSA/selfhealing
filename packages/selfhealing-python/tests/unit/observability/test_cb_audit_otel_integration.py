@@ -18,7 +18,7 @@ class TestTriggeringRequestInfoOtelAutoFill:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -26,7 +26,7 @@ class TestTriggeringRequestInfoOtelAutoFill:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -103,7 +103,7 @@ class TestExternalTraceContextOtelIntegration:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -111,7 +111,7 @@ class TestExternalTraceContextOtelIntegration:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -180,7 +180,7 @@ class TestAuditLoggerTraceIdFull:
         """Reset state before each test."""
         from selfhealing.audit.trace import clear_trace_id
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -190,7 +190,7 @@ class TestAuditLoggerTraceIdFull:
         """Clean up after each test."""
         from selfhealing.audit.trace import clear_trace_id
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -244,7 +244,7 @@ class TestCircuitBreakerTracingManagerOtel:
         from selfhealing.services.circuit_breaker.tracing import (
             CircuitBreakerTracingManager,
         )
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -256,7 +256,7 @@ class TestCircuitBreakerTracingManagerOtel:
         from selfhealing.services.circuit_breaker.tracing import (
             CircuitBreakerTracingManager,
         )
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()

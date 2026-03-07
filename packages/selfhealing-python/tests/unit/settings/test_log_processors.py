@@ -33,8 +33,8 @@ import structlog
 @pytest.fixture(autouse=True)
 def _reset_state():
     """각 테스트 전후로 rate limit 상태와 LoggingSettings 싱글톤을 초기화한다."""
-    from selfhealing.settings.log_processors import reset_rate_limit_state
-    from selfhealing.settings.logging_config import reset_logging_settings
+    from selfhealing.observability.log_processors import reset_rate_limit_state
+    from selfhealing.settings.logging_settings import reset_logging_settings
 
     reset_rate_limit_state()
     reset_logging_settings()
@@ -53,27 +53,27 @@ class TestRateLimitProcessorContract:
 
     def test_never_suppress_levels_include_error_and_critical(self):
         """suppress 제외 레벨이 설계대로 'error'와 'critical'이어야 한다."""
-        from selfhealing.settings.log_processors import _NEVER_SUPPRESS_LEVELS
+        from selfhealing.observability.log_processors import _NEVER_SUPPRESS_LEVELS
 
         assert "error" in _NEVER_SUPPRESS_LEVELS
         assert "critical" in _NEVER_SUPPRESS_LEVELS
 
     def test_never_suppress_levels_excludes_info_and_warning(self):
         """'info'와 'warning'은 suppress 제외 레벨에 포함되지 않아야 한다."""
-        from selfhealing.settings.log_processors import _NEVER_SUPPRESS_LEVELS
+        from selfhealing.observability.log_processors import _NEVER_SUPPRESS_LEVELS
 
         assert "info" not in _NEVER_SUPPRESS_LEVELS
         assert "warning" not in _NEVER_SUPPRESS_LEVELS
 
     def test_rate_limit_window_default_is_10_seconds(self):
         """log_rate_limit_window 기본값이 설계 계약대로 10이어야 한다."""
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         assert LoggingSettings.model_fields["log_rate_limit_window"].default == 10
 
     def test_rate_limit_max_default_is_10(self):
         """log_rate_limit_max 기본값이 10이어야 한다 (프로덕션 로그 볼륨 제어)."""
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         assert LoggingSettings.model_fields["log_rate_limit_max"].default == 10
 
@@ -81,7 +81,7 @@ class TestRateLimitProcessorContract:
         """log_rate_limit_window에 ge=0 제약이 적용되어 음수 입력 시 ValidationError."""
         from pydantic import ValidationError
 
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         with pytest.raises(ValidationError):
             LoggingSettings(log_rate_limit_window=-1)
@@ -90,7 +90,7 @@ class TestRateLimitProcessorContract:
         """log_rate_limit_max에 ge=0 제약이 적용되어 음수 입력 시 ValidationError."""
         from pydantic import ValidationError
 
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         with pytest.raises(ValidationError):
             LoggingSettings(log_rate_limit_max=-1)
@@ -108,11 +108,11 @@ class TestRateLimitNeverSuppressBehavior:
         """ERROR 레벨은 max_count=1을 초과해도 계속 통과한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "1")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         for _ in range(5):
             result = rate_limit_processor(None, "error", {"event": "err_event", "logger": "test"})
@@ -122,11 +122,11 @@ class TestRateLimitNeverSuppressBehavior:
         """CRITICAL 레벨은 max_count=1을 초과해도 계속 통과한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "1")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         for _ in range(5):
             result = rate_limit_processor(None, "critical", {"event": "crit_event", "logger": "test"})
@@ -136,11 +136,11 @@ class TestRateLimitNeverSuppressBehavior:
         """INFO 레벨은 max_count 초과 시 DropEvent가 발생한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "2")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         # 처음 2번은 통과
         for _ in range(2):
@@ -164,11 +164,11 @@ class TestRateLimitMaxCountBoundaryBehavior:
         # Given
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "3")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         # When / Then: 3번 모두 통과
         for i in range(3):
@@ -180,11 +180,11 @@ class TestRateLimitMaxCountBoundaryBehavior:
         # Given
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "3")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         for _ in range(3):
             rate_limit_processor(None, "info", {"event": "boundary_ev", "logger": "test"})
@@ -197,11 +197,11 @@ class TestRateLimitMaxCountBoundaryBehavior:
         """max_count=0 이면 rate limit이 비활성화되어 무제한 통과한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "0")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         for _ in range(200):
             result = rate_limit_processor(None, "info", {"event": "unlimited_ev", "logger": "test"})
@@ -211,11 +211,11 @@ class TestRateLimitMaxCountBoundaryBehavior:
         """window_seconds=0 이면 rate limit이 비활성화되어 무제한 통과한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "1")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "0")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         for _ in range(5):
             result = rate_limit_processor(None, "info", {"event": "window_zero_ev", "logger": "test"})
@@ -235,13 +235,13 @@ class TestRateLimitWindowTransitionBehavior:
         # Given: max_count=1, window=10s
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "1")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "10")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
-        with patch("selfhealing.settings.log_processors.time") as mock_time:
+        with patch("selfhealing.observability.log_processors.time") as mock_time:
             # t=0: 첫 이벤트 통과 (윈도우 시작)
             mock_time.monotonic.return_value = 0.0
             rate_limit_processor(None, "info", {"event": "ev", "logger": "test"})
@@ -265,13 +265,13 @@ class TestRateLimitWindowTransitionBehavior:
         # Given: max_count=100, window=10s
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "100")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "10")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
-        with patch("selfhealing.settings.log_processors.time") as mock_time:
+        with patch("selfhealing.observability.log_processors.time") as mock_time:
             mock_time.monotonic.return_value = 0.0
             rate_limit_processor(None, "info", {"event": "ev", "logger": "test"})
 
@@ -287,11 +287,11 @@ class TestRateLimitWindowTransitionBehavior:
         # Given: max_count=1
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "1")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         # logger_a: max_count 소진
         rate_limit_processor(None, "info", {"event": "same_event", "logger": "logger_a"})
@@ -316,11 +316,11 @@ class TestRateLimitStateResetBehavior:
         # Given
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "1")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor, reset_rate_limit_state
+        from selfhealing.observability.log_processors import rate_limit_processor, reset_rate_limit_state
 
         rate_limit_processor(None, "info", {"event": "reset_test", "logger": "test"})
         with pytest.raises(structlog.DropEvent):
@@ -347,11 +347,11 @@ class TestRateLimitThreadSafetyBehavior:
         # Given
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_MAX", "5")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_RATE_LIMIT_WINDOW", "60")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import rate_limit_processor
+        from selfhealing.observability.log_processors import rate_limit_processor
 
         passed: list[int] = []
         dropped: list[int] = []
@@ -389,14 +389,14 @@ class TestSamplingProcessorContract:
 
     def test_sampling_target_levels_contains_debug_and_info(self):
         """샘플링 대상 레벨이 설계 계약대로 'debug'와 'info'여야 한다."""
-        from selfhealing.settings.log_processors import _SAMPLING_TARGET_LEVELS
+        from selfhealing.observability.log_processors import _SAMPLING_TARGET_LEVELS
 
         assert "debug" in _SAMPLING_TARGET_LEVELS
         assert "info" in _SAMPLING_TARGET_LEVELS
 
     def test_sampling_target_levels_excludes_warning_and_above(self):
         """'warning', 'error', 'critical'은 샘플링 대상 레벨에 포함되지 않아야 한다."""
-        from selfhealing.settings.log_processors import _SAMPLING_TARGET_LEVELS
+        from selfhealing.observability.log_processors import _SAMPLING_TARGET_LEVELS
 
         assert "warning" not in _SAMPLING_TARGET_LEVELS
         assert "error" not in _SAMPLING_TARGET_LEVELS
@@ -404,13 +404,13 @@ class TestSamplingProcessorContract:
 
     def test_log_sampling_rate_default_is_1_0(self):
         """log_sampling_rate 기본값이 설계 계약대로 1.0이어야 한다 (비활성화)."""
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         assert LoggingSettings.model_fields["log_sampling_rate"].default == 1.0
 
     def test_log_sampling_events_default_is_empty_string(self):
         """log_sampling_events 기본값이 설계 계약대로 빈 문자열이어야 한다."""
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         assert LoggingSettings.model_fields["log_sampling_events"].default == ""
 
@@ -418,7 +418,7 @@ class TestSamplingProcessorContract:
         """log_sampling_rate에 ge=0.0 제약이 적용되어 음수 입력 시 ValidationError."""
         from pydantic import ValidationError
 
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         with pytest.raises(ValidationError):
             LoggingSettings(log_sampling_rate=-0.01)
@@ -427,7 +427,7 @@ class TestSamplingProcessorContract:
         """log_sampling_rate에 le=1.0 제약이 적용되어 1.0 초과 입력 시 ValidationError."""
         from pydantic import ValidationError
 
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         with pytest.raises(ValidationError):
             LoggingSettings(log_sampling_rate=1.01)
@@ -443,7 +443,7 @@ class TestSamplingWarningAlwaysPassesBehavior:
 
     @pytest.fixture(autouse=True)
     def _reset_settings(self):
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
         yield
@@ -452,11 +452,11 @@ class TestSamplingWarningAlwaysPassesBehavior:
     def test_warning_always_passes_regardless_of_rate(self, monkeypatch):
         """warning 레벨은 sample_rate=0.0이어도 DropEvent 없이 통과한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.0")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         for _ in range(5):
             result = sampling_processor(None, "warning", {"event": "warn_event"})
@@ -465,11 +465,11 @@ class TestSamplingWarningAlwaysPassesBehavior:
     def test_error_always_passes_regardless_of_rate(self, monkeypatch):
         """error 레벨은 sample_rate=0.0이어도 DropEvent 없이 통과한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.0")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         result = sampling_processor(None, "error", {"event": "err_event"})
         assert isinstance(result, dict)
@@ -477,11 +477,11 @@ class TestSamplingWarningAlwaysPassesBehavior:
     def test_critical_always_passes_regardless_of_rate(self, monkeypatch):
         """critical 레벨은 sample_rate=0.0이어도 DropEvent 없이 통과한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.0")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         result = sampling_processor(None, "critical", {"event": "crit_event"})
         assert isinstance(result, dict)
@@ -497,7 +497,7 @@ class TestSamplingDisabledBehavior:
 
     @pytest.fixture(autouse=True)
     def _reset_settings(self):
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
         yield
@@ -506,11 +506,11 @@ class TestSamplingDisabledBehavior:
     def test_rate_1_0_disables_sampling_for_info(self, monkeypatch):
         """sample_rate=1.0(기본값)이면 info 레그가 항상 통과하고 _sampled 필드가 없다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "1.0")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         for _ in range(5):
             result = sampling_processor(None, "info", {"event": "hot_event"})
@@ -520,11 +520,11 @@ class TestSamplingDisabledBehavior:
     def test_rate_1_0_disables_sampling_for_debug(self, monkeypatch):
         """sample_rate=1.0이면 debug 레벨도 항상 통과한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "1.0")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         result = sampling_processor(None, "debug", {"event": "debug_event"})
         assert isinstance(result, dict)
@@ -540,7 +540,7 @@ class TestSamplingProbabilisticDropBehavior:
 
     @pytest.fixture(autouse=True)
     def _reset_settings(self):
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
         yield
@@ -550,13 +550,13 @@ class TestSamplingProbabilisticDropBehavior:
         """random() > sample_rate이면 info 로그가 DropEvent로 drop된다."""
         # Given: sample_rate=0.5, random()=0.6 → drop
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.5")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
-        with patch("selfhealing.settings.log_processors.random") as mock_random:
+        with patch("selfhealing.observability.log_processors.random") as mock_random:
             mock_random.random.return_value = 0.6
 
             # When / Then
@@ -567,13 +567,13 @@ class TestSamplingProbabilisticDropBehavior:
         """random() ≤ sample_rate이면 info 로그가 통과하고 _sampled=True가 주입된다."""
         # Given: sample_rate=0.5, random()=0.4 → pass
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.5")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
-        with patch("selfhealing.settings.log_processors.random") as mock_random:
+        with patch("selfhealing.observability.log_processors.random") as mock_random:
             mock_random.random.return_value = 0.4
 
             # When
@@ -586,13 +586,13 @@ class TestSamplingProbabilisticDropBehavior:
     def test_rate_0_drops_all_debug_info_logs(self, monkeypatch):
         """sample_rate=0.0이면 random() 값과 무관하게 debug/info 로그가 모두 drop된다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.0")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
-        with patch("selfhealing.settings.log_processors.random") as mock_random:
+        with patch("selfhealing.observability.log_processors.random") as mock_random:
             mock_random.random.return_value = 0.0  # 0.0 > 0.0은 False → 통과처럼 보이지만
 
             # random() = 0.0, sample_rate = 0.0 → 0.0 > 0.0 = False → 통과
@@ -601,7 +601,7 @@ class TestSamplingProbabilisticDropBehavior:
             assert isinstance(result, dict)
             assert result["_sampled"] is True
 
-        with patch("selfhealing.settings.log_processors.random") as mock_random:
+        with patch("selfhealing.observability.log_processors.random") as mock_random:
             mock_random.random.return_value = 0.0001  # 0.0001 > 0.0 = True → drop
 
             with pytest.raises(structlog.DropEvent):
@@ -618,7 +618,7 @@ class TestSamplingTargetEventsFilterBehavior:
 
     @pytest.fixture(autouse=True)
     def _reset_settings(self):
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
         yield
@@ -629,11 +629,11 @@ class TestSamplingTargetEventsFilterBehavior:
         # Given: target_events에 "circuit_breaker.checked"만 포함
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.0")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_EVENTS", "circuit_breaker.checked")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         # When: 목록에 없는 이벤트
         result = sampling_processor(None, "info", {"event": "other_event"})
@@ -647,13 +647,13 @@ class TestSamplingTargetEventsFilterBehavior:
         # Given: target_events에 "circuit_breaker.checked" 포함, rate=0.5
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.5")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_EVENTS", "circuit_breaker.checked")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
-        with patch("selfhealing.settings.log_processors.random") as mock_random:
+        with patch("selfhealing.observability.log_processors.random") as mock_random:
             mock_random.random.return_value = 0.8  # 0.8 > 0.5 → drop
 
             # When / Then: target 이벤트는 drop됨
@@ -665,13 +665,13 @@ class TestSamplingTargetEventsFilterBehavior:
         # Given: target_events="" (기본), rate=0.5
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.5")
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_EVENTS", "")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
-        with patch("selfhealing.settings.log_processors.random") as mock_random:
+        with patch("selfhealing.observability.log_processors.random") as mock_random:
             mock_random.random.return_value = 0.8  # drop
 
             # When / Then: 어떤 이벤트든 drop됨
@@ -686,13 +686,13 @@ class TestSamplingTargetEventsFilterBehavior:
             "SELFHEALING_LOGGING_LOG_SAMPLING_EVENTS",
             "circuit_breaker.checked,action_executor.execute",
         )
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
-        with patch("selfhealing.settings.log_processors.random") as mock_random:
+        with patch("selfhealing.observability.log_processors.random") as mock_random:
             mock_random.random.return_value = 0.9  # drop
 
             with pytest.raises(structlog.DropEvent):
@@ -708,11 +708,11 @@ class TestSamplingTargetEventsFilterBehavior:
             "SELFHEALING_LOGGING_LOG_SAMPLING_EVENTS",
             "circuit_breaker.checked,action_executor.execute",
         )
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         # When: 목록에 없는 이벤트 (rate=0.0 이지만 target 아님)
         result = sampling_processor(None, "info", {"event": "dlq.enqueue"})
@@ -732,7 +732,7 @@ class TestSamplingInjectedFlagBehavior:
 
     @pytest.fixture(autouse=True)
     def _reset_settings(self):
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
         yield
@@ -742,13 +742,13 @@ class TestSamplingInjectedFlagBehavior:
         """샘플링으로 통과한 로그의 event_dict에 _sampled=True가 주입된다."""
         # Given: rate=0.5, random=0.3 → pass
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.5")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
-        with patch("selfhealing.settings.log_processors.random") as mock_random:
+        with patch("selfhealing.observability.log_processors.random") as mock_random:
             mock_random.random.return_value = 0.3
 
             # When
@@ -760,11 +760,11 @@ class TestSamplingInjectedFlagBehavior:
     def test_no_sampled_flag_on_warning_level_passthrough(self, monkeypatch):
         """WARNING 레벨은 샘플링 없이 통과하므로 _sampled 필드가 없어야 한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "0.5")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         result = sampling_processor(None, "warning", {"event": "warn_event"})
 
@@ -773,11 +773,11 @@ class TestSamplingInjectedFlagBehavior:
     def test_no_sampled_flag_when_sampling_disabled(self, monkeypatch):
         """sample_rate=1.0(비활성화)이면 통과 로그에도 _sampled 필드가 없어야 한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_LOG_SAMPLING_RATE", "1.0")
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
 
         reset_logging_settings()
 
-        from selfhealing.settings.log_processors import sampling_processor
+        from selfhealing.observability.log_processors import sampling_processor
 
         result = sampling_processor(None, "info", {"event": "normal_event"})
 

@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import os
 import socket
-from functools import lru_cache
 from typing import Literal
 
 import structlog
@@ -30,8 +29,7 @@ class LeaderElectionSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_LEADER_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -190,12 +188,15 @@ class LeaderElectionSettings(BaseSettings):
         return max(base - margin, 1.0)
 
 
-@lru_cache(maxsize=1)
-def get_leader_election_settings() -> LeaderElectionSettings:
-    """설정 싱글톤 반환."""
-    return LeaderElectionSettings()
+def get_leader_election_settings() -> "LeaderElectionSettings":
+    from selfhealing.settings.root import get_config
 
+    return get_config().coordination.leader_election
 
 def reset_leader_election_settings() -> None:
-    """설정 캐시 리셋 (테스트용)."""
-    get_leader_election_settings.cache_clear()
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().coordination.__dict__["leader_election"]
+    except KeyError:
+        pass

@@ -88,7 +88,7 @@ class TestRequestsInstrumentationFunctions:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -99,7 +99,7 @@ class TestRequestsInstrumentationFunctions:
             reset_opentelemetry,
             uninstrument_requests,
         )
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         uninstrument_requests()
         reset_opentelemetry()
@@ -132,7 +132,7 @@ class TestCeleryInstrumentationFunctions:
     def setup_method(self):
         """Reset OTEL state before each test."""
         from selfhealing.observability import reset_opentelemetry
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         reset_opentelemetry()
         reset_otel_settings()
@@ -140,7 +140,7 @@ class TestCeleryInstrumentationFunctions:
     def teardown_method(self):
         """Clean up after each test."""
         from selfhealing.observability import reset_opentelemetry, uninstrument_celery
-        from selfhealing.settings.observability import reset_otel_settings
+        from selfhealing.settings.otel import reset_otel_settings
 
         uninstrument_celery()
         reset_opentelemetry()

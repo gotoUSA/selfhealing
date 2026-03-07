@@ -37,8 +37,7 @@ class JitterSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_JITTER_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -130,31 +129,15 @@ class JitterSettings(BaseSettings):
         return self
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_jitter_settings() -> "JitterSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: JitterSettings | None = None
-
-
-def get_jitter_settings() -> JitterSettings:
-    """
-    캐시된 JitterSettings 인스턴스 반환.
-
-    Returns:
-        JitterSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = JitterSettings()
-    return _settings
-
+    return get_config().testing.jitter
 
 def reset_jitter_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
+    from selfhealing.settings.root import get_config
 
-    환경 변수 변경 후 설정을 다시 로드하려면 이 함수를 호출하세요.
-    """
-    global _settings
-    _settings = None
+    try:
+        del get_config().testing.__dict__["jitter"]
+    except KeyError:
+        pass

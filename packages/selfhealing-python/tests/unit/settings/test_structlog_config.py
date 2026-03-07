@@ -25,7 +25,7 @@ import structlog
 @pytest.fixture(autouse=True)
 def reset_logging_settings():
     """각 테스트 전후로 LoggingSettings 싱글톤을 초기화해 환경 격리."""
-    from selfhealing.settings.logging_config import reset_logging_settings
+    from selfhealing.settings.logging_settings import reset_logging_settings
 
     reset_logging_settings()
     yield
@@ -35,7 +35,7 @@ def reset_logging_settings():
 @pytest.fixture()
 def inject_otel_fn():
     """테스트 대상 함수를 반환하는 픽스처."""
-    from selfhealing.settings.structlog_config import _inject_otel_trace_context
+    from selfhealing.observability.structlog_config import _inject_otel_trace_context
 
     return _inject_otel_trace_context
 
@@ -50,13 +50,13 @@ class TestStructlogConfigContract:
 
     def test_configure_structlog_is_callable(self):
         """configure_structlog 함수가 모듈에 공개되어 있어야 한다."""
-        from selfhealing.settings import structlog_config
+        from selfhealing.observability import structlog_config
 
         assert callable(structlog_config.configure_structlog)
 
     def test_inject_otel_trace_context_is_callable(self):
         """_inject_otel_trace_context 함수가 모듈에 존재해야 한다."""
-        from selfhealing.settings.structlog_config import _inject_otel_trace_context
+        from selfhealing.observability.structlog_config import _inject_otel_trace_context
 
         assert callable(_inject_otel_trace_context)
 
@@ -91,7 +91,7 @@ class TestStructlogConfigContract:
             original_configure(**kwargs)
 
         with patch("structlog.configure", side_effect=capture_configure):
-            from selfhealing.settings.structlog_config import configure_structlog
+            from selfhealing.observability.structlog_config import configure_structlog
 
             configure_structlog()
 
@@ -220,7 +220,7 @@ class TestConfigureStructlogBehavior:
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
         monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
 
-        from selfhealing.settings.structlog_config import configure_structlog
+        from selfhealing.observability.structlog_config import configure_structlog
 
         configure_structlog()
 
@@ -236,7 +236,7 @@ class TestConfigureStructlogBehavior:
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "false")
         monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
 
-        from selfhealing.settings.structlog_config import configure_structlog
+        from selfhealing.observability.structlog_config import configure_structlog
 
         configure_structlog()
 
@@ -251,7 +251,7 @@ class TestConfigureStructlogBehavior:
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
         monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
 
-        from selfhealing.settings.structlog_config import configure_structlog
+        from selfhealing.observability.structlog_config import configure_structlog
 
         configure_structlog()
         configure_structlog()
@@ -268,7 +268,7 @@ class TestConfigureStructlogBehavior:
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
         monkeypatch.setenv("SELFHEALING_TEST_LOG_LEVEL", "WARNING")
 
-        from selfhealing.settings.structlog_config import configure_structlog
+        from selfhealing.observability.structlog_config import configure_structlog
 
         configure_structlog()
 
@@ -287,7 +287,7 @@ class TestConfigureStructlogBehavior:
         """
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
 
-        from selfhealing.settings.structlog_config import configure_structlog
+        from selfhealing.observability.structlog_config import configure_structlog
 
         configure_structlog()
 
@@ -302,7 +302,7 @@ class TestConfigureStructlogBehavior:
         """
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
 
-        from selfhealing.settings.structlog_config import configure_structlog
+        from selfhealing.observability.structlog_config import configure_structlog
 
         # 테스트 환경: SELFHEALING_TEST_LOG_LEVEL=WARNING이면 WARNING(30)
         monkeypatch.setenv("SELFHEALING_TEST_LOG_LEVEL", "WARNING")

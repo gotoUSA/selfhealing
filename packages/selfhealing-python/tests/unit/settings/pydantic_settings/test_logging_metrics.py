@@ -12,14 +12,14 @@ class TestLoggingSettings:
     @pytest.fixture(autouse=True)
     def reset_singleton(self):
         """Reset singleton before and after each test."""
-        from selfhealing.settings.logging_config import reset_logging_settings
+        from selfhealing.settings.logging_settings import reset_logging_settings
         reset_logging_settings()
         yield
         reset_logging_settings()
 
     def test_default_values(self):
         """기본값이 core/config.py:LoggingConfig와 일치하는지 검증."""
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         settings = LoggingSettings()
 
@@ -32,7 +32,7 @@ class TestLoggingSettings:
 
     def test_env_override(self, monkeypatch):
         """환경변수로 값을 오버라이드할 수 있는지 검증."""
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         monkeypatch.setenv("SELFHEALING_LOGGING_DLQ_LOG_LEVEL", "DEBUG")
 
@@ -42,7 +42,7 @@ class TestLoggingSettings:
 
     def test_validation_log_level(self):
         """로그 레벨 유효값 검증."""
-        from selfhealing.settings.logging_config import LoggingSettings
+        from selfhealing.settings.logging_settings import LoggingSettings
 
         # Valid levels
         for level in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]:
@@ -55,7 +55,7 @@ class TestLoggingSettings:
 
     def test_singleton_pattern(self):
         """싱글톤 패턴이 동작하는지 검증."""
-        from selfhealing.settings.logging_config import get_logging_settings
+        from selfhealing.settings.logging_settings import get_logging_settings
 
         settings1 = get_logging_settings()
         settings2 = get_logging_settings()

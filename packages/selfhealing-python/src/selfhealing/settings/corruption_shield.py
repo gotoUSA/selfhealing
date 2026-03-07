@@ -36,8 +36,7 @@ class CorruptionShieldSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_CORRUPTION_SHIELD_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -191,19 +190,15 @@ class CorruptionShieldSettings(BaseSettings):
         )
 
 
-# Singleton instance (cached)
-_settings: CorruptionShieldSettings | None = None
+def get_corruption_shield_settings() -> "CorruptionShieldSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_corruption_shield_settings() -> CorruptionShieldSettings:
-    """Get cached CorruptionShieldSettings instance."""
-    global _settings
-    if _settings is None:
-        _settings = CorruptionShieldSettings()
-    return _settings
-
+    return get_config().security_group.corruption_shield
 
 def reset_corruption_shield_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().security_group.__dict__["corruption_shield"]
+    except KeyError:
+        pass

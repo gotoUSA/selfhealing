@@ -12,6 +12,7 @@ Replaces:
 - core/safe_defaults.py (SAFE_DEFAULTS, VALIDATION_RULES)
 """
 
+from selfhealing.settings import audit as audit_settings  # backward-compatible alias
 from selfhealing.settings.admission_control import (
     AdmissionControlSettings,
     get_admission_control_settings,
@@ -39,15 +40,15 @@ from selfhealing.settings.apply_strategy import (
     get_apply_strategy_settings,
     reset_apply_strategy_settings,
 )
+from selfhealing.settings.audit import (
+    AuditSettings,
+    get_audit_settings,
+    reset_audit_settings,
+)
 from selfhealing.settings.audit_integrity import (
     AuditIntegritySettings,
     get_audit_integrity_settings,
     reset_audit_integrity_settings,
-)
-from selfhealing.settings.audit_settings import (
-    AuditSettings,
-    get_audit_settings,
-    reset_audit_settings,
 )
 from selfhealing.settings.audit_sync import (
     AuditSyncSettings,
@@ -264,7 +265,7 @@ from selfhealing.settings.leader_election import (
     get_leader_election_settings,
     reset_leader_election_settings,
 )
-from selfhealing.settings.logging_config import (
+from selfhealing.settings.logging_settings import (
     LoggingSettings,
     get_logging_settings,
     reset_logging_settings,

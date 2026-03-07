@@ -36,8 +36,7 @@ class HashChainSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_HASH_CHAIN_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -104,29 +103,15 @@ class HashChainSettings(BaseSettings):
         return self
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_hash_chain_settings() -> "HashChainSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: HashChainSettings | None = None
-
-
-def get_hash_chain_settings() -> HashChainSettings:
-    """
-    캐시된 HashChainSettings 인스턴스 반환.
-
-    Returns:
-        HashChainSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = HashChainSettings()
-    return _settings
-
+    return get_config().audit_group.hash_chain
 
 def reset_hash_chain_settings() -> None:
-    """
-    캐시된 Settings 초기화 (테스트용).
-    """
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().audit_group.__dict__["hash_chain"]
+    except KeyError:
+        pass

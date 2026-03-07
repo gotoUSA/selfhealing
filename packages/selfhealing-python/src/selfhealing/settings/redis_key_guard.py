@@ -35,8 +35,7 @@ class RedisKeyGuardSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_REDIS_GUARD_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -115,31 +114,15 @@ class RedisKeyGuardSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern (cached settings)
-# =============================================================================
+def get_redis_key_guard_settings() -> "RedisKeyGuardSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: RedisKeyGuardSettings | None = None
-
-
-def get_redis_key_guard_settings() -> RedisKeyGuardSettings:
-    """
-    Get cached RedisKeyGuardSettings instance.
-
-    Returns:
-        RedisKeyGuardSettings: Singleton instance
-    """
-    global _settings
-    if _settings is None:
-        _settings = RedisKeyGuardSettings()
-    return _settings
-
+    return get_config().coordination.redis_key_guard
 
 def reset_redis_key_guard_settings() -> None:
-    """
-    Reset cached settings (for testing).
+    from selfhealing.settings.root import get_config
 
-    Call this after modifying environment variables to reload settings.
-    """
-    global _settings
-    _settings = None
+    try:
+        del get_config().coordination.__dict__["redis_key_guard"]
+    except KeyError:
+        pass

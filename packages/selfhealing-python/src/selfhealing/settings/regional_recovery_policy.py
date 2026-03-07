@@ -47,8 +47,7 @@ class RegionalRecoveryPolicySettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_REGIONAL_RECOVERY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -185,21 +184,15 @@ class RegionalRecoveryPolicySettings(BaseSettings):
         return self
 
 
-# ==========================================================================
-# Singleton 관리
-# ==========================================================================
-_regional_recovery_policy_settings: RegionalRecoveryPolicySettings | None = None
+def get_regional_recovery_policy_settings() -> "RegionalRecoveryPolicySettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_regional_recovery_policy_settings() -> RegionalRecoveryPolicySettings:
-    """Get cached RegionalRecoveryPolicySettings instance."""
-    global _regional_recovery_policy_settings
-    if _regional_recovery_policy_settings is None:
-        _regional_recovery_policy_settings = RegionalRecoveryPolicySettings()
-    return _regional_recovery_policy_settings
-
+    return get_config().multi_region.regional_recovery_policy
 
 def reset_regional_recovery_policy_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _regional_recovery_policy_settings
-    _regional_recovery_policy_settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().multi_region.__dict__["regional_recovery_policy"]
+    except KeyError:
+        pass

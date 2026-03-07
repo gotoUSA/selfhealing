@@ -13,7 +13,7 @@ class TestOpenTelemetrySettings:
 
     def test_default_settings_otel_disabled(self):
         """Test that OTEL is disabled by default."""
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             OpenTelemetrySettings,
             reset_otel_settings,
         )
@@ -28,7 +28,7 @@ class TestOpenTelemetrySettings:
 
     def test_settings_from_environment_variables(self):
         """Test loading settings from environment variables."""
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             OpenTelemetrySettings,
             reset_otel_settings,
         )
@@ -59,7 +59,7 @@ class TestOpenTelemetrySettings:
 
     def test_get_excluded_urls_list(self):
         """Test parsing excluded URLs into a list."""
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             OpenTelemetrySettings,
             reset_otel_settings,
         )
@@ -78,7 +78,7 @@ class TestOpenTelemetrySettings:
 
     def test_get_excluded_urls_list_empty(self):
         """Test empty excluded URLs."""
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             OpenTelemetrySettings,
             reset_otel_settings,
         )
@@ -94,7 +94,7 @@ class TestOpenTelemetrySettings:
 
     def test_get_resource_attributes_dict(self):
         """Test parsing resource attributes into a dictionary."""
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             OpenTelemetrySettings,
             reset_otel_settings,
         )
@@ -116,7 +116,7 @@ class TestOpenTelemetrySettings:
 
     def test_get_resource_attributes_dict_empty(self):
         """Test empty resource attributes."""
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             OpenTelemetrySettings,
             reset_otel_settings,
         )
@@ -134,7 +134,7 @@ class TestOpenTelemetrySettings:
         """Test that sampler arg is clamped to 0.0-1.0."""
         from pydantic import ValidationError
 
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             OpenTelemetrySettings,
             reset_otel_settings,
         )
@@ -155,7 +155,7 @@ class TestOpenTelemetrySettings:
 
     def test_singleton_pattern(self):
         """Test that get_otel_settings returns cached instance."""
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             get_otel_settings,
             reset_otel_settings,
         )
@@ -169,7 +169,7 @@ class TestOpenTelemetrySettings:
 
     def test_reset_clears_singleton(self):
         """Test that reset_otel_settings clears the cached instance."""
-        from selfhealing.settings.observability import (
+        from selfhealing.settings.otel import (
             get_otel_settings,
             reset_otel_settings,
         )

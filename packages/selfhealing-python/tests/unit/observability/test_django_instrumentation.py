@@ -11,7 +11,7 @@ from selfhealing.observability import (
     is_django_instrumented,
     reset_opentelemetry,
 )
-from selfhealing.settings.observability import reset_otel_settings
+from selfhealing.settings.otel import reset_otel_settings
 
 
 class TestInstrumentDjangoContract:
@@ -57,7 +57,7 @@ class TestInstrumentDjangoBehavior:
             mock_settings = MagicMock()
             mock_settings.django_instrument_enabled = False
             with patch(
-                "selfhealing.settings.observability.get_otel_settings",
+                "selfhealing.settings.otel.get_otel_settings",
                 return_value=mock_settings,
             ):
                 result = instrument_django()
@@ -98,7 +98,7 @@ class TestInstrumentDjangoBehavior:
         with (
             patch("selfhealing.observability.is_otel_enabled", return_value=True),
             patch(
-                "selfhealing.settings.observability.get_otel_settings",
+                "selfhealing.settings.otel.get_otel_settings",
                 return_value=mock_settings,
             ),
             patch.dict(os.environ, {}, clear=False),

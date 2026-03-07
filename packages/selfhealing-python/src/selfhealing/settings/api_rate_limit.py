@@ -42,8 +42,7 @@ class ApiRateLimitSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_API_RATE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -135,31 +134,15 @@ class ApiRateLimitSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern (cached settings)
-# =============================================================================
+def get_api_rate_limit_settings() -> "ApiRateLimitSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: ApiRateLimitSettings | None = None
-
-
-def get_api_rate_limit_settings() -> ApiRateLimitSettings:
-    """
-    캐시된 ApiRateLimitSettings 인스턴스 반환.
-
-    Returns:
-        ApiRateLimitSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = ApiRateLimitSettings()
-    return _settings
-
+    return get_config().services_group.api_rate_limit
 
 def reset_api_rate_limit_settings() -> None:
-    """
-    캐시된 settings 초기화 (테스트용).
+    from selfhealing.settings.root import get_config
 
-    환경변수 변경 후 settings를 다시 로드하려면 이 함수 호출.
-    """
-    global _settings
-    _settings = None
+    try:
+        del get_config().services_group.__dict__["api_rate_limit"]
+    except KeyError:
+        pass

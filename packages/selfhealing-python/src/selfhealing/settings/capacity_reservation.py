@@ -8,7 +8,6 @@ Capacity Reservation Settings - Pydantic v2.
 
 from __future__ import annotations
 
-from functools import lru_cache
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,8 +26,7 @@ class CapacityReservationSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_CAPACITY_RESERVATION_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -114,12 +112,15 @@ class CapacityReservationSettings(BaseSettings):
     )
 
 
-@lru_cache(maxsize=1)
-def get_capacity_reservation_settings() -> CapacityReservationSettings:
-    """설정 싱글톤 반환."""
-    return CapacityReservationSettings()
+def get_capacity_reservation_settings() -> "CapacityReservationSettings":
+    from selfhealing.settings.root import get_config
 
+    return get_config().services_group.capacity_reservation
 
 def reset_capacity_reservation_settings() -> None:
-    """설정 캐시 리셋 (테스트용)."""
-    get_capacity_reservation_settings.cache_clear()
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().services_group.__dict__["capacity_reservation"]
+    except KeyError:
+        pass

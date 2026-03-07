@@ -119,7 +119,7 @@ class TestAuditSettingsBufferRedisTtl:
 
     def test_default_buffer_redis_ttl(self):
         """기본 Buffer Redis TTL 값 (86400초 = 24시간)."""
-        from selfhealing.settings.audit_settings import (
+        from selfhealing.settings.audit import (
             AuditSettings,
             reset_audit_settings,
         )
@@ -130,7 +130,7 @@ class TestAuditSettingsBufferRedisTtl:
 
     def test_buffer_redis_ttl_from_env(self):
         """환경 변수에서 Buffer Redis TTL 로드."""
-        from selfhealing.settings.audit_settings import (
+        from selfhealing.settings.audit import (
             AuditSettings,
             reset_audit_settings,
         )
@@ -370,7 +370,7 @@ class TestHelperFunctions:
     def test_audit_buffer_uses_settings(self):
         """RedisAuditBuffer가 Settings에서 TTL을 가져오는지 확인."""
         from selfhealing.adapters.audit.redis_buffer import _get_audit_buffer_ttl
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         reset_audit_settings()
         ttl = _get_audit_buffer_ttl()
@@ -596,7 +596,7 @@ class TestRedisTtlAppliedToMock:
         from unittest.mock import MagicMock
 
         from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         reset_audit_settings()
 
@@ -620,7 +620,7 @@ class TestRedisTtlAppliedToMock:
         from unittest.mock import MagicMock
 
         from selfhealing.adapters.audit.redis_buffer import RedisAuditBuffer
-        from selfhealing.settings.audit_settings import reset_audit_settings
+        from selfhealing.settings.audit import reset_audit_settings
 
         reset_audit_settings()
 

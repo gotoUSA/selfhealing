@@ -26,8 +26,7 @@ class ResourceMonitorSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_RESOURCE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -53,35 +52,15 @@ class ResourceMonitorSettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_resource_monitor_settings() -> "ResourceMonitorSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: ResourceMonitorSettings | None = None
-
-
-def get_resource_monitor_settings() -> ResourceMonitorSettings:
-    """
-    캐시된 ResourceMonitorSettings 인스턴스 반환.
-
-    Returns:
-        ResourceMonitorSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = ResourceMonitorSettings()
-        logger.debug(
-            "[ResourceMonitorSettings] Loaded: "  # noqa: G004
-            f"safety_margin={_settings.safety_margin}, "
-            f"cpu_margin={_settings.cpu_margin}"
-        )
-    return _settings
-
+    return get_config().resilience.resource_monitor
 
 def reset_resource_monitor_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
-    """
-    global _settings
-    _settings = None
-    logger.debug("resource_monitor_settings.reset")
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().resilience.__dict__["resource_monitor"]
+    except KeyError:
+        pass

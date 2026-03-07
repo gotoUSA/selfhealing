@@ -56,7 +56,7 @@ def initialize_opentelemetry() -> bool:
         return False
 
     # Import settings
-    from selfhealing.settings.observability import get_otel_settings
+    from selfhealing.settings.otel import get_otel_settings
 
     settings = get_otel_settings()
 
@@ -459,7 +459,7 @@ def instrument_django() -> bool:
 
         from opentelemetry.instrumentation.django import DjangoInstrumentor
 
-        from selfhealing.settings.observability import get_otel_settings
+        from selfhealing.settings.otel import get_otel_settings
 
         settings = get_otel_settings()
 
@@ -558,7 +558,7 @@ def initialize_logger_provider() -> bool:
         from opentelemetry.sdk.resources import Resource
 
         # Import settings
-        from selfhealing.settings.observability import get_otel_settings
+        from selfhealing.settings.otel import get_otel_settings
 
         settings = get_otel_settings()
 

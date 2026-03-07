@@ -30,8 +30,7 @@ class StressTestSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_STRESS_TEST_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -168,31 +167,15 @@ class StressTestSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_stress_test_settings() -> "StressTestSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: StressTestSettings | None = None
-
-
-def get_stress_test_settings() -> StressTestSettings:
-    """
-    캐시된 StressTestSettings 인스턴스 반환.
-
-    Returns:
-        StressTestSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = StressTestSettings()
-    return _settings
-
+    return get_config().testing.stress_test
 
 def reset_stress_test_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
+    from selfhealing.settings.root import get_config
 
-    환경 변수 변경 후 설정을 다시 로드하려면 이 함수를 호출하세요.
-    """
-    global _settings
-    _settings = None
+    try:
+        del get_config().testing.__dict__["stress_test"]
+    except KeyError:
+        pass

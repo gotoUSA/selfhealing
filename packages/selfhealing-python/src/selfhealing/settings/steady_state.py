@@ -36,8 +36,7 @@ class SteadyStateSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_STEADY_STATE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -111,22 +110,15 @@ class SteadyStateSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_steady_state_settings() -> "SteadyStateSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: SteadyStateSettings | None = None
-
-
-def get_steady_state_settings() -> SteadyStateSettings:
-    """Get cached SteadyStateSettings instance."""
-    global _settings
-    if _settings is None:
-        _settings = SteadyStateSettings()
-    return _settings
-
+    return get_config().slo_group.steady_state
 
 def reset_steady_state_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().slo_group.__dict__["steady_state"]
+    except KeyError:
+        pass

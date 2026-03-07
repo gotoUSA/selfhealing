@@ -33,7 +33,7 @@ from typing import Any
 
 import structlog
 
-from selfhealing.settings.log_processors import (
+from selfhealing.observability.log_processors import (
     rate_limit_processor,
     sampling_processor,
 )
@@ -90,7 +90,7 @@ def configure_structlog() -> None:
     중복 호출에 안전하도록 설계되어 있으며,
     `structured_json` 설정에 따라 렌더러를 선택한다.
     """
-    from selfhealing.settings.logging_config import get_logging_settings
+    from selfhealing.settings.logging_settings import get_logging_settings
 
     settings = get_logging_settings()
 
@@ -134,7 +134,11 @@ def configure_structlog() -> None:
     root_logger = logging.getLogger()
     # 중복 핸들러 방지: structlog 포매터를 가진 핸들러만 교체
     root_logger.handlers = [
-        h for h in root_logger.handlers if not isinstance(getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter)
+        h
+        for h in root_logger.handlers
+        if not isinstance(
+            getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter
+        )
     ]
 
     # 테스트 환경에서는 NullHandler로 콘솔 출력을 완전 차단한다.

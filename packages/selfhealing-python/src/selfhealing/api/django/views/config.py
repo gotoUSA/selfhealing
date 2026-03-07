@@ -261,7 +261,10 @@ class BaseConfigView(APIView):
         previous_config = manager._get_config(self.config_name)
 
         # Extract reason for history tracking
-        reason = apply_options.pop("reason", "") or f"API update: {list(config_changes.keys())}"
+        reason = (
+            apply_options.pop("reason", "")
+            or f"API update: {list(config_changes.keys())}"
+        )
 
         # Update with strategy (includes ConfigHistory integration)
         result = manager.update_with_strategy(
@@ -392,18 +395,17 @@ class LoggingConfigView(BaseConfigView):
 
     def put(self, request: Request) -> Response:
         """로깅 설정 업데이트 + stdlib 로거에 레벨 즉시 적용."""
-        import logging as _logging
 
         response = super().put(request)
 
         # 성공 시 실제 로거에 레벨 적용 (런타임 핫 리로드)
         if response.status_code in (200, 202):
             try:
-                from selfhealing.settings.structlog_config import (
+                from selfhealing.observability.structlog_config import (
                     _COMPONENT_LOGGER_MAP,
                     _apply_component_log_levels,
                 )
-                from selfhealing.settings.logging_config import (
+                from selfhealing.settings.logging_settings import (
                     get_logging_settings,
                     reset_logging_settings,
                 )
@@ -415,7 +417,9 @@ class LoggingConfigView(BaseConfigView):
 
                 logger.info(
                     "config_api.logging_levels_applied_runtime",
-                    applied_levels={k: getattr(settings, k, "INFO") for k in _COMPONENT_LOGGER_MAP},
+                    applied_levels={
+                        k: getattr(settings, k, "INFO") for k in _COMPONENT_LOGGER_MAP
+                    },
                     changed_by=str(request.user),
                 )
             except Exception as exc:

@@ -36,8 +36,7 @@ class SamplingSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_SAMPLING_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -100,22 +99,15 @@ class SamplingSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_sampling_settings() -> "SamplingSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: SamplingSettings | None = None
-
-
-def get_sampling_settings() -> SamplingSettings:
-    """Get cached SamplingSettings instance."""
-    global _settings
-    if _settings is None:
-        _settings = SamplingSettings()
-    return _settings
-
+    return get_config().testing.sampling
 
 def reset_sampling_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().testing.__dict__["sampling"]
+    except KeyError:
+        pass

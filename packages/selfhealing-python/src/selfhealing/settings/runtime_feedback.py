@@ -26,8 +26,7 @@ class RuntimeFeedbackSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_RUNTIME_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -63,36 +62,15 @@ class RuntimeFeedbackSettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_runtime_feedback_settings() -> "RuntimeFeedbackSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: RuntimeFeedbackSettings | None = None
-
-
-def get_runtime_feedback_settings() -> RuntimeFeedbackSettings:
-    """
-    캐시된 RuntimeFeedbackSettings 인스턴스 반환.
-
-    Returns:
-        RuntimeFeedbackSettings: 싱글톤 인스턴스
-    """
-    global _settings
-    if _settings is None:
-        _settings = RuntimeFeedbackSettings()
-        logger.debug(
-            "[RuntimeFeedbackSettings] Loaded: "  # noqa: G004
-            f"max_consecutive_failures={_settings.max_consecutive_failures}, "
-            f"rollback_cooldown={_settings.rollback_cooldown}s, "
-            f"adjustment_wait={_settings.adjustment_wait}s"
-        )
-    return _settings
-
+    return get_config().meta.runtime_feedback
 
 def reset_runtime_feedback_settings() -> None:
-    """
-    캐시된 설정 초기화 (테스트용).
-    """
-    global _settings
-    _settings = None
-    logger.debug("runtime_feedback_settings.reset")
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().meta.__dict__["runtime_feedback"]
+    except KeyError:
+        pass

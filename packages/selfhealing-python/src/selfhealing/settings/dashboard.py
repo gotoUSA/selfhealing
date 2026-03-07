@@ -40,8 +40,7 @@ class DashboardSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_DASHBOARD_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -124,21 +123,15 @@ class DashboardSettings(BaseSettings):
         return v
 
 
-# ==========================================================================
-# Singleton 관리
-# ==========================================================================
-_dashboard_settings: DashboardSettings | None = None
+def get_dashboard_settings() -> "DashboardSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_dashboard_settings() -> DashboardSettings:
-    """Get cached DashboardSettings instance."""
-    global _dashboard_settings
-    if _dashboard_settings is None:
-        _dashboard_settings = DashboardSettings()
-    return _dashboard_settings
-
+    return get_config().slo_group.dashboard
 
 def reset_dashboard_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _dashboard_settings
-    _dashboard_settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().slo_group.__dict__["dashboard"]
+    except KeyError:
+        pass

@@ -40,8 +40,7 @@ class PredictiveForecasterSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_FORECASTER_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -182,18 +181,16 @@ class PredictiveForecasterSettings(BaseSettings):
 
 # ── Singleton ──
 
-_settings: PredictiveForecasterSettings | None = None
 
+def get_predictive_forecaster_settings() -> "PredictiveForecasterSettings":
+    from selfhealing.settings.root import get_config
 
-def get_predictive_forecaster_settings() -> PredictiveForecasterSettings:
-    """PredictiveForecasterSettings 싱글톤 인스턴스 반환."""
-    global _settings
-    if _settings is None:
-        _settings = PredictiveForecasterSettings()
-    return _settings
-
+    return get_config().testing.predictive_forecaster
 
 def reset_predictive_forecaster_settings() -> None:
-    """싱글톤 인스턴스 초기화 (테스트 용도)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().testing.__dict__["predictive_forecaster"]
+    except KeyError:
+        pass

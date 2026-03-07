@@ -44,8 +44,7 @@ class CeleryTaskSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_CELERY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -169,21 +168,15 @@ class CeleryTaskSettings(BaseSettings):
         return self
 
 
-# ==========================================================================
-# Singleton 관리
-# ==========================================================================
-_celery_task_settings: CeleryTaskSettings | None = None
+def get_celery_task_settings() -> "CeleryTaskSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_celery_task_settings() -> CeleryTaskSettings:
-    """Get cached CeleryTaskSettings instance."""
-    global _celery_task_settings
-    if _celery_task_settings is None:
-        _celery_task_settings = CeleryTaskSettings()
-    return _celery_task_settings
-
+    return get_config().adapters.celery_task
 
 def reset_celery_task_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _celery_task_settings
-    _celery_task_settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().adapters.__dict__["celery_task"]
+    except KeyError:
+        pass

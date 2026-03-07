@@ -26,7 +26,6 @@ Environment Variables:
 
 from __future__ import annotations
 
-import threading
 
 import structlog
 from pydantic import Field
@@ -40,8 +39,7 @@ class CellTopologySettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_CELL_TOPOLOGY_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -263,26 +261,15 @@ class CellTopologySettings(BaseSettings):
     )
 
 
-# =============================================================================
-# Singleton
-# =============================================================================
+def get_cell_topology_settings() -> "CellTopologySettings":
+    from selfhealing.settings.root import get_config
 
-_settings: CellTopologySettings | None = None
-_settings_lock = threading.Lock()
-
-
-def get_cell_topology_settings() -> CellTopologySettings:
-    """CellTopologySettings 싱글톤 반환."""
-    global _settings
-    if _settings is None:
-        with _settings_lock:
-            if _settings is None:
-                _settings = CellTopologySettings()
-    return _settings
-
+    return get_config().multi_region.cell_topology
 
 def reset_cell_topology_settings() -> None:
-    """싱글톤 초기화 (테스트용)."""
-    global _settings
-    with _settings_lock:
-        _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().multi_region.__dict__["cell_topology"]
+    except KeyError:
+        pass

@@ -9,7 +9,6 @@ Moved from: meta/config.py (위치 통일)
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Literal
 
 import structlog
@@ -33,8 +32,7 @@ class MetaWatchdogSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_META_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -147,12 +145,15 @@ class MetaWatchdogSettings(BaseSettings):
     )
 
 
-@lru_cache(maxsize=1)
-def get_meta_watchdog_settings() -> MetaWatchdogSettings:
-    """Meta-Watchdog 설정 싱글톤 반환."""
-    return MetaWatchdogSettings()
+def get_meta_watchdog_settings() -> "MetaWatchdogSettings":
+    from selfhealing.settings.root import get_config
 
+    return get_config().meta.meta_watchdog
 
 def reset_meta_watchdog_settings() -> None:
-    """설정 캐시 리셋 (테스트용)."""
-    get_meta_watchdog_settings.cache_clear()
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().meta.__dict__["meta_watchdog"]
+    except KeyError:
+        pass

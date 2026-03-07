@@ -39,8 +39,7 @@ class AirGapSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_AIRGAP_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -72,21 +71,15 @@ class AirGapSettings(BaseSettings):
         return v
 
 
-# ==========================================================================
-# Singleton 관리
-# ==========================================================================
-_airgap_settings: AirGapSettings | None = None
+def get_airgap_settings() -> "AirGapSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_airgap_settings() -> AirGapSettings:
-    """Get cached AirGapSettings instance."""
-    global _airgap_settings
-    if _airgap_settings is None:
-        _airgap_settings = AirGapSettings()
-    return _airgap_settings
-
+    return get_config().testing.airgap
 
 def reset_airgap_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _airgap_settings
-    _airgap_settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().testing.__dict__["airgap"]
+    except KeyError:
+        pass

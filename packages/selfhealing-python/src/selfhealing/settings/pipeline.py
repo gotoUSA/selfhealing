@@ -33,8 +33,7 @@ class PipelineSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_PIPELINE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -68,22 +67,15 @@ class PipelineSettings(BaseSettings):
         return v
 
 
-# =============================================================================
-# Singleton Pattern
-# =============================================================================
+def get_pipeline_settings() -> "PipelineSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: PipelineSettings | None = None
-
-
-def get_pipeline_settings() -> PipelineSettings:
-    """캐시된 PipelineSettings 인스턴스 반환."""
-    global _settings
-    if _settings is None:
-        _settings = PipelineSettings()
-    return _settings
-
+    return get_config().meta.pipeline
 
 def reset_pipeline_settings() -> None:
-    """캐시된 설정 초기화 (테스트용)."""
-    global _settings
-    _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().meta.__dict__["pipeline"]
+    except KeyError:
+        pass

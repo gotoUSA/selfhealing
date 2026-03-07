@@ -13,7 +13,6 @@ Environment Variables:
 
 from __future__ import annotations
 
-import threading
 
 import structlog
 from pydantic import Field
@@ -27,8 +26,7 @@ class AdmissionControlSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_ADMISSION_CONTROL_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -109,26 +107,15 @@ class AdmissionControlSettings(BaseSettings):
         return value if value > 0 else None
 
 
-# =============================================================================
-# Singleton
-# =============================================================================
+def get_admission_control_settings() -> "AdmissionControlSettings":
+    from selfhealing.settings.root import get_config
 
-_settings: AdmissionControlSettings | None = None
-_settings_lock = threading.Lock()
-
-
-def get_admission_control_settings() -> AdmissionControlSettings:
-    """AdmissionControlSettings 싱글톤 반환."""
-    global _settings
-    if _settings is None:
-        with _settings_lock:
-            if _settings is None:
-                _settings = AdmissionControlSettings()
-    return _settings
-
+    return get_config().core.admission_control
 
 def reset_admission_control_settings() -> None:
-    """싱글톤 초기화 (테스트용)."""
-    global _settings
-    with _settings_lock:
-        _settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().core.__dict__["admission_control"]
+    except KeyError:
+        pass

@@ -42,8 +42,7 @@ class SafeGaugeSettings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="SELFHEALING_SAFE_GAUGE_",
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_file=None,
         extra="ignore",
         validate_default=True,
     )
@@ -80,21 +79,15 @@ class SafeGaugeSettings(BaseSettings):
         return v
 
 
-# ==========================================================================
-# Singleton 관리
-# ==========================================================================
-_safe_gauge_settings: SafeGaugeSettings | None = None
+def get_safe_gauge_settings() -> "SafeGaugeSettings":
+    from selfhealing.settings.root import get_config
 
-
-def get_safe_gauge_settings() -> SafeGaugeSettings:
-    """Get cached SafeGaugeSettings instance."""
-    global _safe_gauge_settings
-    if _safe_gauge_settings is None:
-        _safe_gauge_settings = SafeGaugeSettings()
-    return _safe_gauge_settings
-
+    return get_config().metrics_group.safe_gauge
 
 def reset_safe_gauge_settings() -> None:
-    """Reset cached settings (for testing)."""
-    global _safe_gauge_settings
-    _safe_gauge_settings = None
+    from selfhealing.settings.root import get_config
+
+    try:
+        del get_config().metrics_group.__dict__["safe_gauge"]
+    except KeyError:
+        pass
