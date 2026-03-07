@@ -122,8 +122,7 @@ class DashboardService:
                 from selfhealing.factory import ProviderRegistry
 
                 self._cache = ProviderRegistry.get_cache()
-            except (ImportError, ValueError):
-                # Cache not available, will skip caching
+            except (ImportError, ValueError, Exception):
                 pass
         return self._cache
 
@@ -147,7 +146,9 @@ class DashboardService:
             )
         return None
 
-    def _set_cached(self, key: str, value: dict[str, Any], ttl_seconds: int = None) -> None:
+    def _set_cached(
+        self, key: str, value: dict[str, Any], ttl_seconds: int = None
+    ) -> None:
         """Set cached value with TTL."""
         if not self.cache:
             return
@@ -364,7 +365,10 @@ class DashboardService:
 
             return Distribution(
                 by_domain=[{"domain": d.domain, "count": d.count} for d in domain_dist],
-                by_failure_type=[{"failure_type": f.failure_type, "count": f.count} for f in failure_dist],
+                by_failure_type=[
+                    {"failure_type": f.failure_type, "count": f.count}
+                    for f in failure_dist
+                ],
             )
         except Exception as e:
             logger.exception(

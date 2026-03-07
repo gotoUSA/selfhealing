@@ -90,8 +90,7 @@ class CircuitBreakerPolicy(ResiliencePolicy[T]):
             from selfhealing.factory import ProviderRegistry
 
             repository = ProviderRegistry.get_circuit_breaker_repo(name="layered")
-        except (ValueError, ImportError):
-            # "layered" 미등록 시 ProviderRegistry 기본값 사용
+        except (ValueError, ImportError, Exception):
             logger.debug("circuit_breaker_policy.layered_repo_available_falling")
         return CircuitBreakerService(config=config, repository=repository)
 

@@ -161,8 +161,8 @@ class RedisLeaderElector(LeaderElector):
         # 비동기 콜백 실행용 스레드 풀
         self._callback_executor: ThreadPoolExecutor | None = None
 
-        # Lua Script Registry (lazy-initialized after Redis client is available)
-        self._lua_registry = None
+        # Registered Lua scripts (lazy-initialized after Redis client is available)
+        self._scripts: dict[str, Any] | None = None
 
         # 메트릭
         self._metrics: LeaderElectorMetrics | None = None
@@ -178,22 +178,20 @@ class RedisLeaderElector(LeaderElector):
             )
         return self._redis
 
-    def _get_lua_registry(self):
-        """LuaScriptRegistry 반환 (lazy initialization, double-checked locking)."""
-        if self._lua_registry is None:
+    def _ensure_scripts(self) -> dict[str, Any]:
+        """Lua 스크립트 등록 (lazy initialization, double-checked locking)."""
+        if self._scripts is None:
             with self._lock:
-                if self._lua_registry is None:
-                    from selfhealing.audit.performance.lua_registry import (
-                        LuaScriptRegistry,
-                    )
-
+                if self._scripts is None:
                     redis_client = self._get_redis()
-                    registry = LuaScriptRegistry(redis_client)
-                    registry.register("acquire", self.LUA_ACQUIRE_WITH_PRIORITY)
-                    registry.register("release", self.LUA_RELEASE)
-                    registry.register("renew", self.LUA_RENEW)
-                    self._lua_registry = registry
-        return self._lua_registry
+                    self._scripts = {
+                        "acquire": redis_client.register_script(
+                            self.LUA_ACQUIRE_WITH_PRIORITY
+                        ),
+                        "release": redis_client.register_script(self.LUA_RELEASE),
+                        "renew": redis_client.register_script(self.LUA_RENEW),
+                    }
+        return self._scripts
 
     def _get_callback_executor(self) -> ThreadPoolExecutor:
         """콜백 실행용 스레드 풀 (lazy initialization)."""
@@ -288,9 +286,8 @@ class RedisLeaderElector(LeaderElector):
                 }
             )
 
-            registry = self._get_lua_registry()
-            result = registry.execute(
-                "acquire",
+            scripts = self._ensure_scripts()
+            result = scripts["acquire"](
                 keys=[self._leader_key, self._fencing_key],
                 args=[
                     value,
@@ -318,9 +315,8 @@ class RedisLeaderElector(LeaderElector):
     def _renew_lease(self) -> bool:
         """Lease 갱신."""
         try:
-            registry = self._get_lua_registry()
-            result = registry.execute(
-                "renew",
+            scripts = self._ensure_scripts()
+            result = scripts["renew"](
                 keys=[self._leader_key],
                 args=[self._node_id, self._settings.lease_ttl_seconds],
             )
@@ -346,9 +342,8 @@ class RedisLeaderElector(LeaderElector):
     def _release_leadership(self) -> None:
         """리더십 반납."""
         try:
-            registry = self._get_lua_registry()
-            registry.execute(
-                "release",
+            scripts = self._ensure_scripts()
+            scripts["release"](
                 keys=[self._leader_key],
                 args=[self._node_id],
             )

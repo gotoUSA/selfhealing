@@ -38,14 +38,23 @@ class TestLoggingNotificationAdapterContract:
         logger_type_name = type(adapter._logger).__name__
         assert "BoundLogger" in logger_type_name or "Proxy" in logger_type_name
 
-    def test_severity_to_log_method_mapping_has_five_entries(self):
-        """SEVERITY_TO_LOG_METHOD 매핑에 5개 severity 레벨이 모두 정의되어야 한다."""
+    def test_severity_to_log_method_mapping_has_six_entries(self):
+        """SEVERITY_TO_LOG_METHOD 매핑에 6개 severity 레벨이 모두 정의되어야 한다."""
         mapping = LoggingNotificationAdapter._SEVERITY_TO_LOG_METHOD
-        assert len(mapping) == 5
-        assert set(mapping.keys()) == {"CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"}
+        assert len(mapping) == 6
+        assert set(mapping.keys()) == {
+            "CRITICAL",
+            "HIGH",
+            "WARNING",
+            "MEDIUM",
+            "LOW",
+            "INFO",
+        }
 
     def test_critical_maps_to_critical_method(self):
-        assert LoggingNotificationAdapter._SEVERITY_TO_LOG_METHOD["CRITICAL"] == "critical"
+        assert (
+            LoggingNotificationAdapter._SEVERITY_TO_LOG_METHOD["CRITICAL"] == "critical"
+        )
 
     def test_high_maps_to_error_method(self):
         assert LoggingNotificationAdapter._SEVERITY_TO_LOG_METHOD["HIGH"] == "error"
@@ -212,7 +221,9 @@ class TestPoolMonitorStructlogBehavior:
             mock_logger.info.assert_called_once()
             call = mock_logger.info.call_args
             assert call.args[0] == "pool_monitor.simulation_override_set"
-            assert call.kwargs.get("pool_health_status") == PoolHealthStatus.CRITICAL.value
+            assert (
+                call.kwargs.get("pool_health_status") == PoolHealthStatus.CRITICAL.value
+            )
 
     def test_clear_simulation_override_logs_cleared_event(self):
         """clear_simulation_override 호출 시 cleared 이벤트가 기록되어야 한다."""

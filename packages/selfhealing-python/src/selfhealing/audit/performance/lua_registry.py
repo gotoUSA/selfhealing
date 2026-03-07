@@ -58,7 +58,10 @@ class LuaScriptRegistry:
         if len(keys) > 1:
             self._validate_same_slot(keys)
 
-        from redis.exceptions import NoScriptError
+        try:
+            from redis.exceptions import NoScriptError
+        except ImportError:
+            NoScriptError = type(None)
 
         for attempt in range(self.MAX_RELOAD_ATTEMPTS):
             sha = self._sha_cache.get(name)
@@ -66,7 +69,9 @@ class LuaScriptRegistry:
                 if sha:
                     return self._redis.evalsha(sha, len(keys), *keys, *args)
                 return self._load_and_execute(name, keys, args)
-            except NoScriptError:
+            except (NoScriptError, Exception) as exc:
+                if not isinstance(exc, NoScriptError) and "NOSCRIPT" not in str(exc):
+                    raise
                 self._sha_cache.pop(name, None)
                 load_counter, noscript_counter = _get_lua_metrics()
                 if noscript_counter:
@@ -99,8 +104,14 @@ class LuaScriptRegistry:
     @staticmethod
     def _validate_same_slot(keys: list[str]) -> None:
         """Validate that all keys map to the same hash slot (Redis Cluster safety)."""
-        tags = {LuaScriptRegistry._extract_hash_tag(k) for k in keys}
-        if len(tags) > 1:
+        tags = set()
+        has_explicit_tag = False
+        for k in keys:
+            tag = LuaScriptRegistry._extract_hash_tag(k)
+            if tag != k:
+                has_explicit_tag = True
+            tags.add(tag)
+        if has_explicit_tag and len(tags) > 1:
             raise ValueError(
                 f"Keys span multiple hash slots: {keys}. "
                 f"Use {{hash_tag}} to group related keys."

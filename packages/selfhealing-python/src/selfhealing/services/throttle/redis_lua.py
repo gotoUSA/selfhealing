@@ -234,15 +234,15 @@ class RedisThrottleLimitManager:
 
     def _get_limit_key(self, service_name: str) -> str:
         """서비스별 limit 키."""
-        return f"{self._key_prefix}throttle:{{{service_name}}}:limit"
+        return f"{self._key_prefix}throttle:limit:{service_name}"
 
     def _get_safe_limit_key(self, service_name: str) -> str:
         """서비스별 마지막 안전 limit 키."""
-        return f"{self._key_prefix}throttle:{{{service_name}}}:safe_limit"
+        return f"{self._key_prefix}throttle:last_safe_limit:{service_name}"
 
     def _get_rtt_key(self, service_name: str) -> str:
         """서비스별 RTT 샘플 키."""
-        return f"{self._key_prefix}throttle:{{{service_name}}}:rtt"
+        return f"{self._key_prefix}throttle:rtt:{service_name}"
 
     def update_limit_atomic(
         self,

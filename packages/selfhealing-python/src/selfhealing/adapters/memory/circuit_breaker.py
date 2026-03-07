@@ -338,6 +338,10 @@ class InMemoryCircuitBreakerStateRepository(CircuitBreakerStateRepository):
         with self._lock:
             return list(self._storage.values())
 
+    def get_all(self) -> list[CircuitBreakerStateData]:
+        """Alias for get_all_states (backward compatibility)."""
+        return self.get_all_states()
+
     def reset(self, service_name: str) -> bool:
         """Reset circuit breaker to initial closed state."""
         with self._lock:

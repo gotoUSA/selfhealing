@@ -258,7 +258,7 @@ def get_notification_adapter(
     name = channel.value if channel else None
     try:
         return ProviderRegistry.get_notification(name)
-    except ValueError:
+    except (ValueError, Exception):
         return _default_adapter
 
 

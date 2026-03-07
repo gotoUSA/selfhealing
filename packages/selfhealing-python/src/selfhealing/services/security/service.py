@@ -138,7 +138,11 @@ class SecurityViolationService:
         Returns:
             SecurityViolationResult with incident ID and action taken
         """
-        violation_type_str = violation_type.value if isinstance(violation_type, ViolationType) else violation_type
+        violation_type_str = (
+            violation_type.value
+            if isinstance(violation_type, ViolationType)
+            else violation_type
+        )
 
         try:
             # Extract request information
@@ -146,7 +150,9 @@ class SecurityViolationService:
             user_agent = request_info.get("user_agent", "") if request_info else ""
 
             # Determine severity
-            severity = SEVERITY_BY_VIOLATION_TYPE.get(violation_type_str, Severity.MEDIUM)
+            severity = SEVERITY_BY_VIOLATION_TYPE.get(
+                violation_type_str, Severity.MEDIUM
+            )
 
             # Create incident record via repository
             incident = self.repository.create(
@@ -183,7 +189,13 @@ class SecurityViolationService:
             log_security_violation_audit(
                 violation_type=violation_type_str,
                 action="handle_violation",
-                target=(f"ip:{source_ip}" if source_ip else f"user:{user_id}" if user_id else "unknown"),
+                target=(
+                    f"ip:{source_ip}"
+                    if source_ip
+                    else f"user:{user_id}"
+                    if user_id
+                    else "unknown"
+                ),
                 result="success",
                 severity=severity.value,
                 operator="system",
@@ -198,7 +210,9 @@ class SecurityViolationService:
 
             # Trigger notification (async if possible)
             try:
-                self._send_security_notification(incident.id, violation_type_str, severity.value)
+                self._send_security_notification(
+                    incident.id, violation_type_str, severity.value
+                )
             except Exception as e:
                 logger.exception(
                     "security_violation_notification_failed",
@@ -301,7 +315,9 @@ class SecurityViolationService:
 
         elif violation_type == ViolationType.RATE_LIMIT_ABUSE.value:
             if source_ip:
-                action_taken = self._temporary_ip_ban(source_ip, hours=self.config.temporary_ban_hours)
+                action_taken = self._temporary_ip_ban(
+                    source_ip, hours=self.config.temporary_ban_hours
+                )
             else:
                 action_taken = "Rate limit abuse detected but no IP"
 
@@ -345,12 +361,13 @@ class SecurityViolationService:
             else:
                 items.append("redis_sessions(0:no_registered_keys)")
         except ImportError:
-            pass
+            items.append("redis_sessions(0:registry_unavailable)")
         except Exception as e:
             logger.debug(
                 "security.usersessionregistry_cleanup_failed",
                 error=e,
             )
+            items.append("redis_sessions(0:cleanup_failed)")
         return items
 
     @staticmethod
@@ -369,7 +386,9 @@ class SecurityViolationService:
                 from django.contrib.sessions.models import Session
                 from django.utils import timezone as dj_timezone
 
-                active_sessions = Session.objects.filter(expire_date__gte=dj_timezone.now())
+                active_sessions = Session.objects.filter(
+                    expire_date__gte=dj_timezone.now()
+                )
                 deleted_count = 0
                 for session in active_sessions:
                     data = session.get_decoded()
@@ -432,7 +451,7 @@ class SecurityViolationService:
             logger.info(
                 "security.invalidated_sessions_user",
                 user_id=user_id,
-                value=', '.join(invalidated_items),
+                value=", ".join(invalidated_items),
             )
 
             # === Audit 기록: 세션 무효화 ===
@@ -447,7 +466,10 @@ class SecurityViolationService:
                 details={"invalidated": invalidated_items},
             )
 
-            return f"User sessions cleared for user {user_id}: " f"{', '.join(invalidated_items)}"
+            return (
+                f"User sessions cleared for user {user_id}: "
+                f"{', '.join(invalidated_items)}"
+            )
         except Exception as e:
             logger.exception(
                 "security.failed_invalidate_sessions",
@@ -639,7 +661,11 @@ class SecurityViolationService:
                     return "[MAX_DEPTH_EXCEEDED]"
                 if isinstance(data, dict):
                     return {
-                        k: ("[REDACTED]" if k.lower() in self._SENSITIVE_FIELDS else sanitize(v, depth + 1))
+                        k: (
+                            "[REDACTED]"
+                            if k.lower() in self._SENSITIVE_FIELDS
+                            else sanitize(v, depth + 1)
+                        )
                         for k, v in data.items()
                     }
                 elif isinstance(data, list):
