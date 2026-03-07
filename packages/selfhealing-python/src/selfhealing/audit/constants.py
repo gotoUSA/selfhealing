@@ -1,7 +1,6 @@
 """Shared constants for audit module."""
 
 FIXED_AUDIT_FIELDS: list[str] = [
-    "audit_id",
     "timestamp",
     "action",
     "actor_id",
