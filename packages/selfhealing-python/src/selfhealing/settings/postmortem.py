@@ -373,6 +373,7 @@ __all__ = [
     "reset_postmortem_settings",
 ]
 
+
 def reset_postmortem_settings() -> None:
     from selfhealing.settings.root import get_config
 

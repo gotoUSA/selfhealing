@@ -143,6 +143,7 @@ def get_correlation_settings() -> "CorrelationSettings":
 
     return get_config().obs.correlation
 
+
 def reset_correlation_settings() -> None:
     from selfhealing.settings.root import get_config
 

@@ -129,6 +129,7 @@ def get_distributed_lock_settings() -> "DistributedLockSettings":
 
     return get_config().coordination.distributed_lock
 
+
 def reset_distributed_lock_settings() -> None:
     from selfhealing.settings.root import get_config
 

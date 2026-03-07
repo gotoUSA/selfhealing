@@ -150,6 +150,7 @@ def get_meta_watchdog_settings() -> "MetaWatchdogSettings":
 
     return get_config().meta.meta_watchdog
 
+
 def reset_meta_watchdog_settings() -> None:
     from selfhealing.settings.root import get_config
 

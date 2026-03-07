@@ -187,6 +187,7 @@ def get_predictive_forecaster_settings() -> "PredictiveForecasterSettings":
 
     return get_config().testing.predictive_forecaster
 
+
 def reset_predictive_forecaster_settings() -> None:
     from selfhealing.settings.root import get_config
 

@@ -108,6 +108,7 @@ def get_hash_chain_settings() -> "HashChainSettings":
 
     return get_config().audit_group.hash_chain
 
+
 def reset_hash_chain_settings() -> None:
     from selfhealing.settings.root import get_config
 

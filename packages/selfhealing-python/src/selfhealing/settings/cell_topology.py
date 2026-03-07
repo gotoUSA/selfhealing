@@ -266,6 +266,7 @@ def get_cell_topology_settings() -> "CellTopologySettings":
 
     return get_config().multi_region.cell_topology
 
+
 def reset_cell_topology_settings() -> None:
     from selfhealing.settings.root import get_config
 

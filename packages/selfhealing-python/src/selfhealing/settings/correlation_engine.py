@@ -75,6 +75,7 @@ def get_correlation_engine_settings() -> "CorrelationEngineSettings":
 
     return get_config().obs.correlation_engine
 
+
 def reset_correlation_engine_settings() -> None:
     from selfhealing.settings.root import get_config
 

@@ -115,6 +115,7 @@ def get_steady_state_settings() -> "SteadyStateSettings":
 
     return get_config().slo_group.steady_state
 
+
 def reset_steady_state_settings() -> None:
     from selfhealing.settings.root import get_config
 

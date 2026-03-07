@@ -163,6 +163,7 @@ def get_resilient_recorder_settings() -> "ResilientRecorderSettings":
 
     return get_config().resilience.resilient_recorder
 
+
 def reset_resilient_recorder_settings() -> None:
     from selfhealing.settings.root import get_config
 

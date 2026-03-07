@@ -112,6 +112,7 @@ def get_admission_control_settings() -> "AdmissionControlSettings":
 
     return get_config().core.admission_control
 
+
 def reset_admission_control_settings() -> None:
     from selfhealing.settings.root import get_config
 

@@ -146,6 +146,7 @@ def get_otel_settings() -> "OpenTelemetrySettings":
 
     return get_config().obs.otel
 
+
 def reset_otel_settings() -> None:
     from selfhealing.settings.root import get_config
 

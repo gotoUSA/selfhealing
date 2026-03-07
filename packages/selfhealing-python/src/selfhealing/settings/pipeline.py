@@ -72,6 +72,7 @@ def get_pipeline_settings() -> "PipelineSettings":
 
     return get_config().meta.pipeline
 
+
 def reset_pipeline_settings() -> None:
     from selfhealing.settings.root import get_config
 

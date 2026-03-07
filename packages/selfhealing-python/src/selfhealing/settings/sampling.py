@@ -104,6 +104,7 @@ def get_sampling_settings() -> "SamplingSettings":
 
     return get_config().testing.sampling
 
+
 def reset_sampling_settings() -> None:
     from selfhealing.settings.root import get_config
 

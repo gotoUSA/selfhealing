@@ -157,6 +157,7 @@ def get_notification_channel_settings() -> "NotificationChannelSettings":
 
     return get_config().adapters.notification_channel
 
+
 def reset_notification_channel_settings() -> None:
     from selfhealing.settings.root import get_config
 

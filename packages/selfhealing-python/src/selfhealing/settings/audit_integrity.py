@@ -259,6 +259,7 @@ def get_audit_integrity_settings() -> "AuditIntegritySettings":
 
     return get_config().audit_group.audit_integrity
 
+
 def reset_audit_integrity_settings() -> None:
     from selfhealing.settings.root import get_config
 

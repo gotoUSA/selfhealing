@@ -14,7 +14,7 @@ load_dotenv(
 
 import os
 from enum import Enum
-from functools import cached_property  # noqa: F811
+from functools import cached_property
 from typing import Any
 
 import structlog

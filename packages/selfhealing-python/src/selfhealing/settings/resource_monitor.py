@@ -57,6 +57,7 @@ def get_resource_monitor_settings() -> "ResourceMonitorSettings":
 
     return get_config().resilience.resource_monitor
 
+
 def reset_resource_monitor_settings() -> None:
     from selfhealing.settings.root import get_config
 

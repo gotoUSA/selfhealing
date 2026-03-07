@@ -150,6 +150,7 @@ def get_bulkhead_settings() -> "BulkheadSettings":
 
     return get_config().resilience.bulkhead
 
+
 def reset_bulkhead_settings() -> None:
     from selfhealing.settings.root import get_config
 

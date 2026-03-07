@@ -76,6 +76,7 @@ def get_airgap_settings() -> "AirGapSettings":
 
     return get_config().testing.airgap
 
+
 def reset_airgap_settings() -> None:
     from selfhealing.settings.root import get_config
 

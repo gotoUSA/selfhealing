@@ -153,6 +153,7 @@ def get_domain_sensitivity_settings() -> "DomainSensitivitySettings":
 
     return get_config().security_group.domain_sensitivity
 
+
 def reset_domain_sensitivity_settings() -> None:
     from selfhealing.settings.root import get_config
 

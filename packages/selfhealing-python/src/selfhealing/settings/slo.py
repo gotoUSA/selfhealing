@@ -93,6 +93,7 @@ def get_slo_settings() -> "SLOSettings":
 
     return get_config().slo_group.slo
 
+
 def reset_slo_settings() -> None:
     from selfhealing.settings.root import get_config
 

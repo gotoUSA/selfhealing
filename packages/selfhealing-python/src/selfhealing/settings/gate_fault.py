@@ -74,6 +74,7 @@ def get_gate_fault_settings() -> "GateFaultSettings":
 
     return get_config().meta.gate_fault
 
+
 def reset_gate_fault_settings() -> None:
     from selfhealing.settings.root import get_config
 

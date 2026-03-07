@@ -67,6 +67,7 @@ def get_runtime_feedback_settings() -> "RuntimeFeedbackSettings":
 
     return get_config().meta.runtime_feedback
 
+
 def reset_runtime_feedback_settings() -> None:
     from selfhealing.settings.root import get_config
 

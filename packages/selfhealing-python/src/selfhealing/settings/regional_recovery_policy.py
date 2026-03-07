@@ -189,6 +189,7 @@ def get_regional_recovery_policy_settings() -> "RegionalRecoveryPolicySettings":
 
     return get_config().multi_region.regional_recovery_policy
 
+
 def reset_regional_recovery_policy_settings() -> None:
     from selfhealing.settings.root import get_config
 

@@ -128,6 +128,7 @@ def get_dashboard_settings() -> "DashboardSettings":
 
     return get_config().slo_group.dashboard
 
+
 def reset_dashboard_settings() -> None:
     from selfhealing.settings.root import get_config
 

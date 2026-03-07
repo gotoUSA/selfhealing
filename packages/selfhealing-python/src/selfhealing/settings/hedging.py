@@ -131,6 +131,7 @@ def get_hedging_settings() -> "HedgingSettings":
 
     return get_config().resilience.hedging
 
+
 def reset_hedging_settings() -> None:
     from selfhealing.settings.root import get_config
 

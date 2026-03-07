@@ -94,6 +94,7 @@ def get_drift_detection_settings() -> "DriftDetectionSettings":
 
     return get_config().metrics_group.drift_detection
 
+
 def reset_drift_detection_settings() -> None:
     from selfhealing.settings.root import get_config
 

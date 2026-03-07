@@ -179,6 +179,7 @@ def get_audit_settings() -> "AuditSettings":
 
     return get_config().audit_group.audit
 
+
 def reset_audit_settings() -> None:
     from selfhealing.settings.root import get_config
 

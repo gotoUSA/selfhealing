@@ -98,6 +98,7 @@ def get_pool_monitor_settings() -> "PoolMonitorSettings":
 
     return get_config().core.pool_monitor
 
+
 def reset_pool_monitor_settings() -> None:
     from selfhealing.settings.root import get_config
 

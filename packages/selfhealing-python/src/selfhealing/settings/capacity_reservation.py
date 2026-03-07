@@ -117,6 +117,7 @@ def get_capacity_reservation_settings() -> "CapacityReservationSettings":
 
     return get_config().services_group.capacity_reservation
 
+
 def reset_capacity_reservation_settings() -> None:
     from selfhealing.settings.root import get_config
 

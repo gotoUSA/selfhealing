@@ -195,6 +195,7 @@ def get_corruption_shield_settings() -> "CorruptionShieldSettings":
 
     return get_config().security_group.corruption_shield
 
+
 def reset_corruption_shield_settings() -> None:
     from selfhealing.settings.root import get_config
 

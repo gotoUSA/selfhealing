@@ -193,6 +193,7 @@ def get_leader_election_settings() -> "LeaderElectionSettings":
 
     return get_config().coordination.leader_election
 
+
 def reset_leader_election_settings() -> None:
     from selfhealing.settings.root import get_config
 

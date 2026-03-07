@@ -172,6 +172,7 @@ def get_stress_test_settings() -> "StressTestSettings":
 
     return get_config().testing.stress_test
 
+
 def reset_stress_test_settings() -> None:
     from selfhealing.settings.root import get_config
 

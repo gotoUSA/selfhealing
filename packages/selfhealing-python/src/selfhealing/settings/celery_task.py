@@ -173,6 +173,7 @@ def get_celery_task_settings() -> "CeleryTaskSettings":
 
     return get_config().adapters.celery_task
 
+
 def reset_celery_task_settings() -> None:
     from selfhealing.settings.root import get_config
 

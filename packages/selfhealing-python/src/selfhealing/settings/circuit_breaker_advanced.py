@@ -150,6 +150,7 @@ def get_circuit_breaker_advanced_settings() -> "CircuitBreakerAdvancedSettings":
 
     return get_config().core.circuit_breaker_advanced
 
+
 def reset_circuit_breaker_advanced_settings() -> None:
     from selfhealing.settings.root import get_config
 

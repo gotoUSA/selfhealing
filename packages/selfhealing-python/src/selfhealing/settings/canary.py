@@ -121,6 +121,7 @@ def get_canary_settings() -> "CanarySettings":
 
     return get_config().services_group.canary
 
+
 def reset_canary_settings() -> None:
     from selfhealing.settings.root import get_config
 

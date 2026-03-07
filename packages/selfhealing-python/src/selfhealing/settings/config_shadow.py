@@ -93,6 +93,7 @@ def get_config_shadow_settings() -> "ConfigShadowSettings":
 
     return get_config().adapters.config_shadow
 
+
 def reset_config_shadow_settings() -> None:
     from selfhealing.settings.root import get_config
 

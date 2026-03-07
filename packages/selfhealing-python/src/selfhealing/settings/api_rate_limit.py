@@ -139,6 +139,7 @@ def get_api_rate_limit_settings() -> "ApiRateLimitSettings":
 
     return get_config().services_group.api_rate_limit
 
+
 def reset_api_rate_limit_settings() -> None:
     from selfhealing.settings.root import get_config
 

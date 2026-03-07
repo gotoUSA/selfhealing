@@ -79,6 +79,7 @@ def get_resource_guard_settings() -> "ResourceGuardSettings":
 
     return get_config().meta.resource_guard
 
+
 def reset_resource_guard_settings() -> None:
     from selfhealing.settings.root import get_config
 

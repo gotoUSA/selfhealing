@@ -286,6 +286,7 @@ def get_safety_bounds_settings() -> "SafetyBoundsSettings":
 
     return get_config().meta.safety_bounds
 
+
 def reset_safety_bounds_settings() -> None:
     from selfhealing.settings.root import get_config
 

@@ -96,6 +96,7 @@ def get_namespace_emergency_settings() -> "NamespaceEmergencySettings":
 
     return get_config().multi_region.namespace_emergency
 
+
 def reset_namespace_emergency_settings() -> None:
     from selfhealing.settings.root import get_config
 

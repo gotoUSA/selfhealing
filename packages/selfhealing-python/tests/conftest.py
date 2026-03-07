@@ -88,48 +88,34 @@ def _reset_root_config():
 
 
 @pytest.fixture(autouse=True, scope="function")
-def auto_reset_audit_settings():
+def auto_reset_audit_singletons():
     """
-    모든 테스트 전후에 Audit 관련 Settings 싱글톤을 자동으로 리셋하는 fixture.
+    모든 테스트 전후에 Audit 관련 서비스 싱글톤을 자동으로 리셋하는 fixture.
 
-    Step 3 리팩토링 후 Audit 모듈이 Pydantic Settings를 사용하므로,
-    환경변수 변경이 다른 테스트에 영향을 주지 않도록 격리합니다.
+    Settings 리셋은 auto_reset_all_settings(reset_config())이 전담하므로,
+    이 fixture는 Settings에 연동된 서비스 싱글톤과 ContextVar만 리셋합니다.
 
-    리셋 대상 Settings:
-    - HashChainSettings: AtomicMergeSwap, ShardedDateLock, IntegrityAuditTrail
-    - AuditIntegritySettings: DailyHashAnchor, CrossClusterLinker, HealthScore, S3WORM
-    - CascadeRetentionSettings: CascadeEventAuditor
-    - ResilientRecorderSettings: InMemoryAuditBuffer
-    - AuditSettings: get_recommended_retention
-    - AuditWatchdogSettings: AuditWatchdog
+    리셋 대상:
+    - CausationContext (ContextVar)
+    - InMemoryAuditBuffer, CascadeAuditor (서비스 싱글톤)
+    - ErrorBudgetWeightMap, ClusterIdentity, ServiceFactory (서비스 싱글톤)
     """
-    # Setup: 테스트 전에 settings 리셋
-    _reset_all_audit_settings()
+    _reset_audit_singletons()
 
     yield
 
-    # Teardown: 테스트 후에도 리셋 (다음 테스트를 위해)
-    _reset_all_audit_settings()
+    _reset_audit_singletons()
 
 
-def _reset_all_audit_settings():
+def _reset_audit_singletons():
     """
-    모든 Audit 관련 Settings 싱글톤을 리셋합니다.
+    Audit 관련 서비스 싱글톤을 리셋합니다.
+
+    Settings 리셋은 auto_reset_all_settings에서 reset_config()으로 처리되므로,
+    여기서는 Settings 외의 런타임 싱글톤만 리셋합니다.
 
     최적화: sys.modules를 먼저 확인하여, 실제로 로드된 모듈만 리셋합니다.
-    로드되지 않은 모듈은 리셋할 필요가 없으므로 import 시도를 건너뜁니다.
-    이를 통해 해당 모듈을 사용하지 않는 테스트(87%)에서 오버헤드를 제거합니다.
     """
-    # 리셋 대상: (모듈 키, 리셋 함수/속성) 매핑
-    _SETTINGS_RESETS = {
-        "selfhealing.settings.hash_chain": "reset_hash_chain_settings",
-        "selfhealing.settings.audit_integrity": "reset_audit_integrity_settings",
-        "selfhealing.settings.cascade_retention": "reset_cascade_retention_settings",
-        "selfhealing.settings.resilient_recorder": "reset_resilient_recorder_settings",
-        "selfhealing.settings.audit": "reset_audit_settings",
-        "selfhealing.settings.audit_watchdog": "reset_audit_watchdog_settings",
-    }
-
     # CausationContext 리셋 (병렬 테스트 격리용)
     ctx_mod = sys.modules.get("selfhealing.context.causation_context")
     if ctx_mod is not None:
@@ -137,15 +123,6 @@ def _reset_all_audit_settings():
             ctx_mod._current_causation.set(None)
         except (AttributeError, LookupError):
             pass
-
-    # Settings 모듈 일괄 리셋
-    for mod_key, reset_fn_name in _SETTINGS_RESETS.items():
-        mod = sys.modules.get(mod_key)
-        if mod is not None:
-            try:
-                getattr(mod, reset_fn_name)()
-            except (AttributeError, TypeError):
-                pass
 
     # Audit 모듈 싱글톤 리셋 (Settings 연동 클래스들)
     buf_mod = sys.modules.get("selfhealing.audit.resilience.buffer")

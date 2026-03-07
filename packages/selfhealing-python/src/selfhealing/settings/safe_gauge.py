@@ -84,6 +84,7 @@ def get_safe_gauge_settings() -> "SafeGaugeSettings":
 
     return get_config().metrics_group.safe_gauge
 
+
 def reset_safe_gauge_settings() -> None:
     from selfhealing.settings.root import get_config
 

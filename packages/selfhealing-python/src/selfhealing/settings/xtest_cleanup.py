@@ -150,6 +150,7 @@ __all__ = [
     "reset_xtest_cleanup_settings",
 ]
 
+
 def reset_xtest_cleanup_settings() -> None:
     from selfhealing.settings.root import get_config
 

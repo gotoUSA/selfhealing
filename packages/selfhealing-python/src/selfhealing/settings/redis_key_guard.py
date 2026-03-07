@@ -119,6 +119,7 @@ def get_redis_key_guard_settings() -> "RedisKeyGuardSettings":
 
     return get_config().coordination.redis_key_guard
 
+
 def reset_redis_key_guard_settings() -> None:
     from selfhealing.settings.root import get_config
 

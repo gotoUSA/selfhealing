@@ -147,6 +147,7 @@ def get_anti_flapping_settings() -> "AntiFlappingSettings":
 
     return get_config().services_group.anti_flapping
 
+
 def reset_anti_flapping_settings() -> None:
     from selfhealing.settings.root import get_config
 

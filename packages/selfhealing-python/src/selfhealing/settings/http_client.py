@@ -56,6 +56,7 @@ def get_http_client_settings() -> "HttpClientSettings":
 
     return get_config().adapters.http_client
 
+
 def reset_http_client_settings() -> None:
     from selfhealing.settings.root import get_config
 

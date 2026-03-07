@@ -134,6 +134,7 @@ def get_jitter_settings() -> "JitterSettings":
 
     return get_config().testing.jitter
 
+
 def reset_jitter_settings() -> None:
     from selfhealing.settings.root import get_config
 

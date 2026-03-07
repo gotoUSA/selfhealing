@@ -291,6 +291,7 @@ def get_backpressure_settings() -> "BackpressureSettings":
 
     return get_config().scaling.backpressure
 
+
 def reset_backpressure_settings() -> None:
     from selfhealing.settings.root import get_config
 

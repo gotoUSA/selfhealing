@@ -63,6 +63,7 @@ def get_system_metrics_cache_settings() -> "SystemMetricsCacheSettings":
 
     return get_config().metrics_group.system_metrics_cache
 
+
 def reset_system_metrics_cache_settings() -> None:
     from selfhealing.settings.root import get_config
 
