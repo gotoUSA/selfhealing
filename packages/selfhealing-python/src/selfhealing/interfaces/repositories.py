@@ -650,10 +650,6 @@ class CircuitBreakerStateRepository(ABC):
         """Get all circuit breaker states"""
         ...
 
-    def get_all(self) -> list[CircuitBreakerStateData]:
-        """Deprecated: Use get_all_states() instead."""
-        return self.get_all_states()
-
     @abstractmethod
     def reset(self, service_name: str) -> bool:
         """Reset circuit breaker to initial closed state"""

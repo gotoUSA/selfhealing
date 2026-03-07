@@ -166,18 +166,15 @@ def get_all_states(self) -> list[CircuitBreakerStateData]:
     """Get all circuit breaker states"""
     ...
 
-# 호환성:
-def get_all(self) -> list[CircuitBreakerStateData]:
-    """Deprecated: Use get_all_states() instead."""
-    return self.get_all_states()
+# get_all()은 완전 제거됨 (deprecated wrapper 불필요 — 미배포 코드)
 ```
 
 #### 3.1.4 수정 대상
 
 | 파일 | 변경 |
 |------|------|
-| `interfaces/repositories.py` | `get_all()`를 non-abstract deprecated wrapper로 변경 |
-| `adapters/redis/circuit_breaker.py` | `get_all()` 구현 제거 (base class wrapper 사용) |
+| `interfaces/repositories.py` | `get_all()` 완전 제거 (abstract + wrapper 모두) |
+| `adapters/redis/circuit_breaker.py` | `get_all()` 구현 제거 |
 | `adapters/memory/circuit_breaker.py` | `get_all()` 구현 제거 |
 | `adapters/ipc/cb_state_snapshot.py` | `get_all()` 호출을 `get_all_states()` 호출로 변경 |
 | `adapters/memory/layered_repository/` | `get_all()` 호출을 `get_all_states()` 호출로 변경 |
@@ -342,6 +339,11 @@ class MetricsAwareCacheAdapter(CacheProviderInterface):
 - `InMemoryCacheAdapter`에 하드코딩된 기존 메트릭 코드(`memory_adapter.py:36-48` 및 산재된 `record_*` 호출) **전량 삭제**
 - ProviderRegistry/팩토리에서 모든 캐시 어댑터를 `MetricsAwareCacheAdapter`로 wrap하여 반환
 - 점진적 전환 시 메트릭 수집 경로가 2개(내부 하드코딩 + Decorator) 공존하여 중복 카운팅 위험이 있으므로 한 번에 전환
+
+**메트릭 범위**: Decorator는 `record_cache_get` (hit/miss)과 `record_cache_set`만 수집.
+`record_cache_ttl_expired`와 `update_cache_entries_count`는 backend-specific 메트릭으로,
+Decorator 레이어에서는 miss/expired 구분이 불가능하므로 수집 대상에서 제외.
+(Grafana 대시보드 및 알림 규칙에서 해당 메트릭 참조 없음 확인 완료)
 
 #### 3.4.2 Lock Owner ID 표준화
 

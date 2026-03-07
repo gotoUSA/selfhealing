@@ -143,18 +143,8 @@ class TestAbstractPropertyDetectedContract:
         )
 
 
-class TestGetAllDeprecatedWrapperBehavior:
-    """get_all() is a deprecated non-abstract wrapper for get_all_states()."""
-
-    def test_get_all_is_not_abstract(self):
-        """get_all() on CircuitBreakerStateRepository is NOT abstract."""
-        from selfhealing.interfaces.repositories import (
-            CircuitBreakerStateRepository,
-        )
-
-        get_all_method = getattr(CircuitBreakerStateRepository, "get_all", None)
-        assert get_all_method is not None
-        assert not getattr(get_all_method, "__isabstractmethod__", False)
+class TestGetAllStatesAbstractBehavior:
+    """get_all_states() is the single abstract method for CB state listing."""
 
     def test_get_all_states_is_abstract(self):
         """get_all_states() on CircuitBreakerStateRepository IS abstract."""
@@ -166,23 +156,10 @@ class TestGetAllDeprecatedWrapperBehavior:
         assert method is not None
         assert getattr(method, "__isabstractmethod__", False)
 
-    def test_get_all_delegates_to_get_all_states(self):
-        """get_all() calls get_all_states() and returns its result."""
-
+    def test_get_all_is_removed(self):
+        """get_all() is fully removed from CircuitBreakerStateRepository."""
         from selfhealing.interfaces.repositories import (
             CircuitBreakerStateRepository,
         )
 
-        # Create a concrete subclass implementing all abstract methods
-        abstract_names = CircuitBreakerStateRepository.__abstractmethods__
-
-        methods = {"get_all_states": lambda self: ["state1", "state2"]}
-        for name in abstract_names:
-            if name not in methods:
-                methods[name] = lambda self, *a, **kw: None
-
-        ConcreteRepo = type("ConcreteRepo", (CircuitBreakerStateRepository,), methods)
-
-        repo = ConcreteRepo()
-        result = repo.get_all()
-        assert result == ["state1", "state2"]
+        assert not hasattr(CircuitBreakerStateRepository, "get_all")

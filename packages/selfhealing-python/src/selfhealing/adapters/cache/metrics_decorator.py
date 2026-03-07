@@ -19,8 +19,6 @@ try:
     from selfhealing.metrics.drift_metrics import (
         record_cache_get,
         record_cache_set,
-        record_cache_ttl_expired,
-        update_cache_entries_count,
     )
 
     HAS_DRIFT_METRICS = True

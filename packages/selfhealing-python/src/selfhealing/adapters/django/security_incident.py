@@ -43,7 +43,11 @@ class DjangoSecurityIncidentRepository(SecurityIncidentRepository):
                     instance.related_entity_id
                 )
             except (ValueError, TypeError):
-                pass
+                logger.debug(
+                    "django_security_incident.invalid_entity_id",
+                    incident_id=instance.id,
+                    related_entity_id=instance.related_entity_id,
+                )
 
         return SecurityIncidentData(
             id=instance.id,
