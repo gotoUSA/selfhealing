@@ -178,6 +178,14 @@ class TestDetectionSettingsBoundaryContract:
 class TestDetectionSettingsBehavior:
     """DetectionSettings 동작 검증."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_singleton(self):
+        from selfhealing.settings.detection import reset_detection_settings
+
+        reset_detection_settings()
+        yield
+        reset_detection_settings()
+
     def test_env_override_anomaly_window_size(self):
         """SELFHEALING_DETECTION_ANOMALY_WINDOW_SIZE 환경변수로 오버라이드."""
         from selfhealing.settings.detection import DetectionSettings
@@ -228,6 +236,7 @@ class TestDetectionSettingsBehavior:
     def test_reset_clears_cached_root(self):
         """reset_detection_settings() 후 새 설정이 로드된다."""
         from selfhealing.settings.detection import (
+            DetectionSettings,
             get_detection_settings,
             reset_detection_settings,
         )
@@ -244,4 +253,5 @@ class TestDetectionSettingsBehavior:
         reset_detection_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
             s2 = get_detection_settings()
-            assert s2.anomaly_window_size == 100
+            fresh = DetectionSettings()
+            assert s2.anomaly_window_size == fresh.anomaly_window_size

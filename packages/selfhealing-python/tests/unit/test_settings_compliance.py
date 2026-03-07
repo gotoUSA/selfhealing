@@ -40,28 +40,31 @@ class HardcodedTimeoutVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def test_no_hardcoded_timeouts_in_services():
-    """services/ 디렉토리에서 timeout=N, window=N 형태의 하드코딩을 AST로 탐지."""
-    services_dir = Path("packages/selfhealing-python/src/selfhealing/services")
-    violations = []
+class TestHardcodedTimeoutComplianceContract:
+    """서비스 코드의 하드코딩 timeout/window 부재 계약 검증."""
 
-    for py_file in services_dir.rglob("*.py"):
-        rel = py_file.relative_to(services_dir)
-        rel_str = str(rel).replace("\\", "/")
+    def test_no_hardcoded_timeouts_in_services(self):
+        """services/ 디렉토리에서 timeout=N, window=N 형태의 하드코딩을 AST로 탐지."""
+        services_dir = Path("packages/selfhealing-python/src/selfhealing/services")
+        violations = []
 
-        if rel_str in _KNOWN_EXCEPTIONS:
-            continue
+        for py_file in services_dir.rglob("*.py"):
+            rel = py_file.relative_to(services_dir)
+            rel_str = str(rel).replace("\\", "/")
 
-        source = py_file.read_text(encoding="utf-8")
-        try:
-            tree = ast.parse(source, filename=str(py_file))
-        except SyntaxError:
-            continue
-        visitor = HardcodedTimeoutVisitor(rel)
-        visitor.visit(tree)
-        violations.extend(visitor.violations)
+            if rel_str in _KNOWN_EXCEPTIONS:
+                continue
 
-    assert not violations, (
-        f"Found {len(violations)} hardcoded values in services:\n"
-        + "\n".join(violations)
-    )
+            source = py_file.read_text(encoding="utf-8")
+            try:
+                tree = ast.parse(source, filename=str(py_file))
+            except SyntaxError:
+                continue
+            visitor = HardcodedTimeoutVisitor(rel)
+            visitor.visit(tree)
+            violations.extend(visitor.violations)
+
+        assert not violations, (
+            f"Found {len(violations)} hardcoded values in services:\n"
+            + "\n".join(violations)
+        )

@@ -120,6 +120,16 @@ class TestThreadManagementSettingsBoundaryContract:
 class TestThreadManagementSettingsBehavior:
     """ThreadManagementSettings 동작 검증."""
 
+    @pytest.fixture(autouse=True)
+    def _reset_singleton(self):
+        from selfhealing.settings.thread_management import (
+            reset_thread_management_settings,
+        )
+
+        reset_thread_management_settings()
+        yield
+        reset_thread_management_settings()
+
     def test_env_override_join_timeout(self):
         """SELFHEALING_THREAD_JOIN_TIMEOUT 환경변수로 오버라이드."""
         from selfhealing.settings.thread_management import ThreadManagementSettings
@@ -156,6 +166,7 @@ class TestThreadManagementSettingsBehavior:
     def test_reset_clears_cached_root(self):
         """reset_thread_management_settings() 후 새 설정이 로드된다."""
         from selfhealing.settings.thread_management import (
+            ThreadManagementSettings,
             get_thread_management_settings,
             reset_thread_management_settings,
         )
@@ -170,4 +181,5 @@ class TestThreadManagementSettingsBehavior:
         reset_thread_management_settings()
         with mock.patch.dict(os.environ, {}, clear=True):
             s2 = get_thread_management_settings()
-            assert s2.join_timeout == 5.0
+            fresh = ThreadManagementSettings()
+            assert s2.join_timeout == fresh.join_timeout

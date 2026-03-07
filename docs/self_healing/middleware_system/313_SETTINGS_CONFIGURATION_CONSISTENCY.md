@@ -272,7 +272,13 @@ def reset_detection_settings() -> None:
 |------|--------|---------------|
 | `wildcard_observer.py:137` | `window=100` | `correlation_window_size` |
 | `co_occurrence_tracker.py:323` | `window=100` | `correlation_window_size` |
-| `anomaly_detector.py:21` | `threshold=3.0, window=100` | `anomaly_zscore_threshold`, `anomaly_window_size`, `anomaly_window_max_age_seconds` |
+| `anomaly_detector.py:21` | `threshold=3.0, window=100` (docstring 예시) | `anomaly_zscore_threshold`, `anomaly_window_size`, `anomaly_window_max_age_seconds` |
+
+> **참고**: `anomaly_detector.py:21`은 모듈 docstring의 Usage 예시이며 실행 코드가 아니다.
+> `ZScoreDetector` 클래스에 `max_age_seconds` 파라미터가 추가되었고,
+> `anomaly_window_size`, `anomaly_zscore_threshold`는 `predictive_forecaster/service.py`에서
+> 자체 settings(`PredictiveSettings.zscore_threshold`, `zscore_window`)로 이미 제어되고 있다.
+> `anomaly_window_max_age_seconds`는 향후 callers에서 `max_age_seconds` 인자로 전달 예정이다.
 
 ---
 
@@ -403,6 +409,9 @@ def test_no_hardcoded_timeouts_in_services():
         + "\n".join(violations)
     )
 ```
+
+> **Known Exceptions**: 313 범위 외에 사전 존재하는 하드코딩은 `_KNOWN_EXCEPTIONS` set으로
+> 관리하며, 별도 이슈로 순차 제거한다. 현재 10개 파일이 예외 처리되어 있다.
 
 **AST 방식의 장점**:
 - 주석/문자열 내부 코드 무시 (AST는 실행 코드만 파싱)
