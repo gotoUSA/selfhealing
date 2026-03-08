@@ -74,7 +74,7 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
             self._networking_v1 = client.NetworkingV1Api()
             self._is_available = True
         except ImportError:
-            logger.warning("k8s_ingress_traffic_router.kubernetes_package_installed")
+            logger.warning("k8s_ingress.kubernetes_package_missing")
         except Exception as e:
             logger.warning(
                 "k8s_ingress_traffic_router.init_failed",
@@ -122,7 +122,9 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
 
             # 롤백용 이전 상태 스냅샷
             rollback_info = {
-                "previous_annotations": dict(current_ingress.metadata.annotations or {}),
+                "previous_annotations": dict(
+                    current_ingress.metadata.annotations or {}
+                ),
                 "previous_rules": copy.deepcopy(current_ingress.spec.rules),
                 "previous_region": from_region,
             }
@@ -138,7 +140,11 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
                 if rule.http is None:
                     continue
                 for path_entry in rule.http.paths or []:
-                    if path_entry.backend and path_entry.backend.service and path_entry.backend.service.name in known_services:
+                    if (
+                        path_entry.backend
+                        and path_entry.backend.service
+                        and path_entry.backend.service.name in known_services
+                    ):
                         path_entry.backend.service.name = target_service
                         replaced_count += 1
 
@@ -147,7 +153,12 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
                     success=False,
                     from_region=from_region,
                     to_region=to_region,
-                    details={"error": ("No matching backend service found in " f"Ingress rules (known: {known_services})")},
+                    details={
+                        "error": (
+                            "No matching backend service found in "
+                            f"Ingress rules (known: {known_services})"
+                        )
+                    },
                 )
 
             # Ingress 패치: spec.rules + 추적용 annotation
@@ -155,7 +166,9 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
                 "metadata": {
                     "annotations": {
                         "selfhealing.io/primary-region": to_region,
-                        "selfhealing.io/failover-timestamp": (datetime.now(timezone.utc).isoformat()),
+                        "selfhealing.io/failover-timestamp": (
+                            datetime.now(timezone.utc).isoformat()
+                        ),
                     }
                 },
                 "spec": {
@@ -231,7 +244,9 @@ class K8sIngressTrafficRoutingAdapter(TrafficRoutingAdapter):
             return {
                 "available": True,
                 "ingress_name": self._ingress_name,
-                "primary_region": annotations.get("selfhealing.io/primary-region", "unknown"),
+                "primary_region": annotations.get(
+                    "selfhealing.io/primary-region", "unknown"
+                ),
                 "last_failover": annotations.get("selfhealing.io/failover-timestamp"),
             }
         except Exception as e:

@@ -72,7 +72,7 @@ class S3WORMBackend(AuditBackend):
         self._client = None
         self._enabled = False
 
-        logger.info("s3_worm_backend.initialized_interface_only_enable")
+        logger.info("s3_worm.backend_initialized")
 
     @property
     def name(self) -> str:
@@ -92,7 +92,7 @@ class S3WORMBackend(AuditBackend):
             #     raise ValueError("Object Lock not enabled on bucket")
             # self._enabled = True
 
-            logger.warning("s3_worm_backend.enable_called_configured_interface")
+            logger.warning("s3_worm.backend_not_configured")
             return False
         except Exception as e:
             logger.exception(
@@ -218,7 +218,7 @@ resource "aws_s3_bucket_object_lock_configuration" "audit_logs" {
         Use for investigations or legal requirements.
         """
         if not self._enabled:
-            logger.warning("s3_worm_backend.cannot_place_legal_hold")
+            logger.warning("s3_worm.legal_hold_failed")
             return False
 
         # Actual implementation:

@@ -92,7 +92,11 @@ class LabelFilter:
 # =============================================================================
 
 
-def _compare(operator: ConditionOperator, current: float | str, threshold: float | str | list[str]) -> bool:
+def _compare(
+    operator: ConditionOperator,
+    current: float | str,
+    threshold: float | str | list[str],
+) -> bool:
     """연산자에 따른 값 비교 수행."""
     if operator == ConditionOperator.GT:
         return float(current) > float(threshold)
@@ -116,7 +120,7 @@ def _compare(operator: ConditionOperator, current: float | str, threshold: float
         try:
             return bool(re.search(str(threshold), str(current)))
         except re.error:
-            logger.warning("regex_pattern_invalid", pattern=threshold)
+            logger.warning("runbook.regex_pattern_invalid", pattern=threshold)
             return False
     return False
 
@@ -174,7 +178,7 @@ class EventCondition:
 
 
 def _event_condition_matches(
-    ec: "EventCondition",
+    ec: EventCondition,
     triggered_event: str,
     event_source: str | None,
     event_data: dict[str, Any] | None,
@@ -258,7 +262,10 @@ class PatternCondition:
                 # 이벤트 조건이 있는 런북은 Proactive 경로에서 매칭 불가
                 # 설계 §4.1: Reactive가 "감지"를, Proactive가 "지속 확인"을 담당
                 return False
-            return any(_event_condition_matches(ec, triggered_event, event_source, event_data) for ec in self.event_conditions)
+            return any(
+                _event_condition_matches(ec, triggered_event, event_source, event_data)
+                for ec in self.event_conditions
+            )
 
         # 이벤트 조건 없음 — 메트릭만으로 매칭 (Proactive/Reactive 모두 허용)
         return True
@@ -308,7 +315,9 @@ class MatchResult:
     """런북 위험도 (RunbookLike.risk_level, 기본 0). select_runbook Tie-breaker 2차 키.
     값이 작을수록 우선 선택 (0=SAFE, 1=MODERATE, 2=DANGEROUS)."""
 
-    def build_trigger_event(self, original_event_data: dict[str, Any]) -> dict[str, Any]:
+    def build_trigger_event(
+        self, original_event_data: dict[str, Any]
+    ) -> dict[str, Any]:
         """RunbookExecutor.execute_runbook()에 전달할 trigger_event를 생성한다.
 
         original_event_data에 trigger_context 키를 추가하여 반환한다.

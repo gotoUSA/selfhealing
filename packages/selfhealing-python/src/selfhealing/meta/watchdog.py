@@ -99,8 +99,12 @@ class SelfHealerWatchdog:
             escalation_manager: Escalation Manager (None이면 생성)
         """
         self._settings = settings or get_meta_watchdog_settings()
-        self._probe_manager = probe_manager or HealthProbeManager(settings=self._settings)
-        self._escalation_manager = escalation_manager or EscalationManager(settings=self._settings)
+        self._probe_manager = probe_manager or HealthProbeManager(
+            settings=self._settings
+        )
+        self._escalation_manager = escalation_manager or EscalationManager(
+            settings=self._settings
+        )
 
         self._lock = threading.RLock()
         self._running = False
@@ -187,7 +191,9 @@ class SelfHealerWatchdog:
 
     def _check_overload_status(self, component_statuses: dict) -> None:
         """과부하 상태 확인 및 Self CB 업데이트."""
-        unhealthy_count = sum(1 for s in component_statuses.values() if s == HealthStatus.UNHEALTHY)
+        unhealthy_count = sum(
+            1 for s in component_statuses.values() if s == HealthStatus.UNHEALTHY
+        )
         total_count = len(component_statuses)
         if total_count > 0 and unhealthy_count >= total_count - 1:
             self._record_self_cb_failure()
@@ -240,7 +246,9 @@ class SelfHealerWatchdog:
             self._check_overload_status(component_statuses)
             self._update_state_store()
 
-            return self._build_watchdog_state(overall_status, component_statuses, escalation_pending)
+            return self._build_watchdog_state(
+                overall_status, component_statuses, escalation_pending
+            )
 
         except Exception as e:
             logger.exception(
@@ -326,7 +334,9 @@ class SelfHealerWatchdog:
 
             # 복구 완료/실패 Audit
             if recorder:
-                self._record_recovery_complete_audit(recorder, session_id, component, success, duration_ms)
+                self._record_recovery_complete_audit(
+                    recorder, session_id, component, success, duration_ms
+                )
 
             logger.info(
                 "watchdog.recovery_completed",
@@ -345,7 +355,9 @@ class SelfHealerWatchdog:
 
             # 복구 실패 Audit
             if recorder:
-                self._record_recovery_failed_audit(recorder, session_id, component, str(e), duration_ms)
+                self._record_recovery_failed_audit(
+                    recorder, session_id, component, str(e), duration_ms
+                )
 
             logger.error(
                 "watchdog.recovery_failed",
@@ -413,7 +425,11 @@ class SelfHealerWatchdog:
                 RecoveryAuditEventType,
             )
 
-            event_type = RecoveryAuditEventType.RECOVERY_COMPLETED if success else RecoveryAuditEventType.RECOVERY_STEP_FAILED
+            event_type = (
+                RecoveryAuditEventType.RECOVERY_COMPLETED
+                if success
+                else RecoveryAuditEventType.RECOVERY_STEP_FAILED
+            )
 
             recorder.record_recovery_event(
                 event_type=event_type,
@@ -553,13 +569,13 @@ class SelfHealerWatchdog:
         """
         # === Stage 1: 진성 커넥션 풀 복구 ===
         try:
-            logger.info("watchdog.redis_recovery_stage1")
+            logger.info("watchdog.redis_recovery_started")
 
             from selfhealing.factory import ProviderRegistry
 
             adapter = ProviderRegistry.get_cache("redis")
             if adapter.reconnect():
-                logger.info("watchdog.redis_recovery_stage1_succeeded")
+                logger.info("watchdog.redis_recovery_completed")
                 return True
             # reconnect()가 False 반환 — ping 실패
             logger.warning("watchdog.redis_stage_failed_reconnect")

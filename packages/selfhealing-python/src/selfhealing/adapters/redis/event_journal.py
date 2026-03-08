@@ -61,7 +61,7 @@ class RedisEventJournalRepository(EventJournalRepository):
         try:
             self._redis.zadd(key, {data: seq})
         except Exception as e:
-            logger.warning("journal_zadd_failed", sequence=seq, error=str(e))
+            logger.warning("redis_journal.zadd_failed", sequence=seq, error=str(e))
             raise
 
         if self._redis.ttl(key) < 0:
@@ -231,7 +231,7 @@ class RedisEventJournalRepository(EventJournalRepository):
                 tier_id=data.get("tier_id", ""),
             )
         except (json.JSONDecodeError, KeyError, ValueError) as e:
-            logger.warning("journal_deserialize_failed", error=str(e))
+            logger.warning("redis_journal.entry_deserialization_failed", error=str(e))
             return None
 
     def _matches_filter(
