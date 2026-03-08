@@ -96,7 +96,9 @@ class TestKafkaAuditProducer:
         """테스트 후 정리."""
         reset_kafka_producer()
 
-    def test_producer_initialization(self, mock_confluent_kafka, kafka_settings) -> None:
+    def test_producer_initialization(
+        self, mock_confluent_kafka, kafka_settings
+    ) -> None:
         """Producer 초기화 확인."""
         producer = KafkaAuditProducer(settings=kafka_settings)
 
@@ -136,7 +138,9 @@ class TestKafkaAuditProducer:
 
         producer.close()
 
-    def test_publish_audit_event_with_metadata(self, mock_confluent_kafka, kafka_settings) -> None:
+    def test_publish_audit_event_with_metadata(
+        self, mock_confluent_kafka, kafka_settings
+    ) -> None:
         """Audit 이벤트 발행 시 메타데이터 자동 추가."""
         producer = KafkaAuditProducer(settings=kafka_settings)
         mock_producer = mock_confluent_kafka["producer_instance"]
@@ -270,7 +274,9 @@ class TestKafkaAuditProducer:
 
         producer.close()
 
-    def test_publish_to_specific_partition(self, mock_confluent_kafka, kafka_settings) -> None:
+    def test_publish_to_specific_partition(
+        self, mock_confluent_kafka, kafka_settings
+    ) -> None:
         """특정 파티션에 발행."""
         producer = KafkaAuditProducer(settings=kafka_settings)
         mock_producer = mock_confluent_kafka["producer_instance"]
@@ -310,3 +316,46 @@ class TestKafkaProducerSingleton:
         producer2 = get_kafka_producer()
 
         assert producer1 is not producer2
+
+
+class TestResetKafkaProducerAfterForkBehavior:
+    """reset_kafka_producer_after_fork() 동작 검증."""
+
+    def setup_method(self) -> None:
+        """테스트 전 Producer 싱글톤 초기화."""
+        reset_kafka_producer()
+
+    def teardown_method(self) -> None:
+        """테스트 후 정리."""
+        reset_kafka_producer()
+
+    def test_drops_reference_without_calling_close(self, mock_confluent_kafka) -> None:
+        """fork-safe 리셋은 close()를 호출하지 않고 참조만 해제."""
+        from selfhealing.adapters.kafka.producer import reset_kafka_producer_after_fork
+
+        producer = get_kafka_producer()
+        mock_inner = mock_confluent_kafka["producer_instance"]
+        mock_inner.flush.reset_mock()
+
+        reset_kafka_producer_after_fork()
+
+        # close()가 호출되지 않았어야 함 (fork-safe)
+        mock_inner.flush.assert_not_called()
+
+    def test_next_get_creates_new_instance(self, mock_confluent_kafka) -> None:
+        """fork-safe 리셋 후 get_kafka_producer()는 새 인스턴스를 반환."""
+        from selfhealing.adapters.kafka.producer import reset_kafka_producer_after_fork
+
+        producer1 = get_kafka_producer()
+        reset_kafka_producer_after_fork()
+        producer2 = get_kafka_producer()
+
+        assert producer1 is not producer2
+
+    def test_idempotent_when_no_producer_exists(self) -> None:
+        """Producer가 없는 상태에서 호출해도 에러 없음."""
+        from selfhealing.adapters.kafka.producer import reset_kafka_producer_after_fork
+
+        # 에외 없이 정상 실행
+        reset_kafka_producer_after_fork()
+        reset_kafka_producer_after_fork()

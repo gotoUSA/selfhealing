@@ -33,6 +33,7 @@ class TestDomainRegistry:
 
         # Clean up: remove added domain
         from selfhealing.metrics import prometheus
+
         if "test_new_domain" in prometheus._registered_domains:
             prometheus._registered_domains.remove("test_new_domain")
 
@@ -120,6 +121,7 @@ class TestSelfHealingMetricsGauges:
 
         # Use get_metrics() instead of creating new instance to avoid registry conflict
         from selfhealing.metrics.prometheus import get_metrics
+
         metrics = get_metrics()
         assert hasattr(metrics, "dlq_pending_gauge")
 
@@ -134,6 +136,7 @@ class TestSelfHealingMetricsGauges:
 
         # Use get_metrics() instead of creating new instance to avoid registry conflict
         from selfhealing.metrics.prometheus import get_metrics
+
         metrics = get_metrics()
         assert hasattr(metrics, "dlq_by_status_gauge")
 
@@ -161,7 +164,7 @@ class TestPrometheusAvailability:
 
 class TestREDMetrics:
     """Test RED (Rate, Errors, Duration) metrics.
-    
+
     Reference: https://www.weave.works/blog/the-red-method-key-metrics-for-microservices/
     """
 
@@ -228,7 +231,7 @@ class TestREDMetrics:
 
 class TestFourGoldenSignals:
     """Test Four Golden Signals metrics.
-    
+
     Reference: https://sre.google/sre-book/monitoring-distributed-systems/
     - Latency: How long it takes to service a request
     - Traffic: How much demand is being placed on the system
@@ -414,3 +417,17 @@ class TestConvenienceFunctions:
 
         # Should not raise
         set_error_rate("test-service", 1.5)
+
+
+class TestGILContentionGaugeContract:
+    """GIL contention Prometheus gauge 계약 검증."""
+
+    def test_gil_contention_p90_ms_gauge_exists(self):
+        """selfhealing_gil_contention_p90_ms Gauge가 존재."""
+        from selfhealing.metrics.prometheus import PROMETHEUS_AVAILABLE, get_metrics
+
+        if not PROMETHEUS_AVAILABLE:
+            pytest.skip("prometheus_client not installed")
+
+        metrics = get_metrics()
+        assert hasattr(metrics, "gil_contention_p90_ms")
