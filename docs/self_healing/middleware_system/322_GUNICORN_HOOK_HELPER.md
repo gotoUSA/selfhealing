@@ -275,10 +275,19 @@ def _reset_mmap(worker):
     mmap FD 자체는 MAP_SHARED로 공유되지만,
     Python 래퍼 객체(Lock, 데몬 스레드, Writer 플래그)는 fork-safe하지 않다.
     마스터의 Writer 인스턴스를 버리고, 워커에서 Reader로 재생성한다.
+
+    1-Writer N-Reader 패턴:
+    - reset_cb_state_snapshot(): 마스터의 싱글톤(is_writer=True) 파괴
+    - get_cb_state_snapshot(is_writer=False): Reader로 새 인스턴스 생성
+    - Reader는 atomic write 보장으로 Lock-free 읽기 가능
     """
-    from selfhealing.adapters.ipc import reset_cb_state_snapshot
+    from selfhealing.adapters.ipc import (
+        get_cb_state_snapshot,
+        reset_cb_state_snapshot,
+    )
     reset_cb_state_snapshot()
-    logger.info("Worker %s: mmap descriptors reset", worker.pid)
+    get_cb_state_snapshot(is_writer=False)
+    logger.info("Worker %s: mmap CB snapshot re-initialized as reader", worker.pid)
 
 
 def _reseed_rng(worker):
