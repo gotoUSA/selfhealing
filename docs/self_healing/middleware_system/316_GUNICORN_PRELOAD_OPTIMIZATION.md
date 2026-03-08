@@ -1,6 +1,6 @@
 # 316. Gunicorn Preload Optimization — 프로세스 모델 기반 Cold Start 최적화
 
-> **Status**: Planned
+> **Status**: Implemented (Phase 1–8)
 > **Severity**: P2 (MEDIUM) — fork-safety 누락은 데이터 손상 위험
 > **Target**: 배포 설정 (docker-compose.yml, k8s/, gunicorn.conf.py)
 > **References**:
@@ -327,10 +327,22 @@ Gunicorn의 프로세스 라이프사이클 관리와 충돌한다.
 # gunicorn.conf.py
 def worker_exit(server, worker):
     """Worker 종료 시 graceful shutdown 파이프라인 실행."""
-    from selfhealing.core.shutdown_coordinator import GracefulShutdownCoordinator
-    coordinator = GracefulShutdownCoordinator.get_instance()
-    if coordinator:
-        coordinator.initiate_shutdown()
+    try:
+        from selfhealing.coordination.shutdown_integration import (
+            graceful_shutdown_leader_elector,
+        )
+        graceful_shutdown_leader_elector()
+    except (ImportError, Exception):
+        pass
+
+    try:
+        from selfhealing.audit.async_audit_lifecycle import (
+            graceful_shutdown_audit_system,
+        )
+        graceful_shutdown_audit_system()
+    except (ImportError, Exception):
+        pass
+
     worker.log.info(f"Worker {worker.pid}: graceful shutdown completed")
 ```
 
