@@ -315,7 +315,7 @@ def scan_middleware_wiring() -> dict[str, set[str]]:
 ```python
 import re
 
-SUBSCRIBE_PATTERN = re.compile(r"\.subscribe\(\s*EventType\.", re.MULTILINE)
+SUBSCRIBE_PATTERN = re.compile(r"\.subscribe\(\s*EventType\.")
 
 def _has_eventbus_subscription(service_dir: Path) -> bool:
     """서비스 디렉토리 내 .py 파일에서 EventBus subscribe 호출 감지."""
@@ -697,3 +697,5 @@ class AdmissionControlSettings(BaseSettings):
 | 2026-03-08 | §3.8 | has_eventbus_subscription → _has_eventbus_subscription (private function) |
 | 2026-03-08 | §4.1 | CI YAML에 workflow_dispatch, schedule 트리거 및 JSON report 생성 step 추가 |
 | 2026-03-08 | §5.2 | JSON 출력에 eventbus_subscribers, middleware_wiring, dep_graph_warnings, missing_feature_flags 필드 추가; orphan depends_on 제거 |
+| 2026-03-08 | §3.8 | SUBSCRIBE_PATTERN에서 불필요한 re.MULTILINE 플래그 제거 — \s*가 이미 줄바꿈 매칭 |
+| 2026-03-08 | §4.1 | CI paths 트리거에 scripts/verify_wiring.py, scripts/wiring_allowlist.yaml 추가 |

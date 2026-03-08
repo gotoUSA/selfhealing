@@ -470,7 +470,7 @@ class TestLoadAllowlistBehavior:
     """Behavior tests for YAML allowlist loading."""
 
     def test_valid_allowlist(self, allowlist_file):
-        """Verify valid YAML allowlist returns correct service names and on-demand tasks."""
+        """Verify valid YAML allowlist returns correct service names, on-demand tasks, and reasons."""
         f = allowlist_file("""\
             allowlist:
               - name: saga
@@ -482,29 +482,32 @@ class TestLoadAllowlistBehavior:
                 reason: "On demand"
         """)
         with patch.object(verify_wiring, "ALLOWLIST_PATH", f):
-            names, on_demand = verify_wiring.load_allowlist()
+            names, on_demand, reasons = verify_wiring.load_allowlist()
 
         assert names == {"saga", "isolation"}
         assert "selfhealing.saga.*" in on_demand
+        assert reasons == {"saga": "Host app defines", "isolation": "Multi-region only"}
 
     def test_missing_file_returns_empty(self, tmp_path):
-        """Verify missing allowlist file returns empty set and empty list."""
+        """Verify missing allowlist file returns empty set, empty list, and empty dict."""
         with patch.object(
             verify_wiring, "ALLOWLIST_PATH", tmp_path / "nonexistent.yaml"
         ):
-            names, on_demand = verify_wiring.load_allowlist()
+            names, on_demand, reasons = verify_wiring.load_allowlist()
 
         assert names == set()
         assert on_demand == []
+        assert reasons == {}
 
     def test_empty_yaml_returns_empty(self, allowlist_file):
-        """Verify empty YAML file returns empty set and empty list."""
+        """Verify empty YAML file returns empty set, empty list, and empty dict."""
         f = allowlist_file("")
         with patch.object(verify_wiring, "ALLOWLIST_PATH", f):
-            names, on_demand = verify_wiring.load_allowlist()
+            names, on_demand, reasons = verify_wiring.load_allowlist()
 
         assert names == set()
         assert on_demand == []
+        assert reasons == {}
 
 
 # =============================================================================

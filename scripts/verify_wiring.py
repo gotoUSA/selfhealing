@@ -85,7 +85,7 @@ HOST_ENTRY_POINT_PATHS: list[str] = [
 MIDDLEWARE_SETTINGS_PATH = PROJECT_ROOT / "myproject" / "settings" / "base.py"
 ALLOWLIST_PATH = PROJECT_ROOT / "scripts" / "wiring_allowlist.yaml"
 
-SUBSCRIBE_PATTERN = re.compile(r"\.subscribe\(\s*EventType\.", re.MULTILINE)
+SUBSCRIBE_PATTERN = re.compile(r"\.subscribe\(\s*EventType\.")
 
 
 # ---------------------------------------------------------------------------
@@ -332,28 +332,33 @@ def _has_eventbus_subscription(service_dir: Path) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def load_allowlist() -> tuple[set[str], list[str]]:
-    """Load wiring_allowlist.yaml. Returns (allowlisted_names, on_demand_task_patterns)."""
+def load_allowlist() -> tuple[set[str], list[str], dict[str, str]]:
+    """Load wiring_allowlist.yaml.
+
+    Returns (allowlisted_names, on_demand_task_patterns, reasons).
+    """
     if not ALLOWLIST_PATH.exists():
-        return set(), []
+        return set(), [], {}
     if yaml is None:
         print("WARNING: pyyaml not installed, skipping allowlist", file=sys.stderr)
-        return set(), []
+        return set(), [], {}
 
     with open(ALLOWLIST_PATH, encoding="utf-8") as f:
         data = yaml.safe_load(f) or {}
 
     names: set[str] = set()
+    reasons: dict[str, str] = {}
     for entry in data.get("allowlist", []):
         if isinstance(entry, dict) and "name" in entry:
             names.add(entry["name"])
+            reasons[entry["name"]] = entry.get("reason", "")
 
     on_demand: list[str] = []
     for entry in data.get("on_demand_tasks", []):
         if isinstance(entry, dict) and "name" in entry:
             on_demand.append(entry["name"])
 
-    return names, on_demand
+    return names, on_demand, reasons
 
 
 # ---------------------------------------------------------------------------
@@ -705,18 +710,11 @@ def run_verification(
     all_wired = connected_names | set(indirect.keys()) | eventbus_subs
 
     # Phase 4: allowlist
-    allowlisted_names, on_demand_patterns = load_allowlist()
-    allowlist_data = {}
-    if ALLOWLIST_PATH.exists() and yaml is not None:
-        with open(ALLOWLIST_PATH, encoding="utf-8") as f:
-            data = yaml.safe_load(f) or {}
-        for entry in data.get("allowlist", []):
-            if isinstance(entry, dict):
-                allowlist_data[entry["name"]] = entry.get("reason", "")
+    allowlisted_names, on_demand_patterns, allowlist_reasons = load_allowlist()
 
     for svc in all_services:
         if svc in allowlisted_names and svc not in all_wired:
-            report.allowlisted[svc] = allowlist_data.get(svc, "")
+            report.allowlisted[svc] = allowlist_reasons.get(svc, "")
 
     all_accounted = all_wired | allowlisted_names
 

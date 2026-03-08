@@ -10,6 +10,8 @@ on:
       - 'packages/selfhealing-python/src/selfhealing/tasks/**'
       - 'myproject/celery.py'
       - 'myproject/settings/**'
+      - 'scripts/verify_wiring.py'
+      - 'scripts/wiring_allowlist.yaml'
   workflow_dispatch:
   schedule:
     - cron: '0 9 * * 1'  # Every Monday 09:00 UTC
