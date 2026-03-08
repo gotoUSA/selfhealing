@@ -20,12 +20,22 @@ from selfhealing.adapters.celery.beat_schedule import (
     _CRITICAL_TASK_ROUTES,
     _QUEUE_DEFINITIONS,
     SELFHEALING_QUEUE_CONFIG,
+    _reset_celery_configured,
     _selfhealing_dlx,
     _selfhealing_exchange,
     configure_selfhealing_celery,
     get_selfhealing_queues,
     get_selfhealing_task_routes,
 )
+
+
+# Reset idempotency guard before each test in this module
+@pytest.fixture(autouse=True)
+def _reset_configure_guard():
+    _reset_celery_configured()
+    yield
+    _reset_celery_configured()
+
 
 # =============================================================================
 # Queue/Exchange Definition Contract Tests (Q4)
@@ -643,3 +653,326 @@ class TestQueueDefinitionsImmutabilityBehavior:
         get_selfhealing_task_routes(prefix="test-prefix")
 
         assert _CRITICAL_TASK_ROUTES == original_routes
+
+
+# =============================================================================
+# get_selfhealing_queues() queue_type / enable_dlx Tests (Finding #2)
+# =============================================================================
+
+
+class TestGetSelfhealingQueuesSettingsWiring:
+    """get_selfhealing_queues() queue_type and enable_dlx parameter behavior."""
+
+    def test_default_queue_type_is_quorum(self):
+        """Default queue_type='quorum' preserves original queue arguments."""
+        queues = get_selfhealing_queues()
+        for q in queues:
+            assert q.queue_arguments["x-queue-type"] == "quorum"
+
+    def test_queue_type_classic_applies_to_all(self):
+        """queue_type='classic' overrides x-queue-type on all queues."""
+        queues = get_selfhealing_queues(queue_type="classic")
+        for q in queues:
+            assert q.queue_arguments["x-queue-type"] == "classic", (
+                f"Queue '{q.name}' should have classic type"
+            )
+
+    def test_queue_type_stream_applies_to_all(self):
+        """queue_type='stream' overrides x-queue-type on all queues."""
+        queues = get_selfhealing_queues(queue_type="stream")
+        for q in queues:
+            assert q.queue_arguments["x-queue-type"] == "stream"
+
+    def test_enable_dlx_true_preserves_dlx_bindings(self):
+        """enable_dlx=True (default) keeps DLX bindings on critical queues."""
+        queues = get_selfhealing_queues(enable_dlx=True)
+        dlx_names = {
+            q.name for q in queues if q.queue_arguments.get("x-dead-letter-exchange")
+        }
+        assert dlx_names == {"critical_maintenance", "realtime", "selfhealing.critical"}
+
+    def test_enable_dlx_false_removes_all_dlx_bindings(self):
+        """enable_dlx=False removes x-dead-letter-exchange from all queues."""
+        queues = get_selfhealing_queues(enable_dlx=False)
+        for q in queues:
+            assert "x-dead-letter-exchange" not in q.queue_arguments, (
+                f"Queue '{q.name}' should not have DLX when enable_dlx=False"
+            )
+
+    def test_enable_dlx_false_preserves_other_arguments(self):
+        """enable_dlx=False only removes DLX, other arguments are preserved."""
+        queues = get_selfhealing_queues(enable_dlx=False)
+        realtime = next(q for q in queues if q.name == "realtime")
+        assert realtime.queue_arguments["x-max-priority"] == 10
+        assert realtime.queue_arguments["x-message-ttl"] == 30000
+        assert realtime.queue_arguments["x-queue-type"] == "quorum"
+
+    def test_queue_type_and_prefix_combined(self):
+        """queue_type and prefix work together."""
+        queues = get_selfhealing_queues(prefix="shopping", queue_type="classic")
+        for q in queues:
+            assert q.name.startswith("shopping.")
+            assert q.queue_arguments["x-queue-type"] == "classic"
+
+    def test_queue_type_does_not_mutate_originals(self):
+        """Calling with non-default queue_type does not alter _QUEUE_DEFINITIONS."""
+        original_types = [q.queue_arguments["x-queue-type"] for q in _QUEUE_DEFINITIONS]
+
+        get_selfhealing_queues(queue_type="classic")
+
+        current_types = [q.queue_arguments["x-queue-type"] for q in _QUEUE_DEFINITIONS]
+        assert current_types == original_types
+
+    def test_enable_dlx_false_does_not_mutate_originals(self):
+        """Calling with enable_dlx=False does not alter _QUEUE_DEFINITIONS."""
+        original_dlx_count = sum(
+            1
+            for q in _QUEUE_DEFINITIONS
+            if "x-dead-letter-exchange" in q.queue_arguments
+        )
+
+        get_selfhealing_queues(enable_dlx=False)
+
+        current_dlx_count = sum(
+            1
+            for q in _QUEUE_DEFINITIONS
+            if "x-dead-letter-exchange" in q.queue_arguments
+        )
+        assert current_dlx_count == original_dlx_count
+
+
+# =============================================================================
+# configure_selfhealing_celery() Beat Schedule Prefix Tests (Finding #3)
+# =============================================================================
+
+
+class TestConfigureBeatScheduleQueuePrefix:
+    """queue_prefix is applied to beat schedule options.queue entries."""
+
+    @pytest.fixture()
+    def mock_celery_app(self):
+        """Celery app mock with realistic conf structure."""
+        app = MagicMock()
+        app.conf.beat_schedule = {}
+        app.conf.task_queues = []
+        app.conf.task_routes = {}
+        return app
+
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.register_all_tasks_with_celery",
+        autospec=True,
+    )
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.get_selfhealing_beat_schedule",
+        autospec=True,
+    )
+    def test_prefix_applies_to_beat_schedule_queue_options(
+        self, mock_get_schedule, mock_register, mock_celery_app
+    ):
+        """queue_prefix is injected into beat schedule options.queue values."""
+        mock_get_schedule.return_value = {
+            "cleanup-task": {
+                "task": "selfhealing.tasks.cleanup",
+                "schedule": 60.0,
+                "options": {"queue": "maintenance"},
+            },
+            "analysis-task": {
+                "task": "selfhealing.tasks.analysis",
+                "schedule": 120.0,
+                "options": {"queue": "analysis"},
+            },
+        }
+
+        configure_selfhealing_celery(mock_celery_app, queue_prefix="shopping")
+
+        schedule = mock_celery_app.conf.beat_schedule
+        assert schedule["cleanup-task"]["options"]["queue"] == "shopping.maintenance"
+        assert schedule["analysis-task"]["options"]["queue"] == "shopping.analysis"
+
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.register_all_tasks_with_celery",
+        autospec=True,
+    )
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.get_selfhealing_beat_schedule",
+        autospec=True,
+    )
+    def test_no_prefix_leaves_beat_schedule_queue_options_unchanged(
+        self, mock_get_schedule, mock_register, mock_celery_app
+    ):
+        """Without prefix, beat schedule options.queue values are unchanged."""
+        mock_get_schedule.return_value = {
+            "cleanup-task": {
+                "task": "selfhealing.tasks.cleanup",
+                "schedule": 60.0,
+                "options": {"queue": "maintenance"},
+            },
+        }
+
+        configure_selfhealing_celery(mock_celery_app)
+
+        schedule = mock_celery_app.conf.beat_schedule
+        assert schedule["cleanup-task"]["options"]["queue"] == "maintenance"
+
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.register_all_tasks_with_celery",
+        autospec=True,
+    )
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.get_selfhealing_beat_schedule",
+        autospec=True,
+    )
+    def test_prefix_skips_entries_without_queue_option(
+        self, mock_get_schedule, mock_register, mock_celery_app
+    ):
+        """Entries without options.queue are not affected by prefix."""
+        mock_get_schedule.return_value = {
+            "no-queue-task": {
+                "task": "selfhealing.tasks.simple",
+                "schedule": 60.0,
+            },
+        }
+
+        configure_selfhealing_celery(mock_celery_app, queue_prefix="shopping")
+
+        schedule = mock_celery_app.conf.beat_schedule
+        assert "options" not in schedule["no-queue-task"] or "queue" not in schedule[
+            "no-queue-task"
+        ].get("options", {})
+
+
+# =============================================================================
+# configure_selfhealing_celery() Idempotency Tests (Finding #5)
+# =============================================================================
+
+
+class TestConfigureIdempotencyGuard:
+    """configure_selfhealing_celery() idempotency guard behavior."""
+
+    @pytest.fixture()
+    def mock_celery_app(self):
+        """Celery app mock with realistic conf structure."""
+        app = MagicMock()
+        app.conf.beat_schedule = {}
+        app.conf.task_queues = []
+        app.conf.task_routes = {}
+        return app
+
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.register_all_tasks_with_celery",
+        autospec=True,
+    )
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.get_selfhealing_beat_schedule",
+        autospec=True,
+    )
+    def test_second_call_is_noop(
+        self, mock_get_schedule, mock_register, mock_celery_app
+    ):
+        """Second call to configure_selfhealing_celery is a no-op."""
+        mock_get_schedule.return_value = {}
+
+        configure_selfhealing_celery(mock_celery_app)
+        configure_selfhealing_celery(mock_celery_app)
+
+        mock_register.assert_called_once()
+
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.register_all_tasks_with_celery",
+        autospec=True,
+    )
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.get_selfhealing_beat_schedule",
+        autospec=True,
+    )
+    def test_second_call_does_not_duplicate_queues(
+        self, mock_get_schedule, mock_register, mock_celery_app
+    ):
+        """Queues are not duplicated on second call."""
+        mock_get_schedule.return_value = {}
+
+        configure_selfhealing_celery(mock_celery_app)
+        first_count = len(mock_celery_app.conf.task_queues)
+
+        configure_selfhealing_celery(mock_celery_app)
+        second_count = len(mock_celery_app.conf.task_queues)
+
+        assert first_count == second_count
+
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.register_all_tasks_with_celery",
+        autospec=True,
+    )
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.get_selfhealing_beat_schedule",
+        autospec=True,
+    )
+    def test_reset_allows_reconfiguration(
+        self, mock_get_schedule, mock_register, mock_celery_app
+    ):
+        """_reset_celery_configured() allows a fresh configure call."""
+        mock_get_schedule.return_value = {}
+
+        configure_selfhealing_celery(mock_celery_app)
+        _reset_celery_configured()
+        configure_selfhealing_celery(mock_celery_app)
+
+        assert mock_register.call_count == 2
+
+
+# =============================================================================
+# configure_selfhealing_celery() queue_type/enable_dlx Forwarding (Finding #2)
+# =============================================================================
+
+
+class TestConfigureQueueSettingsForwarding:
+    """configure_selfhealing_celery() forwards queue_type/enable_dlx to queues."""
+
+    @pytest.fixture()
+    def mock_celery_app(self):
+        """Celery app mock with realistic conf structure."""
+        app = MagicMock()
+        app.conf.beat_schedule = {}
+        app.conf.task_queues = []
+        app.conf.task_routes = {}
+        return app
+
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.register_all_tasks_with_celery",
+        autospec=True,
+    )
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.get_selfhealing_beat_schedule",
+        autospec=True,
+    )
+    def test_queue_type_classic_flows_to_queues(
+        self, mock_get_schedule, mock_register, mock_celery_app
+    ):
+        """queue_type='classic' is applied to all injected queues."""
+        mock_get_schedule.return_value = {}
+
+        configure_selfhealing_celery(mock_celery_app, queue_type="classic")
+
+        queues = mock_celery_app.conf.task_queues
+        for q in queues:
+            assert q.queue_arguments["x-queue-type"] == "classic"
+
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.register_all_tasks_with_celery",
+        autospec=True,
+    )
+    @patch(
+        "selfhealing.adapters.celery.beat_schedule.get_selfhealing_beat_schedule",
+        autospec=True,
+    )
+    def test_enable_dlx_false_flows_to_queues(
+        self, mock_get_schedule, mock_register, mock_celery_app
+    ):
+        """enable_dlx=False removes DLX bindings from all injected queues."""
+        mock_get_schedule.return_value = {}
+
+        configure_selfhealing_celery(mock_celery_app, enable_dlx=False)
+
+        queues = mock_celery_app.conf.task_queues
+        for q in queues:
+            assert "x-dead-letter-exchange" not in q.queue_arguments

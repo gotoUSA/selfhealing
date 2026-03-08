@@ -119,30 +119,35 @@ queue_prefix: str = Field(
 ```
 
 ```python
-# beat_schedule.py — 네임스페이스 격리 팩토리
-def get_selfhealing_queues(prefix: str = "") -> list[Queue]:
+# beat_schedule.py — 네임스페이스 격리 + Settings 와이어링 팩토리
+def get_selfhealing_queues(
+    prefix: str = "",
+    queue_type: str = "quorum",
+    enable_dlx: bool = True,
+) -> list[Queue]:
     """Consumer에 전달할 kombu.Queue 리스트.
 
     prefix가 지정되면 큐 이름, Exchange 이름, Routing Key 모두에 적용.
-    브로커(RabbitMQ) 레벨에서 완벽한 메시지 격리 보장.
+    queue_type/enable_dlx로 CeleryTaskSettings 값을 큐 인자에 반영.
     """
-    if not prefix:
-        return list(_QUEUE_DEFINITIONS)
+    result: list[Queue] = []
+    for q in _QUEUE_DEFINITIONS:
+        name = f"{prefix}.{q.name}" if prefix else q.name
+        # ... exchange/routing_key prefix 적용
 
-    return [
-        Queue(
-            f"{prefix}.{q.name}",
-            exchange=Exchange(
-                f"{prefix}.{q.exchange.name}",
-                type=q.exchange.type,
-                durable=q.exchange.durable,
-            ),
-            routing_key=f"{prefix}.{q.routing_key}",
-            queue_arguments=q.queue_arguments,
-        )
-        for q in _QUEUE_DEFINITIONS
-    ]
+        args = dict(q.queue_arguments or {})
+        args["x-queue-type"] = queue_type          # Settings 와이어링
+        if not enable_dlx:
+            args.pop("x-dead-letter-exchange", None)  # DLX 비활성화
+
+        result.append(Queue(name, exchange=exchange, routing_key=routing_key,
+                            queue_arguments=args))
+    return result
 ```
+
+> **Settings 와이어링**: `CeleryTaskSettings.queue_type`과 `enable_dlx` 필드가
+> `get_selfhealing_queues()` 파라미터로 전달되어 큐 인자에 반영된다.
+> `configure_selfhealing_celery()`가 이 파라미터를 중개한다.
 
 ### 2.4 kombu.Queue/Exchange 객체 기반 큐 정의
 
@@ -166,7 +171,7 @@ _selfhealing_dlx = Exchange(
 )
 
 _QUEUE_DEFINITIONS: list[Queue] = [
-    # 🧹 청소부 레인
+    # Cleanup Lane
     Queue(
         "maintenance",
         exchange=_selfhealing_exchange,
@@ -183,98 +188,11 @@ _QUEUE_DEFINITIONS: list[Queue] = [
         queue_arguments={
             "x-max-priority": 10,
             "x-queue-type": "quorum",
-            "x-dead-letter-exchange": "selfhealing.dlx",
+            "x-dead-letter-exchange": _selfhealing_dlx.name,  # DLX 객체 참조
         },
     ),
-    # 🧠 지능 레인
-    Queue(
-        "analysis",
-        exchange=_selfhealing_exchange,
-        routing_key="analysis",
-        queue_arguments={
-            "x-max-priority": 5,
-            "x-queue-type": "quorum",
-        },
-    ),
-    Queue(
-        "realtime",
-        exchange=_selfhealing_exchange,
-        routing_key="realtime",
-        queue_arguments={
-            "x-max-priority": 10,
-            "x-queue-type": "quorum",
-            "x-dead-letter-exchange": "selfhealing.dlx",
-            "x-message-ttl": 30000,  # 30초 TTL — 실시간 큐
-        },
-    ),
-    # 📋 증명 레인
-    Queue(
-        "compliance",
-        exchange=_selfhealing_exchange,
-        routing_key="compliance",
-        queue_arguments={
-            "x-max-priority": 7,
-            "x-queue-type": "quorum",
-        },
-    ),
-    Queue(
-        "reports",
-        exchange=_selfhealing_exchange,
-        routing_key="reports",
-        queue_arguments={
-            "x-max-priority": 2,
-            "x-queue-type": "quorum",
-        },
-    ),
-    Queue(
-        "metrics",
-        exchange=_selfhealing_exchange,
-        routing_key="metrics",
-        queue_arguments={
-            "x-max-priority": 1,
-            "x-queue-type": "quorum",
-        },
-    ),
-    # 📝 Audit 플러시
-    Queue(
-        "audit_flush",
-        exchange=_selfhealing_exchange,
-        routing_key="audit_flush",
-        queue_arguments={
-            "x-max-priority": 4,
-            "x-queue-type": "quorum",
-        },
-    ),
-    # Chaos Engineering
-    Queue(
-        "chaos",
-        exchange=_selfhealing_exchange,
-        routing_key="chaos",
-        queue_arguments={
-            "x-max-priority": 5,
-            "x-queue-type": "quorum",
-        },
-    ),
-    Queue(
-        "chaos_monitoring",
-        exchange=_selfhealing_exchange,
-        routing_key="chaos.monitoring",
-        queue_arguments={
-            "x-max-priority": 6,
-            "x-queue-type": "quorum",
-        },
-    ),
-    # Critical (Recovery)
-    Queue(
-        "selfhealing.critical",
-        exchange=Exchange("selfhealing.critical", type="direct", durable=True),
-        routing_key="selfhealing.critical",
-        queue_arguments={
-            "x-max-priority": 10,
-            "x-queue-type": "quorum",
-            "x-dead-letter-exchange": "selfhealing.dlx",
-        },
-    ),
+    # ... (11개 큐 전체 — realtime, compliance, reports, metrics,
+    #      audit_flush, chaos, chaos_monitoring, selfhealing.critical)
 ]
 
 # 하위호환: dict 형태도 제공 (점진적 마이그레이션)
@@ -287,6 +205,10 @@ SELFHEALING_QUEUE_CONFIG = {
     for q in _QUEUE_DEFINITIONS
 }
 ```
+
+> **DLX 참조 방식**: `_selfhealing_dlx.name` 으로 참조하여 DLX Exchange 객체와
+> `queue_arguments` 문자열의 동기화를 보장한다. 하드코딩 문자열 `"selfhealing.dlx"` 대신
+> 객체 참조를 사용하여 이름 변경 시 일관성이 유지된다.
 
 #### 2.4.2 Settings 연동
 
@@ -357,7 +279,9 @@ app.conf.beat_schedule.update(schedule)
 > Celery 전용 래퍼를 제공하여, Consumer celery.py에서 1줄로 모든 설정을 주입한다.
 
 ```python
-# selfhealing/adapters/celery/beat_schedule.py (신규 함수)
+# selfhealing/adapters/celery/beat_schedule.py
+_celery_configured = False  # 멱등성 가드 (setup_selfhealing_signals 패턴과 동일)
+
 def configure_selfhealing_celery(
     app,
     *,
@@ -372,35 +296,42 @@ def configure_selfhealing_celery(
     include_saga: bool = True,
     include_legacy: bool = True,
     queue_prefix: str = "",
+    queue_type: str = "quorum",
+    enable_dlx: bool = True,
 ) -> None:
     """Celery app에 selfhealing Beat 스케줄, 큐, 라우팅을 1줄로 주입.
 
     configure_selfhealing(namespace=globals()) 과 대칭 구조.
+    멱등 — 두 번째 호출 시 경고 로그 후 no-op.
 
     Args:
         app: Celery application instance
         include_*: 모듈별 Beat 태스크 포함 여부
         queue_prefix: 큐 네임스페이스 접두사 (멀티서비스 격리)
+        queue_type: RabbitMQ 큐 타입 (classic/quorum/stream)
+        enable_dlx: Dead Letter Exchange 활성화 여부
     """
+    global _celery_configured
+    if _celery_configured:
+        logger.warning("beat_schedule.celery_already_configured")
+        return
+
     # 1. Beat Schedule merge
-    schedule = get_selfhealing_beat_schedule(
-        include_cleanup=include_cleanup,
-        include_intelligence=include_intelligence,
-        include_compliance=include_compliance,
-        include_traffic_aware=include_traffic_aware,
-        include_canary_watchdog=include_canary_watchdog,
-        include_governance=include_governance,
-        include_xtest_cleanup=include_xtest_cleanup,
-        include_audit_flush=include_audit_flush,
-        include_saga=include_saga,
-        include_legacy=include_legacy,
-    )
-    if not hasattr(app.conf, "beat_schedule") or app.conf.beat_schedule is None:
-        app.conf.beat_schedule = {}
+    schedule = get_selfhealing_beat_schedule(...)
+
+    # 1b. Beat 스케줄 큐 옵션에 prefix 적용
+    if queue_prefix:
+        for entry in schedule.values():
+            opts = entry.get("options", {})
+            if "queue" in opts:
+                opts["queue"] = f"{queue_prefix}.{opts['queue']}"
+
     app.conf.beat_schedule.update(schedule)
 
-    # 2. Queue 정의 merge (kombu.Queue 객체)
-    queues = get_selfhealing_queues(prefix=queue_prefix)
+    # 2. Queue 정의 merge (queue_type/enable_dlx 전달)
+    queues = get_selfhealing_queues(
+        prefix=queue_prefix, queue_type=queue_type, enable_dlx=enable_dlx,
+    )
     existing = list(app.conf.task_queues or [])
     app.conf.task_queues = existing + queues
 
@@ -412,8 +343,17 @@ def configure_selfhealing_celery(
     # 4. Task 등록
     register_all_tasks_with_celery(app)
 
+    _celery_configured = True
     logger.info("beat_schedule.celery_configured", queue_prefix=queue_prefix or "(none)")
 ```
+
+> **멱등성 가드**: `setup_selfhealing_signals()`의 `_signals_connected` 패턴과 동일하게
+> `_celery_configured` 플래그로 중복 호출을 방지한다. Django reload, 테스트 setUp 등에서
+> 안전하다. 테스트용 `_reset_celery_configured()` 함수를 별도 제공한다.
+>
+> **Beat 스케줄 큐 prefix**: Step 1b에서 `queue_prefix`가 지정된 경우 beat 스케줄 엔트리의
+> `options.queue` 값에도 prefix를 적용한다. 이를 통해 Step 2의 kombu Queue 정의
+> (`shopping.maintenance`)와 beat 스케줄의 큐 참조(`shopping.maintenance`)가 일치한다.
 
 ### 2.7 Consumer 사용법 (최종)
 

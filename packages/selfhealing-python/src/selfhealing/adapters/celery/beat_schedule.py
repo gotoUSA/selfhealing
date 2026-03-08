@@ -52,7 +52,7 @@ _QUEUE_DEFINITIONS: list[Queue] = [
         queue_arguments={
             "x-max-priority": 10,
             "x-queue-type": "quorum",
-            "x-dead-letter-exchange": "selfhealing.dlx",
+            "x-dead-letter-exchange": _selfhealing_dlx.name,
         },
     ),
     # Intelligence Lane
@@ -72,7 +72,7 @@ _QUEUE_DEFINITIONS: list[Queue] = [
         queue_arguments={
             "x-max-priority": 10,
             "x-queue-type": "quorum",
-            "x-dead-letter-exchange": "selfhealing.dlx",
+            "x-dead-letter-exchange": _selfhealing_dlx.name,
             "x-message-ttl": 30000,
         },
     ),
@@ -141,7 +141,7 @@ _QUEUE_DEFINITIONS: list[Queue] = [
         queue_arguments={
             "x-max-priority": 10,
             "x-queue-type": "quorum",
-            "x-dead-letter-exchange": "selfhealing.dlx",
+            "x-dead-letter-exchange": _selfhealing_dlx.name,
         },
     ),
 ]
@@ -162,28 +162,49 @@ SELFHEALING_QUEUE_CONFIG = {
 # =============================================================================
 
 
-def get_selfhealing_queues(prefix: str = "") -> list[Queue]:
+def get_selfhealing_queues(
+    prefix: str = "",
+    queue_type: str = "quorum",
+    enable_dlx: bool = True,
+) -> list[Queue]:
     """Return kombu.Queue list with optional namespace prefix.
 
     When prefix is specified, queue name, Exchange name, and routing key
     all get the prefix applied for broker-level message isolation.
-    """
-    if not prefix:
-        return list(_QUEUE_DEFINITIONS)
 
-    return [
-        Queue(
-            f"{prefix}.{q.name}",
-            exchange=Exchange(
+    Args:
+        prefix: Queue namespace prefix for multi-service isolation.
+        queue_type: RabbitMQ queue type (classic/quorum/stream).
+        enable_dlx: Whether to keep DLX bindings on critical queues.
+    """
+    result: list[Queue] = []
+    for q in _QUEUE_DEFINITIONS:
+        name = f"{prefix}.{q.name}" if prefix else q.name
+        if prefix:
+            exchange = Exchange(
                 f"{prefix}.{q.exchange.name}",
                 type=q.exchange.type,
                 durable=q.exchange.durable,
-            ),
-            routing_key=f"{prefix}.{q.routing_key}",
-            queue_arguments=q.queue_arguments,
+            )
+            routing_key = f"{prefix}.{q.routing_key}"
+        else:
+            exchange = q.exchange
+            routing_key = q.routing_key
+
+        args = dict(q.queue_arguments or {})
+        args["x-queue-type"] = queue_type
+        if not enable_dlx:
+            args.pop("x-dead-letter-exchange", None)
+
+        result.append(
+            Queue(
+                name,
+                exchange=exchange,
+                routing_key=routing_key,
+                queue_arguments=args,
+            )
         )
-        for q in _QUEUE_DEFINITIONS
-    ]
+    return result
 
 
 # =============================================================================
@@ -307,7 +328,7 @@ def _load_schedule_module(
         )
     except AttributeError as e:
         logger.warning(
-            "beat_schedule.function_found",
+            "beat_schedule.getter_not_found",
             module_path=module_path,
             error=e,
         )
@@ -407,6 +428,8 @@ def _get_legacy_beat_schedule() -> dict[str, Any]:
 # Consumer Integration Wrapper (321, Q6)
 # =============================================================================
 
+_celery_configured = False
+
 
 def configure_selfhealing_celery(
     app,
@@ -422,16 +445,26 @@ def configure_selfhealing_celery(
     include_saga: bool = True,
     include_legacy: bool = True,
     queue_prefix: str = "",
+    queue_type: str = "quorum",
+    enable_dlx: bool = True,
 ) -> None:
     """Inject selfhealing Beat schedule, queues, routes, and tasks into a Celery app.
 
     Symmetric with configure_selfhealing(namespace=globals()) for Django settings.
+    Idempotent — second call is a no-op with a warning log.
 
     Args:
         app: Celery application instance.
         include_*: Module-level Beat task inclusion flags.
         queue_prefix: Queue namespace prefix for multi-service isolation.
+        queue_type: RabbitMQ queue type (classic/quorum/stream).
+        enable_dlx: Whether to enable DLX bindings on critical queues.
     """
+    global _celery_configured
+    if _celery_configured:
+        logger.warning("beat_schedule.celery_already_configured")
+        return
+
     # 1. Beat Schedule merge
     schedule = get_selfhealing_beat_schedule(
         include_cleanup=include_cleanup,
@@ -445,12 +478,24 @@ def configure_selfhealing_celery(
         include_saga=include_saga,
         include_legacy=include_legacy,
     )
+
+    # 1b. Apply queue_prefix to beat schedule queue options
+    if queue_prefix:
+        for entry in schedule.values():
+            opts = entry.get("options", {})
+            if "queue" in opts:
+                opts["queue"] = f"{queue_prefix}.{opts['queue']}"
+
     if not hasattr(app.conf, "beat_schedule") or app.conf.beat_schedule is None:
         app.conf.beat_schedule = {}
     app.conf.beat_schedule.update(schedule)
 
     # 2. Queue definitions merge (kombu.Queue objects)
-    queues = get_selfhealing_queues(prefix=queue_prefix)
+    queues = get_selfhealing_queues(
+        prefix=queue_prefix,
+        queue_type=queue_type,
+        enable_dlx=enable_dlx,
+    )
     existing = list(app.conf.task_queues or [])
     app.conf.task_queues = existing + queues
 
@@ -462,10 +507,17 @@ def configure_selfhealing_celery(
     # 4. Task registration
     register_all_tasks_with_celery(app)
 
+    _celery_configured = True
     logger.info(
         "beat_schedule.celery_configured",
         queue_prefix=queue_prefix or "(none)",
     )
+
+
+def _reset_celery_configured() -> None:
+    """Reset idempotency guard (testing only)."""
+    global _celery_configured
+    _celery_configured = False
 
 
 # =============================================================================
