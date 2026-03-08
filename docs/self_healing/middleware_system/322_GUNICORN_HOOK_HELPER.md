@@ -513,7 +513,14 @@ selfhealing_gil_contention_p90_ms = Gauge(
 |---------|---------|------|
 | `worker_exit_cleanup()`에서 daemon 스레드 정리 없음 | `_stop_background_threads()` 단계 추가 (timeout=5s) | daemon 스레드는 프로세스 종료 시 인터럽트 없이 즉사한다. 실행 중이던 배치/메트릭 푸시가 유실될 수 있으므로, 종료 전 우아한 stop을 기다린다 |
 
-### 4.5 GIL 경합 방지
+### 4.5 mmap 초기화 — 1-Writer N-Reader 패턴
+
+| 변경 전 | 변경 후 | 근거 |
+|---------|---------|------|
+| `_reset_mmap()`의 필요성이 문서에 명시되지 않음 | docstring에 아키텍처적 이유 명시 | mmap FD 자체는 `MAP_SHARED`로 fork 후에도 부모-자식 간 공유된다. 그러나 FD를 감싸는 Python 래퍼 객체(`CBStateSnapshot`)의 Lock, 데몬 스레드(100ms 주기 업데이트), Writer 플래그는 fork-safe하지 않다. 마스터의 `is_writer=True` 싱글톤을 그대로 사용하면 모든 워커가 동시에 Writer가 되어 race condition이 발생한다 |
+| 리셋 후 역할 재할당 없음 | 워커는 `is_writer=False`(Reader)로 재초기화 | 1-Writer(마스터 또는 전담 프로세스) N-Reader(워커) 구조로 Lock 경합을 회피한다. `CBStateSnapshot`은 atomic write + Lock-free read를 보장하므로 Reader 간 동기화가 불필요하다 |
+
+### 4.6 GIL 경합 방지
 
 | 변경 전 | 변경 후 | 근거 |
 |---------|---------|------|
