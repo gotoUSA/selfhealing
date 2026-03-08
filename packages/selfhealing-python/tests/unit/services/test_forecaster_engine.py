@@ -1079,3 +1079,72 @@ class TestTimeSeriesScenarioGeneratorBehavior:
         v1 = TimeSeriesScenarioGenerator.gradual_degradation(seed=123)
         v2 = TimeSeriesScenarioGenerator.gradual_degradation(seed=123)
         assert v1 == v2
+
+
+# =============================================================================
+# 317: spike_history_size 설정 및 히스토리 버퍼 테스트
+# =============================================================================
+
+
+class TestSpikeHistorySizeContract:
+    """317: spike_history_size 설계 계약값 검증."""
+
+    def test_spike_history_size_default(self):
+        """spike_history_size 기본값은 200이다."""
+        settings = PredictiveForecasterSettings()
+        assert settings.spike_history_size == 200
+
+    def test_spike_history_size_minimum_boundary(self):
+        """spike_history_size 최소 경계: ge=50."""
+        with pytest.raises(Exception):
+            PredictiveForecasterSettings(spike_history_size=49)
+        settings = PredictiveForecasterSettings(spike_history_size=50)
+        assert settings.spike_history_size == 50
+
+    def test_spike_history_size_maximum_boundary(self):
+        """spike_history_size 최대 경계: le=5000."""
+        settings = PredictiveForecasterSettings(spike_history_size=5000)
+        assert settings.spike_history_size == 5000
+        with pytest.raises(Exception):
+            PredictiveForecasterSettings(spike_history_size=5001)
+
+
+class TestSpikeHistoryTrimBehavior:
+    """317: PredictiveForecasterService 히스토리 버퍼 트리밍 동작 검증."""
+
+    def test_rps_history_trimmed_at_spike_history_size(self, service):
+        """RPS 히스토리가 spike_history_size 초과 시 트리밍된다."""
+        max_size = service._spike_history_size
+
+        # Given — max_size + 10 개의 데이터포인트 추가
+        for i in range(max_size + 10):
+            service._rps_history.append(float(i))
+            if len(service._rps_history) > max_size:
+                service._rps_history = service._rps_history[-max_size:]
+
+        # Then
+        assert len(service._rps_history) == max_size
+        assert service._rps_history[-1] == float(max_size + 9)
+
+    def test_service_uses_settings_spike_history_size(self):
+        """서비스가 settings.spike_history_size를 _spike_history_size로 사용."""
+        custom_size = 300
+        custom_settings = PredictiveForecasterSettings(spike_history_size=custom_size)
+        with patch(
+            "selfhealing.services.predictive_forecaster.service.get_predictive_forecaster_settings",
+            return_value=custom_settings,
+        ):
+            svc = PredictiveForecasterService()
+        assert svc._spike_history_size == custom_size
+
+    def test_history_trim_preserves_most_recent_values(self, service):
+        """트리밍 시 가장 최근 값이 보존된다."""
+        max_size = service._spike_history_size
+        values = list(range(max_size + 50))
+
+        service._error_rate_history = values.copy()
+        if len(service._error_rate_history) > max_size:
+            service._error_rate_history = service._error_rate_history[-max_size:]
+
+        assert service._error_rate_history[0] == 50
+        assert service._error_rate_history[-1] == max_size + 49

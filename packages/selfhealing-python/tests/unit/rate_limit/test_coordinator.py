@@ -59,7 +59,9 @@ class TestRateLimitCoordinatorEventEmission:
             mock_get_bus.return_value = mock_bus
             coordinator.on_rate_limited("payment_api", retry_after=5)
 
-        rate_limit_events = [e for e in emitted_events if "RATE_LIMIT_429" in e["event_type"]]
+        rate_limit_events = [
+            e for e in emitted_events if "RATE_LIMIT_429" in e["event_type"]
+        ]
         assert len(rate_limit_events) >= 1
 
         event_data = rate_limit_events[0]["data"]
@@ -75,7 +77,9 @@ class TestRateLimitCoordinatorEventEmission:
         ],
         ids=["first-429", "second-429", "third-429"],
     )
-    def test_on_rate_limited_calculates_exponential_backoff(self, mock_storage, call_index, expected_multiplier):
+    def test_on_rate_limited_calculates_exponential_backoff(
+        self, mock_storage, call_index, expected_multiplier
+    ):
         """연속 429 시 지수 백오프 계산 확인."""
         from selfhealing.services.rate_limit_coordinator import (
             RateLimitCoordinator,
@@ -117,7 +121,9 @@ class TestRateLimitCoordinatorDebouncing:
             RateLimitCoordinatorConfig,
         )
 
-        config = RateLimitCoordinatorConfig(debounce_window_seconds=DEFAULT_DEBOUNCE_WINDOW)
+        config = RateLimitCoordinatorConfig(
+            debounce_window_seconds=DEFAULT_DEBOUNCE_WINDOW
+        )
         coordinator = RateLimitCoordinator(storage=mock_storage, config=config)
 
         assert coordinator._should_emit_event("test_api") is True
@@ -149,7 +155,9 @@ class TestRateLimitCoordinatorDebouncing:
             RateLimitCoordinatorConfig,
         )
 
-        config = RateLimitCoordinatorConfig(debounce_window_seconds=DEFAULT_DEBOUNCE_WINDOW)
+        config = RateLimitCoordinatorConfig(
+            debounce_window_seconds=DEFAULT_DEBOUNCE_WINDOW
+        )
         coordinator = RateLimitCoordinator(storage=mock_storage, config=config)
 
         assert coordinator._should_emit_event("api_a") is True
@@ -203,7 +211,9 @@ class TestRateLimitCoordinatorCanary:
             RateLimitCoordinatorConfig,
         )
 
-        coordinator = RateLimitCoordinator(storage=mock_storage, config=RateLimitCoordinatorConfig())
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
 
         mock_storage.increment_consecutive_429s("test_api")
         result = coordinator.wait_if_needed("test_api")
@@ -216,7 +226,9 @@ class TestRateLimitCoordinatorCanary:
             RateLimitCoordinatorConfig,
         )
 
-        coordinator = RateLimitCoordinator(storage=mock_storage, config=RateLimitCoordinatorConfig())
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
 
         mock_storage.increment_consecutive_429s("test_api")
         result1 = coordinator.wait_if_needed("test_api")
@@ -297,7 +309,9 @@ class TestEmitRateLimitEventFailOpen:
         from selfhealing.services.rate_limit_coordinator import _emit_rate_limit_event
 
         mock_bus = MagicMock()
-        with patch("selfhealing.services.event_bus.get_event_bus", return_value=mock_bus):
+        with patch(
+            "selfhealing.services.event_bus.get_event_bus", return_value=mock_bus
+        ):
             _emit_rate_limit_event("NONEXISTENT_EVENT_TYPE", {"key": "test"})
 
         mock_bus.emit.assert_not_called()
@@ -481,7 +495,9 @@ class TestRateLimitCoordinatorOnSuccess:
             RateLimitCoordinatorConfig,
         )
 
-        coordinator = RateLimitCoordinator(storage=mock_storage, config=RateLimitCoordinatorConfig())
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
 
         mock_storage.increment_consecutive_429s("test_api")
         mock_storage.increment_consecutive_429s("test_api")
@@ -497,7 +513,9 @@ class TestRateLimitCoordinatorOnSuccess:
             RateLimitCoordinatorConfig,
         )
 
-        coordinator = RateLimitCoordinator(storage=mock_storage, config=RateLimitCoordinatorConfig())
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
 
         coordinator.on_success("test_api")
         assert mock_storage.get_state("test_api").consecutive_429s == 0
@@ -518,7 +536,9 @@ class TestRateLimitCoordinatorScheduleCooldownEnd:
             RateLimitCoordinatorConfig,
         )
 
-        coordinator = RateLimitCoordinator(storage=mock_storage, config=RateLimitCoordinatorConfig())
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
 
         coordinator._schedule_cooldown_end_event("test_api", time.time() - 5)
         assert "test_api" not in coordinator._cooldown_timers
@@ -530,7 +550,9 @@ class TestRateLimitCoordinatorScheduleCooldownEnd:
             RateLimitCoordinatorConfig,
         )
 
-        coordinator = RateLimitCoordinator(storage=mock_storage, config=RateLimitCoordinatorConfig())
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
 
         coordinator._schedule_cooldown_end_event("test_api", time.time() + 60)
         first_timer = coordinator._cooldown_timers.get("test_api")
@@ -558,7 +580,9 @@ class TestRateLimitAwareDecorator:
             RateLimitCoordinatorConfig,
         )
 
-        coordinator = RateLimitCoordinator(storage=mock_storage, config=RateLimitCoordinatorConfig())
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -571,7 +595,9 @@ class TestRateLimitAwareDecorator:
         result = call_api()
         assert result.status_code == 200
 
-    def test_decorator_calls_on_rate_limited_on_429(self, coordinator_no_jitter_no_debounce, mock_storage):
+    def test_decorator_calls_on_rate_limited_on_429(
+        self, coordinator_no_jitter_no_debounce, mock_storage
+    ):
         """데코레이터가 429 응답 시 on_rate_limited 호출."""
         coordinator = coordinator_no_jitter_no_debounce
 
@@ -587,3 +613,107 @@ class TestRateLimitAwareDecorator:
 
         state = mock_storage.get_state("test_api")
         assert state.consecutive_429s == 1
+
+
+# =============================================================================
+# 317: _broadcast_to_cluster Kafka 분산 전파 테스트
+# =============================================================================
+
+
+class TestBroadcastToClusterBehavior:
+    """317: _broadcast_to_cluster Fail-Open 동작 검증."""
+
+    def test_broadcast_calls_distributed_channel(self, mock_storage):
+        """_broadcast_to_cluster가 DistributedRateLimitChannel.broadcast_rate_limit_429 호출."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        config = RateLimitCoordinatorConfig(
+            jitter_percent=0.0,
+            debounce_window_seconds=0.0,
+        )
+        coordinator = RateLimitCoordinator(storage=mock_storage, config=config)
+
+        mock_channel = MagicMock()
+        with patch(
+            "selfhealing.services.rate_limit.distributed_channel.get_distributed_rate_limit_channel",
+            return_value=mock_channel,
+        ):
+            coordinator._broadcast_to_cluster(
+                key="payment_api",
+                consecutive_429s=3,
+                cooldown_until=1000.0,
+                calculated_delay=5.0,
+            )
+
+        mock_channel.broadcast_rate_limit_429.assert_called_once_with(
+            key="payment_api",
+            consecutive_429s=3,
+            cooldown_until=1000.0,
+            calculated_delay=5.0,
+        )
+
+    def test_broadcast_fail_open_on_import_error(self, mock_storage):
+        """분산 채널 import 실패 시 예외 없이 통과 (Fail-Open)."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
+
+        with patch(
+            "selfhealing.services.rate_limit.distributed_channel.get_distributed_rate_limit_channel",
+            side_effect=ImportError("no kafka"),
+        ):
+            coordinator._broadcast_to_cluster(
+                key="test",
+                consecutive_429s=1,
+                cooldown_until=1000.0,
+                calculated_delay=5.0,
+            )
+
+    def test_broadcast_fail_open_on_runtime_error(self, mock_storage):
+        """분산 채널 런타임 에러 시 예외 없이 통과 (Fail-Open)."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        coordinator = RateLimitCoordinator(
+            storage=mock_storage, config=RateLimitCoordinatorConfig()
+        )
+
+        with patch(
+            "selfhealing.services.rate_limit.distributed_channel.get_distributed_rate_limit_channel",
+            side_effect=RuntimeError("channel broken"),
+        ):
+            coordinator._broadcast_to_cluster(
+                key="test",
+                consecutive_429s=1,
+                cooldown_until=1000.0,
+                calculated_delay=5.0,
+            )
+
+    def test_on_rate_limited_invokes_broadcast(self, mock_storage):
+        """on_rate_limited가 _broadcast_to_cluster를 호출하는지 검증."""
+        from selfhealing.services.rate_limit_coordinator import (
+            RateLimitCoordinator,
+            RateLimitCoordinatorConfig,
+        )
+
+        config = RateLimitCoordinatorConfig(
+            jitter_percent=0.0,
+            debounce_window_seconds=0.0,
+        )
+        coordinator = RateLimitCoordinator(storage=mock_storage, config=config)
+
+        with patch.object(coordinator, "_broadcast_to_cluster") as mock_broadcast:
+            coordinator.on_rate_limited("test_api", retry_after=5.0)
+
+        mock_broadcast.assert_called_once()
+        assert mock_broadcast.call_args[0][0] == "test_api"

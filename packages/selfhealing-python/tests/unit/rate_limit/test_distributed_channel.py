@@ -188,3 +188,64 @@ class TestDistributedRateLimitChannelStartStop:
 
         channel._handlers.append(lambda d: None)
         assert channel.handler_count == 1
+
+
+# =============================================================================
+# 317: _on_broadcast_delivery 콜백 테스트
+# =============================================================================
+
+
+class TestOnBroadcastDeliveryBehavior:
+    """317: _on_broadcast_delivery Kafka 전송 결과 콜백 동작 검증."""
+
+    def test_successful_delivery_does_not_raise(self):
+        """전송 성공 리포트 시 예외 없이 처리."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        report = MagicMock()
+        report.error = None
+        report.topic = "selfhealing.rate_limit.events"
+
+        DistributedRateLimitChannel._on_broadcast_delivery(report)
+
+    def test_failed_delivery_does_not_raise(self):
+        """전송 실패 리포트 시 예외 없이 처리 (Fire-and-Forget)."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        report = MagicMock()
+        report.error = "BrokerNotAvailable"
+        report.topic = "selfhealing.rate_limit.events"
+
+        DistributedRateLimitChannel._on_broadcast_delivery(report)
+
+
+# =============================================================================
+# 317: broadcast with on_delivery 콜백 전달 테스트
+# =============================================================================
+
+
+class TestBroadcastPassesDeliveryCallbackBehavior:
+    """317: broadcast_rate_limit_429이 on_delivery 콜백을 Kafka에 전달하는지 검증."""
+
+    def test_broadcast_passes_on_delivery_callback(self, channel, mock_kafka_bus):
+        """broadcast 호출 시 on_delivery=_on_broadcast_delivery가 전달된다."""
+        from selfhealing.services.rate_limit.distributed_channel import (
+            DistributedRateLimitChannel,
+        )
+
+        channel.broadcast_rate_limit_429(
+            key="test_api",
+            consecutive_429s=1,
+            cooldown_until=1000.0,
+            calculated_delay=5.0,
+        )
+
+        call_kwargs = mock_kafka_bus.publish.call_args[1]
+        assert (
+            call_kwargs["on_delivery"]
+            is DistributedRateLimitChannel._on_broadcast_delivery
+        )
