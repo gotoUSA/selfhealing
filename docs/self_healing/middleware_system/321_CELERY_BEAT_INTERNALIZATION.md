@@ -48,70 +48,55 @@ app.conf.beat_schedule = {
 > 설정 객체는 `AdaptersGroup.celery_task` (`cached_property`)를 통해 싱글톤 캐싱되므로
 > 매 호출 시 환경변수를 재파싱하지 않는다.
 
+`get_selfhealing_beat_schedule()`는 `_SCHEDULE_MODULES` 테이블에 정의된
+레인별 서브모듈을 `importlib.import_module()`로 동적 로딩하고,
+각 모듈의 `get_*_beat_schedule()` 함수를 호출하여 스케줄을 수집한다.
+
 ```python
 # selfhealing/adapters/celery/beat_schedule.py (현재 구현)
-from selfhealing.settings.celery_task import get_celery_task_settings
+_SCHEDULE_MODULES = [
+    ("cleanup",      "selfhealing.tasks.cleanup_tasks",      "get_cleanup_beat_schedule",      "cleanup lane"),
+    ("intelligence", "selfhealing.tasks.intelligence_tasks",  "get_intelligence_beat_schedule",  "intelligence lane"),
+    # ... 9개 모듈
+]
 
 def get_selfhealing_beat_schedule(
     include_cleanup: bool = True,
     include_intelligence: bool = True,
-    include_compliance: bool = True,
-    include_traffic_aware: bool = True,
-    include_canary_watchdog: bool = True,
-    include_governance: bool = True,
-    include_xtest_cleanup: bool = True,
-    include_audit_flush: bool = True,
-    include_saga: bool = True,
-    include_legacy: bool = True,
+    # ... include_* 플래그
 ) -> dict[str, Any]:
     """모듈별 include/exclude 플래그로 스케줄을 동적 생성."""
-    settings = get_celery_task_settings()
-    # settings.trigger_check_interval → 60.0 대신 동적 값 참조
+    for flag_name, module_path, getter_func, debug_msg in _SCHEDULE_MODULES:
+        if include_flags.get(flag_name, False):
+            schedule.update(_load_schedule_module(module_path, getter_func, debug_msg))
     ...
 ```
 
-각 모듈의 `get_*_beat_schedule()` 함수는 `CeleryTaskSettings`의 interval 값을 참조하여
+각 서브모듈의 `get_*_beat_schedule()` 함수가 자체적으로 Settings를 참조하여
 환경/부하 상태에 따라 주기를 조정할 수 있다:
 
 ```python
-# 예시: 환경변수 SELFHEALING_CELERY_TRIGGER_CHECK_INTERVAL=120 → 주기 변경
-settings = get_celery_task_settings()
-"schedule": settings.trigger_check_interval,  # 하드코딩 60.0 대신
+# 예시: xtest_cleanup_tasks.py — Settings에서 동적 interval 참조
+from selfhealing.settings.xtest import get_xtest_settings
+settings = get_xtest_settings()
+"schedule": crontab(minute=f"*/{settings.cleanup_interval_minutes}"),
 ```
 
-### 2.2 Crontab 타임존 명시 (UTC 고정)
+### 2.2 Crontab 타임존 명시 (UTC 고정) — 향후 마이그레이션
 
 > **Q2 반영**: Consumer의 `CELERY_TIMEZONE` 설정에 의존하지 않도록
-> 모든 crontab에 `tz=timezone.utc`를 명시적으로 주입한다.
-> 경고 로그 방식은 글로벌 빅테크 환경에서 무시될 확률이 높으므로 채택하지 않는다.
+> 모든 crontab에 `nowfun=lambda: datetime.now(timezone.utc)`를 주입하는 것이 목표이다.
+>
+> **현재 상태**: 기존 레인별 서브모듈(`cleanup_tasks.py`, `intelligence_tasks.py` 등)의
+> crontab은 아직 `nowfun`을 사용하지 않는다. 신규 crontab 추가 시부터 적용하고,
+> 기존 crontab은 별도 마이그레이션 이슈로 일괄 전환한다.
 
 ```python
-from datetime import timezone
+# 목표 패턴 (신규 crontab 추가 시 적용)
+from datetime import datetime, timezone
 from celery.schedules import crontab
 
-SELFHEALING_BEAT_SCHEDULE = {
-    # === DLQ ===
-    "selfhealing-cleanup-dlq-entries": {
-        "task": "selfhealing.celery_tasks.cleanup_resolved_dlq_entries",
-        "schedule": crontab(hour=5, minute=0, nowfun=lambda: datetime.now(timezone.utc)),
-        "options": {"expires": 3600},
-    },
-
-    # === Recovery Coordinator ===
-    "selfhealing-cleanup-old-recovery-sessions": {
-        "task": "selfhealing.cleanup_old_recovery_sessions",
-        "schedule": crontab(hour=6, minute=0, nowfun=lambda: datetime.now(timezone.utc)),
-        "options": {"expires": 3600},
-    },
-
-    # === JWT Cleanup ===
-    "selfhealing-flush-expired-jwt-tokens": {
-        "task": "selfhealing.flush_expired_jwt_tokens",
-        "schedule": crontab(hour=2, minute=30, nowfun=lambda: datetime.now(timezone.utc)),
-        "options": {"expires": 3600, "queue": "maintenance"},
-    },
-    # ...
-}
+"schedule": crontab(hour=5, minute=0, nowfun=lambda: datetime.now(timezone.utc)),
 ```
 
 > **참고**: Celery 5.x의 `crontab`은 `tz` 파라미터를 직접 지원하지 않고 `nowfun`을 통해
