@@ -11,8 +11,11 @@ This module provides Celery-specific implementations including:
 
 from .beat_schedule import (
     SELFHEALING_QUEUE_CONFIG,
+    configure_selfhealing_celery,
     get_schedule_summary,
     get_selfhealing_beat_schedule,
+    get_selfhealing_queues,
+    get_selfhealing_task_routes,
     register_all_tasks_with_celery,
     validate_schedule,
 )
@@ -62,6 +65,9 @@ __all__ = [
     "SignalHooksConfig",
     # Beat Schedule
     "get_selfhealing_beat_schedule",
+    "get_selfhealing_queues",
+    "get_selfhealing_task_routes",
+    "configure_selfhealing_celery",
     "get_schedule_summary",
     "validate_schedule",
     "register_all_tasks_with_celery",

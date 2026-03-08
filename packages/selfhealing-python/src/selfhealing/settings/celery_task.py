@@ -155,11 +155,34 @@ class CeleryTaskSettings(BaseSettings):
         description="Celery inspect 호출 타임아웃 (초). 워커 상태 확인 시 사용.",
     )
 
+    # ==========================================================================
+    # Queue Configuration (321 — Beat Internalization)
+    # ==========================================================================
+    queue_prefix: str = Field(
+        default="",
+        description="큐 네임스페이스 접두사 (멀티서비스 격리). "
+        "예: 'shopping' → 'shopping.selfhealing.critical'",
+    )
+
+    queue_type: str = Field(
+        default="quorum",
+        pattern=r"^(classic|quorum|stream)$",
+        description="RabbitMQ 큐 타입 (quorum 권장 — Raft 합의 기반 메시지 유실 방지)",
+    )
+
+    enable_dlx: bool = Field(
+        default=True,
+        description="Dead Letter Exchange 활성화 (critical 큐에 DLX 바인딩)",
+    )
+
     @model_validator(mode="after")
     def validate_time_limits(self) -> "CeleryTaskSettings":
         """soft_time_limit이 time_limit보다 작은지 검증."""
         if self.soft_time_limit >= self.time_limit:
-            raise ValueError(f"soft_time_limit ({self.soft_time_limit}) must be less than " f"time_limit ({self.time_limit})")
+            raise ValueError(
+                f"soft_time_limit ({self.soft_time_limit}) must be less than "
+                f"time_limit ({self.time_limit})"
+            )
         if self.min_retry_delay > self.max_retry_delay:
             raise ValueError(
                 f"min_retry_delay ({self.min_retry_delay}) must be less than or equal to "
