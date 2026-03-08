@@ -365,6 +365,12 @@ class SelfHealingMetrics:
             ["service"],
         )
 
+        # GIL Contention (Meta-Watchdog probe output)
+        self.gil_contention_p90_ms = Gauge(
+            f"{prefix}_gil_contention_p90_ms",
+            "GIL contention P90 latency in milliseconds",
+        )
+
         # Info metric
         self.info = Info(
             f"{prefix}_info",

@@ -425,3 +425,19 @@ def reset_kafka_producer() -> None:
         if _producer is not None:
             _producer.close()
             _producer = None
+
+
+def reset_kafka_producer_after_fork() -> None:
+    """Post-fork Producer reset (fork-safe).
+
+    After fork(), librdkafka background threads are not replicated in the
+    child process. Calling close()/flush() on the inherited instance would
+    attempt to join dead threads, causing deadlock or segfault.
+
+    This function only drops the reference so the next get_kafka_producer()
+    call creates a fresh instance. The master's Producer resources are
+    reclaimed by the OS when the master process exits.
+    """
+    global _producer
+    with _producer_lock:
+        _producer = None
