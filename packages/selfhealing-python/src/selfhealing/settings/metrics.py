@@ -86,6 +86,19 @@ class MetricsSettings(BaseSettings):
         description="메트릭 스냅샷 최대 유효 기간 (초). 기본 1시간.",
     )
 
+    # ==========================================================================
+    # OTEL Metrics Backend (316 Gunicorn Preload Optimization)
+    # ==========================================================================
+    backend: str = Field(
+        default="prometheus",
+        pattern=r"^(prometheus|otel)$",
+        description=(
+            "Metrics backend: 'prometheus' (legacy, direct prometheus_client) "
+            "or 'otel' (OpenTelemetry Meter with PrometheusMetricReader). "
+            "OTEL backend resolves multiprocess metrics fragmentation."
+        ),
+    )
+
 
 # Singleton instance (cached)
 _settings: MetricsSettings | None = None

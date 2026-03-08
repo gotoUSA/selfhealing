@@ -21,8 +21,9 @@ V3 Optimization:
 """
 
 import structlog
+from django.http import HttpResponse
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -201,6 +202,38 @@ class SelfHealingMetricsView(APIView):
         # Exception은 exception handler가 처리
         metrics = service.get_metrics()
         return Response(metrics, status=status.HTTP_200_OK)
+
+
+class PrometheusTextMetricsView(APIView):
+    """
+    Prometheus text exposition endpoint for K8s ServiceMonitor scraping.
+
+    GET /api/self-healing/prometheus/
+
+    Returns all metrics in Prometheus text format via generate_latest().
+    When OTEL backend is active, PrometheusMetricReader bridges OTEL
+    instruments to prometheus_client REGISTRY automatically.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        """Return Prometheus text format metrics."""
+        try:
+            from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+            metrics_output = generate_latest()
+            return HttpResponse(
+                metrics_output,
+                content_type=CONTENT_TYPE_LATEST,
+                status=200,
+            )
+        except ImportError:
+            return Response(
+                {"error": "prometheus_client not installed"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
 
 
 class ErrorBudgetGateHealthView(APIView):

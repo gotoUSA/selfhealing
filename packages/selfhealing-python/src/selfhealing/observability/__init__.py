@@ -18,6 +18,9 @@ _initialized: bool = False
 _tracer_provider = None
 _tracer = None
 _logger_provider = None
+_meter_provider = None
+_meter = None
+_prometheus_metric_reader = None
 _logging_instrumented: bool = False
 _requests_instrumented: bool = False
 _celery_instrumented: bool = False
@@ -247,13 +250,96 @@ def get_current_span_id_from_otel() -> str | None:
     return None
 
 
+def initialize_meter_provider() -> bool:
+    """
+    Initialize OpenTelemetry MeterProvider with PrometheusMetricReader.
+
+    PrometheusMetricReader bridges OTEL instruments to prometheus_client
+    REGISTRY, enabling /metrics text exposition while using OTEL Meter API.
+    This resolves Prometheus multiprocess metrics fragmentation (Section 5.4).
+
+    Returns:
+        bool: True if initialization succeeded, False if unavailable
+    """
+    global _meter_provider, _meter, _prometheus_metric_reader
+
+    if _meter_provider is not None:
+        return True
+
+    try:
+        from opentelemetry.exporter.prometheus import PrometheusMetricReader
+        from opentelemetry.sdk.metrics import MeterProvider
+        from opentelemetry.sdk.resources import Resource
+
+        from selfhealing.settings.otel import get_otel_settings
+
+        settings = get_otel_settings()
+
+        resource_attrs = {
+            "service.name": settings.service_name,
+        }
+        resource_attrs.update(settings.get_resource_attributes_dict())
+        resource = Resource(attributes=resource_attrs)
+
+        _prometheus_metric_reader = PrometheusMetricReader()
+        _meter_provider = MeterProvider(
+            resource=resource,
+            metric_readers=[_prometheus_metric_reader],
+        )
+        _meter = _meter_provider.get_meter(
+            "selfhealing",
+            version="1.0.0",
+        )
+
+        logger.info(
+            "otel.meter_provider_initialized",
+            service_name=settings.service_name,
+        )
+        return True
+
+    except ImportError:
+        logger.debug("otel.prometheus_metric_reader_not_installed")
+        return False
+    except Exception as e:
+        logger.warning(
+            "otel.meter_provider_initialization_failed",
+            error=e,
+        )
+        return False
+
+
+def get_meter():
+    """
+    Get the configured OpenTelemetry Meter.
+
+    Returns:
+        Meter instance if MeterProvider is initialized, None otherwise
+    """
+    if _meter is None:
+        initialize_meter_provider()
+    return _meter
+
+
+def get_meter_provider():
+    """
+    Get the configured MeterProvider.
+
+    Returns:
+        MeterProvider instance if initialized, None otherwise
+    """
+    if _meter_provider is None:
+        initialize_meter_provider()
+    return _meter_provider
+
+
 def shutdown_opentelemetry() -> None:
     """
     Gracefully shutdown OpenTelemetry SDK.
 
-    Flushes pending spans and log records, releases resources.
+    Flushes pending spans, log records, and metrics, releases resources.
     """
     global _initialized, _tracer_provider, _tracer, _logger_provider
+    global _meter_provider, _meter, _prometheus_metric_reader
 
     if _logger_provider is not None:
         try:
@@ -276,23 +362,41 @@ def shutdown_opentelemetry() -> None:
                 error=e,
             )
 
+    if _meter_provider is not None:
+        try:
+            _meter_provider.shutdown()
+            logger.debug("otel.meter_provider_shutdown")
+        except Exception as e:
+            logger.warning(
+                "otel.meter_provider_shutdown_failed",
+                error=e,
+            )
+
     _tracer_provider = None
     _tracer = None
+    _meter_provider = None
+    _meter = None
+    _prometheus_metric_reader = None
     _initialized = False
 
 
 def reset_opentelemetry() -> None:
     """
-    Reset OpenTelemetry state for testing.
+    Reset OpenTelemetry state for testing or post-fork reinitialization.
 
     This forces re-initialization on next use.
     """
     global _initialized, _tracer_provider, _tracer, _logger_provider
-    global _requests_instrumented, _celery_instrumented, _logging_instrumented, _django_instrumented
+    global _meter_provider, _meter, _prometheus_metric_reader
+    global _requests_instrumented, _celery_instrumented
+    global _logging_instrumented, _django_instrumented
     _initialized = False
     _tracer_provider = None
     _tracer = None
     _logger_provider = None
+    _meter_provider = None
+    _meter = None
+    _prometheus_metric_reader = None
     _requests_instrumented = False
     _celery_instrumented = False
     _logging_instrumented = False
@@ -475,7 +579,7 @@ def instrument_django() -> bool:
         DjangoInstrumentor().instrument()
         _django_instrumented = True
         logger.info(
-            "OpenTelemetry Django instrumentation enabled " "(excluded_urls=%s)",
+            "OpenTelemetry Django instrumentation enabled (excluded_urls=%s)",
             excluded or "none",
         )
         return True

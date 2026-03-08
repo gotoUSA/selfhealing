@@ -1002,9 +1002,25 @@ _metrics: SelfHealingMetrics | None = None
 
 
 def get_metrics(prefix: str = "selfhealing") -> SelfHealingMetrics:
-    """Get the global metrics instance, creating if necessary."""
+    """Get the global metrics instance, creating if necessary.
+
+    When SELFHEALING_METRICS_BACKEND=otel, returns OTELSelfHealingMetrics
+    backed by OTEL Meter API with PrometheusMetricReader. This resolves
+    multiprocess metrics fragmentation in Gunicorn preload mode.
+    """
     global _metrics
     if _metrics is None:
+        try:
+            from selfhealing.settings.metrics import get_metrics_settings
+
+            settings = get_metrics_settings()
+            if settings.backend == "otel":
+                from selfhealing.metrics.otel_backend import OTELSelfHealingMetrics
+
+                _metrics = OTELSelfHealingMetrics(prefix=prefix)
+                return _metrics
+        except Exception:
+            pass
         _metrics = SelfHealingMetrics(prefix=prefix)
     return _metrics
 

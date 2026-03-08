@@ -1284,9 +1284,17 @@ def register_disk_buffer_shutdown(buffer: DiskPersistentBuffer) -> None:
 
 
 def _register_signal_handlers() -> None:
-    """SIGTERM, SIGINT 핸들러 등록."""
+    """SIGTERM, SIGINT 핸들러 등록.
+
+    Gunicorn Worker에서는 등록을 건너뛴다. atexit만 사용한다.
+    """
     if sys.platform == "win32":
         # Windows는 SIGTERM 미지원, atexit만 사용
+        return
+
+    from selfhealing.core.process_utils import is_gunicorn_worker
+
+    if is_gunicorn_worker():
         return
 
     original_sigterm = signal.getsignal(signal.SIGTERM)

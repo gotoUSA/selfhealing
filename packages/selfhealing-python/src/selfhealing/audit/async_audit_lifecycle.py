@@ -453,11 +453,16 @@ def register_shutdown_handlers() -> bool:
         # atexit: 정상 종료 시 호출
         atexit.register(graceful_shutdown_audit_system)
 
-        # SIGTERM: Kubernetes Pod 종료, docker stop 등
-        _register_signal_handler(signal.SIGTERM, _handle_sigterm)
+        # Gunicorn Worker에서는 signal 등록을 건너뛴다.
+        # worker_exit 훅에서 graceful_shutdown_audit_system()을 직접 호출한다.
+        from selfhealing.core.process_utils import is_gunicorn_worker
 
-        # SIGINT: Ctrl+C (개발 환경)
-        _register_signal_handler(signal.SIGINT, _handle_sigint)
+        if not is_gunicorn_worker():
+            # SIGTERM: Kubernetes Pod 종료, docker stop 등
+            _register_signal_handler(signal.SIGTERM, _handle_sigterm)
+
+            # SIGINT: Ctrl+C (개발 환경)
+            _register_signal_handler(signal.SIGINT, _handle_sigint)
 
         _shutdown_registered = True
         logger.info("async_audit_lifecycle.shutdown_handlers_registered")

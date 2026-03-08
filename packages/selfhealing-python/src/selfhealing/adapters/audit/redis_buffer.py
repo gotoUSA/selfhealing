@@ -833,18 +833,24 @@ class RedisAuditBuffer:
         return recovered_total
 
     def _register_shutdown_hooks(self) -> None:
-        """Graceful Shutdown 훅 등록."""
+        """Graceful Shutdown 훅 등록.
+
+        Gunicorn Worker에서는 signal 등록을 건너뛴다. atexit만 등록한다.
+        """
         if self._shutdown_registered:
             return
 
         try:
             atexit.register(self._graceful_shutdown)
 
-            # Windows에서는 SIGTERM이 없을 수 있음
-            if hasattr(signal, "SIGTERM"):
-                signal.signal(signal.SIGTERM, self._signal_handler)
-            if hasattr(signal, "SIGINT"):
-                signal.signal(signal.SIGINT, self._signal_handler)
+            from selfhealing.core.process_utils import is_gunicorn_worker
+
+            if not is_gunicorn_worker():
+                # Windows에서는 SIGTERM이 없을 수 있음
+                if hasattr(signal, "SIGTERM"):
+                    signal.signal(signal.SIGTERM, self._signal_handler)
+                if hasattr(signal, "SIGINT"):
+                    signal.signal(signal.SIGINT, self._signal_handler)
 
             self._shutdown_registered = True
             logger.debug("redis_audit_buffer.shutdown_hooks_registered")

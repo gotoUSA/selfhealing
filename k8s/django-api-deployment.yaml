@@ -70,16 +70,8 @@ spec:
           command:
             - gunicorn
             - myproject.wsgi:application
-            - --bind=0.0.0.0:8000
-            - --workers=4
-            - --worker-class=gthread
-            - --threads=2
-            - --worker-tmp-dir=/dev/shm
-            - --access-logfile=-
-            - --error-logfile=-
-            - --capture-output
-            - --timeout=30
-            - --graceful-timeout=10
+            - -c
+            - gunicorn.conf.py
 
           env:
             # Django Settings

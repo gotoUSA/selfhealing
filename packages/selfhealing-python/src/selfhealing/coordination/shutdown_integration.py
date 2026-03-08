@@ -71,7 +71,17 @@ def unregister_from_graceful_shutdown(elector: LeaderElector) -> None:
 
 
 def _setup_signal_handlers() -> None:
-    """SIGTERM/SIGINT 핸들러 설정."""
+    """SIGTERM/SIGINT 핸들러 설정.
+
+    Gunicorn Worker에서는 등록을 건너뛴다. Gunicorn Master가
+    프로세스 라이프사이클을 제어하며, worker_exit 훅에서 정리한다.
+    """
+    from selfhealing.core.process_utils import is_gunicorn_worker
+
+    if is_gunicorn_worker():
+        logger.info("leader_elector.skipping_signal_registration_gunicorn")
+        return
+
     if sys.platform == "win32":
         # Windows는 SIGTERM 미지원
         signal.signal(signal.SIGINT, _signal_handler)

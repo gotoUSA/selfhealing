@@ -36,7 +36,9 @@ Note:
 
 from __future__ import annotations
 
+import os
 import random
+import sys
 import threading
 from typing import TYPE_CHECKING
 
@@ -163,17 +165,12 @@ class SelfHealingConfig(AppConfig):
         # Validate config with Safe Defaults (Fail-Safe Default 강화)
         self._validate_startup_config()
 
-        # Hydrate metric gauges with jitter (Startup Hydration)
-        self._schedule_gauge_hydration()
-
-        # V3: Start pre-computed cache worker for L3 observability endpoints
-        self._start_precomputed_cache_worker()
-
-        # Start System Metrics Cache for non-blocking psutil access
-        self._start_system_metrics_cache()
-
-        # Start Meta-Watchdog (Self-Healing 시스템 자체 모니터링)
-        self._start_meta_watchdog()
+        # Background threads: Gauge hydration, Precomputed Cache, System Metrics, Watchdog.
+        # In Gunicorn preload mode, ready() runs in Master — background threads
+        # die after fork(). post_worker_init calls start_background_threads() instead.
+        # In dev server (manage.py runserver), start threads directly here.
+        if self._should_start_background_threads():
+            self._start_all_background_threads()
 
         # Validate required secrets (Security Hardening)
         self._validate_secrets()
@@ -276,7 +273,9 @@ class SelfHealingConfig(AppConfig):
             sync = StartupHashChainSync(
                 redis_client=redis_client,
                 log_dir=log_dir,
-                key_prefix=getattr(settings, "SELFHEALING_REDIS_KEY_PREFIX", "selfhealing:"),
+                key_prefix=getattr(
+                    settings, "SELFHEALING_REDIS_KEY_PREFIX", "selfhealing:"
+                ),
             )
             result = sync.sync()
 
@@ -381,7 +380,9 @@ class SelfHealingConfig(AppConfig):
             )
 
             try:
-                changes = validate_startup_config(log_changes=True, raise_on_fatal=False)
+                changes = validate_startup_config(
+                    log_changes=True, raise_on_fatal=False
+                )
 
                 if changes > 0:
                     logger.info(
@@ -666,7 +667,6 @@ class SelfHealingConfig(AppConfig):
         Reference:
             docs/self_healing/middleware_system/177_SELF_HEALING_META_WATCHDOG.md
         """
-        import os
 
         # 환경변수로 비활성화 가능
         if os.environ.get("SELFHEALING_META_ENABLED", "true").lower() != "true":
@@ -821,6 +821,75 @@ class SelfHealingConfig(AppConfig):
                 "self_healing.jwt_hook_registration_failed",
                 error=e,
             )
+
+    # =========================================================================
+    # Fork-Safety: Background Thread Lifecycle (Section 5.2)
+    # =========================================================================
+
+    @staticmethod
+    def _should_start_background_threads() -> bool:
+        """Determine if background threads should start in this process.
+
+        Returns True when running in a dev server (manage.py runserver) or
+        when this process is a Gunicorn worker (GUNICORN_WORKER env set by
+        post_worker_init hook). Returns False in Gunicorn Master to prevent
+        spawning threads that die after fork().
+        """
+        is_gunicorn_worker = os.environ.get("GUNICORN_WORKER") == "1"
+        is_dev_server = (
+            "runserver" in sys.argv or os.environ.get("DJANGO_DEV_SERVER") == "1"
+        )
+        is_gunicorn_master = (
+            "gunicorn" in os.environ.get("SERVER_SOFTWARE", "")
+            and not is_gunicorn_worker
+        )
+
+        if is_gunicorn_master:
+            logger.info(
+                "self_healing.skipping_background_threads_gunicorn_master",
+            )
+            return False
+
+        return is_gunicorn_worker or is_dev_server or not is_gunicorn_master
+
+    def _start_all_background_threads(self):
+        """Start all background threads (gauge hydration, cache, metrics, watchdog)."""
+        self._schedule_gauge_hydration()
+        self._start_precomputed_cache_worker()
+        self._start_system_metrics_cache()
+        self._start_meta_watchdog()
+
+    @classmethod
+    def start_background_threads(cls):
+        """Public entry point for Gunicorn post_worker_init hook.
+
+        Resets duplicate-start guards so threads can be started fresh
+        in each forked Worker, then starts all background threads.
+        """
+        cls._reset_all_background_state()
+
+        try:
+            from django.apps import apps
+
+            app_config = apps.get_app_config("selfhealing")
+            app_config._start_all_background_threads()
+        except Exception as exc:
+            logger.warning(
+                "self_healing.background_thread_startup_failed",
+                error=exc,
+            )
+
+    @classmethod
+    def _reset_all_background_state(cls):
+        """Reset all duplicate-start guards for a fresh Worker."""
+        with cls._hydration_lock:
+            cls._hydration_done = False
+        with cls._cache_worker_lock:
+            cls._cache_worker_started = False
+        with cls._metrics_cache_lock:
+            cls._metrics_cache_started = False
+        with cls._meta_watchdog_lock:
+            cls._meta_watchdog_started = False
 
     # =========================================================================
     # Test Helpers

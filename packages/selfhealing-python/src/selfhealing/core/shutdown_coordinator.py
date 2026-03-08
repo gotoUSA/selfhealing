@@ -253,7 +253,17 @@ class GracefulShutdownCoordinator:
         return self._phase in (ShutdownPhase.DRAINING, ShutdownPhase.TERMINATING)
 
     def register_signals(self) -> None:
-        """Register signal handlers for graceful shutdown"""
+        """Register signal handlers for graceful shutdown.
+
+        Skipped in Gunicorn Workers where signal lifecycle is managed by
+        Gunicorn Master (Arbiter). Cleanup runs via worker_exit hook instead.
+        """
+        from selfhealing.core.process_utils import is_gunicorn_worker
+
+        if is_gunicorn_worker():
+            logger.info("shutdown_coordinator.skipping_signal_registration_gunicorn")
+            return
+
         import signal
 
         def signal_handler(signum, frame):
