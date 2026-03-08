@@ -284,16 +284,25 @@ def _reset_mmap(worker):
     Python 래퍼 객체(Lock, 데몬 스레드, Writer 플래그)는 fork-safe하지 않다.
     마스터의 Writer 인스턴스를 버리고, 워커에서 Reader로 재생성한다.
 
-    1-Writer N-Reader 패턴:
-    - reset_cb_state_snapshot(): 마스터의 싱글톤(is_writer=True) 파괴
-    - get_cb_state_snapshot(is_writer=False): Reader로 새 인스턴스 생성
-    - Reader는 atomic write 보장으로 Lock-free 읽기 가능
+    2-layer defense:
+    - L1 (cb_state_snapshot.py): reset uses try/finally to guarantee
+      _snapshot_instance = None even if stop() fails.
+    - L2 (here): reset and recreate are isolated so that a reset failure
+      does not prevent Reader creation.
     """
     from selfhealing.adapters.ipc import (
         get_cb_state_snapshot,
         reset_cb_state_snapshot,
     )
-    reset_cb_state_snapshot()
+
+    try:
+        reset_cb_state_snapshot()
+    except Exception as exc:
+        logger.warning(
+            "Worker %s: mmap snapshot reset failed (stop error): %s",
+            worker.pid, exc,
+        )
+
     get_cb_state_snapshot(is_writer=False)
     logger.info("Worker %s: mmap CB snapshot re-initialized as reader", worker.pid)
 
@@ -561,6 +570,13 @@ selfhealing_gil_contention_p90_ms = Gauge(
 | 변경 전 | 변경 후 | 근거 |
 |---------|---------|------|
 | `_shutdown_all_electors()` (private prefix) | `shutdown_all_electors()` (public) | 실제 사용처 5곳 중 4곳이 외부 통합(atexit, signal handler, K8s hook, Gunicorn hook). `_` prefix가 의미하는 module-private 범위를 넘어선 사용이므로 public API로 전환 |
+
+### 4.10 mmap reset 2-Layer Defense (R2)
+
+| 변경 전 | 변경 후 | 근거 |
+|---------|---------|------|
+| `reset_cb_state_snapshot()`에서 `stop()` 실패 시 `_snapshot_instance`가 stale Writer로 남음 | **L1**: `try/finally`로 `stop()` 실패 시에도 `_snapshot_instance = None` 보장 | `stop()`이 fork 후 dead 스레드에서 예외를 던지면 singleton이 해제되지 않아, 다음 `get_cb_state_snapshot()`이 stale Writer를 반환 → 모든 워커가 Writer로 동작 |
+| `_reset_mmap()`에서 `reset`과 `recreate`가 단일 예외 경로 | **L2**: `reset`과 `recreate`를 분리하여 reset 실패 시에도 Reader 재생성 보장 | L1이 정상 동작하면 L2는 불필요하지만, defense-in-depth 원칙으로 두 레이어 모두 적용. self-healing 라이브러리가 자체 fork-safety에서 단일 장애점을 갖는 것은 모순 |
 
 ---
 

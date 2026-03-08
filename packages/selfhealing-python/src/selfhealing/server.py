@@ -262,17 +262,26 @@ def _reset_mmap(worker):
     (Lock, daemon thread, Writer flag) is not fork-safe. Destroy the
     master's is_writer=True singleton and create a Reader instance.
 
-    1-Writer N-Reader pattern:
-    - reset_cb_state_snapshot(): destroys master singleton
-    - get_cb_state_snapshot(is_writer=False): creates Reader
-    - Reader uses atomic write guarantee for lock-free reads
+    2-layer defense:
+    - L1 (cb_state_snapshot.py): reset uses try/finally to guarantee
+      _snapshot_instance = None even if stop() fails.
+    - L2 (here): reset and recreate are isolated so that a reset failure
+      does not prevent Reader creation.
     """
     from selfhealing.adapters.ipc import (
         get_cb_state_snapshot,
         reset_cb_state_snapshot,
     )
 
-    reset_cb_state_snapshot()
+    try:
+        reset_cb_state_snapshot()
+    except Exception as exc:
+        logger.warning(
+            "Worker %s: mmap snapshot reset failed (stop error): %s",
+            worker.pid,
+            exc,
+        )
+
     get_cb_state_snapshot(is_writer=False)
     logger.info("Worker %s: mmap CB snapshot re-initialized as reader", worker.pid)
 

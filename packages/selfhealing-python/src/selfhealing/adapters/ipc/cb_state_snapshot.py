@@ -169,8 +169,12 @@ class CBStateEntry:
             "state": self.state.name,
             "failure_count": self.failure_count,
             "success_count": self.success_count,
-            "last_failure": self.last_failure.isoformat() if self.last_failure else None,
-            "last_success": self.last_success.isoformat() if self.last_success else None,
+            "last_failure": self.last_failure.isoformat()
+            if self.last_failure
+            else None,
+            "last_success": self.last_success.isoformat()
+            if self.last_success
+            else None,
             "failure_threshold": self.failure_threshold,
             "recovery_timeout_ms": self.recovery_timeout_ms,
         }
@@ -363,7 +367,9 @@ class CBStateSnapshot:
 
         self._mmap.seek(0)
         header_data = self._mmap.read(HEADER_SIZE)
-        magic, version, timestamp, cb_count, _ = struct.unpack(HEADER_FORMAT, header_data)
+        magic, version, timestamp, cb_count, _ = struct.unpack(
+            HEADER_FORMAT, header_data
+        )
 
         return magic, version, timestamp, cb_count
 
@@ -606,7 +612,11 @@ class CBStateSnapshot:
                     continue
 
                 state_str = state_info.get("state", "closed").upper()
-                state_enum = CBState[state_str] if state_str in CBState.__members__ else CBState.CLOSED
+                state_enum = (
+                    CBState[state_str]
+                    if state_str in CBState.__members__
+                    else CBState.CLOSED
+                )
 
                 entry = CBStateEntry(
                     cb_id=cb_id,
@@ -616,7 +626,9 @@ class CBStateSnapshot:
                     last_failure_ts=state_info.get("last_failure_ts", 0.0),
                     last_success_ts=state_info.get("last_success_ts", 0.0),
                     failure_threshold=state_info.get("failure_threshold", 5),
-                    recovery_timeout_ms=int(state_info.get("recovery_timeout", 30) * 1000),
+                    recovery_timeout_ms=int(
+                        state_info.get("recovery_timeout", 30) * 1000
+                    ),
                 )
                 self.update_state(entry)
 
@@ -672,8 +684,16 @@ def get_cb_state_snapshot(
 
 
 def reset_cb_state_snapshot() -> None:
-    """테스트용 스냅샷 인스턴스 리셋."""
+    """싱글톤 스냅샷 인스턴스 리셋.
+
+    stop() 실패 시에도 _snapshot_instance를 반드시 None으로 설정한다.
+    fork 후 dead 스레드에서 stop()이 예외를 던질 수 있으며,
+    이때 stale Writer singleton이 남으면 자식 프로세스에서
+    1-Writer N-Reader 패턴이 깨진다.
+    """
     global _snapshot_instance
     if _snapshot_instance is not None:
-        _snapshot_instance.stop()
-        _snapshot_instance = None
+        try:
+            _snapshot_instance.stop()
+        finally:
+            _snapshot_instance = None

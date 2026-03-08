@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import tempfile
 import time
+from unittest.mock import patch
 
 import pytest
 
@@ -378,6 +379,24 @@ class TestCBStateSnapshotSingleton:
 
         # 정리
         reset_cb_state_snapshot()
+
+    def test_reset_clears_singleton_even_if_stop_fails(self):
+        """stop() 예외 시에도 singleton이 None으로 리셋된다. (L1 fork-safety)"""
+        import selfhealing.adapters.ipc.cb_state_snapshot as mod
+
+        reset_cb_state_snapshot()
+        get_cb_state_snapshot()
+        assert mod._snapshot_instance is not None
+
+        # stop()이 예외를 던지도록 조작
+        with patch.object(
+            mod._snapshot_instance, "stop", side_effect=RuntimeError("dead thread")
+        ):
+            with pytest.raises(RuntimeError):
+                reset_cb_state_snapshot()
+
+        # stop() 실패에도 singleton이 None
+        assert mod._snapshot_instance is None
 
 
 class TestCBState:

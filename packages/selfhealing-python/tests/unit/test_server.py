@@ -446,6 +446,25 @@ class TestResetMmapBehavior:
 
         assert call_order == ["reset", "get(is_writer=False)"]
 
+    def test_reader_created_even_when_reset_fails(self):
+        """reset 실패 시에도 Reader 재생성은 반드시 실행된다. (L2 fork-safety)"""
+        worker = _make_worker()
+
+        with (
+            patch(
+                "selfhealing.adapters.ipc.reset_cb_state_snapshot",
+                autospec=True,
+                side_effect=RuntimeError("dead thread"),
+            ),
+            patch(
+                "selfhealing.adapters.ipc.get_cb_state_snapshot",
+                autospec=True,
+            ) as m_get,
+        ):
+            _reset_mmap(worker)
+
+        m_get.assert_called_once_with(is_writer=False)
+
 
 class TestReseedRngBehavior:
     """_reseed_rng() 동작 검증."""
