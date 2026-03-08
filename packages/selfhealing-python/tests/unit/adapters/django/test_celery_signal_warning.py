@@ -26,8 +26,10 @@ class TestWarnIfCelerySignalsMissingBehavior:
         yield
         reset_auto_config_settings()
 
+    # structlog BoundLogger uses dynamic __getattr__ for log methods,
+    # so autospec=True cannot detect .warning — spec omitted intentionally.
     @patch("selfhealing.adapters.django.apps.logger")
-    @patch("celery.signals.task_failure")
+    @patch("celery.signals.task_failure", autospec=True)
     def test_no_receivers_emits_warning(self, mock_task_failure, mock_logger):
         """Celery 시그널 수신자가 없으면 경고 로그를 발생시킨다."""
         mock_task_failure.receivers = []
@@ -41,7 +43,7 @@ class TestWarnIfCelerySignalsMissingBehavior:
         assert call_args[0][0] == "self_healing.celery_signals_not_registered"
 
     @patch("selfhealing.adapters.django.apps.logger")
-    @patch("celery.signals.task_failure")
+    @patch("celery.signals.task_failure", autospec=True)
     def test_with_receivers_no_warning(self, mock_task_failure, mock_logger):
         """Celery 시그널 수신자가 있으면 경고를 발생시키지 않는다."""
         mock_task_failure.receivers = [("handler", MagicMock())]
@@ -63,7 +65,7 @@ class TestWarnIfCelerySignalsMissingBehavior:
         mock_logger.warning.assert_not_called()
 
     @patch("selfhealing.adapters.django.apps.logger")
-    @patch("celery.signals.task_failure")
+    @patch("celery.signals.task_failure", autospec=True)
     def test_disabled_via_settings_skips_check(self, mock_task_failure, mock_logger):
         """celery_signal_warning=False이면 검사를 건너뛴다."""
         mock_task_failure.receivers = []
