@@ -167,6 +167,9 @@ class SelfHealingConfig(AppConfig):
         # 317: Orphan service wiring — pure-memory initialization (Category A)
         self._initialize_orphan_services()
 
+        # 320: Celery 시그널 미등록 감지 경고
+        self._warn_if_celery_signals_missing()
+
         # Background threads: Gauge hydration, Precomputed Cache, System Metrics, Watchdog.
         # In Gunicorn preload mode, ready() runs in Master — background threads
         # die after fork(). post_worker_init calls start_background_threads() instead.
@@ -1078,6 +1081,30 @@ class SelfHealingConfig(AppConfig):
             logger.debug("self_healing.runbook_module_not_available")
         except Exception as e:
             logger.warning("self_healing.failed_init_runbook", error=e)
+
+    # =========================================================================
+    # 320: Celery Signal Registration Detection
+    # =========================================================================
+
+    @staticmethod
+    def _warn_if_celery_signals_missing():
+        """Celery 시그널이 등록되지 않았으면 경고 로그 발생."""
+        from selfhealing.settings.auto_config import get_auto_config_settings
+
+        auto_settings = get_auto_config_settings()
+        if not auto_settings.celery_signal_warning:
+            return
+
+        try:
+            from celery.signals import task_failure
+
+            if not task_failure.receivers:
+                logger.warning(
+                    "self_healing.celery_signals_not_registered",
+                    hint="Consumer celery.py에서 setup_selfhealing_signals(app=app)를 호출하세요.",
+                )
+        except ImportError:
+            pass
 
     # =========================================================================
     # Fork-Safety: Background Thread Lifecycle (Section 5.2)

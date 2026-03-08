@@ -15,6 +15,7 @@ Provides:
 - DjangoStatisticsAdapter: Statistics adapter using Django ORM
 - connect_session_signals: Django 세션 시그널 핸들러 연결
 - disconnect_session_signals: Django 세션 시그널 핸들러 해제 (테스트용)
+- configure_selfhealing: Consumer settings.py에서 호출하여 설정 자동 래핑
 """
 
 from selfhealing.adapters.django.apps import (
@@ -22,6 +23,7 @@ from selfhealing.adapters.django.apps import (
     SelfHealingConfig,
     create_selfhealing_groups,
 )
+from selfhealing.adapters.django.auto_config import configure_selfhealing
 from selfhealing.adapters.django.statistics import DjangoStatisticsAdapter
 
 
@@ -154,4 +156,6 @@ __all__ = [
     # Signal hooks
     "connect_session_signals",
     "disconnect_session_signals",
+    # Auto-configuration
+    "configure_selfhealing",
 ]

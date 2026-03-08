@@ -26,7 +26,9 @@ if not SECRET_KEY:
         "생성 방법: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'"
     )
 
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,web,*").split(",")
+ALLOWED_HOSTS = os.environ.get(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,web,*"
+).split(",")
 
 # CSRF 설정
 CSRF_TRUSTED_ORIGINS = [
@@ -78,51 +80,7 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = "shopping.User"
 
 MIDDLEWARE = [
-    # ==========================================================================
-    # [0] Prometheus Before Middleware (HTTP 요청 계측 시작)
-    # ==========================================================================
-    # RED Metrics: Rate, Errors, Duration 자동 수집
-    # Reference: https://github.com/korfuri/django-prometheus
     "django_prometheus.middleware.PrometheusBeforeMiddleware",
-    # ==========================================================================
-    # [1] Trace ID Middleware (분산 추적의 시작점)
-    # ==========================================================================
-    # 모든 요청에 trace_id 부여, X-Request-ID 헤더 전파
-    # Reference: load_tests/scenarios/integration/stage08_observability.py
-    "selfhealing.audit.trace.trace_id_middleware",
-    # ==========================================================================
-    # [2] Health Bridge (DB-independent, Worker Saturation 방지)
-    # ==========================================================================
-    # DB 죽어도 /health/l3 즉시 응답 - Kubernetes Probe 필수
-    # Reference: Stage 50 Observability
-    "selfhealing.api.django.middleware.HealthBridgeMiddleware",
-    # ==========================================================================
-    # [3] Tiering Middleware (Emergency Mode Load Shedding)
-    # ==========================================================================
-    # 비상 모드 시 Tier별 트래픽 제어 (critical/standard/non_essential)
-    # 비활성화: SELFHEALING_TIERING_MIDDLEWARE_ENABLED = False
-    "selfhealing.api.django.tiering.TieringMiddleware",
-    # ==========================================================================
-    # [3.5] IP Ban Enforcement (banned IP 즉시 차단)
-    # ==========================================================================
-    # Redis에 기록된 IP ban을 HTTP 요청 단계에서 강제 적용
-    # FAIL-OPEN: Redis 장애 시 요청 허용
-    "selfhealing.api.django.middleware.IPBanMiddleware",
-    # ==========================================================================
-    # [4] Self-Healing Middleware (Circuit Breaker + DLQ)
-    # ==========================================================================
-    # DB 오류/502 감지 → CircuitBreaker 기록 + DLQ 자동 적재
-    # Reference: Stage 16 Healing Proof
-    "selfhealing.api.django.middleware.SelfHealingMiddleware",
-    # ==========================================================================
-    # [5] Actor Context Middleware (사용자 추적)
-    # ==========================================================================
-    # 모든 요청에서 "누가" 수행하는지 자동 추적 (Audit 연동)
-    # 비활성화: SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = False
-    "selfhealing.api.django.middleware.actor_context.ActorContextMiddleware",
-    # ==========================================================================
-    # [6] Django Core Middlewares
-    # ==========================================================================
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -131,56 +89,10 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "allauth.account.middleware.AccountMiddleware",
-    # ==========================================================================
-    # [6.5] Cell Tagging Middleware (Cell Topology — Cell 단위 트래픽 태깅)
-    # ==========================================================================
-    # AuthenticationMiddleware + SessionMiddleware 이후 배치
-    # → request.user.pk, request.session.session_key 접근 가능
-    # 비활성화: SELFHEALING_CELL_TOPOLOGY_ENABLED=false 또는 SELFHEALING_CELL_TAGGING_ENABLED=false
-    "selfhealing.api.django.cell.middleware.CellTaggingMiddleware",
-    # ==========================================================================
-    # [6.6] Baggage Sync Middleware (OTel Baggage ↔ ContextVar 동기화)
-    # ==========================================================================
-    # CellTaggingMiddleware 직후 배치 — 모든 ContextVar 설정 후 Baggage 동기화
-    # DjangoInstrumentor가 [auto-0]에서 baggage 헤더를 파싱한 후 실행
-    "selfhealing.api.django.cell.middleware.BaggageSyncMiddleware",
-    # ==========================================================================
-    # [7] Self-Healing Rate Limit (Hybrid: Redis + Local Memory Fallback)
-    # ==========================================================================
-    "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",
-    # ==========================================================================
-    # [8] Pool Circuit Breaker Middleware (DB Connection Pool 보호)
-    # ==========================================================================
-    # Pool 고갈 시 즉시 503 반환 (Fail Fast)
-    # 비활성화: SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = False
-    # Reference: load_tests/scenarios/chaos/stage26_connection_pool.py
-    "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware",
-    # ==========================================================================
-    # [9] Pool Timeout Middleware (SQLAlchemy Timeout 처리)
-    # ==========================================================================
-    # Pool Timeout 발생 시 503 반환
-    # 비활성화: SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED = False
+    # Consumer-specific middleware
     "myproject.middleware.pool_timeout_middleware.PoolTimeoutMiddleware",
-    # ==========================================================================
-    # [10] Chaos Middleware (HELLMODE 테스트용)
-    # ==========================================================================
-    # X-DB-Lock-Timeout, X-DB-Statement-Timeout 헤더 처리
-    # 비활성화: CHAOS_MIDDLEWARE_ENABLED = False
     "myproject.middleware.chaos_middleware.ChaosMiddleware",
-    # Connection Pool 제한 (HELLMODE 시 5개로 제한)
     "myproject.middleware.chaos_middleware.ConnectionPoolLimiterMiddleware",
-    # ==========================================================================
-    # [11] Audit Middleware (가장 마지막 - 모든 이벤트 수집)
-    # ==========================================================================
-    # 모든 미들웨어 이벤트를 단일 해시 체인으로 기록
-    # 비활성화: SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = False
-    # CRITICAL: 반드시 마지막 위치!
-    "selfhealing.api.django.audit_middleware.AuditMiddleware",
-    # ==========================================================================
-    # [12] Prometheus After Middleware (HTTP 요청 계측 완료)
-    # ==========================================================================
-    # RED Metrics 수집 완료 및 /metrics 엔드포인트 노출
-    # 자동 수집 메트릭: django_http_requests_total, django_http_request_duration_seconds 등
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
 
@@ -190,21 +102,27 @@ MIDDLEWARE = [
 # 각 미들웨어의 활성화 여부를 환경변수 또는 여기서 설정
 
 # Tiering Middleware (Emergency Mode Load Shedding)
-SELFHEALING_TIERING_MIDDLEWARE_ENABLED = os.environ.get("SELFHEALING_TIERING_MIDDLEWARE_ENABLED", "True").lower() in (
+SELFHEALING_TIERING_MIDDLEWARE_ENABLED = os.environ.get(
+    "SELFHEALING_TIERING_MIDDLEWARE_ENABLED", "True"
+).lower() in (
     "true",
     "1",
     "yes",
 )
 
 # Actor Context Middleware (사용자 추적)
-SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = os.environ.get("SELFHEALING_ACTOR_MIDDLEWARE_ENABLED", "True").lower() in (
+SELFHEALING_ACTOR_MIDDLEWARE_ENABLED = os.environ.get(
+    "SELFHEALING_ACTOR_MIDDLEWARE_ENABLED", "True"
+).lower() in (
     "true",
     "1",
     "yes",
 )
 
 # Pool Circuit Breaker Middleware
-SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = os.environ.get("SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", "True").lower() in (
+SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED = os.environ.get(
+    "SELFHEALING_POOL_CB_MIDDLEWARE_ENABLED", "True"
+).lower() in (
     "true",
     "1",
     "yes",
@@ -216,10 +134,14 @@ SELFHEALING_POOL_TIMEOUT_MIDDLEWARE_ENABLED = os.environ.get(
 ).lower() in ("true", "1", "yes")
 
 # Chaos Middleware (테스트 환경에서만 True 권장)
-CHAOS_MIDDLEWARE_ENABLED = os.environ.get("CHAOS_MIDDLEWARE_ENABLED", "False").lower() in ("true", "1", "yes")
+CHAOS_MIDDLEWARE_ENABLED = os.environ.get(
+    "CHAOS_MIDDLEWARE_ENABLED", "False"
+).lower() in ("true", "1", "yes")
 
 # Audit Middleware
-SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = os.environ.get("SELFHEALING_AUDIT_MIDDLEWARE_ENABLED", "True").lower() in (
+SELFHEALING_AUDIT_MIDDLEWARE_ENABLED = os.environ.get(
+    "SELFHEALING_AUDIT_MIDDLEWARE_ENABLED", "True"
+).lower() in (
     "true",
     "1",
     "yes",
@@ -249,7 +171,9 @@ WSGI_APPLICATION = "myproject.wsgi.application"
 # ==========================================================================
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -344,7 +268,9 @@ SPECTACULAR_SETTINGS = {
         {"name": "Webhooks", "description": "웹훅 API"},
     ],
     # 태그 변환 함수
-    "PREPROCESSING_HOOKS": ["shopping.utils.spectacular_hooks.preprocess_exclude_endpoints"],
+    "PREPROCESSING_HOOKS": [
+        "shopping.utils.spectacular_hooks.preprocess_exclude_endpoints"
+    ],
     "POSTPROCESSING_HOOKS": ["shopping.utils.spectacular_hooks.postprocess_tags"],
 }
 
@@ -375,7 +301,9 @@ SIMPLE_JWT = {
 # ==========================================================================
 
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
-CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND = os.environ.get(
+    "CELERY_RESULT_BACKEND", "redis://localhost:6379/0"
+)
 
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
@@ -463,18 +391,10 @@ from myproject.settings.components.social_auth import *  # noqa: F401, F403, E40
 from myproject.settings.components.payment import *  # noqa: F401, F403, E402
 
 # ==========================================================================
-# OpenTelemetry SDK Initialization
+# Self-Healing Auto-Configuration (320)
 # ==========================================================================
-# OTEL_ENABLED=true 시 TracerProvider 및 OTLP Exporter 자동 초기화
-# 비활성화 시 기존 trace_id_middleware가 자체 트레이싱 수행
+# MIDDLEWARE에 selfhealing 미들웨어 자동 삽입, DRF EXCEPTION_HANDLER 설정,
+# 개발 서버에서 OTEL 초기화. 반드시 settings.py 맨 마지막에 호출.
+from selfhealing.adapters.django import configure_selfhealing
 
-try:
-    from selfhealing.observability import initialize_opentelemetry
-
-    _otel_initialized = initialize_opentelemetry()
-except ImportError:
-    # OpenTelemetry packages not installed
-    _otel_initialized = False
-except Exception:
-    # Initialization failed - fallback to legacy tracing
-    _otel_initialized = False
+configure_selfhealing(namespace=globals())
