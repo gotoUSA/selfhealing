@@ -1414,7 +1414,7 @@ def register_for_graceful_shutdown(elector: "LeaderElector") -> None:
     # 최초 등록 시 시그널 핸들러 설정
     if len(_registered_electors) == 1:
         _setup_signal_handlers()
-        atexit.register(_shutdown_all_electors)
+        atexit.register(shutdown_all_electors)
 
 
 def _setup_signal_handlers() -> None:
@@ -1432,10 +1432,10 @@ def _setup_signal_handlers() -> None:
 def _signal_handler(signum, frame) -> None:
     """시그널 핸들러."""
     logger.info(f"[LeaderElector] Received signal {signum}, initiating shutdown")
-    _shutdown_all_electors()
+    shutdown_all_electors()
 
 
-def _shutdown_all_electors() -> None:
+def shutdown_all_electors() -> None:
     """모든 등록된 Elector 종료."""
     global _registered_electors
 
@@ -1469,13 +1469,13 @@ def integrate_with_shutdown_coordinator() -> None:
         class LeaderElectorShutdownHandler(ShutdownHandler):
             def on_shutdown_start(self) -> None:
                 logger.info("[LeaderElector] Shutdown start - releasing leadership")
-                _shutdown_all_electors()
+                shutdown_all_electors()
 
             def on_drain_complete(self) -> None:
                 pass
 
             def on_force_shutdown(self, pending_requests) -> None:
-                _shutdown_all_electors()
+                shutdown_all_electors()
 
         # 핸들러 등록 로직은 앱 초기화 시 수행
         logger.info("[LeaderElector] GracefulShutdownCoordinator integration ready")

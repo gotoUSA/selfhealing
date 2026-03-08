@@ -67,6 +67,31 @@ class TestServerContract:
         m_mmap.assert_called_once_with(worker)
         m_rng.assert_called_once_with(worker)
 
+    def test_post_fork_reset_continues_after_individual_failure(self):
+        """개별 reset 실패 시 나머지 reset이 계속 실행된다. (§4.7 에러 격리)"""
+        worker = _make_worker()
+        with (
+            patch(
+                "selfhealing.server._reset_redis",
+                autospec=True,
+                side_effect=RuntimeError("Redis fail"),
+            ),
+            patch(
+                "selfhealing.server._reset_kafka",
+                autospec=True,
+                side_effect=RuntimeError("Kafka fail"),
+            ),
+            patch("selfhealing.server._reset_otel", autospec=True) as m_otel,
+            patch("selfhealing.server._reset_mmap", autospec=True) as m_mmap,
+            patch("selfhealing.server._reseed_rng", autospec=True) as m_rng,
+        ):
+            post_fork_reset(worker)
+
+        # Redis, Kafka 실패에도 나머지 3개는 실행됨
+        m_otel.assert_called_once_with(worker)
+        m_mmap.assert_called_once_with(worker)
+        m_rng.assert_called_once_with(worker)
+
     def test_worker_exit_shutdown_order_is_bg_then_leader_then_audit(self):
         """worker_exit_cleanup()는 background stop → leader elector → audit system 순서로 종료."""
         worker = _make_worker()
@@ -248,10 +273,10 @@ class TestShutdownLeaderElectorsBehavior:
     """_shutdown_leader_electors() 동작 검증."""
 
     def test_calls_shutdown_all_electors(self):
-        """_shutdown_all_electors()를 호출."""
+        """shutdown_all_electors()를 호출."""
         worker = _make_worker()
         with patch(
-            "selfhealing.coordination.shutdown_integration._shutdown_all_electors",
+            "selfhealing.coordination.shutdown_integration.shutdown_all_electors",
             autospec=True,
         ) as mock_shutdown:
             _shutdown_leader_electors(worker)
@@ -262,7 +287,7 @@ class TestShutdownLeaderElectorsBehavior:
         worker = _make_worker()
         with (
             patch(
-                "selfhealing.coordination.shutdown_integration._shutdown_all_electors",
+                "selfhealing.coordination.shutdown_integration.shutdown_all_electors",
                 autospec=True,
                 side_effect=RuntimeError("test"),
             ),
@@ -303,30 +328,38 @@ class TestShutdownAuditSystemBehavior:
 class TestResetRedisBehavior:
     """_reset_redis() 동작 검증."""
 
-    def test_creates_adapter_and_calls_reconnect(self):
-        """RedisCacheAdapter를 생성하고 reconnect()를 호출."""
+    def test_invalidates_provider_registry_singleton(self):
+        """ProviderRegistry._instances에서 'cache:redis' 엔트리를 제거."""
         worker = _make_worker()
-        with patch(
-            "selfhealing.adapters.cache.redis_adapter.RedisCacheAdapter",
-            autospec=True,
-        ) as mock_cls:
-            _reset_redis(worker)
-            mock_cls.assert_called_once()
-            mock_cls.return_value.reconnect.assert_called_once()
 
-    def test_exception_logged_as_warning(self):
-        """예외 발생 시 warning 로그 기록 (크래시하지 않음)."""
+        from selfhealing.factory import ProviderRegistry
+
+        original = ProviderRegistry._instances.copy()
+        try:
+            ProviderRegistry._instances["cache:redis"] = "stale_singleton"
+            ProviderRegistry._instances["cache:memory"] = "keep"
+
+            _reset_redis(worker)
+
+            assert "cache:redis" not in ProviderRegistry._instances
+            assert "cache:memory" in ProviderRegistry._instances
+        finally:
+            ProviderRegistry._instances.clear()
+            ProviderRegistry._instances.update(original)
+
+    def test_no_error_when_no_singleton_exists(self):
+        """singleton이 없는 상태에서도 에러 없이 실행."""
         worker = _make_worker()
-        with (
-            patch(
-                "selfhealing.adapters.cache.redis_adapter.RedisCacheAdapter",
-                autospec=True,
-                side_effect=ConnectionError("Redis down"),
-            ),
-            patch("selfhealing.server.logger", autospec=True) as mock_logger,
-        ):
-            _reset_redis(worker)  # 예외로 크래시하지 않아야 함
-            mock_logger.warning.assert_called()
+
+        from selfhealing.factory import ProviderRegistry
+
+        original = ProviderRegistry._instances.copy()
+        try:
+            ProviderRegistry._instances.pop("cache:redis", None)
+            _reset_redis(worker)  # KeyError 없이 정상 실행
+        finally:
+            ProviderRegistry._instances.clear()
+            ProviderRegistry._instances.update(original)
 
 
 class TestResetKafkaBehavior:

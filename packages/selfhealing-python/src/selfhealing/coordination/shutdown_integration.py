@@ -49,7 +49,7 @@ def register_for_graceful_shutdown(elector: LeaderElector) -> None:
     # 최초 등록 시 시그널 핸들러 설정
     if not _handlers_installed:
         _setup_signal_handlers()
-        atexit.register(_shutdown_all_electors)
+        atexit.register(shutdown_all_electors)
         _handlers_installed = True
 
 
@@ -99,10 +99,10 @@ def _signal_handler(signum: int, frame) -> None:
         "leader_elector.signal_received_shutdown_started",
         signal_name=signal_name,
     )
-    _shutdown_all_electors()
+    shutdown_all_electors()
 
 
-def _shutdown_all_electors() -> None:
+def shutdown_all_electors() -> None:
     """모든 등록된 Elector 종료."""
     global _registered_electors
 
@@ -144,7 +144,7 @@ def integrate_with_shutdown_coordinator() -> None:
             def on_shutdown_start(self) -> None:
                 """Shutdown 시작 시 리더십 반납."""
                 logger.info("leader_elector.shutdown_started_releasing_leadership")
-                _shutdown_all_electors()
+                shutdown_all_electors()
 
             def on_drain_complete(self) -> None:
                 """Drain 완료 시 (추가 작업 없음)."""
@@ -152,7 +152,7 @@ def integrate_with_shutdown_coordinator() -> None:
 
             def on_force_shutdown(self, pending_requests) -> None:
                 """강제 종료 시 리더십 반납."""
-                _shutdown_all_electors()
+                shutdown_all_electors()
 
         logger.info("leader_elector.graceful_shutdown_coordinator_integration_ready")
         return LeaderElectorShutdownHandler()

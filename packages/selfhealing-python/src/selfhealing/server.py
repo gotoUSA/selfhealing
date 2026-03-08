@@ -36,14 +36,23 @@ def post_fork_reset(worker):
     Covers: Redis, Kafka, OpenTelemetry, mmap, RNG.
     DB connection reset is NOT included — that is Django's responsibility.
 
+    Each reset is isolated so that a failure in one does not prevent
+    subsequent resets from running (e.g. Kafka failure must not skip
+    mmap reset, which would leave a stale Writer singleton).
+
     Args:
         worker: Gunicorn worker instance
     """
-    _reset_redis(worker)
-    _reset_kafka(worker)
-    _reset_otel(worker)
-    _reset_mmap(worker)
-    _reseed_rng(worker)
+    for fn in (_reset_redis, _reset_kafka, _reset_otel, _reset_mmap, _reseed_rng):
+        try:
+            fn(worker)
+        except Exception as exc:
+            logger.warning(
+                "Worker %s: %s failed: %s",
+                worker.pid,
+                fn.__name__,
+                exc,
+            )
 
 
 def post_worker_init_start(worker):
@@ -127,10 +136,10 @@ def _shutdown_leader_electors(worker):
     """Shutdown all registered leader electors."""
     try:
         from selfhealing.coordination.shutdown_integration import (
-            _shutdown_all_electors,
+            shutdown_all_electors,
         )
 
-        _shutdown_all_electors()
+        shutdown_all_electors()
     except Exception as exc:
         logger.warning(
             "Worker %s: leader elector shutdown failed: %s",
@@ -204,17 +213,15 @@ def _emergency_dump(worker):
 def _reset_redis(worker):
     """Reset Redis connections after fork.
 
-    Creates a fresh RedisCacheAdapter and calls reconnect() to
-    disconnect inherited pool connections and establish new ones.
+    Invalidates the ProviderRegistry singleton so the next get_cache()
+    call creates a fresh RedisCacheAdapter with a new ConnectionPool.
+    The parent's stale pool (with inherited FDs) is abandoned.
     """
-    from selfhealing.adapters.cache.redis_adapter import RedisCacheAdapter
+    from selfhealing.factory import ProviderRegistry
 
-    try:
-        adapter = RedisCacheAdapter()
-        adapter.reconnect()
-        logger.info("Worker %s: Redis connections reset", worker.pid)
-    except Exception as exc:
-        logger.warning("Worker %s: Redis reset failed: %s", worker.pid, exc)
+    with ProviderRegistry._lock:
+        ProviderRegistry._instances.pop("cache:redis", None)
+    logger.info("Worker %s: Redis cache singleton invalidated", worker.pid)
 
 
 def _reset_kafka(worker):

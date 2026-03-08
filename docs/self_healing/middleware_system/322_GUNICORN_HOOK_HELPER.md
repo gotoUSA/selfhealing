@@ -85,14 +85,20 @@ def post_fork_reset(worker):
     Covers: Redis, Kafka, OpenTelemetry, mmap, RNG.
     DB connection reset is NOT included — that is Django's responsibility.
 
+    Each reset is isolated so that a failure in one does not prevent
+    subsequent resets from running (e.g. Kafka failure must not skip
+    mmap reset, which would leave a stale Writer singleton).
+
     Args:
         worker: Gunicorn worker instance
     """
-    _reset_redis(worker)
-    _reset_kafka(worker)
-    _reset_otel(worker)
-    _reset_mmap(worker)
-    _reseed_rng(worker)
+    for fn in (_reset_redis, _reset_kafka, _reset_otel, _reset_mmap, _reseed_rng):
+        try:
+            fn(worker)
+        except Exception as exc:
+            logger.warning(
+                "Worker %s: %s failed: %s", worker.pid, fn.__name__, exc,
+            )
 
 
 def post_worker_init_start(worker):
@@ -168,9 +174,9 @@ def _shutdown_leader_electors(worker):
     """등록된 Leader Elector 전체 종료."""
     try:
         from selfhealing.coordination.shutdown_integration import (
-            _shutdown_all_electors,
+            shutdown_all_electors,
         )
-        _shutdown_all_electors()
+        shutdown_all_electors()
     except Exception as exc:
         logger.warning(
             "Worker %s: leader elector shutdown failed: %s", worker.pid, exc,
@@ -230,17 +236,15 @@ def _emergency_dump(worker):
 def _reset_redis(worker):
     """Redis 연결 재설정.
 
-    새 RedisCacheAdapter 인스턴스를 생성하고 reconnect()를 호출하여
-    fork으로 상속된 풀 연결을 끊고 새 연결을 생성한다.
+    ProviderRegistry의 캐시 singleton을 무효화하여
+    다음 get_cache() 호출 시 새 ConnectionPool로 재생성되도록 한다.
+    부모의 stale FD를 가진 기존 pool은 버려진다.
     """
-    from selfhealing.adapters.cache.redis_adapter import RedisCacheAdapter
+    from selfhealing.factory import ProviderRegistry
 
-    try:
-        adapter = RedisCacheAdapter()
-        adapter.reconnect()
-        logger.info("Worker %s: Redis connections reset", worker.pid)
-    except Exception as exc:
-        logger.warning("Worker %s: Redis reset failed: %s", worker.pid, exc)
+    with ProviderRegistry._lock:
+        ProviderRegistry._instances.pop("cache:redis", None)
+    logger.info("Worker %s: Redis cache singleton invalidated", worker.pid)
 
 
 def _reset_kafka(worker):
@@ -539,6 +543,24 @@ selfhealing_gil_contention_p90_ms = Gauge(
 |---------|---------|------|
 | CPU 바운드 스레드 2개가 워커 내부에서 GIL 경합 | Sidecar Process로 CPU 작업 분리 (System Metrics, Correlation Engine) | 완화책(Adaptive Interval 등)은 GIL 안에서의 최적화이지 제거가 아니다. Sidecar만이 근본 해결이며, 적용 시 나머지 완화책은 불필요해진다 |
 | GIL 경합 관찰 수단 없음 | Meta-Watchdog에 GILContentionProbe 추가 | Sidecar 효과 검증 + 새 스레드 추가 시 조기 경보 |
+
+### 4.7 post_fork_reset 에러 격리 (R2)
+
+| 변경 전 | 변경 후 | 근거 |
+|---------|---------|------|
+| 5개 reset 함수를 순차 호출, 에러 격리 없음 | loop + try/except로 각 함수를 독립 실행 | `_reset_kafka()` 실패 시 `_reset_mmap()`이 건너뛰어져 자식 프로세스가 master의 `is_writer=True` singleton을 상속하는 치명적 결함. 각 단계가 독립적으로 실행되어야 한다 |
+
+### 4.8 Redis 리셋 — ProviderRegistry singleton 무효화 (R2)
+
+| 변경 전 | 변경 후 | 근거 |
+|---------|---------|------|
+| `RedisCacheAdapter()` throwaway 인스턴스 생성 후 `reconnect()` | `ProviderRegistry._instances.pop("cache:redis", None)` | 기존 코드는 새 인스턴스의 빈 pool만 리셋하고 GC됨. 앱이 사용하는 singleton(`ProviderRegistry._instances["cache:redis"]`)의 stale ConnectionPool은 그대로 유지되어 fork 후 `ConnectionResetError` 발생 가능. singleton 엔트리를 삭제하면 다음 `get_cache()` 호출 시 새 pool로 재생성된다 |
+
+### 4.9 shutdown_all_electors public API 전환 (R2)
+
+| 변경 전 | 변경 후 | 근거 |
+|---------|---------|------|
+| `_shutdown_all_electors()` (private prefix) | `shutdown_all_electors()` (public) | 실제 사용처 5곳 중 4곳이 외부 통합(atexit, signal handler, K8s hook, Gunicorn hook). `_` prefix가 의미하는 module-private 범위를 넘어선 사용이므로 public API로 전환 |
 
 ---
 

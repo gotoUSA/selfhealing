@@ -743,7 +743,7 @@ def start_analysis_loop(self) -> None:
 
 | 문제 | 코드 위치 | 영향 |
 |------|----------|------|
-| SIGTERM 시 `scheduler.stop()` 미호출 | [`shutdown_integration.py`](../../packages/selfhealing-python/src/selfhealing/coordination/shutdown_integration.py) — `_shutdown_all_electors()`가 **elector만** stop | 리더십 반납 후에도 분석 job이 잠시 실행 → 이중 실행 |
+| SIGTERM 시 `scheduler.stop()` 미호출 | [`shutdown_integration.py`](../../packages/selfhealing-python/src/selfhealing/coordination/shutdown_integration.py) — `shutdown_all_electors()`가 **elector만** stop | 리더십 반납 후에도 분석 job이 잠시 실행 → 이중 실행 |
 | 5초 하드코딩 타임아웃 | [`scheduler.py` L253](../../packages/selfhealing-python/src/selfhealing/coordination/scheduler.py) — `join(timeout=5.0)` | 대규모 DAG 분석이 5초 초과 시 강제 중단 |
 | `is_lease_valid()` 미사용 | [`scheduler.py` `_execute_job()`](../../packages/selfhealing-python/src/selfhealing/coordination/scheduler.py) | 장기 분석 중 lease 만료 감지 불가 → stale leader |
 

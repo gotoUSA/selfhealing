@@ -8,9 +8,9 @@ import pytest
 
 from selfhealing.coordination.shutdown_integration import (
     _registered_electors,
-    _shutdown_all_electors,
     integrate_with_shutdown_coordinator,
     register_for_graceful_shutdown,
+    shutdown_all_electors,
     unregister_from_graceful_shutdown,
 )
 
@@ -82,7 +82,7 @@ class TestUnregisterFromGracefulShutdown:
 
 
 class TestShutdownAllElectors:
-    """_shutdown_all_electors 테스트."""
+    """shutdown_all_electors 테스트."""
 
     def test_stops_all_electors(self):
         """모든 등록된 Elector 중지 테스트."""
@@ -94,7 +94,7 @@ class TestShutdownAllElectors:
         _registered_electors.append(mock_elector1)
         _registered_electors.append(mock_elector2)
 
-        _shutdown_all_electors()
+        shutdown_all_electors()
 
         mock_elector1.stop.assert_called_once()
         mock_elector2.stop.assert_called_once()
@@ -109,7 +109,7 @@ class TestShutdownAllElectors:
         _registered_electors.append(mock_elector)
 
         # 예외가 발생해도 계속 진행
-        _shutdown_all_electors()
+        shutdown_all_electors()
 
         assert len(_registered_electors) == 0
 
