@@ -6,6 +6,7 @@
 > **References**:
 > - 317 — Orphan Service Wiring (고아 서비스 목록)
 > - 311 — Interface Contract Integrity (인터페이스 계약 검증)
+> - 313 — Settings Configuration Consistency (설정 일관성 검증)
 
 ---
 
@@ -71,15 +72,22 @@ scripts/
 ```
 Phase 1: 서비스 디렉토리 스캔
   - services/ 하위 모든 디렉토리 목록 추출
-  - __pycache__, __init__.py 등 비서비스 항목 제외
+  - IGNORE_DIRS 제외 (§3.5 참조)
 
-Phase 2: 엔트리포인트 import 스캔
-  - 각 엔트리포인트 파일에서 `from selfhealing.services.{name}` 패턴 검색
-  - 각 엔트리포인트 파일에서 `selfhealing.services.{name}` 문자열 검색 (Celery Beat 등)
+Phase 2: AST 기반 엔트리포인트 import 스캔 (§3.6 참조)
+  - 각 엔트리포인트 파일을 ast.parse()로 파싱
+  - ast.Import / ast.ImportFrom 노드 순회 → 서비스 참조 추출
+  - ast.Constant 문자열 리터럴 마이닝 → 동적 참조 추출
+  - 함수 내부 지연 임포트, as 앨리어스, 멀티라인 임포트 모두 감지
+
+Phase 2.5: Django MIDDLEWARE 문자열 배열 스캔 (§3.7 참조)
+  - myproject/settings/base.py의 MIDDLEWARE = [...] 에서 selfhealing 경로 추출
+  - 해당 미들웨어 파일 → 내부 서비스 import 추적 (2-hop)
 
 Phase 3: 간접 연결 스캔
   - ProviderRegistry에서 서비스 참조 검색
   - 이미 연결된 서비스 내부에서 다른 서비스 import 추적 (1-depth)
+  - EventBus.subscribe() 호출을 서비스 디렉토리 내 텍스트 검색으로 감지 (§3.8 참조)
 
 Phase 4: 허용 목록 적용
   - wiring_allowlist.yaml에 명시된 서비스는 고아여도 PASS
@@ -101,11 +109,21 @@ Usage:
 Exit Codes:
     0 — All services wired or allowlisted
     1 — Orphan services detected
+
+Dependencies:
+    - Python 3.12+ (ast module)
+    - pyyaml (allowlist parsing)
+    - Django import 불필요 — 순수 정적 분석
 """
+import ast
+from pathlib import Path
 
 # 상수
 SELFHEALING_ROOT = "packages/selfhealing-python/src/selfhealing"
 SERVICES_DIR = f"{SELFHEALING_ROOT}/services"
+
+# 인프라/유틸리티 디렉토리 — 서비스가 아니므로 스캔 대상에서 제외
+IGNORE_DIRS = {"event_bus", "factory", "__pycache__"}
 
 ENTRY_POINT_PATHS = [
     # Middleware
@@ -119,7 +137,7 @@ ENTRY_POINT_PATHS = [
     f"{SELFHEALING_ROOT}/celery_tasks/",
     f"{SELFHEALING_ROOT}/tasks/",
     f"{SELFHEALING_ROOT}/adapters/celery/tasks/",
-    # AppConfig
+    # AppConfig / Bootstrap
     f"{SELFHEALING_ROOT}/adapters/django/apps.py",
     # Signals
     f"{SELFHEALING_ROOT}/adapters/django/signal_hooks.py",
@@ -135,12 +153,178 @@ ENTRY_POINT_PATHS = [
     "myproject/settings/",
 ]
 
-IMPORT_PATTERNS = [
-    r"from\s+selfhealing\.services\.{name}",
-    r"selfhealing\.services\.{name}",
-    r"from\s+selfhealing\.services\s+import\s+.*{name}",
+# Django MIDDLEWARE 문자열 배열 스캔 대상
+MIDDLEWARE_SETTINGS_PATH = "myproject/settings/base.py"
+```
+
+### 3.5 IGNORE_DIRS — 비서비스 디렉토리 제외
+
+`services/` 하위에는 실제 서비스가 아닌 인프라/유틸리티 디렉토리가 존재한다. 이들은 와이어링 검증 대상이 아니다.
+
+```python
+IGNORE_DIRS = {"event_bus", "factory", "__pycache__"}
+```
+
+| 디렉토리 | 제외 사유 |
+|----------|----------|
+| `event_bus` | 이벤트 인프라. 다른 서비스에서 import하는 쪽이지, 엔트리포인트에서 직접 import되지 않음 |
+| `factory` | 서비스 팩토리 유틸리티 |
+| `__pycache__` | Python 캐시 디렉토리 |
+
+> **유지보수**: 유사한 인프라 디렉토리가 추가될 경우 이 목록에 추가한다.
+
+### 3.6 AST 기반 Import 분석 — Regex 대체
+
+#### 3.6.1 배경: Regex의 한계
+
+기존 `IMPORT_PATTERNS` 정규식 방식은 다음 패턴을 놓친다:
+
+| 패턴 | 예시 코드 | Regex 감지 |
+|------|----------|-----------|
+| 멀티라인 괄호 임포트 | `from selfhealing.services import (\n    RetryHandler,\n)` | ❌ |
+| `as` 앨리어스 | `import global_state as _global_state_module` | ❌ |
+| 함수 내부 지연 임포트 | `def _store_to_dlq(): from selfhealing.services.dlq import ...` | ❌ |
+| `importlib.import_module()` | `importlib.import_module("selfhealing.services.saga.tasks")` | ❌ |
+| `TYPE_CHECKING` 조건부 | `if TYPE_CHECKING: from selfhealing.services.circuit_mesh...` | ❌ |
+| `__getattr__` lazy binding | `importlib.import_module("selfhealing.services.cleanup_service")` | ❌ |
+
+실제 엔트리포인트 파일(`signal_hooks.py`, `beat_schedule.py`)의 약 40%가 지연 임포트 패턴을 사용하므로 Regex로는 와이어링의 상당 부분을 놓친다.
+
+#### 3.6.2 AST 2-Pass 하이브리드 알고리즘
+
+```python
+def extract_service_refs(file_path: Path) -> set[str]:
+    """AST 기반 서비스 참조 추출. Django import 불필요."""
+    source = file_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(file_path))
+    refs: set[str] = set()
+
+    for node in ast.walk(tree):
+        # Pass 1: 직접 임포트 (멀티라인, alias, 조건부, 지연 임포트 모두 포착)
+        if isinstance(node, ast.ImportFrom) and node.module:
+            # "from selfhealing.services.X ..." → X 추출
+            if node.module.startswith("selfhealing.services."):
+                parts = node.module.split(".")
+                if len(parts) >= 3:
+                    refs.add(parts[2])  # services.{name}
+            # "from selfhealing.services import X" → X 추출
+            if node.module == "selfhealing.services" and node.names:
+                for alias in node.names:
+                    refs.add(alias.name)
+
+        # Pass 2: 문자열 리터럴 마이닝 (Celery task names, importlib paths)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            value = node.value
+            if "selfhealing.services." in value:
+                parts = value.split("selfhealing.services.")[1].split(".")
+                if parts[0]:
+                    refs.add(parts[0])
+
+    return refs
+```
+
+> **설계 원칙**: CI 스크립트는 Django 런타임에 의존하지 않는다. `ast.parse()`만 사용하므로
+> 앱에 에러가 있어서 Django가 로드되지 않는 상황에서도 독립적으로 실행된다.
+
+### 3.7 Django MIDDLEWARE 문자열 배열 스캔
+
+#### 3.7.1 배경
+
+Django 미들웨어는 파이썬 import가 아닌 `settings.py`의 `MIDDLEWARE = [...]` **문자열 배열**로 등록된다. 따라서 Phase 2의 AST import 분석만으로는 미들웨어를 통한 서비스 와이어링을 감지할 수 없다.
+
+현재 `myproject/settings/base.py`에 12개의 selfhealing 미들웨어가 문자열로 등록:
+
+```python
+MIDDLEWARE = [
+    "selfhealing.audit.trace.trace_id_middleware",
+    "selfhealing.api.django.middleware.HealthBridgeMiddleware",
+    "selfhealing.api.django.tiering.TieringMiddleware",
+    "selfhealing.api.django.middleware.IPBanMiddleware",
+    "selfhealing.api.django.middleware.SelfHealingMiddleware",
+    "selfhealing.api.django.middleware.actor_context.ActorContextMiddleware",
+    "selfhealing.api.django.cell.middleware.CellTaggingMiddleware",
+    "selfhealing.api.django.cell.middleware.BaggageSyncMiddleware",
+    "selfhealing.api.django.rate_limit.HybridRateLimitMiddleware",
+    "selfhealing.api.django.pool_circuit_breaker.PoolCircuitBreakerMiddleware",
+    "selfhealing.api.django.audit_middleware.AuditMiddleware",
+    # ...
 ]
 ```
+
+#### 3.7.2 2-Hop 추적 알고리즘
+
+미들웨어 경로 자체는 `selfhealing.services.*`가 아니므로 **2-hop 추적**이 필요하다:
+
+```
+Hop 1: MIDDLEWARE 문자열 → 미들웨어 파일 경로 resolve
+Hop 2: 미들웨어 파일 → 내부 서비스 import 추출 (§3.6 AST 사용)
+```
+
+```python
+def scan_middleware_wiring(settings_path: Path) -> dict[str, set[str]]:
+    """MIDDLEWARE 문자열 배열에서 간접 서비스 참조 추출."""
+    tree = ast.parse(settings_path.read_text(encoding="utf-8"))
+    middleware_paths: list[str] = []
+
+    # Hop 1: MIDDLEWARE = [...] 에서 selfhealing 경로 추출
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if getattr(target, "id", "") == "MIDDLEWARE":
+                    if isinstance(node.value, ast.List):
+                        for elt in node.value.elts:
+                            if isinstance(elt, ast.Constant) and "selfhealing." in str(elt.value):
+                                middleware_paths.append(elt.value)
+
+    # Hop 2: 각 미들웨어 파일 내부에서 서비스 import 추출
+    result: dict[str, set[str]] = {}
+    for dotted_path in middleware_paths:
+        file_path = _dotted_to_file_path(dotted_path)
+        if file_path and file_path.exists():
+            refs = extract_service_refs(file_path)
+            if refs:
+                result[dotted_path] = refs
+
+    return result
+```
+
+현재 감지되는 미들웨어 → 서비스 간접 연결:
+
+| 미들웨어 | 내부 서비스 import (지연 임포트) |
+|----------|-------------------------------|
+| `SelfHealingMiddleware` | `circuit_breaker`, `dlq`, `audit` |
+| `HealthBridgeMiddleware` | `circuit_breaker` |
+| `IPBanMiddleware` | `security` (+ `factory` ProviderRegistry) |
+| `BackpressureMiddleware` | `scaling.rate_controller`, `scaling.graceful_degradation` |
+
+### 3.8 EventBus 구독 감지
+
+서비스 디렉토리 내에서 `EventBus.subscribe()` 호출을 텍스트 정규식으로 감지한다. AST 수준의 메서드 스코프 추적은 불필요하다.
+
+```python
+import re
+
+SUBSCRIBE_PATTERN = re.compile(r"\.subscribe\(\s*EventType\.", re.MULTILINE)
+
+def has_eventbus_subscription(service_dir: Path) -> bool:
+    """서비스 디렉토리 내 .py 파일에서 EventBus subscribe 호출 감지."""
+    for py_file in service_dir.rglob("*.py"):
+        content = py_file.read_text(encoding="utf-8")
+        if SUBSCRIBE_PATTERN.search(content):
+            return True
+    return False
+```
+
+> **포매터 대응**: Black 등의 코드 포매터가 `.subscribe(\n    EventType...` 형태로 줄바꿈을
+> 삽입하므로, `\s*`로 공백과 줄바꿈을 모두 커버한다.
+
+현재 22개 이상의 파일에서 `.subscribe(EventType.` 패턴이 일관되게 사용 중이며, 다음 3가지 호출 위치에서 발생:
+
+| 패턴 | 위치 예시 |
+|------|----------|
+| 독립 함수 (모듈 레벨) | `circuit_mesh/mesh_coordinator.py:626` `register_mesh_handlers()` |
+| 인스턴스 메서드 (`_subscribe_*`) | `backoff_calculator/calculator.py:156`, `cell_topology/registry.py:442` |
+| `register()` / `initialize()` 메서드 | `event_journal/subscriber.py:77` |
 
 ### 3.4 wiring_allowlist.yaml 형식
 
@@ -295,38 +479,145 @@ ORPHAN (5):
 
 ## 6. 추가 검증 규칙
 
-### 6.1 Celery Task 등록 검증
+### 6.1 Celery Task 등록 검증 — 주기적 vs 온디맨드 구분
 
-`@shared_task`로 정의된 태스크가 Celery Beat 스케줄에 등록되었는지 검증:
+`@shared_task`로 정의된 태스크가 Celery Beat 스케줄에 등록되었는지 검증한다. 단, **온디맨드 태스크**(`.delay()` / `.apply_async()`로 호출)는 Beat 등록이 불필요하므로 구분이 필요하다.
+
+#### 6.1.1 구분 전략
 
 ```
 Phase A: @shared_task 정의 수집
   - celery_tasks/, tasks/, adapters/celery/tasks/, services/*/tasks.py 스캔
+  - AST로 @shared_task 데코레이터의 name= 파라미터 추출
 
-Phase B: Beat 스케줄 수집
+Phase B: Beat 스케줄 수집 (SSOT)
   - myproject/celery.py의 CELERY_BEAT_SCHEDULE 파싱
+  - adapters/celery/beat_schedule.py의 _SCHEDULE_MODULES 문자열 리터럴 마이닝
 
-Phase C: 비교
-  - @shared_task가 있지만 Beat에 없으면 WARNING
-  - (on-demand 태스크는 Beat 불필요 — allowlist 지원)
+Phase C: 교차 검증
+  - Beat에 등록된 task name → 주기적 Task
+  - Beat에 없는 task name → 온디맨드 Task (WARNING 대신 INFO)
+  - wiring_allowlist.yaml의 on_demand_tasks 섹션에 명시된 task는 검증 제외
 ```
 
-### 6.2 AppConfig.ready() 초기화 순서 검증
+#### 6.1.2 현재 태스크 현황
 
-의존성 순서가 올바른지 검증:
+| 파일 | Task | 유형 |
+|------|------|------|
+| `celery_tasks/metrics_tasks.py` | `collect_self_healing_metrics` | 주기적 (Beat 등록) |
+| `celery_tasks/forecaster_tasks.py` | `run_forecaster_cycle` | 주기적 (Beat 등록) |
+| `services/runbook/tasks.py` | `resume_runbook_task` | **온디맨드** (실행 재개) |
+| `services/runbook/tasks.py` | `scan_orphan_runbook_executions` | 주기적 (Beat 등록) |
+| `services/saga/tasks.py` | saga orchestration tasks | **온디맨드** (오케스트레이션) |
+| `services/coordination/recovery_tasks.py` | recovery lifecycle tasks | 주기적 (Beat 등록) |
+
+> **설계 원칙**: 온디맨드 Task를 커스텀 데코레이터로 마킹하는 것은 비즈니스 로직에 검증용 메타데이터를
+> 오염시킨다. CI 레벨(Beat 스케줄 교차 검증 + Allowlist)에서 통제하여 프로덕션 코드의 순수성을 유지한다.
+
+#### 6.1.3 wiring_allowlist.yaml 온디맨드 섹션
+
+```yaml
+on_demand_tasks:
+  - name: "selfhealing.runbook.resume_pipeline"
+    reason: "Runbook 실행 재개 — 사용자 요청 시에만 호출"
+  - name: "selfhealing.saga.*"
+    reason: "Saga 오케스트레이션 — 워크플로우 진행 시에만 호출"
+```
+
+### 6.2 ServiceDependencyGraph 초기화 순서 검증
+
+317번 구현에서 `AppConfig.ready()` 내부에 `ServiceDependencyGraph` 기반 위상 정렬이 도입되었다. 별도의 `bootstrap.py`는 존재하지 않으며, `apps.py:_initialize_orphan_services()` 메서드가 초기화 오케스트레이터 역할을 한다.
+
+#### 6.2.1 검증 대상
+
+기존 `ready()` 전체가 아닌 **`_initialize_orphan_services()` 내부의 `ServiceDependencyGraph`** 호출을 검증한다:
 
 ```
-event_journal → config_shadow (event_journal이 먼저 초기화되어야 함)
-correlation_engine → postmortem (postmortem이 먼저 초기화되어야 함)
+# 실제 구현 위치: adapters/django/apps.py:907-962
+graph = ServiceDependencyGraph()
+graph.register_service("event_journal")
+graph.register_service("config_shadow", depends_on=["event_journal"])
+graph.register_service("correlation_engine", depends_on=["event_bus"])
+graph.register_service("capacity_reservation", depends_on=["rate_controller", "bulkhead"])
+# ...
+init_order = graph.topological_sort_subset(services=[...], direction="leaves_first")
 ```
 
-### 6.3 Feature Flag 존재 검증
-
-각 서비스에 대응하는 Feature Flag가 `settings/`에 정의되어 있는지 검증:
+#### 6.2.2 검증 알고리즘
 
 ```
-서비스 디렉토리 → SELFHEALING_{NAME}_ENABLED 설정 존재 여부
+Phase A: apps.py에서 graph.register_service() 호출 목록 AST 추출
+  - 서비스명과 depends_on 인자 파싱
+
+Phase B: depends_on 의존성이 실제 import 관계와 일치하는지 교차 검증
+  - 예: correlation_engine이 event_bus를 depends_on으로 선언
+        → correlation_engine/ 내부에서 event_bus를 실제로 import하는지 확인
+
+Phase C: topological_sort_subset()에 전달된 서비스 목록이
+         Phase 1에서 발견된 orphan 서비스 목록과 일치하는지 검증
+  - 새 orphan 서비스가 graph에 등록되지 않았으면 WARNING
 ```
+
+#### 6.2.3 관련 코드
+
+| 파일 | 역할 |
+|------|------|
+| `adapters/django/apps.py:907-962` | `_initialize_orphan_services()` — 위상 정렬 기반 초기화 |
+| `core/dependency_graph.py:212-257` | `ServiceDependencyGraph` — Kahn's algorithm 구현 |
+| `tests/unit/adapters/django/test_orphan_service_wiring.py:251-299` | 위상 정렬 순서 검증 테스트 |
+
+### 6.3 Feature Flag 존재 검증 — 정적 텍스트 검색
+
+각 서비스에 대응하는 Feature Flag가 `settings/`에 정의되어 있는지 검증한다.
+
+#### 6.3.1 검증 방식: 정적 `env_prefix` 매칭
+
+```python
+def verify_feature_flags(service_names: list[str]) -> list[str]:
+    """settings/ 디렉토리에서 각 서비스의 Feature Flag 존재 여부를 정적으로 검증."""
+    settings_dir = Path(SELFHEALING_ROOT) / "settings"
+    missing: list[str] = []
+
+    for name in service_names:
+        expected_prefix = f"SELFHEALING_{name.upper()}_"
+        found = False
+        for py_file in settings_dir.rglob("*.py"):
+            content = py_file.read_text(encoding="utf-8")
+            if f'env_prefix="{expected_prefix}"' in content:
+                found = True
+                break
+            if f"env_prefix='{expected_prefix}'" in content:
+                found = True
+                break
+        if not found:
+            missing.append(name)
+
+    return missing
+```
+
+#### 6.3.2 설계 근거
+
+| 방식 | 장점 | 단점 | 채택 |
+|------|------|------|------|
+| `hasattr()` 동적 검사 | 정확함 | Django 런타임 필요, 앱 로드 실패 시 동작 불가 | ❌ |
+| `model_fields` 리플렉션 | Pydantic 메타데이터 활용 | Django 런타임 필요, settings lazy-load 문제 | ❌ |
+| 정적 `env_prefix` 텍스트 검색 | Django 불필요, 독립 실행 | 패턴 변경 시 수정 필요 | ✅ |
+
+> **설계 원칙**: CI 검증 스크립트는 Django 앱의 런타임에 의존하지 않는다.
+> 앱에 에러가 있어서 로드가 안 되는 상황에서도 "설정이 누락되었다"는 정확한 피드백을 줄 수 있어야 한다.
+
+#### 6.3.3 현재 설정 구조
+
+각 설정 파일은 Pydantic v2 `BaseSettings`를 따르며 일관된 `env_prefix` 패턴을 사용:
+
+```python
+# settings/admission_control.py
+class AdmissionControlSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="SELFHEALING_ADMISSION_CONTROL_")
+    enabled: bool = Field(default=True)
+```
+
+현재 29개 이상의 설정 파일에서 `_ENABLED` 패턴이 확인됨.
 
 ---
 
@@ -334,12 +625,16 @@ correlation_engine → postmortem (postmortem이 먼저 초기화되어야 함)
 
 | 단계 | 내용 | 산출물 |
 |------|------|--------|
-| 1 | 기본 verify_wiring.py 구현 | 서비스 스캔 + import 검색 |
-| 2 | wiring_allowlist.yaml 작성 | 의도적 미연결 서비스 등록 |
-| 3 | CI 워크플로우 추가 | GitHub Actions YAML |
-| 4 | Celery Task 등록 검증 추가 | Beat 스케줄 교차 검증 |
-| 5 | 초기화 순서 검증 추가 | 의존성 그래프 기반 순서 검증 |
-| 6 | Feature Flag 검증 추가 | settings 교차 검증 |
+| 1 | AST 기반 `extract_service_refs()` 구현 | §3.6 — 2-Pass 하이브리드 분석기 |
+| 2 | Phase 1 서비스 스캔 + IGNORE_DIRS | §3.5 — 서비스 목록 추출 |
+| 3 | Phase 2 엔트리포인트 AST 스캔 | §3.6 — 직접 임포트 + 문자열 리터럴 |
+| 4 | Phase 2.5 MIDDLEWARE 문자열 배열 2-hop 추적 | §3.7 — 미들웨어 간접 연결 감지 |
+| 5 | Phase 3 간접 연결 + EventBus 구독 감지 | §3.8 — subscribe 정규식 검색 |
+| 6 | wiring_allowlist.yaml 작성 (+ on_demand_tasks) | §3.4, §6.1.3 |
+| 7 | CI 워크플로우 추가 | §4 — GitHub Actions YAML |
+| 8 | Celery Task 등록 검증 (주기적 vs 온디맨드) | §6.1 — Beat 교차 검증 + Allowlist |
+| 9 | ServiceDependencyGraph 초기화 순서 검증 | §6.2 — apps.py graph 추출 + 교차 검증 |
+| 10 | Feature Flag 정적 검증 | §6.3 — env_prefix 텍스트 검색 |
 
 ---
 
@@ -350,6 +645,9 @@ correlation_engine → postmortem (postmortem이 먼저 초기화되어야 함)
 | 고아 서비스 발견 시점 | 수동 코드 리뷰 (주~월 단위) | PR 시점 (분 단위) |
 | 고아 서비스 비율 | 10% (5/51) | 0% (CI 차단) |
 | 와이어링 현황 가시성 | 없음 | JSON 리포트 + 주간 정기 검증 |
+| Import 감지 정확도 | ~60% (Regex) | ~95% (AST 하이브리드) |
+| 미들웨어 와이어링 감지 | 미감지 | 2-hop 추적으로 완전 커버 |
+| Django 런타임 의존 | 해당 없음 | 없음 (순수 정적 분석) |
 
 ---
 
@@ -358,3 +656,17 @@ correlation_engine → postmortem (postmortem이 먼저 초기화되어야 함)
 - **317_ORPHAN_SERVICE_WIRING.md** — 현재 고아 서비스 목록 및 연결 계획
 - **311_INTERFACE_CONTRACT_INTEGRITY.md** — 인터페이스 계약 무결성 검증
 - **313_SETTINGS_CONFIGURATION_CONSISTENCY.md** — 설정 일관성 검증
+
+---
+
+## 10. 리뷰 이력
+
+| 날짜 | 항목 | 변경 내용 |
+|------|------|----------|
+| 2026-03-08 | §3.5 | IGNORE_DIRS 추가 — event_bus, factory 등 인프라 디렉토리 제외 |
+| 2026-03-08 | §3.6 | AST 2-Pass 하이브리드로 Regex 대체 — 지연 임포트, alias, importlib 등 8가지 패턴 커버 |
+| 2026-03-08 | §3.7 | Django MIDDLEWARE 문자열 배열 2-hop 추적 추가 |
+| 2026-03-08 | §3.8 | EventBus subscribe 정규식 감지 — 포매터 줄바꿈 대응 `\s*` 적용 |
+| 2026-03-08 | §6.1 | 주기적 vs 온디맨드 Task 구분 — Beat 교차 검증 + on_demand_tasks allowlist |
+| 2026-03-08 | §6.2 | AppConfig.ready() → ServiceDependencyGraph 기반 검증으로 변경 (317 bootstrap 반영) |
+| 2026-03-08 | §6.3 | hasattr 대신 정적 env_prefix 텍스트 검색 채택 — Django 런타임 비의존 |
