@@ -211,8 +211,8 @@ class TestOTELSelfHealingMetricsTimerBehavior:
         assert attrs == {"domain": "orders"}
 
     @patch("selfhealing.observability.get_meter")
-    def test_track_http_request_records_on_error(self, mock_get_meter):
-        """track_http_request records duration and error type on exception."""
+    def test_http_request_timer_records_on_error(self, mock_get_meter):
+        """http_request_timer records duration and error type on exception."""
         counters = {}
         histograms = {}
 
@@ -233,7 +233,7 @@ class TestOTELSelfHealingMetricsTimerBehavior:
         metrics = OTELSelfHealingMetrics()
 
         with pytest.raises(ValueError):
-            with metrics.track_http_request("GET", "/api/test"):
+            with metrics.http_request_timer("GET", "/api/test"):
                 raise ValueError("test error")
 
         metrics.http_request_duration_seconds.record.assert_called_once()

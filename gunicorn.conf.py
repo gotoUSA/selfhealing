@@ -172,8 +172,12 @@ def worker_exit(server, worker):
         )
 
         graceful_shutdown_leader_elector()
-    except (ImportError, Exception):
+    except ImportError:
         pass
+    except Exception as exc:
+        worker.log.warning(
+            "Worker %s: leader elector shutdown failed: %s", worker.pid, exc
+        )
 
     try:
         from selfhealing.audit.async_audit_lifecycle import (
@@ -181,7 +185,11 @@ def worker_exit(server, worker):
         )
 
         graceful_shutdown_audit_system()
-    except (ImportError, Exception):
+    except ImportError:
         pass
+    except Exception as exc:
+        worker.log.warning(
+            "Worker %s: audit system shutdown failed: %s", worker.pid, exc
+        )
 
     worker.log.info("Worker %s: graceful shutdown completed", worker.pid)

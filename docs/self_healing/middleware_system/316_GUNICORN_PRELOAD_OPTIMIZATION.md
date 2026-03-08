@@ -702,4 +702,5 @@ def post_worker_init(worker):
 | 날짜 | 버전 | 변경 내용 |
 |------|------|----------|
 | 2026-03-07 | 1.0.0 | 초안 작성 (313 Q2 리뷰에서 분리) |
+| 2026-03-08 | 1.1.0 | Phase 6 실행: Sidecar-only 18개 파일 제거 (소스 10 + 테스트 8). OTEL API 정합성 8건 수정 (otel_backend.py ↔ prometheus.py 시그니처 일치). 리뷰 10건 반영: worker_exit 예외 처리, observability 로그 메시지, apps.py 조건문 단순화, set_info 설명 주석 |
 | 2026-03-08 | 2.0.0 | Fork-safety 심층 분석 7개 영역 추가 (5절), OTEL Metrics 전환 계획 (5.8절), Sidecar 잔존물 정리 (5.7절), 엔터프라이즈 준비도 평가 (8절), 검증 계획 확장 (6절), 구현 순서 재편 (7절), Severity P3→P2 상향 |

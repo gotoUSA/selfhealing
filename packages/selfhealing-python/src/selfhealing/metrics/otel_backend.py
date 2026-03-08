@@ -471,7 +471,7 @@ class OTELSelfHealingMetrics:
         except Exception as e:
             logger.warning("metrics.failed_record_circuit_trip", error=e)
 
-    def record_circuit_transition(
+    def record_circuit_breaker_state_change(
         self,
         service_name: str,
         from_state: str,
@@ -493,12 +493,14 @@ class OTELSelfHealingMetrics:
         except Exception as e:
             logger.warning("metrics.failed_record_circuit_transition", error=e)
 
-    def record_circuit_open_duration(self, service_name: str, duration: float) -> None:
+    def record_circuit_breaker_open_duration(
+        self, service_name: str, duration_seconds: float
+    ) -> None:
         if not self._initialized:
             return
         try:
             self.circuit_breaker_open_duration.record(
-                duration, {"service_name": service_name}
+                duration_seconds, {"service_name": service_name}
             )
         except Exception as e:
             logger.warning("metrics.failed_record_circuit_open", error=e)
@@ -545,17 +547,25 @@ class OTELSelfHealingMetrics:
     # Replay
     # =========================================================================
 
-    def record_replay_attempt(self, domain: str, replay_type: str = "manual") -> None:
+    def record_replay_attempt(
+        self, domain: str, replay_type: str, success: bool
+    ) -> None:
         if not self._initialized:
             return
         self.replay_attempts_total.add(
             1, {"domain": domain, "replay_type": replay_type}
         )
+        outcome = "success" if success else "failure"
+        self.replay_outcomes_total.add(1, {"domain": domain, "outcome": outcome})
 
-    def record_replay_outcome(self, domain: str, outcome: str) -> None:
+    def record_replay(
+        self, domain: str, result: str, duration: float | None = None
+    ) -> None:
         if not self._initialized:
             return
-        self.replay_outcomes_total.add(1, {"domain": domain, "outcome": outcome})
+        self.replay_outcomes_total.add(1, {"domain": domain, "outcome": result})
+        if duration is not None:
+            self.replay_duration_seconds.record(duration, {"domain": domain})
 
     # =========================================================================
     # Security
@@ -572,19 +582,21 @@ class OTELSelfHealingMetrics:
     # RED Metrics
     # =========================================================================
 
-    def record_http_request(self, method: str, endpoint: str, status_code: int) -> None:
+    def record_http_request(
+        self,
+        method: str,
+        endpoint: str,
+        status_code: int,
+        duration_seconds: float,
+    ) -> None:
         if not self._initialized:
             return
         self.http_requests_total.add(
             1,
             {"method": method, "endpoint": endpoint, "status_code": str(status_code)},
         )
-
-    def record_http_duration(self, method: str, endpoint: str, duration: float) -> None:
-        if not self._initialized:
-            return
         self.http_request_duration_seconds.record(
-            duration, {"method": method, "endpoint": endpoint}
+            duration_seconds, {"method": method, "endpoint": endpoint}
         )
 
     def record_http_error(self, method: str, endpoint: str, error_type: str) -> None:
@@ -595,7 +607,7 @@ class OTELSelfHealingMetrics:
         )
 
     @contextmanager
-    def track_http_request(self, method: str, endpoint: str):
+    def http_request_timer(self, method: str, endpoint: str):
         start_time = datetime.now(timezone.utc)
         error_occurred = False
         error_type = None
@@ -608,7 +620,9 @@ class OTELSelfHealingMetrics:
         finally:
             if self._initialized:
                 duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-                self.record_http_duration(method, endpoint, duration)
+                self.http_request_duration_seconds.record(
+                    duration, {"method": method, "endpoint": endpoint}
+                )
                 if error_occurred and error_type:
                     self.record_http_error(method, endpoint, error_type)
 
@@ -616,7 +630,7 @@ class OTELSelfHealingMetrics:
     # Saturation / Golden Signals
     # =========================================================================
 
-    def set_queue_depth(self, service: str, depth: int) -> None:
+    def set_request_queue_depth(self, service: str, depth: int) -> None:
         if not self._initialized:
             return
         self._queue_depth_store.set(depth, {"service": service})
@@ -632,21 +646,23 @@ class OTELSelfHealingMetrics:
         self._active_conn_store.set(count, {"connection_type": connection_type})
 
     def set_latency_percentile(
-        self, percentile: str, endpoint: str, value: float
+        self, endpoint: str, percentile: str, value_seconds: float
     ) -> None:
         if not self._initialized:
             return
         self._latency_pct_store.set(
-            value, {"percentile": percentile, "endpoint": endpoint}
+            value_seconds, {"percentile": percentile, "endpoint": endpoint}
         )
 
-    def set_error_rate(self, service: str, rate: float) -> None:
+    def set_error_rate(self, service: str, rate_percent: float) -> None:
         if not self._initialized:
             return
-        safe_rate = clamp_percentage(rate, f"error_rate[{service}]")
+        safe_rate = clamp_percentage(rate_percent, f"error_rate[{service}]")
         self._error_rate_store.set(safe_rate, {"service": service})
 
     def set_info(self, info_dict: dict[str, str]) -> None:
+        # OTEL SDK has no Info metric type equivalent to prometheus_client.Info.
+        # Info labels are set as Resource attributes in MeterProvider instead.
         pass
 
     # =========================================================================

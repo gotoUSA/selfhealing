@@ -38,7 +38,6 @@ from __future__ import annotations
 
 import os
 import random
-import sys
 import threading
 from typing import TYPE_CHECKING
 
@@ -836,9 +835,6 @@ class SelfHealingConfig(AppConfig):
         spawning threads that die after fork().
         """
         is_gunicorn_worker = os.environ.get("GUNICORN_WORKER") == "1"
-        is_dev_server = (
-            "runserver" in sys.argv or os.environ.get("DJANGO_DEV_SERVER") == "1"
-        )
         is_gunicorn_master = (
             "gunicorn" in os.environ.get("SERVER_SOFTWARE", "")
             and not is_gunicorn_worker
@@ -850,7 +846,8 @@ class SelfHealingConfig(AppConfig):
             )
             return False
 
-        return is_gunicorn_worker or is_dev_server or not is_gunicorn_master
+        # After the guard above, is_gunicorn_master is always False here.
+        return True
 
     def _start_all_background_threads(self):
         """Start all background threads (gauge hydration, cache, metrics, watchdog)."""

@@ -54,7 +54,7 @@ def initialize_opentelemetry() -> bool:
 
     # Check if OTEL is available
     if not _is_otel_available():
-        logger.debug("otel.sdk_already_installed")
+        logger.debug("otel.sdk_not_available")
         _initialized = True
         return False
 
