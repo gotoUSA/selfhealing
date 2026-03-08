@@ -81,6 +81,7 @@ class TestDiscoverServicesBehavior:
     """Behavior tests for Phase 1 service directory scanning."""
 
     def test_discover_services_returns_sorted_names(self, service_tree):
+        """Verify discovered service names are returned in sorted order."""
         # Given
         with patch.object(verify_wiring, "SERVICES_DIR", service_tree):
             # When
@@ -90,6 +91,7 @@ class TestDiscoverServicesBehavior:
         assert result == ["audit", "circuit_breaker", "dlq", "orphan_svc", "saga"]
 
     def test_discover_services_excludes_ignore_dirs(self, service_tree):
+        """Verify IGNORE_DIRS entries are excluded from discovered services."""
         # Given
         with patch.object(verify_wiring, "SERVICES_DIR", service_tree):
             result = verify_wiring.discover_services()
@@ -99,6 +101,7 @@ class TestDiscoverServicesBehavior:
             assert ignored not in result
 
     def test_discover_services_empty_directory(self, tmp_path):
+        """Verify empty services directory returns an empty list."""
         empty = tmp_path / "empty_services"
         empty.mkdir()
 
@@ -106,10 +109,12 @@ class TestDiscoverServicesBehavior:
             assert verify_wiring.discover_services() == []
 
     def test_discover_services_nonexistent_directory(self, tmp_path):
+        """Verify nonexistent services directory returns an empty list."""
         with patch.object(verify_wiring, "SERVICES_DIR", tmp_path / "nonexistent"):
             assert verify_wiring.discover_services() == []
 
     def test_discover_services_skips_files(self, service_tree):
+        """Verify regular files in the services directory are not listed as services."""
         # Given — a regular file among directories
         (service_tree / "not_a_dir.py").write_text("", encoding="utf-8")
 
@@ -140,6 +145,7 @@ class TestExtractServiceRefsBehavior:
         assert "dlq" in verify_wiring.extract_service_refs(f)
 
     def test_multiline_parenthesized_import(self, py_file):
+        """Verify parenthesized multi-line imports are correctly parsed."""
         f = py_file("""\
             from selfhealing.services.replay_service import (
                 ReplayService,
@@ -149,6 +155,7 @@ class TestExtractServiceRefsBehavior:
         assert "replay_service" in verify_wiring.extract_service_refs(f)
 
     def test_alias_import(self, py_file):
+        """Verify aliased service imports are detected by original name."""
         f = py_file("from selfhealing.services import governance as gov")
         assert "governance" in verify_wiring.extract_service_refs(f)
 
@@ -183,17 +190,21 @@ class TestExtractServiceRefsBehavior:
         assert "cleanup_service" in verify_wiring.extract_service_refs(f)
 
     def test_no_false_positive_for_non_service_import(self, py_file):
+        """Verify imports from non-services modules do not produce false positives."""
         f = py_file("from selfhealing.core.backoff import ExponentialBackoff")
         assert verify_wiring.extract_service_refs(f) == set()
 
     def test_syntax_error_returns_empty(self, py_file):
+        """Verify files with syntax errors return an empty set."""
         f = py_file("def broken(:\n    pass")
         assert verify_wiring.extract_service_refs(f) == set()
 
     def test_nonexistent_file_returns_empty(self, tmp_path):
+        """Verify nonexistent file path returns an empty set."""
         assert verify_wiring.extract_service_refs(tmp_path / "nope.py") == set()
 
     def test_empty_file_returns_empty(self, py_file):
+        """Verify empty Python file returns an empty set."""
         f = py_file("")
         assert verify_wiring.extract_service_refs(f) == set()
 
@@ -203,6 +214,7 @@ class TestExtractServiceRefsBehavior:
         assert "error_budget" in verify_wiring.extract_service_refs(f)
 
     def test_multiple_services_in_single_file(self, py_file):
+        """Verify multiple service references in one file are all extracted."""
         f = py_file("""\
             from selfhealing.services.circuit_breaker import CB
             from selfhealing.services.dlq import DLQ
@@ -243,6 +255,7 @@ class TestClassifyEntrypointContract:
         ],
     )
     def test_classify_entrypoint_mapping(self, path, expected):
+        """Verify each file path is classified to the correct entrypoint type."""
         assert verify_wiring._classify_entrypoint(path) == expected
 
 
@@ -255,6 +268,7 @@ class TestDottedToFilePathBehavior:
     """Behavior tests for dotted middleware path resolution."""
 
     def test_non_selfhealing_prefix_returns_none(self):
+        """Verify non-selfhealing dotted paths return None."""
         assert verify_wiring._dotted_to_file_path("django.middleware.Foo") is None
 
     def test_module_path_resolution(self, tmp_path):
@@ -287,6 +301,7 @@ class TestDottedToFilePathBehavior:
         assert result == init_file
 
     def test_returns_none_for_missing_file(self, tmp_path):
+        """Verify dotted path returns None when neither .py nor __init__.py exists."""
         with patch.object(verify_wiring, "SELFHEALING_ROOT", tmp_path):
             result = verify_wiring._dotted_to_file_path(
                 "selfhealing.missing.module.Class"
@@ -303,6 +318,7 @@ class TestScanMiddlewareWiringBehavior:
     """Behavior tests for MIDDLEWARE string array 2-hop scan."""
 
     def test_extracts_selfhealing_middleware_paths(self, tmp_path):
+        """Verify selfhealing middleware entries are extracted with their service refs."""
         # Given — settings file with MIDDLEWARE
         settings = tmp_path / "settings.py"
         settings.write_text(
@@ -336,6 +352,7 @@ class TestScanMiddlewareWiringBehavior:
         )
 
     def test_missing_settings_returns_empty(self, tmp_path):
+        """Verify missing settings file returns an empty dict."""
         with patch.object(
             verify_wiring, "MIDDLEWARE_SETTINGS_PATH", tmp_path / "nope.py"
         ):
@@ -351,6 +368,7 @@ class TestScanIndirectConnectionsBehavior:
     """Behavior tests for 1-depth indirect connection detection."""
 
     def test_finds_transitive_import(self, tmp_path):
+        """Verify transitive service imports are detected as indirect connections."""
         # Given — service A imports service B
         services = tmp_path / "services"
         svc_a = services / "circuit_breaker"
@@ -374,6 +392,7 @@ class TestScanIndirectConnectionsBehavior:
         assert "via circuit_breaker" in result["error_budget"]
 
     def test_does_not_include_already_connected(self, tmp_path):
+        """Verify already-connected services are excluded from indirect results."""
         services = tmp_path / "services"
         svc = services / "dlq"
         svc.mkdir(parents=True)
@@ -401,6 +420,7 @@ class TestEventBusSubscriptionBehavior:
     """Behavior tests for EventBus.subscribe() regex detection."""
 
     def test_detects_subscribe_pattern(self, tmp_path):
+        """Verify EventBus.subscribe with EventType argument is detected."""
         svc = tmp_path / "my_svc"
         svc.mkdir()
         (svc / "handler.py").write_text(
@@ -425,6 +445,7 @@ class TestEventBusSubscriptionBehavior:
         assert verify_wiring._has_eventbus_subscription(svc) is True
 
     def test_no_match_without_eventtype(self, tmp_path):
+        """Verify subscribe calls without EventType are not matched."""
         svc = tmp_path / "my_svc"
         svc.mkdir()
         (svc / "handler.py").write_text(
@@ -434,6 +455,7 @@ class TestEventBusSubscriptionBehavior:
         assert verify_wiring._has_eventbus_subscription(svc) is False
 
     def test_empty_directory(self, tmp_path):
+        """Verify empty directory has no EventBus subscription."""
         svc = tmp_path / "empty_svc"
         svc.mkdir()
         assert verify_wiring._has_eventbus_subscription(svc) is False
@@ -448,6 +470,7 @@ class TestLoadAllowlistBehavior:
     """Behavior tests for YAML allowlist loading."""
 
     def test_valid_allowlist(self, allowlist_file):
+        """Verify valid YAML allowlist returns correct service names and on-demand tasks."""
         f = allowlist_file("""\
             allowlist:
               - name: saga
@@ -465,6 +488,7 @@ class TestLoadAllowlistBehavior:
         assert "selfhealing.saga.*" in on_demand
 
     def test_missing_file_returns_empty(self, tmp_path):
+        """Verify missing allowlist file returns empty set and empty list."""
         with patch.object(
             verify_wiring, "ALLOWLIST_PATH", tmp_path / "nonexistent.yaml"
         ):
@@ -474,6 +498,7 @@ class TestLoadAllowlistBehavior:
         assert on_demand == []
 
     def test_empty_yaml_returns_empty(self, allowlist_file):
+        """Verify empty YAML file returns empty set and empty list."""
         f = allowlist_file("")
         with patch.object(verify_wiring, "ALLOWLIST_PATH", f):
             names, on_demand = verify_wiring.load_allowlist()
@@ -491,15 +516,18 @@ class TestVerifyCeleryTasksBehavior:
     """Behavior tests for periodic vs on-demand task classification."""
 
     def test_periodic_task_classified_correctly(self):
+        """Verify tasks found in celery beat schedule are classified as periodic."""
         with (
             patch.object(
                 verify_wiring,
                 "scan_celery_beat_tasks",
+                autospec=True,
                 return_value={"selfhealing.celery_tasks.collect_metrics"},
             ),
             patch.object(
                 verify_wiring,
                 "scan_shared_tasks",
+                autospec=True,
                 return_value={
                     "selfhealing.celery_tasks.collect_metrics": "celery_tasks/metrics.py"
                 },
@@ -513,11 +541,18 @@ class TestVerifyCeleryTasksBehavior:
         )
 
     def test_on_demand_with_glob_pattern(self):
+        """Verify on-demand tasks matching an allowlist glob are marked as allowlisted."""
         with (
-            patch.object(verify_wiring, "scan_celery_beat_tasks", return_value=set()),
+            patch.object(
+                verify_wiring,
+                "scan_celery_beat_tasks",
+                autospec=True,
+                return_value=set(),
+            ),
             patch.object(
                 verify_wiring,
                 "scan_shared_tasks",
+                autospec=True,
                 return_value={
                     "selfhealing.saga.step_execute": "services/saga/tasks.py"
                 },
@@ -529,11 +564,18 @@ class TestVerifyCeleryTasksBehavior:
         assert result["on_demand"][0]["allowlisted"] is True
 
     def test_on_demand_without_pattern_not_allowlisted(self):
+        """Verify on-demand tasks not matching any glob are marked as not allowlisted."""
         with (
-            patch.object(verify_wiring, "scan_celery_beat_tasks", return_value=set()),
+            patch.object(
+                verify_wiring,
+                "scan_celery_beat_tasks",
+                autospec=True,
+                return_value=set(),
+            ),
             patch.object(
                 verify_wiring,
                 "scan_shared_tasks",
+                autospec=True,
                 return_value={"selfhealing.unknown.task": "services/x/tasks.py"},
             ),
         ):
@@ -552,6 +594,7 @@ class TestVerifyDependencyGraphBehavior:
     """Behavior tests for ServiceDependencyGraph consistency check."""
 
     def test_orphan_not_in_graph_produces_warning(self, py_file):
+        """Verify orphan service not registered in the graph produces a warning."""
         apps = py_file(
             """\
             graph = ServiceDependencyGraph()
@@ -577,6 +620,7 @@ class TestVerifyDependencyGraphBehavior:
         assert "new_orphan_svc" in warnings[0]
 
     def test_no_warning_when_orphan_is_registered(self, tmp_path):
+        """Verify no warning when orphan service is registered in the dependency graph."""
         adapters = tmp_path / "adapters" / "django"
         adapters.mkdir(parents=True)
         apps = adapters / "apps.py"
@@ -594,6 +638,7 @@ class TestVerifyDependencyGraphBehavior:
         assert warnings == []
 
     def test_missing_apps_file(self, tmp_path):
+        """Verify missing apps.py file produces a 'not found' warning."""
         with patch.object(verify_wiring, "SELFHEALING_ROOT", tmp_path):
             warnings = verify_wiring.verify_dependency_graph(["any_svc"])
         assert len(warnings) == 1
@@ -609,6 +654,7 @@ class TestVerifyFeatureFlagsBehavior:
     """Behavior tests for env_prefix static text search."""
 
     def test_found_double_quote_prefix(self, settings_dir):
+        """Verify double-quoted env_prefix is detected for a service."""
         (settings_dir / "circuit_breaker.py").write_text(
             'model_config = SettingsConfigDict(env_prefix="SELFHEALING_CIRCUIT_BREAKER_")',
             encoding="utf-8",
@@ -619,6 +665,7 @@ class TestVerifyFeatureFlagsBehavior:
         assert result == []
 
     def test_found_single_quote_prefix(self, settings_dir):
+        """Verify single-quoted env_prefix is detected for a service."""
         (settings_dir / "dlq.py").write_text(
             "model_config = SettingsConfigDict(env_prefix='SELFHEALING_DLQ_')",
             encoding="utf-8",
@@ -629,6 +676,7 @@ class TestVerifyFeatureFlagsBehavior:
         assert result == []
 
     def test_missing_prefix_reported(self, settings_dir):
+        """Verify service without env_prefix is reported as missing."""
         (settings_dir / "empty.py").write_text("", encoding="utf-8")
 
         with patch.object(verify_wiring, "SELFHEALING_ROOT", settings_dir.parent):
@@ -637,6 +685,7 @@ class TestVerifyFeatureFlagsBehavior:
         assert "missing_service" in result
 
     def test_nonexistent_settings_dir(self, tmp_path):
+        """Verify nonexistent settings directory reports all services as missing."""
         with patch.object(verify_wiring, "SELFHEALING_ROOT", tmp_path):
             result = verify_wiring.verify_feature_flags(["any"])
         assert result == ["any"]
@@ -651,6 +700,7 @@ class TestWiringReportBehavior:
     """Behavior tests for report generation."""
 
     def test_to_json_structure_pass(self):
+        """Verify to_json returns pass=True with correct counts when no orphans."""
         report = verify_wiring.WiringReport()
         report.total_services = 5
         report.connected = {"svc_a": {"middleware"}}
@@ -672,6 +722,7 @@ class TestWiringReportBehavior:
         assert "timestamp" in data
 
     def test_to_json_structure_fail(self):
+        """Verify to_json returns pass=False with orphan details when orphans exist."""
         report = verify_wiring.WiringReport()
         report.total_services = 3
         report.connected = {}
@@ -719,16 +770,19 @@ class TestCollectPythonFilesBehavior:
     """Behavior tests for Python file collection utility."""
 
     def test_single_py_file(self, tmp_path):
+        """Verify a single .py file is returned as a one-element list."""
         f = tmp_path / "module.py"
         f.write_text("", encoding="utf-8")
         assert verify_wiring._collect_python_files(f) == [f]
 
     def test_non_py_file_ignored(self, tmp_path):
+        """Verify non-.py files are excluded from collection."""
         f = tmp_path / "readme.md"
         f.write_text("", encoding="utf-8")
         assert verify_wiring._collect_python_files(f) == []
 
     def test_directory_recursive(self, tmp_path):
+        """Verify .py files are collected recursively from subdirectories."""
         sub = tmp_path / "sub"
         sub.mkdir()
         (tmp_path / "a.py").write_text("", encoding="utf-8")
@@ -740,6 +794,7 @@ class TestCollectPythonFilesBehavior:
         assert "b.py" in names
 
     def test_nonexistent_returns_empty(self, tmp_path):
+        """Verify nonexistent path returns an empty list."""
         assert verify_wiring._collect_python_files(tmp_path / "nope") == []
 
 
@@ -752,6 +807,7 @@ class TestRunVerificationContract:
     """Contract tests for end-to-end orchestration exit codes."""
 
     def test_returns_zero_when_no_orphans(self, tmp_path):
+        """Verify exit code 0 when all services are connected."""
         # Given — all services are connected
         services = tmp_path / "services"
         svc = services / "my_svc"
@@ -784,6 +840,7 @@ class TestRunVerificationContract:
         assert exit_code == 0
 
     def test_returns_one_when_orphan_exists(self, tmp_path):
+        """Verify exit code 1 when an orphan service exists."""
         # Given — service exists but no entrypoint references it
         services = tmp_path / "services"
         svc = services / "orphan"

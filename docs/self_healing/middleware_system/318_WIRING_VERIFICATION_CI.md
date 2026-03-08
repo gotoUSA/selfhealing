@@ -1,6 +1,6 @@
 # 318. Wiring Verification CI — 서비스 와이어링 자동 검증
 
-> **Status**: Planned
+> **Status**: Implemented
 > **Severity**: P2 (MEDIUM) — 고아 서비스 재발 방지
 > **Target**: CI/CD 파이프라인 + `scripts/verify_wiring.py`
 > **References**:
@@ -118,43 +118,47 @@ Dependencies:
 import ast
 from pathlib import Path
 
-# 상수
-SELFHEALING_ROOT = "packages/selfhealing-python/src/selfhealing"
-SERVICES_DIR = f"{SELFHEALING_ROOT}/services"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SELFHEALING_ROOT = PROJECT_ROOT / "packages" / "selfhealing-python" / "src" / "selfhealing"
+SERVICES_DIR = SELFHEALING_ROOT / "services"
 
 # 인프라/유틸리티 디렉토리 — 서비스가 아니므로 스캔 대상에서 제외
 IGNORE_DIRS = {"event_bus", "factory", "__pycache__"}
 
-ENTRY_POINT_PATHS = [
+# selfhealing 패키지 내부 엔트리포인트 (SELFHEALING_ROOT 기준 상대 경로)
+ENTRY_POINT_PATHS: list[str] = [
     # Middleware
-    f"{SELFHEALING_ROOT}/api/django/middleware/",
-    f"{SELFHEALING_ROOT}/api/django/tiering/",
-    f"{SELFHEALING_ROOT}/api/django/rate_limit.py",
-    f"{SELFHEALING_ROOT}/api/django/pool_circuit_breaker.py",
-    f"{SELFHEALING_ROOT}/api/django/audit_middleware.py",
-    f"{SELFHEALING_ROOT}/api/django/cell/middleware.py",
+    "api/django/middleware/",
+    "api/django/tiering/",
+    "api/django/rate_limit.py",
+    "api/django/pool_circuit_breaker.py",
+    "api/django/audit_middleware.py",
+    "api/django/cell/middleware.py",
     # Celery Tasks
-    f"{SELFHEALING_ROOT}/celery_tasks/",
-    f"{SELFHEALING_ROOT}/tasks/",
-    f"{SELFHEALING_ROOT}/adapters/celery/tasks/",
+    "celery_tasks/",
+    "tasks/",
+    "adapters/celery/tasks/",
     # AppConfig / Bootstrap
-    f"{SELFHEALING_ROOT}/adapters/django/apps.py",
+    "adapters/django/apps.py",
     # Signals
-    f"{SELFHEALING_ROOT}/adapters/django/signal_hooks.py",
-    f"{SELFHEALING_ROOT}/adapters/celery/signal_hooks.py",
+    "adapters/django/signal_hooks.py",
+    "adapters/celery/signal_hooks.py",
     # API Views
-    f"{SELFHEALING_ROOT}/api/django/views/",
+    "api/django/views/",
     # Management Commands
-    f"{SELFHEALING_ROOT}/adapters/django/management/commands/",
+    "adapters/django/management/commands/",
     # Factory
-    f"{SELFHEALING_ROOT}/factory.py",
-    # Host app
+    "factory.py",
+]
+
+# 호스트 앱 엔트리포인트 (PROJECT_ROOT 기준 상대 경로)
+HOST_ENTRY_POINT_PATHS: list[str] = [
     "myproject/celery.py",
     "myproject/settings/",
 ]
 
 # Django MIDDLEWARE 문자열 배열 스캔 대상
-MIDDLEWARE_SETTINGS_PATH = "myproject/settings/base.py"
+MIDDLEWARE_SETTINGS_PATH = PROJECT_ROOT / "myproject" / "settings" / "base.py"
 ```
 
 ### 3.5 IGNORE_DIRS — 비서비스 디렉토리 제외
@@ -261,9 +265,15 @@ Hop 2: 미들웨어 파일 → 내부 서비스 import 추출 (§3.6 AST 사용)
 ```
 
 ```python
-def scan_middleware_wiring(settings_path: Path) -> dict[str, set[str]]:
-    """MIDDLEWARE 문자열 배열에서 간접 서비스 참조 추출."""
-    tree = ast.parse(settings_path.read_text(encoding="utf-8"))
+def scan_middleware_wiring() -> dict[str, set[str]]:
+    """MIDDLEWARE 문자열 배열에서 간접 서비스 참조 추출.
+
+    모듈 상수 MIDDLEWARE_SETTINGS_PATH를 사용한다 (파라미터 불필요).
+    """
+    if not MIDDLEWARE_SETTINGS_PATH.exists():
+        return {}
+
+    tree = ast.parse(MIDDLEWARE_SETTINGS_PATH.read_text(encoding="utf-8"))
     middleware_paths: list[str] = []
 
     # Hop 1: MIDDLEWARE = [...] 에서 selfhealing 경로 추출
@@ -273,8 +283,9 @@ def scan_middleware_wiring(settings_path: Path) -> dict[str, set[str]]:
                 if getattr(target, "id", "") == "MIDDLEWARE":
                     if isinstance(node.value, ast.List):
                         for elt in node.value.elts:
-                            if isinstance(elt, ast.Constant) and "selfhealing." in str(elt.value):
-                                middleware_paths.append(elt.value)
+                            if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
+                                if "selfhealing." in elt.value:
+                                    middleware_paths.append(elt.value)
 
     # Hop 2: 각 미들웨어 파일 내부에서 서비스 import 추출
     result: dict[str, set[str]] = {}
@@ -306,7 +317,7 @@ import re
 
 SUBSCRIBE_PATTERN = re.compile(r"\.subscribe\(\s*EventType\.", re.MULTILINE)
 
-def has_eventbus_subscription(service_dir: Path) -> bool:
+def _has_eventbus_subscription(service_dir: Path) -> bool:
     """서비스 디렉토리 내 .py 파일에서 EventBus subscribe 호출 감지."""
     for py_file in service_dir.rglob("*.py"):
         content = py_file.read_text(encoding="utf-8")
@@ -365,6 +376,9 @@ on:
       - 'packages/selfhealing-python/src/selfhealing/tasks/**'
       - 'myproject/celery.py'
       - 'myproject/settings/**'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday 09:00 UTC
 
 jobs:
   verify-wiring:
@@ -382,6 +396,10 @@ jobs:
 
       - name: Verify service wiring
         run: python scripts/verify_wiring.py --verbose
+
+      - name: Generate JSON report
+        if: always()
+        run: python scripts/verify_wiring.py --json || true
 
       - name: Upload wiring report
         if: always()
@@ -461,16 +479,19 @@ ORPHAN (5):
   "total_services": 51,
   "connected": 39,
   "indirect": 3,
+  "eventbus_subscribers": 5,
   "allowlisted": 2,
   "orphan": 5,
   "orphans": [
     {
       "name": "correlation_engine",
       "path": "services/correlation_engine/",
-      "suggested_entry_points": ["appconfig", "celery_beat"],
-      "depends_on": ["event_bus", "postmortem", "learning"]
+      "suggested_entry_points": ["appconfig", "celery_beat"]
     }
   ],
+  "middleware_wiring": {},
+  "dep_graph_warnings": [],
+  "missing_feature_flags": ["correlation_engine"],
   "pass": false
 }
 ```
@@ -670,3 +691,9 @@ class AdmissionControlSettings(BaseSettings):
 | 2026-03-08 | §6.1 | 주기적 vs 온디맨드 Task 구분 — Beat 교차 검증 + on_demand_tasks allowlist |
 | 2026-03-08 | §6.2 | AppConfig.ready() → ServiceDependencyGraph 기반 검증으로 변경 (317 bootstrap 반영) |
 | 2026-03-08 | §6.3 | hasattr 대신 정적 env_prefix 텍스트 검색 채택 — Django 런타임 비의존 |
+| 2026-03-08 | §header | Status: Planned → Implemented |
+| 2026-03-08 | §3.3 | ENTRY_POINT_PATHS를 2개 리스트(ENTRY_POINT_PATHS + HOST_ENTRY_POINT_PATHS)로 분리 — 코드 구현 반영 |
+| 2026-03-08 | §3.7 | scan_middleware_wiring() 파라미터 제거 — 모듈 상수 MIDDLEWARE_SETTINGS_PATH 사용 |
+| 2026-03-08 | §3.8 | has_eventbus_subscription → _has_eventbus_subscription (private function) |
+| 2026-03-08 | §4.1 | CI YAML에 workflow_dispatch, schedule 트리거 및 JSON report 생성 step 추가 |
+| 2026-03-08 | §5.2 | JSON 출력에 eventbus_subscribers, middleware_wiring, dep_graph_warnings, missing_feature_flags 필드 추가; orphan depends_on 제거 |
