@@ -395,8 +395,11 @@ class RateLimitCoordinator:
                 cooldown_until=cooldown_until,
                 calculated_delay=calculated_delay,
             )
-        except Exception:
-            pass  # Fail-Open: Kafka 장애가 로컬 rate limit에 영향 없음
+        except Exception as e:
+            logger.debug(
+                "rate_limit_coordinator.broadcast_skipped",
+                error=e,
+            )
 
     def on_success(self, key: str) -> None:
         """

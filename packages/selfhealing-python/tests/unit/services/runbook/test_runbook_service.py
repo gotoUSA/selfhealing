@@ -864,7 +864,6 @@ class TestRunbookServiceOnEventReceivedBehavior:
 class TestInitializeRunbookSystemBehavior:
     """initialize_runbook_system() 전체 초기화 동작 검증."""
 
-    @patch("selfhealing.factory.ProviderRegistry")
     @patch(
         "selfhealing.services.runbook.primitives.register_builtin_primitives",
     )
@@ -877,9 +876,8 @@ class TestInitializeRunbookSystemBehavior:
         mock_subscriptions,
         mock_builtins,
         mock_primitives,
-        mock_provider_registry,
     ):
-        """초기화 시 빌트인 등록 + 구독 + ProviderRegistry 등록."""
+        """초기화 시 빌트인 등록 + 구독."""
         # When
         service = initialize_runbook_system()
 
@@ -888,13 +886,9 @@ class TestInitializeRunbookSystemBehavior:
         mock_builtins.assert_called_once()
         mock_primitives.assert_called_once()
         mock_subscriptions.assert_called_once()
-        mock_provider_registry.register.assert_called_once_with(
-            "runbook_service", service
-        )
 
-    @patch("selfhealing.factory.ProviderRegistry")
     @patch.object(RunbookService, "register_subscriptions")
-    def test_initialize_handles_missing_builtins(self, mock_sub, mock_provider):
+    def test_initialize_handles_missing_builtins(self, mock_sub):
         """빌트인 모듈 없어도 초기화 성공."""
         with (
             patch(

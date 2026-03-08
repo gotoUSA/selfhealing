@@ -659,10 +659,5 @@ def initialize_runbook_system() -> RunbookService:
     # EventBus 구독 등록
     service.register_subscriptions()
 
-    # ProviderRegistry 등록
-    from selfhealing.factory import ProviderRegistry
-
-    ProviderRegistry.register("runbook_service", service)
-
     logger.info("runbook_system.initialized")
     return service

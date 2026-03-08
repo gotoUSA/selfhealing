@@ -1044,21 +1044,14 @@ class SelfHealingConfig(AppConfig):
 
     @staticmethod
     def _init_config_propagator():
-        """317: GlobalConfigPropagator 초기화 + ProviderRegistry 등록."""
+        """317: GlobalConfigPropagator 초기화."""
         try:
             from selfhealing.services.config.propagator import (
                 get_global_config_propagator,
             )
 
-            propagator = get_global_config_propagator()
+            get_global_config_propagator()
             logger.info("self_healing.config_propagator_initialized")
-
-            try:
-                from selfhealing.factory import ProviderRegistry
-
-                ProviderRegistry.register("config_propagator", propagator)
-            except Exception:
-                pass
         except ImportError:
             logger.debug("self_healing.config_propagator_module_not_available")
         except Exception as e:

@@ -58,5 +58,5 @@ def run_forecaster_cycle() -> dict:
         logger.debug("forecaster_tasks.module_not_available")
         return {"success": True, "skipped": True, "reason": "module_not_available"}
     except Exception as e:
-        logger.exception("forecaster_tasks.cycle_failed", error=e)
+        logger.exception("forecaster_tasks.cycle_failed")
         return {"success": False, "error": str(e)}
