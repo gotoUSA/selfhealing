@@ -69,6 +69,11 @@ class CellTaggingMiddleware:
         if not self._check_enabled():
             return self.get_response(request)
 
+        # 317: Regional Isolation — 격리된 리전의 트래픽 차단
+        isolation_response = self._check_regional_isolation(request)
+        if isolation_response is not None:
+            return isolation_response
+
         from selfhealing.context.cell_context import _current_cell_id
 
         tagger = self._get_tagger()
@@ -141,14 +146,20 @@ class CellTaggingMiddleware:
 
         try:
             addr = ip_address(client_ip)
-            return any(addr in ip_network(cidr, strict=False) for cidr in self._get_trusted_cidrs())
+            return any(
+                addr in ip_network(cidr, strict=False)
+                for cidr in self._get_trusted_cidrs()
+            )
         except ValueError:
             return False
 
     def _get_trusted_cidrs(self) -> list[str]:
         """trusted_source_cidrs 지연 로딩 (TTL 기반 갱신)."""
         now = time.monotonic()
-        if self._trusted_cidrs is None or now - self._trusted_cidrs_loaded_at > _TRUSTED_CIDRS_CACHE_TTL_SECONDS:
+        if (
+            self._trusted_cidrs is None
+            or now - self._trusted_cidrs_loaded_at > _TRUSTED_CIDRS_CACHE_TTL_SECONDS
+        ):
             from selfhealing.settings.cell_topology import get_cell_topology_settings
 
             settings = get_cell_topology_settings()
@@ -175,7 +186,8 @@ class CellTaggingMiddleware:
         if cell_info is None:
             self._record_topology_mismatch(incoming_cell_id, "cell_not_found")
             logger.warning(
-                "Topology mismatch: received '%s' not in local registry " "(local cell_count=%d)",
+                "Topology mismatch: received '%s' not in local registry "
+                "(local cell_count=%d)",
                 incoming_cell_id,
                 len(registry.get_all_cells()),
             )
@@ -237,6 +249,55 @@ class CellTaggingMiddleware:
 
             self._tagger = CellTagger()
         return self._tagger
+
+    # =========================================================================
+    # 317: Regional Isolation Gate
+    # =========================================================================
+
+    @staticmethod
+    def _check_regional_isolation(request: HttpRequest) -> HttpResponse | None:
+        """317: 현재 리전이 격리 상태이면 503 반환."""
+        try:
+            from django.conf import settings as django_settings
+
+            if not getattr(
+                django_settings,
+                "SELFHEALING_REGIONAL_ISOLATION_ENABLED",
+                False,
+            ):
+                return None
+
+            from selfhealing.services.isolation.regional_gate import (
+                get_regional_isolation_gate,
+            )
+
+            gate = get_regional_isolation_gate()
+            is_isolated, reason = gate.is_current_region_isolated()
+
+            if is_isolated:
+                from django.http import JsonResponse
+
+                logger.warning(
+                    "cell_middleware.regional_isolation_active",
+                    reason=reason,
+                )
+                return JsonResponse(
+                    {
+                        "error": "service_unavailable",
+                        "reason": "regional_isolation",
+                        "detail": reason,
+                    },
+                    status=503,
+                )
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.debug(
+                "cell_middleware.regional_isolation_check_failed",
+                error=e,
+            )
+
+        return None
 
 
 class BaggageSyncMiddleware:

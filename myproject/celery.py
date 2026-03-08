@@ -61,7 +61,9 @@ try:
             "shopping.tasks.email_tasks.retry_failed_emails_task": "notification",
         },
     )
-    print("[SelfHealing] Celery signal hooks enabled - CB, DLQ, Forensics, Metrics active")
+    print(
+        "[SelfHealing] Celery signal hooks enabled - CB, DLQ, Forensics, Metrics active"
+    )
 except ImportError:
     # selfhealing package not installed - that's OK
     print("[SelfHealing] Package not installed, signal hooks disabled")
@@ -209,6 +211,43 @@ app.conf.beat_schedule = {
         "options": {
             "expires": 55,
             "queue": "chaos",
+        },
+    },
+    # =========================================================================
+    # 317: Orphan Service Wiring — Celery Beat 등록
+    # =========================================================================
+    # Chaos Execution: 예약된 Chaos 실험 실행 (5분 간격)
+    "run-scheduled-experiments": {
+        "task": "selfhealing.tasks.chaos_scheduler.run_scheduled_experiments_task",
+        "schedule": 300.0,  # 5분
+        "options": {
+            "expires": 290,
+            "queue": "chaos",
+        },
+    },
+    # Config Apply: 예정된 설정 변경 적용 (30초 간격)
+    "apply-pending-config-changes": {
+        "task": "selfhealing.apply_pending_config_changes",
+        "schedule": 30.0,  # 30초
+        "options": {
+            "expires": 25,
+        },
+    },
+    # Saga: 고아 사가 탐지 (2분 간격)
+    "scan-orphan-sagas": {
+        "task": "selfhealing.scan_orphan_sagas",
+        "schedule": 120.0,  # 2분
+        "options": {
+            "expires": 115,
+        },
+    },
+    # Predictive Forecaster: 메트릭 예측 + 이상 탐지 (60초)
+    "run-forecaster-cycle": {
+        "task": "selfhealing.celery_tasks.run_forecaster_cycle",
+        "schedule": 60.0,  # 매분
+        "options": {
+            "expires": 55,
+            "queue": "monitoring",
         },
     },
     # =========================================================================

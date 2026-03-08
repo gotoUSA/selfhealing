@@ -362,6 +362,9 @@ class RateLimitCoordinator:
             # Cooldown 종료 이벤트 스케줄링
             self._schedule_cooldown_end_event(key, cooldown_until)
 
+        # 317: Kafka 분산 채널을 통해 클러스터 전체에 429 이벤트 전파
+        self._broadcast_to_cluster(key, consecutive, cooldown_until, delay)
+
         logger.warning(
             "rate_limit_coordinator.rate_limited",
             key=key,
@@ -371,6 +374,29 @@ class RateLimitCoordinator:
         )
 
         return delay
+
+    def _broadcast_to_cluster(
+        self,
+        key: str,
+        consecutive_429s: int,
+        cooldown_until: float,
+        calculated_delay: float,
+    ) -> None:
+        """317: Kafka 분산 채널로 429 이벤트 비동기 전파 (Fail-Open)."""
+        try:
+            from selfhealing.services.rate_limit.distributed_channel import (
+                get_distributed_rate_limit_channel,
+            )
+
+            channel = get_distributed_rate_limit_channel()
+            channel.broadcast_rate_limit_429(
+                key=key,
+                consecutive_429s=consecutive_429s,
+                cooldown_until=cooldown_until,
+                calculated_delay=calculated_delay,
+            )
+        except Exception:
+            pass  # Fail-Open: Kafka 장애가 로컬 rate limit에 영향 없음
 
     def on_success(self, key: str) -> None:
         """

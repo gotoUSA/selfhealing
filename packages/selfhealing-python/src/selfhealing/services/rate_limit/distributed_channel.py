@@ -119,7 +119,10 @@ class DistributedRateLimitChannel:
         calculated_delay: float,
     ) -> bool:
         """
-        429 이벤트를 전체 클러스터에 브로드캐스트.
+        429 이벤트를 전체 클러스터에 비동기 브로드캐스트.
+
+        confluent-kafka produce()는 내부 버퍼에 이벤트를 넣고 즉시 반환하므로
+        Kafka 브로커 장애가 API 응답 지연으로 전파되지 않는다 (Fire-and-Forget).
 
         Args:
             key: Rate limit key (예: "payment_api")
@@ -128,7 +131,7 @@ class DistributedRateLimitChannel:
             calculated_delay: 계산된 지연 시간 (초)
 
         Returns:
-            전송 성공 여부
+            내부 버퍼 전송 성공 여부
         """
         try:
             kafka_bus = self._ensure_kafka_bus()
@@ -145,21 +148,10 @@ class DistributedRateLimitChannel:
                 topic=RATE_LIMIT_TOPIC,
                 event=event,
                 key=key,  # 동일 key는 동일 파티션으로 순서 보장
+                on_delivery=self._on_broadcast_delivery,
             )
 
-            if success:
-                logger.info(
-                    "distributed_rate_limit_channel.broadcasted",
-                    rate_limit_key=key,
-                    consecutive_429s=consecutive_429s,
-                )
-            else:
-                logger.warning(
-                    "distributed_rate_limit_channel.failed_broadcast",
-                    rate_limit_key=key,
-                )
-
-            return success
+            return success  # 메모리 버퍼에 넣고 즉시 반환
 
         except Exception as e:
             logger.exception(
@@ -167,6 +159,21 @@ class DistributedRateLimitChannel:
                 error=e,
             )
             return False
+
+    @staticmethod
+    def _on_broadcast_delivery(report) -> None:
+        """Kafka 전송 결과 콜백 (Fire-and-Forget)."""
+        if report.error:
+            logger.warning(
+                "distributed_rate_limit_channel.delivery_failed",
+                error=str(report.error),
+                topic=report.topic,
+            )
+        else:
+            logger.debug(
+                "distributed_rate_limit_channel.delivery_confirmed",
+                topic=report.topic,
+            )
 
     def subscribe_rate_limit_429(
         self,

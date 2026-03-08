@@ -184,10 +184,10 @@ class TestPredictiveForecasterSettingsContract:
         assert settings.state_ttl == 259200
 
     def test_total_settings_field_count(self):
-        """설정 필드는 총 15개이다."""
+        """설정 필드는 총 16개이다 (317: spike_history_size 추가)."""
         settings = PredictiveForecasterSettings()
         field_count = len(PredictiveForecasterSettings.model_fields)
-        assert field_count == 15
+        assert field_count == 16
 
     def test_env_prefix_is_selfhealing_forecaster(self):
         """환경변수 접두사는 SELFHEALING_FORECASTER_이다."""
@@ -244,12 +244,16 @@ class TestHoltLinearForecasterBehavior:
     def test_upward_trend_produces_higher_prediction(self):
         """상승 추세에서 예측값이 현재 레벨보다 높다."""
         f = HoltLinearForecaster(alpha=0.3, beta=0.1, warmup_samples=5)
-        values = TimeSeriesScenarioGenerator.gradual_degradation(base=100, target=500, steps=30, noise_ratio=0.0, seed=42)
+        values = TimeSeriesScenarioGenerator.gradual_degradation(
+            base=100, target=500, steps=30, noise_ratio=0.0, seed=42
+        )
         for v in values:
             f.update(v)
         predicted = f.predict(steps_ahead=5)
         assert predicted is not None
-        assert predicted > f._level, "상승 트렌드에서 미래 예측값이 현재 레벨보다 높아야 함"
+        assert predicted > f._level, (
+            "상승 트렌드에서 미래 예측값이 현재 레벨보다 높아야 함"
+        )
 
     def test_downward_trend_produces_lower_prediction(self):
         """하강 추세에서 예측값이 현재 레벨보다 낮다."""
@@ -258,7 +262,9 @@ class TestHoltLinearForecasterBehavior:
             f.update(float(v))
         predicted = f.predict(steps_ahead=5)
         assert predicted is not None
-        assert predicted < f._level, "하강 트렌드에서 미래 예측값이 현재 레벨보다 낮아야 함"
+        assert predicted < f._level, (
+            "하강 트렌드에서 미래 예측값이 현재 레벨보다 낮아야 함"
+        )
 
     def test_confidence_zero_before_warmup(self):
         """warmup 미달 시 confidence는 0.0이다."""
@@ -484,7 +490,9 @@ class TestZScoreDetectorBehavior:
     def test_stable_values_not_anomalous(self):
         """안정적인 값은 이상으로 판정되지 않는다."""
         d = ZScoreDetector(threshold=3.0, window=100)
-        for v in TimeSeriesScenarioGenerator.stable_noise(base=100, std_dev=2, steps=50, seed=42):
+        for v in TimeSeriesScenarioGenerator.stable_noise(
+            base=100, std_dev=2, steps=50, seed=42
+        ):
             is_anom, z = d.is_anomaly(v)
         # 대부분 비이상이어야 함
         assert not is_anom or abs(z) > 3.0
@@ -636,10 +644,14 @@ class TestSpikeClassifierBehavior:
             acceleration_threshold=2.0,
             sensitivity_multiplier=1.0,
         )
-        rps_history, error_history, latency_history = TimeSeriesScenarioGenerator.flash_sale_surge(seed=42)
+        rps_history, error_history, latency_history = (
+            TimeSeriesScenarioGenerator.flash_sale_surge(seed=42)
+        )
         # 충분한 데이터로 테스트
         if len(rps_history) >= 10:
-            result = c.classify(rps_history[:10], error_history[:10], latency_history[:10])
+            result = c.classify(
+                rps_history[:10], error_history[:10], latency_history[:10]
+            )
             # Flash Sale은 HEALTHY_SURGE 또는 GRADUAL_DEGRADATION (에러 없으므로 ANOMALOUS는 아님)
             assert result != SpikeType.ANOMALOUS_SPIKE
 
@@ -649,10 +661,14 @@ class TestSpikeClassifierBehavior:
             error_rate_threshold=0.05,
             sensitivity_multiplier=1.0,
         )
-        rps_history, error_history, latency_history = TimeSeriesScenarioGenerator.ddos_attack(seed=42)
+        rps_history, error_history, latency_history = (
+            TimeSeriesScenarioGenerator.ddos_attack(seed=42)
+        )
         # 공격 전환 경계(step 5~14)를 포함해야 에러 급증 감지 가능
         if len(rps_history) >= 15:
-            result = c.classify(rps_history[5:15], error_history[5:15], latency_history[5:15])
+            result = c.classify(
+                rps_history[5:15], error_history[5:15], latency_history[5:15]
+            )
             assert result == SpikeType.ANOMALOUS_SPIKE
 
     def test_slow_increase_classified_as_gradual(self):
@@ -732,15 +748,23 @@ class TestProactiveActionTriggerContract:
 
     def test_adjustment_intensity_healthy_surge(self):
         """HEALTHY_SURGE의 조정 강도는 0.0이다 (조치 없음)."""
-        assert ProactiveActionTrigger.ADJUSTMENT_INTENSITY[SpikeType.HEALTHY_SURGE] == 0.0
+        assert (
+            ProactiveActionTrigger.ADJUSTMENT_INTENSITY[SpikeType.HEALTHY_SURGE] == 0.0
+        )
 
     def test_adjustment_intensity_anomalous_spike(self):
         """ANOMALOUS_SPIKE의 조정 강도는 0.15이다."""
-        assert ProactiveActionTrigger.ADJUSTMENT_INTENSITY[SpikeType.ANOMALOUS_SPIKE] == 0.15
+        assert (
+            ProactiveActionTrigger.ADJUSTMENT_INTENSITY[SpikeType.ANOMALOUS_SPIKE]
+            == 0.15
+        )
 
     def test_adjustment_intensity_gradual_degradation(self):
         """GRADUAL_DEGRADATION의 조정 강도는 0.05이다."""
-        assert ProactiveActionTrigger.ADJUSTMENT_INTENSITY[SpikeType.GRADUAL_DEGRADATION] == 0.05
+        assert (
+            ProactiveActionTrigger.ADJUSTMENT_INTENSITY[SpikeType.GRADUAL_DEGRADATION]
+            == 0.05
+        )
 
 
 class TestProactiveActionTriggerBehavior:
@@ -786,7 +810,9 @@ class TestProactiveActionTriggerBehavior:
         assert result is not None
         assert isinstance(result, ProactiveAction)
         assert result.is_dry_run is True
-        expected_intensity = ProactiveActionTrigger.ADJUSTMENT_INTENSITY[SpikeType.ANOMALOUS_SPIKE]
+        expected_intensity = ProactiveActionTrigger.ADJUSTMENT_INTENSITY[
+            SpikeType.ANOMALOUS_SPIKE
+        ]
         assert result.suggested_value == pytest.approx(100.0 * (1 + expected_intensity))
 
     def test_proactive_action_serialization(self):
@@ -820,7 +846,9 @@ class TestStateBackendRoundTripBehavior:
         mock_storage = {}
 
         mock_backend = MagicMock()
-        mock_backend.set.side_effect = lambda key, value, **kwargs: mock_storage.update({key: value})
+        mock_backend.set.side_effect = lambda key, value, **kwargs: mock_storage.update(
+            {key: value}
+        )
         mock_backend.get.side_effect = lambda key: mock_storage.get(key)
 
         with (
@@ -983,7 +1011,9 @@ class TestTimeSeriesScenarioGeneratorBehavior:
 
     def test_gradual_degradation_monotonic(self):
         """gradual_degradation이 대체로 증가하는 시계열을 생성한다."""
-        values = TimeSeriesScenarioGenerator.gradual_degradation(base=100, target=500, steps=50, noise_ratio=0.0)
+        values = TimeSeriesScenarioGenerator.gradual_degradation(
+            base=100, target=500, steps=50, noise_ratio=0.0
+        )
         assert len(values) == 50
         assert values[0] == pytest.approx(100.0)
         assert values[-1] == pytest.approx(500.0)
@@ -1010,17 +1040,23 @@ class TestTimeSeriesScenarioGeneratorBehavior:
 
     def test_pool_exhaustion_bounded(self):
         """pool_exhaustion이 max_usage를 초과하지 않는다."""
-        values = TimeSeriesScenarioGenerator.pool_exhaustion(initial_usage=30, max_usage=100, steps=200, noise_ratio=0.0)
+        values = TimeSeriesScenarioGenerator.pool_exhaustion(
+            initial_usage=30, max_usage=100, steps=200, noise_ratio=0.0
+        )
         assert all(v <= 100.0 for v in values)
 
     def test_memory_leak_increasing(self):
         """memory_leak이 증가하는 시계열을 생성한다."""
-        values = TimeSeriesScenarioGenerator.memory_leak(initial_mb=500, leak_rate_mb=2, steps=100, noise_ratio=0.0)
+        values = TimeSeriesScenarioGenerator.memory_leak(
+            initial_mb=500, leak_rate_mb=2, steps=100, noise_ratio=0.0
+        )
         assert values[-1] > values[0]
 
     def test_stable_noise_centered(self):
         """stable_noise가 base 주변에 분포한다."""
-        values = TimeSeriesScenarioGenerator.stable_noise(base=100, std_dev=5, steps=1000, seed=42)
+        values = TimeSeriesScenarioGenerator.stable_noise(
+            base=100, std_dev=5, steps=1000, seed=42
+        )
         mean = sum(values) / len(values)
         assert abs(mean - 100.0) < 2.0
 

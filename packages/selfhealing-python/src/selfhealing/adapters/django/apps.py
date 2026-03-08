@@ -164,6 +164,9 @@ class SelfHealingConfig(AppConfig):
         # Validate config with Safe Defaults (Fail-Safe Default 강화)
         self._validate_startup_config()
 
+        # 317: Orphan service wiring — pure-memory initialization (Category A)
+        self._initialize_orphan_services()
+
         # Background threads: Gauge hydration, Precomputed Cache, System Metrics, Watchdog.
         # In Gunicorn preload mode, ready() runs in Master — background threads
         # die after fork(). post_worker_init calls start_background_threads() instead.
@@ -712,6 +715,82 @@ class SelfHealingConfig(AppConfig):
             cls._meta_watchdog_started = False
 
     # =========================================================================
+    # 317: Correlation Engine Analysis Loop (Category B — background thread)
+    # =========================================================================
+
+    _correlation_loop_started: bool = False
+    _correlation_loop_lock: threading.Lock = threading.Lock()
+
+    def _start_correlation_engine_loop(self):
+        """317: CorrelationEngine 분석 루프 시작 (LeaderScheduler 스레드)."""
+        try:
+            from selfhealing.settings.correlation import get_correlation_settings
+
+            settings = get_correlation_settings()
+            if not settings.enabled:
+                return
+
+            with self._correlation_loop_lock:
+                if self._correlation_loop_started:
+                    return
+                SelfHealingConfig._correlation_loop_started = True
+
+            from selfhealing.services.correlation_engine.service import (
+                CorrelationEngineService,
+            )
+
+            engine = CorrelationEngineService.get_instance()
+            engine.start_analysis_loop()
+            logger.info("self_healing.correlation_engine_loop_started")
+
+        except ImportError:
+            logger.debug("self_healing.correlation_engine_module_not_available")
+        except Exception as e:
+            logger.warning(
+                "self_healing.failed_start_correlation_engine_loop",
+                error=e,
+            )
+
+    # =========================================================================
+    # 317: Capacity Reservation Scheduler (Category B — background thread)
+    # =========================================================================
+
+    _capacity_reservation_started: bool = False
+    _capacity_reservation_lock: threading.Lock = threading.Lock()
+
+    def _start_capacity_reservation(self):
+        """317: CapacityReservationService 스케줄러 스레드 시작."""
+        try:
+            from selfhealing.settings.capacity_reservation import (
+                get_capacity_reservation_settings,
+            )
+
+            settings = get_capacity_reservation_settings()
+            if not settings.enabled:
+                return
+
+            with self._capacity_reservation_lock:
+                if self._capacity_reservation_started:
+                    return
+                SelfHealingConfig._capacity_reservation_started = True
+
+            from selfhealing.services.capacity_reservation.service import (
+                CapacityReservationService,
+            )
+
+            service = CapacityReservationService()
+            service.start()
+            logger.info("self_healing.capacity_reservation_started")
+
+        except ImportError:
+            logger.debug("self_healing.capacity_reservation_module_not_available")
+        except Exception as e:
+            logger.warning(
+                "self_healing.failed_start_capacity_reservation",
+                error=e,
+            )
+
+    # =========================================================================
     # Secrets Validation
     # =========================================================================
 
@@ -822,6 +901,192 @@ class SelfHealingConfig(AppConfig):
             )
 
     # =========================================================================
+    # 317: Orphan Service Wiring — Pure-Memory Initialization (Category A)
+    # =========================================================================
+
+    def _initialize_orphan_services(self):
+        """317: 고아 서비스 초기화 — ServiceDependencyGraph 위상 정렬 순서 보장."""
+        try:
+            from selfhealing.core.dependency_graph import ServiceDependencyGraph
+
+            graph = ServiceDependencyGraph()
+
+            graph.register_service("event_journal")
+            graph.register_service("config_shadow", depends_on=["event_journal"])
+            graph.register_service("event_bus")
+            graph.register_service("rate_controller")
+            graph.register_service("bulkhead")
+            graph.register_service("correlation_engine", depends_on=["event_bus"])
+            graph.register_service(
+                "capacity_reservation",
+                depends_on=["rate_controller", "bulkhead"],
+            )
+            graph.register_service("saga")
+            graph.register_service("config")
+            graph.register_service("runbook")
+
+            init_order = graph.topological_sort_subset(
+                services=[
+                    "event_journal",
+                    "correlation_engine",
+                    "capacity_reservation",
+                    "saga",
+                    "config",
+                    "runbook",
+                ],
+                direction="leaves_first",
+            )
+
+            initializers = {
+                "event_journal": self._init_event_journal,
+                "correlation_engine": self._init_correlation_engine,
+                "capacity_reservation": self._init_capacity_reservation,
+                "saga": self._init_saga_autodiscover,
+                "config": self._init_config_propagator,
+                "runbook": self._init_runbook,
+            }
+
+            for service_name in init_order:
+                if service_name in initializers:
+                    initializers[service_name]()
+
+            logger.info(
+                "self_healing.orphan_services_initialized",
+                init_order=init_order,
+            )
+
+        except Exception as e:
+            logger.warning(
+                "self_healing.failed_initialize_orphan_services",
+                error=e,
+            )
+
+    @staticmethod
+    def _init_event_journal():
+        """317: EventJournal 초기화 — EventBus 구독 등록."""
+        try:
+            from selfhealing.settings.event_journal import EventJournalSettings
+
+            settings = EventJournalSettings()
+            if not settings.enabled:
+                logger.debug("self_healing.event_journal_disabled")
+                return
+
+            from selfhealing.services.event_journal import init_event_journal
+
+            init_event_journal()
+            logger.info("self_healing.event_journal_initialized")
+        except ImportError:
+            logger.debug("self_healing.event_journal_module_not_available")
+        except Exception as e:
+            logger.warning("self_healing.failed_init_event_journal", error=e)
+
+    @staticmethod
+    def _init_correlation_engine():
+        """317: CorrelationEngine 순수 메모리 초기화 (EventBus 구독, 전략 등록)."""
+        try:
+            from selfhealing.settings.correlation import get_correlation_settings
+
+            settings = get_correlation_settings()
+            if not settings.enabled:
+                logger.debug("self_healing.correlation_engine_disabled")
+                return
+
+            from selfhealing.services.correlation_engine.service import (
+                CorrelationEngineService,
+            )
+
+            engine = CorrelationEngineService.get_instance()
+            engine.initialize()
+            logger.info("self_healing.correlation_engine_initialized")
+        except ImportError:
+            logger.debug("self_healing.correlation_engine_module_not_available")
+        except Exception as e:
+            logger.warning("self_healing.failed_init_correlation_engine", error=e)
+
+    @staticmethod
+    def _init_capacity_reservation():
+        """317: CapacityReservationService DI 초기화."""
+        try:
+            from selfhealing.settings.capacity_reservation import (
+                get_capacity_reservation_settings,
+            )
+
+            settings = get_capacity_reservation_settings()
+            if not settings.enabled:
+                logger.debug("self_healing.capacity_reservation_disabled")
+                return
+
+            from selfhealing.services.capacity_reservation.service import (
+                CapacityReservationService,
+            )
+
+            service = CapacityReservationService()
+            service.initialize()
+            logger.info("self_healing.capacity_reservation_initialized")
+        except ImportError:
+            logger.debug("self_healing.capacity_reservation_module_not_available")
+        except Exception as e:
+            logger.warning("self_healing.failed_init_capacity_reservation", error=e)
+
+    @staticmethod
+    def _init_saga_autodiscover():
+        """317: Saga 정의 자동 등록."""
+        try:
+            from celery import current_app
+
+            current_app.autodiscover_tasks(["selfhealing.services.saga"])
+            logger.info("self_healing.saga_tasks_autodiscovered")
+        except ImportError:
+            logger.debug("self_healing.saga_autodiscover_skipped_no_celery")
+        except Exception as e:
+            logger.warning("self_healing.failed_saga_autodiscover", error=e)
+
+    @staticmethod
+    def _init_config_propagator():
+        """317: GlobalConfigPropagator 초기화 + ProviderRegistry 등록."""
+        try:
+            from selfhealing.services.config.propagator import (
+                get_global_config_propagator,
+            )
+
+            propagator = get_global_config_propagator()
+            logger.info("self_healing.config_propagator_initialized")
+
+            try:
+                from selfhealing.factory import ProviderRegistry
+
+                ProviderRegistry.register("config_propagator", propagator)
+            except Exception:
+                pass
+        except ImportError:
+            logger.debug("self_healing.config_propagator_module_not_available")
+        except Exception as e:
+            logger.warning("self_healing.failed_init_config_propagator", error=e)
+
+    @staticmethod
+    def _init_runbook():
+        """317: Runbook 시스템 명시적 초기화."""
+        try:
+            from selfhealing.settings.runbook import get_runbook_settings
+
+            settings = get_runbook_settings()
+            if not settings.enabled:
+                logger.debug("self_healing.runbook_disabled")
+                return
+
+            from selfhealing.services.runbook.service import (
+                initialize_runbook_system,
+            )
+
+            initialize_runbook_system()
+            logger.info("self_healing.runbook_system_initialized")
+        except ImportError:
+            logger.debug("self_healing.runbook_module_not_available")
+        except Exception as e:
+            logger.warning("self_healing.failed_init_runbook", error=e)
+
+    # =========================================================================
     # Fork-Safety: Background Thread Lifecycle (Section 5.2)
     # =========================================================================
 
@@ -855,6 +1120,8 @@ class SelfHealingConfig(AppConfig):
         self._start_precomputed_cache_worker()
         self._start_system_metrics_cache()
         self._start_meta_watchdog()
+        self._start_correlation_engine_loop()
+        self._start_capacity_reservation()
 
     @classmethod
     def start_background_threads(cls):
@@ -887,6 +1154,10 @@ class SelfHealingConfig(AppConfig):
             cls._metrics_cache_started = False
         with cls._meta_watchdog_lock:
             cls._meta_watchdog_started = False
+        with cls._correlation_loop_lock:
+            cls._correlation_loop_started = False
+        with cls._capacity_reservation_lock:
+            cls._capacity_reservation_started = False
 
     # =========================================================================
     # Test Helpers

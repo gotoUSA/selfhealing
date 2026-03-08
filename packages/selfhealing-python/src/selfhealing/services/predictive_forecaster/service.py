@@ -88,7 +88,9 @@ class ForecastResult:
             "is_anomaly_iqr": self.is_anomaly_iqr,
             "z_score": self.z_score,
             "spike_type": self.spike_type.value if self.spike_type else None,
-            "proactive_action": (self.proactive_action.to_dict() if self.proactive_action else None),
+            "proactive_action": (
+                self.proactive_action.to_dict() if self.proactive_action else None
+            ),
             "is_warmed_up": self.is_warmed_up,
             "data_point_count": self.data_point_count,
             "timestamp": self.timestamp.isoformat(),
@@ -145,6 +147,7 @@ class PredictiveForecasterService:
         )
 
         # 멀티-시그널 분류를 위한 RPS/에러율/레이턴시 히스토리
+        self._spike_history_size: int = settings.spike_history_size
         self._rps_history: list[float] = []
         self._error_rate_history: list[float] = []
         self._latency_history: list[float] = []
@@ -178,7 +181,9 @@ class PredictiveForecasterService:
     def _get_or_create_smoother(self, metric_name: str) -> EWMAForecaster:
         """메트릭별 EWMAForecaster smoothing 인스턴스 반환."""
         if metric_name not in self._smoothers:
-            self._smoothers[metric_name] = EWMAForecaster(alpha=self._settings.ewma_alpha)
+            self._smoothers[metric_name] = EWMAForecaster(
+                alpha=self._settings.ewma_alpha
+            )
         return self._smoothers[metric_name]
 
     def _get_or_create_zscore(self, metric_name: str) -> ZScoreDetector:
@@ -228,18 +233,19 @@ class PredictiveForecasterService:
         smoother.update(value)
 
         # 멀티-시그널 히스토리 업데이트 (SpikeClassifier용)
+        max_size = self._spike_history_size
         if metric_name == "rps" or metric_name == "requests_per_second":
             self._rps_history.append(value)
-            if len(self._rps_history) > 200:
-                self._rps_history = self._rps_history[-200:]
+            if len(self._rps_history) > max_size:
+                self._rps_history = self._rps_history[-max_size:]
         elif metric_name == "error_rate":
             self._error_rate_history.append(value)
-            if len(self._error_rate_history) > 200:
-                self._error_rate_history = self._error_rate_history[-200:]
+            if len(self._error_rate_history) > max_size:
+                self._error_rate_history = self._error_rate_history[-max_size:]
         elif metric_name in ("p99_latency_ms", "latency_ms"):
             self._latency_history.append(value)
-            if len(self._latency_history) > 200:
-                self._latency_history = self._latency_history[-200:]
+            if len(self._latency_history) > max_size:
+                self._latency_history = self._latency_history[-max_size:]
 
         # 이전 예측값이 있으면 정확도 평가
         if metric_name in self._last_predictions:
@@ -333,11 +339,18 @@ class PredictiveForecasterService:
             )
             # LearningService에 이상 패턴 보고
             if predicted is not None:
-                self._report_anomaly_to_learning(metric_name, spike_type, predicted, confidence)
+                self._report_anomaly_to_learning(
+                    metric_name, spike_type, predicted, confidence
+                )
 
         # ProactiveActionTrigger 사전 조치 평가
         proactive_action = None
-        if spike_type is not None and predicted is not None and parameter is not None and current_parameter_value is not None:
+        if (
+            spike_type is not None
+            and predicted is not None
+            and parameter is not None
+            and current_parameter_value is not None
+        ):
             proactive_action = self._action_trigger.evaluate(
                 spike_type=spike_type,
                 confidence=confidence,
@@ -389,7 +402,9 @@ class PredictiveForecasterService:
             learning.learn_pattern(
                 pattern_type=PatternType.ANOMALY,
                 name=f"PredictedAnomaly:{metric_name}:{spike_type.value}",
-                description=(f"Forecaster predicted {spike_type.value} for {metric_name}"),
+                description=(
+                    f"Forecaster predicted {spike_type.value} for {metric_name}"
+                ),
                 features={
                     "metric_name": metric_name,
                     "spike_type": spike_type.value,
@@ -415,7 +430,9 @@ class PredictiveForecasterService:
 
         LearningService._detect_anomaly()가 정확도 급락 시 자동 패턴 학습.
         """
-        accuracy = 1.0 - abs(predicted_value - actual_value) / max(abs(actual_value), 1e-10)
+        accuracy = 1.0 - abs(predicted_value - actual_value) / max(
+            abs(actual_value), 1e-10
+        )
         accuracy = max(0.0, min(1.0, accuracy))
 
         try:

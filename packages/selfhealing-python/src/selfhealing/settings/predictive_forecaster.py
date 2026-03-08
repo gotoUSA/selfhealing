@@ -97,7 +97,10 @@ class PredictiveForecasterSettings(BaseSettings):
         default=30,
         ge=5,
         le=1000,
-        description=("Cold Start 보호: 이 수 미만의 데이터포인트에서는 " "confidence를 0으로 반환하여 예측 기반 조치를 억제."),
+        description=(
+            "Cold Start 보호: 이 수 미만의 데이터포인트에서는 "
+            "confidence를 0으로 반환하여 예측 기반 조치를 억제."
+        ),
     )
 
     # ── 예측 ──
@@ -137,6 +140,18 @@ class PredictiveForecasterSettings(BaseSettings):
         ),
     )
 
+    # ── SpikeClassifier 히스토리 버퍼 ──
+
+    spike_history_size: int = Field(
+        default=200,
+        ge=50,
+        le=5000,
+        description=(
+            "SpikeClassifier용 멀티시그널 히스토리 링 버퍼 크기. "
+            "SpikeClassifier는 최근 5~10개만 사용하므로 기본값 200은 20배 여유."
+        ),
+    )
+
     # ── SpikeClassifier (급증 유형 분류기) ──
 
     spike_error_rate_threshold: float = Field(
@@ -144,7 +159,8 @@ class PredictiveForecasterSettings(BaseSettings):
         ge=0.001,
         le=1.0,
         description=(
-            "SpikeClassifier: 에러율 변화량이 이 값 초과 시 " "ANOMALOUS_SPIKE로 분류 (sensitivity_multiplier 적용 전 기본값)."
+            "SpikeClassifier: 에러율 변화량이 이 값 초과 시 "
+            "ANOMALOUS_SPIKE로 분류 (sensitivity_multiplier 적용 전 기본값)."
         ),
     )
     spike_acceleration_threshold: float = Field(
@@ -174,7 +190,8 @@ class PredictiveForecasterSettings(BaseSettings):
         """warmup_samples가 prediction_steps보다 충분히 큰지 검증."""
         if self.warmup_samples < self.prediction_steps:
             raise ValueError(
-                f"warmup_samples({self.warmup_samples})은 " f"prediction_steps({self.prediction_steps}) 이상이어야 합니다."
+                f"warmup_samples({self.warmup_samples})은 "
+                f"prediction_steps({self.prediction_steps}) 이상이어야 합니다."
             )
         return self
 
@@ -182,7 +199,7 @@ class PredictiveForecasterSettings(BaseSettings):
 # ── Singleton ──
 
 
-def get_predictive_forecaster_settings() -> "PredictiveForecasterSettings":
+def get_predictive_forecaster_settings() -> PredictiveForecasterSettings:
     from selfhealing.settings.root import get_config
 
     return get_config().testing.predictive_forecaster
