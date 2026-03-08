@@ -1,0 +1,134 @@
+"""Unit tests for SelfHealingConfig fork-safety methods (Section 5.2).
+
+Tests _should_start_background_threads(), start_background_threads(),
+and _reset_all_background_state() added in commit cf89883a.
+
+Reference:
+    docs/self_healing/middleware_system/316_GUNICORN_PRELOAD_OPTIMIZATION.md §5.2
+"""
+
+from __future__ import annotations
+
+import threading
+from unittest.mock import MagicMock, patch
+
+from selfhealing.adapters.django.apps import SelfHealingConfig
+
+
+class TestShouldStartBackgroundThreadsContract:
+    """Contract: thread start decision based on env vars per §5.2."""
+
+    def test_gunicorn_master_returns_false(self):
+        """Gunicorn Master (SERVER_SOFTWARE set, no GUNICORN_WORKER) → False."""
+        env = {"SERVER_SOFTWARE": "gunicorn/21.2.0"}
+        with patch.dict("os.environ", env, clear=True), patch("sys.argv", ["gunicorn"]):
+            assert SelfHealingConfig._should_start_background_threads() is False
+
+    def test_gunicorn_worker_returns_true(self):
+        """Gunicorn Worker (GUNICORN_WORKER='1') → True."""
+        env = {
+            "SERVER_SOFTWARE": "gunicorn/21.2.0",
+            "GUNICORN_WORKER": "1",
+        }
+        with patch.dict("os.environ", env, clear=True), patch("sys.argv", ["gunicorn"]):
+            assert SelfHealingConfig._should_start_background_threads() is True
+
+    def test_dev_server_runserver_returns_true(self):
+        """Dev server (runserver in sys.argv) → True."""
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("sys.argv", ["manage.py", "runserver"]),
+        ):
+            assert SelfHealingConfig._should_start_background_threads() is True
+
+    def test_dev_server_env_var_returns_true(self):
+        """Dev server (DJANGO_DEV_SERVER='1') → True."""
+        env = {"DJANGO_DEV_SERVER": "1"}
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch("sys.argv", ["manage.py"]),
+        ):
+            assert SelfHealingConfig._should_start_background_threads() is True
+
+    def test_non_gunicorn_non_dev_returns_true(self):
+        """Regular process (no gunicorn, no runserver) → True (default)."""
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("sys.argv", ["manage.py", "migrate"]),
+        ):
+            assert SelfHealingConfig._should_start_background_threads() is True
+
+
+class TestResetAllBackgroundStateBehavior:
+    """Behavior: _reset_all_background_state resets all guards."""
+
+    def test_resets_all_four_guards_to_false(self):
+        """All four duplicate-start guards must be reset to False."""
+        # Given — set all guards to True
+        SelfHealingConfig._hydration_done = True
+        SelfHealingConfig._cache_worker_started = True
+        SelfHealingConfig._metrics_cache_started = True
+        SelfHealingConfig._meta_watchdog_started = True
+
+        # When
+        SelfHealingConfig._reset_all_background_state()
+
+        # Then
+        assert SelfHealingConfig._hydration_done is False
+        assert SelfHealingConfig._cache_worker_started is False
+        assert SelfHealingConfig._metrics_cache_started is False
+        assert SelfHealingConfig._meta_watchdog_started is False
+
+    def test_idempotent_double_reset_no_error(self):
+        """Resetting twice in a row does not raise."""
+        SelfHealingConfig._reset_all_background_state()
+        SelfHealingConfig._reset_all_background_state()
+        assert SelfHealingConfig._hydration_done is False
+
+
+class TestStartBackgroundThreadsBehavior:
+    """Behavior: start_background_threads() resets guards and starts threads."""
+
+    @patch("django.apps.apps")
+    def test_calls_reset_then_start(self, mock_apps):
+        """Resets state, gets app config, and calls _start_all_background_threads."""
+        mock_config = MagicMock()
+        mock_apps.get_app_config.return_value = mock_config
+
+        # Given — guards are set
+        SelfHealingConfig._hydration_done = True
+
+        # When
+        SelfHealingConfig.start_background_threads()
+
+        # Then — guards are reset
+        assert SelfHealingConfig._hydration_done is False
+        mock_apps.get_app_config.assert_called_once_with("selfhealing")
+        mock_config._start_all_background_threads.assert_called_once()
+
+    @patch("django.apps.apps")
+    def test_handles_app_config_error_gracefully(self, mock_apps):
+        """If apps.get_app_config raises, logs warning but does not crash."""
+        mock_apps.get_app_config.side_effect = LookupError("not found")
+
+        # Should not raise
+        SelfHealingConfig.start_background_threads()
+
+    def test_thread_safety_concurrent_reset(self):
+        """Multiple threads calling _reset_all_background_state concurrently."""
+        errors = []
+
+        def worker():
+            try:
+                for _ in range(100):
+                    SelfHealingConfig._reset_all_background_state()
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=worker) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
