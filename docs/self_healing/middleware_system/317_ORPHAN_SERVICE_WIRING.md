@@ -4,6 +4,7 @@
 > **Severity**: P1 (HIGH) — 빌드된 기능이 런타임에 활성화되지 않음
 > **Target**: `services/`, `adapters/django/apps.py`, `celery_tasks/`, `myproject/celery.py`
 > **References**:
+> - 316 — Gunicorn Preload Optimization (fork-safety, post_worker_init)
 > - 318 — Wiring Verification CI (자동 검증)
 > - 75 — Crisis Budget Multiplier (domain_tag 데코레이터)
 > - 299 — Config Shadow Evaluator (event_journal 의존)
@@ -67,8 +68,24 @@ CorrelationEngineService.get_instance()
 
 | 엔트리포인트 | 위치 | 내용 |
 |-------------|------|------|
-| AppConfig.ready() | `adapters/django/apps.py` | `CorrelationEngineService.get_instance().initialize()` |
-| AppConfig.ready() | `adapters/django/apps.py` | `CorrelationEngineService.get_instance().start_analysis_loop()` |
+| AppConfig.ready() | `adapters/django/apps.py` | `CorrelationEngineService.get_instance().initialize()` (순수 메모리 초기화만) |
+| `_start_all_background_threads()` | `adapters/django/apps.py` | `CorrelationEngineService.get_instance().start_analysis_loop()` |
+
+**316번 Preload 연계 — fork-safety 필수사항**:
+
+`start_analysis_loop()`는 LeaderScheduler 스레드를 생성하므로, `--preload` 모드에서 `ready()`에 직접 넣으면 Master 프로세스의 스레드가 fork() 후 유실된다. 반드시 기존 `_start_all_background_threads()` 체인에 추가하여, `post_worker_init` 훅을 통해 Worker별로 기동되도록 해야 한다.
+
+```python
+# adapters/django/apps.py — _start_all_background_threads() 확장
+def _start_all_background_threads(self):
+    self._schedule_gauge_hydration()
+    self._start_precomputed_cache_worker()
+    self._start_system_metrics_cache()
+    self._start_meta_watchdog()
+    self._start_correlation_engine_loop()      # 317 추가
+```
+
+`initialize()`는 순수 메모리 초기화(EventBus 구독, 전략 등록)이므로 `ready()`에서 호출해도 안전하다. `start_analysis_loop()`만 분리한다.
 
 **Feature Flag**: `SELFHEALING_CORRELATION_ENGINE_ENABLED` (default: False)
 
@@ -185,6 +202,30 @@ service = PredictiveForecasterService()
 | Celery Beat | `myproject/celery.py` | 메트릭 수집 + 예측 루프 (60초) |
 | Metrics 수집 훅 | `celery_tasks/metrics_tasks.py` | `collect_self_healing_metrics` 내에서 ingest 호출 |
 
+**SpikeClassifier 히스토리 버퍼 설정화**:
+
+현재 `service.py`에서 SpikeClassifier 전용 링 버퍼 크기가 `200`으로 하드코딩되어 있다. SpikeClassifier는 실제로 최근 5~10개만 사용하므로 200은 값으로는 충분하지만, 엔터프라이즈 환경에서 하드코딩은 변경 불가능성이 문제다. `settings/predictive_forecaster.py`에 설정으로 추출한다.
+
+```python
+# settings/predictive_forecaster.py 추가
+spike_history_size: int = Field(
+    default=200,
+    ge=50,
+    le=5000,
+    description="SpikeClassifier용 멀티시그널 히스토리 링 버퍼 크기. "
+    "SpikeClassifier는 최근 5~10개만 사용하므로 기본값 200은 20배 여유.",
+)
+```
+
+```python
+# service.py 수정 — 하드코딩 200 제거
+max_size = self._settings.spike_history_size
+if len(self._rps_history) > max_size:
+    self._rps_history = self._rps_history[-max_size:]
+```
+
+참고: 예측 엔진(HoltLinearForecaster)의 히스토리는 별도 `max_history=10,000` (deque)으로 관리되며, Z-Score/IQR 윈도우는 `zscore_window=100` (설정 가능, max 10,000)으로 관리된다. 이 설정은 SpikeClassifier 전용이다.
+
 **Feature Flag**: `SELFHEALING_FORECASTER_ENABLED` (default: False)
 
 **우선순위**: P2 — 선제적 대응 (Proactive Action)의 핵심
@@ -199,13 +240,40 @@ service = PredictiveForecasterService()
 |------|------|------|
 | 부분 연결 | `init_event_journal(bus)` 호출 없음 | AppConfig.ready()에 추가 |
 
-Config Shadow 서비스가 EventJournal에 의존하므로 **Config Shadow보다 먼저 초기화**해야 한다.
+Config Shadow 서비스가 EventJournal에 의존하므로 **Config Shadow보다 먼저 초기화**해야 한다. 초기화 순서는 8절의 `ServiceDependencyGraph` 기반 위상 정렬로 강제한다.
 
-### 3.2 rate_limit (Kafka 분산 채널) — 호출자 없음
+### 3.2 rate_limit (Kafka 분산 채널) — 호출자 없음 + 동기 I/O 문제
 
 | 상태 | 문제 | 해결 |
 |------|------|------|
 | 고아에 가까움 | `RateLimitCoordinator`가 Kafka 채널 미사용 | `coordinator.on_rate_limited()`에서 `broadcast_rate_limit_429()` 호출 |
+
+**Kafka 장애 격리 — 비동기 발송 필수**:
+
+현재 `distributed_channel.py:144`의 `kafka_bus.publish()`는 동기 호출이다. Kafka 브로커 장애/지연 시 API 응답 지연으로 직결되는 Anti-pattern이다. EventBus 계층(`helpers.py:21-69`)은 이미 완벽한 Fail-Open(try/except로 삼킴)이지만, Kafka 계층은 동기 네트워크 I/O를 동반한다.
+
+해결 방안 — `confluent-kafka` 비동기 produce 전환:
+
+```python
+# distributed_channel.py 수정
+def broadcast_rate_limit_429(self, key, consecutive_429s, cooldown_until, calculated_delay):
+    try:
+        kafka_bus = self._ensure_kafka_bus()
+        event = { ... }
+        # 동기 publish() 대신 비동기 produce() + 콜백
+        kafka_bus.produce_async(
+            topic=RATE_LIMIT_TOPIC,
+            event=event,
+            key=key,
+            on_delivery=self._on_broadcast_delivery,  # Fire-and-Forget 콜백
+        )
+        return True  # 메모리 버퍼에 넣고 즉시 반환
+    except Exception as e:
+        logger.exception("distributed_rate_limit_channel.broadcast_error", error=e)
+        return False
+```
+
+타임아웃 설정보다 비동기 produce가 우선이다. `confluent-kafka`의 C 확장 내부 버퍼에 이벤트를 넣고 메인 스레드는 즉시 반환되므로, Kafka 장애가 API 응답에 전혀 영향을 주지 않는다.
 
 ### 3.3 config (Global Config Propagator) — 초기화 + 리스너 없음
 
@@ -247,25 +315,32 @@ Config Shadow 서비스가 EventJournal에 의존하므로 **Config Shadow보다
 
 ```
 1. execution_services → Celery Beat 등록
-2. event_journal → AppConfig.ready() 초기화
-3. rate_limit → RateLimitCoordinator 연결
+2. event_journal → ready() 초기화 (순수 메모리)
+3. rate_limit → RateLimitCoordinator 연결 + Kafka 비동기 produce 전환
 ```
 
 ### Phase 2: 분석/예측 서비스 (P2)
 
 ```
-4. correlation_engine → AppConfig.ready() + EventBus
-5. predictive_forecaster → Celery Beat + Metrics Hook
-6. saga → Celery Beat + Autodiscover
+4. correlation_engine → ready(): initialize() + background threads: start_analysis_loop()
+5. predictive_forecaster → Celery Beat + Metrics Hook + spike_history_size 설정화
+6. saga → Celery Beat + autodiscover_modules('sagas')
 7. runbook → 초기화 확인/추가
 ```
 
 ### Phase 3: 인프라 서비스 (P3)
 
 ```
-8. config → AppConfig.ready() + ProviderRegistry
-9. capacity_reservation → AppConfig.ready() + DI
+8. config → ready() + ProviderRegistry
+9. capacity_reservation → ready() DI (ServiceDependencyGraph 순서 보장)
 10. isolation → Middleware 확장
+```
+
+### 선행 작업: 부트스트랩 인프라 (Phase 0)
+
+```
+0-1. ready() 초기화 2분류 분리 (순수 메모리 vs 능동 I/O/스레드)
+0-2. ServiceDependencyGraph 기반 초기화 순서 강제 도입
 ```
 
 ---
@@ -274,11 +349,15 @@ Config Shadow 서비스가 EventJournal에 의존하므로 **Config Shadow보다
 
 | 파일 | 변경 내용 |
 |------|----------|
-| `adapters/django/apps.py` | ready()에 6개 서비스 초기화 추가 |
+| `adapters/django/apps.py` | ready(): 순수 메모리 초기화 6개 추가 |
+| `adapters/django/apps.py` | `_start_all_background_threads()`: 능동 스레드 기동 추가 (correlation_engine 등) |
 | `myproject/celery.py` | Beat 스케줄에 4개 태스크 추가 |
 | `services/rate_limit_coordinator/coordinator.py` | Kafka 분산 채널 연결 |
+| `services/rate_limit/distributed_channel.py` | 동기 `publish()` → 비동기 `produce_async()` 전환 |
 | `api/django/cell/middleware.py` | Regional Isolation 체크 추가 |
 | `settings/` | Feature Flag 6개 추가 |
+| `settings/predictive_forecaster.py` | `spike_history_size` 설정 추가 |
+| `services/predictive_forecaster/service.py` | 하드코딩 200 → `settings.spike_history_size` |
 
 ---
 
@@ -291,11 +370,107 @@ Config Shadow 서비스가 EventJournal에 의존하므로 **Config Shadow보다
 3. **Graceful Failure**: 의존성(Redis 등) 실패 시 서비스 기동에 영향 없음
 4. **테스트 커버리지**: 와이어링 경로의 단위 테스트
 5. **CI 검증 통과**: 318번 문서의 CI 스크립트로 자동 검증
+6. **Fork-Safety 검증**: 스레드/커넥션 생성이 `_start_all_background_threads()` 경로에만 존재하는지 확인
+7. **초기화 순서 검증**: `ServiceDependencyGraph` 위상 정렬 결과와 실제 호출 순서 일치 확인
 
 ---
 
-## 7. 관련 문서
+## 7. 316번 Preload 연계 — ready() 초기화 2분류
 
+317의 와이어링이 316번 `--preload` 모드와 충돌하지 않도록, `ready()`에 추가하는 초기화를 2가지로 분류한다.
+
+### 분류 기준
+
+| 분류 | 위치 | 특성 | 예시 |
+|------|------|------|------|
+| **A. 순수 메모리 초기화** | `ready()` | import, DI, 레지스트리 등록, EventBus 구독 | `initialize()`, `autodiscover_modules()`, `register_saga()` |
+| **B. 능동 I/O / 스레드 기동** | `_start_all_background_threads()` | 스레드 생성, 네트워크 커넥션, 주기적 루프 | `start_analysis_loop()`, Kafka 채널 연결 |
+
+### 현재 코드의 fork-safety 체인
+
+```
+AppConfig.ready()
+    ├── 순수 메모리 초기화 (A) — 항상 실행
+    └── _should_start_background_threads()
+        ├── Gunicorn Master → False (스킵)
+        └── Dev Server / Worker → True
+            └── _start_all_background_threads() (B)
+
+Gunicorn post_worker_init 훅
+    └── SelfHealingConfig.start_background_threads()
+        ├── _reset_all_background_state()  — 중복 기동 가드 리셋
+        └── _start_all_background_threads() (B)
+```
+
+317에서 추가되는 서비스는 반드시 이 체인을 따라야 한다:
+
+| 서비스 | 분류 A (ready) | 분류 B (background threads) |
+|--------|---------------|---------------------------|
+| correlation_engine | `initialize()` | `start_analysis_loop()` |
+| event_journal | `init_event_journal(bus)` | — |
+| saga | `autodiscover_modules('sagas')` | — |
+| config | `GlobalConfigPropagator` 초기화 | Kafka 리스너 연결 |
+| capacity_reservation | `CapacityReservationService().initialize(...)` | `start()` (스케줄러 스레드) |
+| isolation | — | EventBus 구독은 A이지만 Kafka 채널은 B |
+
+---
+
+## 8. 부트스트랩 순서 강제 — ServiceDependencyGraph 활용
+
+### 문제
+
+`ready()` 내 코드 라인의 상하 순서에만 의존하는 초기화는 리팩토링 시 휴먼 에러를 유발한다. 예: event_journal과 config_shadow의 순서가 뒤바뀌면 런타임 장애.
+
+### 해결 — 기존 ServiceDependencyGraph 재활용
+
+`core/dependency_graph.py`에 이미 Kahn's Algorithm 기반 위상 정렬이 구현되어 있다. 현재 런타임 장애 전파 분석에만 사용되지만, 부트스트랩 단계에서도 동일하게 활용한다.
+
+```python
+# adapters/django/apps.py — ready() 내부
+from selfhealing.core.dependency_graph import ServiceDependencyGraph
+
+def _initialize_orphan_services(self):
+    """317: 고아 서비스 초기화 — 위상 정렬 순서 보장."""
+    graph = ServiceDependencyGraph()
+
+    # 의존성 선언
+    graph.add_dependency("config_shadow", "event_journal")
+    graph.add_dependency("capacity_reservation", "rate_controller")
+    graph.add_dependency("capacity_reservation", "bulkhead")
+    graph.add_dependency("correlation_engine", "event_bus")
+
+    # 위상 정렬 → 안전한 초기화 순서
+    init_order = graph.topological_sort_subset(
+        subset=["event_journal", "config_shadow", "correlation_engine",
+                "capacity_reservation", "saga", "config", "runbook"],
+        direction="leaves_first",
+    )
+
+    initializers = {
+        "event_journal": self._init_event_journal,
+        "config_shadow": self._init_config_shadow,
+        "correlation_engine": self._init_correlation_engine,
+        "capacity_reservation": self._init_capacity_reservation,
+        "saga": self._init_saga_autodiscover,
+        "config": self._init_config_propagator,
+        "runbook": self._init_runbook,
+    }
+
+    for service_name in init_order:
+        if service_name in initializers:
+            initializers[service_name]()
+```
+
+이 방식의 장점:
+- 의존성이 코드로 **선언**되므로, 줄 바꿈에 의한 순서 오류 원천 차단
+- 순환 의존성 자동 탐지 (기존 `ServiceDependencyGraph` 내장)
+- 새 서비스 추가 시 `add_dependency()` + `initializers` dict에만 추가하면 됨
+
+---
+
+## 9. 관련 문서
+
+- **316_GUNICORN_PRELOAD_OPTIMIZATION.md** — fork-safety, post_worker_init 훅
 - **318_WIRING_VERIFICATION_CI.md** — 와이어링 상태 자동 검증 CI 스크립트
 - **75_CRISIS_BUDGET_MULTIPLIER.md** — domain_tag 데코레이터 기반 도메인 인지
 - **299_CONFIG_SHADOW_EVALUATOR.md** — event_journal 의존 서비스
