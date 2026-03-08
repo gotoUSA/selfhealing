@@ -1,6 +1,6 @@
 # 317. Orphan Service Wiring — 미연결 서비스 식별 및 연결 계획
 
-> **Status**: Planned
+> **Status**: Implemented
 > **Severity**: P1 (HIGH) — 빌드된 기능이 런타임에 활성화되지 않음
 > **Target**: `services/`, `adapters/django/apps.py`, `celery_tasks/`, `myproject/celery.py`
 > **References**:
@@ -142,7 +142,7 @@ gate = get_regional_isolation_gate()
 
 | 엔트리포인트 | 위치 | 내용 |
 |-------------|------|------|
-| CellTaggingMiddleware 확장 | `api/django/cell/middleware.py` | `is_region_isolated()` 체크 추가 |
+| CellTaggingMiddleware 확장 | `api/django/cell/middleware.py` | `is_current_region_isolated()` 체크 추가 |
 | EventBus 구독 | `adapters/django/apps.py` | CB Cascade 감지 시 자동 격리 |
 
 **Feature Flag**: `SELFHEALING_REGIONAL_ISOLATION_ENABLED` (default: False)
@@ -219,7 +219,8 @@ spike_history_size: int = Field(
 
 ```python
 # service.py 수정 — 하드코딩 200 제거
-max_size = self._settings.spike_history_size
+# __init__에서 캐싱: self._spike_history_size = settings.spike_history_size
+max_size = self._spike_history_size
 if len(self._rps_history) > max_size:
     self._rps_history = self._rps_history[-max_size:]
 ```
@@ -252,7 +253,7 @@ Config Shadow 서비스가 EventJournal에 의존하므로 **Config Shadow보다
 
 현재 `distributed_channel.py:144`의 `kafka_bus.publish()`는 동기 호출이다. Kafka 브로커 장애/지연 시 API 응답 지연으로 직결되는 Anti-pattern이다. EventBus 계층(`helpers.py:21-69`)은 이미 완벽한 Fail-Open(try/except로 삼킴)이지만, Kafka 계층은 동기 네트워크 I/O를 동반한다.
 
-해결 방안 — `confluent-kafka` 비동기 produce 전환:
+해결 방안 — `publish()` + `on_delivery` 콜백 (Fire-and-Forget):
 
 ```python
 # distributed_channel.py 수정
@@ -260,12 +261,12 @@ def broadcast_rate_limit_429(self, key, consecutive_429s, cooldown_until, calcul
     try:
         kafka_bus = self._ensure_kafka_bus()
         event = { ... }
-        # 동기 publish() 대신 비동기 produce() + 콜백
-        kafka_bus.produce_async(
+        # on_delivery 콜백으로 비동기 전송 결과 처리 (Fire-and-Forget)
+        kafka_bus.publish(
             topic=RATE_LIMIT_TOPIC,
             event=event,
             key=key,
-            on_delivery=self._on_broadcast_delivery,  # Fire-and-Forget 콜백
+            on_delivery=self._on_broadcast_delivery,
         )
         return True  # 메모리 버퍼에 넣고 즉시 반환
     except Exception as e:
@@ -273,7 +274,7 @@ def broadcast_rate_limit_429(self, key, consecutive_429s, cooldown_until, calcul
         return False
 ```
 
-타임아웃 설정보다 비동기 produce가 우선이다. `confluent-kafka`의 C 확장 내부 버퍼에 이벤트를 넣고 메인 스레드는 즉시 반환되므로, Kafka 장애가 API 응답에 전혀 영향을 주지 않는다.
+기존 `publish()` API에 `on_delivery` 콜백을 추가하여 Kafka 내부 버퍼에 이벤트를 넣고 메인 스레드는 즉시 반환되므로, Kafka 장애가 API 응답에 전혀 영향을 주지 않는다.
 
 ### 3.3 config (Global Config Propagator) — 초기화 + 리스너 없음
 
@@ -433,22 +434,29 @@ def _initialize_orphan_services(self):
     """317: 고아 서비스 초기화 — 위상 정렬 순서 보장."""
     graph = ServiceDependencyGraph()
 
-    # 의존성 선언
-    graph.add_dependency("config_shadow", "event_journal")
-    graph.add_dependency("capacity_reservation", "rate_controller")
-    graph.add_dependency("capacity_reservation", "bulkhead")
-    graph.add_dependency("correlation_engine", "event_bus")
+    # 의존성 선언 (register_service API 사용)
+    graph.register_service("event_journal")
+    graph.register_service("config_shadow", depends_on=["event_journal"])
+    graph.register_service("event_bus")
+    graph.register_service("rate_controller")
+    graph.register_service("bulkhead")
+    graph.register_service("correlation_engine", depends_on=["event_bus"])
+    graph.register_service("capacity_reservation",
+                           depends_on=["rate_controller", "bulkhead"])
+    graph.register_service("saga")
+    graph.register_service("config")
+    graph.register_service("runbook")
 
     # 위상 정렬 → 안전한 초기화 순서
+    # config_shadow는 §3.5에서 이미 양호(Celery Task + Canary)이므로 제외
     init_order = graph.topological_sort_subset(
-        subset=["event_journal", "config_shadow", "correlation_engine",
-                "capacity_reservation", "saga", "config", "runbook"],
+        services=["event_journal", "correlation_engine",
+                   "capacity_reservation", "saga", "config", "runbook"],
         direction="leaves_first",
     )
 
     initializers = {
         "event_journal": self._init_event_journal,
-        "config_shadow": self._init_config_shadow,
         "correlation_engine": self._init_correlation_engine,
         "capacity_reservation": self._init_capacity_reservation,
         "saga": self._init_saga_autodiscover,
