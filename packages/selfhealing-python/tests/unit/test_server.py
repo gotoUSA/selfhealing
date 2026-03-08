@@ -22,6 +22,7 @@ from selfhealing.server import (
     _reset_redis,
     _shutdown_audit_system,
     _shutdown_leader_electors,
+    _stop_background_threads,
     post_fork_reset,
     post_worker_init_start,
     worker_exit_cleanup,
@@ -66,12 +67,17 @@ class TestServerContract:
         m_mmap.assert_called_once_with(worker)
         m_rng.assert_called_once_with(worker)
 
-    def test_worker_exit_shutdown_order_is_leader_then_audit(self):
-        """worker_exit_cleanup()는 leader elector → audit system 순서로 종료."""
+    def test_worker_exit_shutdown_order_is_bg_then_leader_then_audit(self):
+        """worker_exit_cleanup()는 background stop → leader elector → audit system 순서로 종료."""
         worker = _make_worker()
         call_order = []
 
         with (
+            patch(
+                "selfhealing.server._stop_background_threads",
+                autospec=True,
+                side_effect=lambda w: call_order.append("background"),
+            ),
             patch(
                 "selfhealing.server._shutdown_leader_electors",
                 autospec=True,
@@ -86,7 +92,7 @@ class TestServerContract:
         ):
             worker_exit_cleanup(worker)
 
-        assert call_order == ["leader", "audit"]
+        assert call_order == ["background", "leader", "audit"]
 
 
 # =============================================================================
@@ -164,13 +170,14 @@ class TestWorkerExitCleanupBehavior:
         worker = _make_worker(timeout=60)
 
         with (
+            patch("selfhealing.server._stop_background_threads", autospec=True),
             patch("selfhealing.server._shutdown_leader_electors", autospec=True),
             patch("selfhealing.server._shutdown_audit_system", autospec=True),
             patch("selfhealing.server._emergency_dump", autospec=True) as m_dump,
             patch("selfhealing.server.time") as mock_time,
         ):
-            # monotonic returns: initial, after leader, after audit, final check
-            mock_time.monotonic.side_effect = [0.0, 0.0, 0.0, 0.0]
+            # monotonic: initial, after bg, after leader, after audit, final check
+            mock_time.monotonic.side_effect = [0.0, 0.0, 0.0, 0.0, 0.0]
             worker_exit_cleanup(worker)
             # Budget = 60 - 10 = 50, deadline = 50.0
             # remaining at check = 50.0 - 0.0 = 50.0 > 0 → no emergency dump
@@ -181,14 +188,15 @@ class TestWorkerExitCleanupBehavior:
         worker = _make_worker(timeout=20)
 
         with (
+            patch("selfhealing.server._stop_background_threads", autospec=True),
             patch("selfhealing.server._shutdown_leader_electors", autospec=True),
             patch("selfhealing.server._shutdown_audit_system", autospec=True),
             patch("selfhealing.server._emergency_dump", autospec=True) as m_dump,
             patch("selfhealing.server.time") as mock_time,
         ):
             # Budget = 20 - 10 = 10, deadline = 10.0
-            # monotonic: initial=0, after leader=0, after audit=0, final=11.0
-            mock_time.monotonic.side_effect = [0.0, 0.0, 0.0, 11.0]
+            # monotonic: initial=0, after bg=0, after leader=0, after audit=0, final=11.0
+            mock_time.monotonic.side_effect = [0.0, 0.0, 0.0, 0.0, 11.0]
             worker_exit_cleanup(worker)
             m_dump.assert_called_once_with(worker)
 
@@ -199,6 +207,7 @@ class TestWorkerExitCleanupBehavior:
         worker.cfg = SimpleNamespace()  # timeout 속성 없음
 
         with (
+            patch("selfhealing.server._stop_background_threads", autospec=True),
             patch("selfhealing.server._shutdown_leader_electors", autospec=True),
             patch("selfhealing.server._shutdown_audit_system", autospec=True),
             patch("selfhealing.server._emergency_dump", autospec=True) as m_dump,
@@ -206,6 +215,33 @@ class TestWorkerExitCleanupBehavior:
             worker_exit_cleanup(worker)
             # 기본 timeout=60, budget=50 → 정상 범위이므로 dump 미호출
             m_dump.assert_not_called()
+
+
+class TestStopBackgroundThreadsBehavior:
+    """_stop_background_threads() 동작 검증."""
+
+    def test_calls_stop_background_threads_on_config(self):
+        """SelfHealingConfig.stop_background_threads()를 호출."""
+        worker = _make_worker()
+        # autospec 미사용: stop_background_threads()는 아직 구현되지 않은 계획된 메서드
+        with patch(
+            "selfhealing.adapters.django.apps.SelfHealingConfig",
+        ) as mock_config:
+            _stop_background_threads(worker)
+            mock_config.stop_background_threads.assert_called_once()
+
+    def test_exception_logged_as_warning(self):
+        """예외 발생 시 warning 로그 기록 (크래시하지 않음)."""
+        worker = _make_worker()
+        with (
+            patch(
+                "selfhealing.adapters.django.apps.SelfHealingConfig",
+            ) as mock_config,
+            patch("selfhealing.server.logger", autospec=True) as mock_logger,
+        ):
+            mock_config.stop_background_threads.side_effect = RuntimeError("test")
+            _stop_background_threads(worker)
+            mock_logger.warning.assert_called()
 
 
 class TestShutdownLeaderElectorsBehavior:

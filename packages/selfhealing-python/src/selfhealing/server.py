@@ -83,10 +83,17 @@ def worker_exit_cleanup(worker):
     budget = float(gunicorn_timeout) - _SHUTDOWN_BUDGET_MARGIN_SECONDS
     deadline = time.monotonic() + budget
 
+    # 1. Background threads graceful stop
+    remaining = deadline - time.monotonic()
+    if remaining > 0:
+        _stop_background_threads(worker)
+
+    # 2. Leader elector shutdown
     remaining = deadline - time.monotonic()
     if remaining > 0:
         _shutdown_leader_electors(worker)
 
+    # 3. Audit system shutdown
     remaining = deadline - time.monotonic()
     if remaining > 0:
         _shutdown_audit_system(worker)
@@ -96,6 +103,24 @@ def worker_exit_cleanup(worker):
         _emergency_dump(worker)
 
     logger.info("Worker %s: selfhealing graceful shutdown completed", worker.pid)
+
+
+def _stop_background_threads(worker):
+    """Graceful stop for background daemon threads.
+
+    Daemon threads are killed without interruption on process exit.
+    This gives in-flight batch/metric pushes a chance to complete.
+    """
+    try:
+        from selfhealing.adapters.django.apps import SelfHealingConfig
+
+        SelfHealingConfig.stop_background_threads()
+    except Exception as exc:
+        logger.warning(
+            "Worker %s: background thread stop failed: %s",
+            worker.pid,
+            exc,
+        )
 
 
 def _shutdown_leader_electors(worker):

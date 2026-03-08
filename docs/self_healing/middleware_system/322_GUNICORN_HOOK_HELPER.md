@@ -133,17 +133,17 @@ def worker_exit_cleanup(worker):
     # 1. Background threads graceful stop (daemon 스레드 유실 방지)
     remaining = deadline - time.monotonic()
     if remaining > 0:
-        _stop_background_threads(worker, timeout=min(remaining, 5.0))
+        _stop_background_threads(worker)
 
     # 2. Leader elector shutdown
     remaining = deadline - time.monotonic()
     if remaining > 0:
-        _shutdown_leader_elector(worker, timeout=min(remaining, 5.0))
+        _shutdown_leader_electors(worker)
 
     # 3. Audit system shutdown (가장 시간 소모가 큰 단계)
     remaining = deadline - time.monotonic()
     if remaining > 0:
-        _shutdown_audit_system(worker, timeout=max(remaining - 1.0, 1.0))
+        _shutdown_audit_system(worker)
 
     # 4. 예산 초과 시 Emergency Dump
     remaining = deadline - time.monotonic()
@@ -153,37 +153,37 @@ def worker_exit_cleanup(worker):
     logger.info("Worker %s: selfhealing graceful shutdown completed", worker.pid)
 
 
-def _stop_background_threads(worker, timeout):
+def _stop_background_threads(worker):
     """Background daemon 스레드들의 우아한 종료."""
     try:
         from selfhealing.adapters.django.apps import SelfHealingConfig
-        SelfHealingConfig.stop_background_threads(timeout=timeout)
+        SelfHealingConfig.stop_background_threads()
     except Exception as exc:
         logger.warning(
             "Worker %s: background thread stop failed: %s", worker.pid, exc,
         )
 
 
-def _shutdown_leader_elector(worker, timeout):
-    """Leader elector 종료."""
+def _shutdown_leader_electors(worker):
+    """등록된 Leader Elector 전체 종료."""
     try:
         from selfhealing.coordination.shutdown_integration import (
-            graceful_shutdown_leader_elector,
+            _shutdown_all_electors,
         )
-        graceful_shutdown_leader_elector(timeout=timeout)
+        _shutdown_all_electors()
     except Exception as exc:
         logger.warning(
             "Worker %s: leader elector shutdown failed: %s", worker.pid, exc,
         )
 
 
-def _shutdown_audit_system(worker, timeout):
+def _shutdown_audit_system(worker):
     """Audit 시스템 종료."""
     try:
         from selfhealing.audit.async_audit_lifecycle import (
             graceful_shutdown_audit_system,
         )
-        graceful_shutdown_audit_system(timeout=timeout)
+        graceful_shutdown_audit_system()
     except Exception as exc:
         logger.warning(
             "Worker %s: audit system shutdown failed: %s", worker.pid, exc,
@@ -230,27 +230,31 @@ def _emergency_dump(worker):
 def _reset_redis(worker):
     """Redis 연결 재설정.
 
-    R1: ImportError 대신 settings 플래그로 명시적 분기.
-    server.py는 selfhealing 패키지 내부이므로 내부 모듈의
-    ImportError는 환경 깨짐을 의미한다. 조용히 넘기지 않는다.
+    새 RedisCacheAdapter 인스턴스를 생성하고 reconnect()를 호출하여
+    fork으로 상속된 풀 연결을 끊고 새 연결을 생성한다.
     """
     from selfhealing.adapters.cache.redis_adapter import RedisCacheAdapter
-    adapter = RedisCacheAdapter.get_instance()
-    if adapter:
+
+    try:
+        adapter = RedisCacheAdapter()
         adapter.reconnect()
-    logger.info("Worker %s: Redis connections reset", worker.pid)
+        logger.info("Worker %s: Redis connections reset", worker.pid)
+    except Exception as exc:
+        logger.warning("Worker %s: Redis reset failed: %s", worker.pid, exc)
 
 
 def _reset_kafka(worker):
-    """Kafka producer 재설정.
+    """Kafka producer 재설정 (fork-safe).
 
     R1-Fork-Safety: fork() 이후 자식 프로세스에서는
     librdkafka 백그라운드 스레드가 복제되지 않으므로
     기존 인스턴스의 close()/flush()를 호출하면 Deadlock이 발생한다.
     참조만 해제하고 OS의 자원 회수에 맡긴다.
     """
-    settings = get_settings()
-    if not settings.kafka_producer.bootstrap_servers:
+    from selfhealing.adapters.kafka.config import get_kafka_settings
+
+    settings = get_kafka_settings()
+    if not settings.bootstrap_servers:
         logger.debug("Worker %s: Kafka not configured, skipping reset", worker.pid)
         return
     from selfhealing.adapters.kafka.producer import reset_kafka_producer_after_fork
@@ -441,7 +445,7 @@ Sidecar 효과를 검증하고, 향후 새 백그라운드 스레드 추가 시 
 # meta/probes/gil_contention.py (신규)
 import time
 
-from selfhealing.meta.watchdog import HealthStatus
+from selfhealing.meta.health_probe import HealthStatus
 
 
 class GILContentionProbe:
@@ -520,7 +524,7 @@ selfhealing_gil_contention_p90_ms = Gauge(
 
 | 변경 전 | 변경 후 | 근거 |
 |---------|---------|------|
-| `worker_exit_cleanup()`에서 daemon 스레드 정리 없음 | `_stop_background_threads()` 단계 추가 (timeout=5s) | daemon 스레드는 프로세스 종료 시 인터럽트 없이 즉사한다. 실행 중이던 배치/메트릭 푸시가 유실될 수 있으므로, 종료 전 우아한 stop을 기다린다 |
+| `worker_exit_cleanup()`에서 daemon 스레드 정리 없음 | `_stop_background_threads()` 단계 추가 (shutdown 1단계) | daemon 스레드는 프로세스 종료 시 인터럽트 없이 즉사한다. 실행 중이던 배치/메트릭 푸시가 유실될 수 있으므로, 종료 전 우아한 stop을 기다린다 |
 
 ### 4.5 mmap 초기화 — 1-Writer N-Reader 패턴
 
