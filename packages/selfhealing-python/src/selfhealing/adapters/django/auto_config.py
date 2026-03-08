@@ -238,4 +238,5 @@ def _initialize_otel(namespace: dict) -> None:
     except ImportError:
         namespace["_otel_initialized"] = False
     except Exception:
+        logger.warning("self_healing.otel_initialization_failed", exc_info=True)
         namespace["_otel_initialized"] = False

@@ -57,6 +57,9 @@ class TestWarnIfCelerySignalsMissingBehavior:
     @patch("selfhealing.adapters.django.apps.logger")
     def test_celery_not_installed_silently_passes(self, mock_logger):
         """Celery가 설치되지 않은 환경에서는 조용히 넘어간다."""
+        # sys.modules에 None을 넣으면 CPython이 ImportError를 발생시킨다.
+        # _warn_if_celery_signals_missing()은 매 호출마다 local import하므로
+        # 이미 캐싱된 모듈 참조 문제 없이 정확히 동작한다.
         with patch.dict("sys.modules", {"celery.signals": None}):
             from selfhealing.adapters.django.apps import SelfHealingConfig
 

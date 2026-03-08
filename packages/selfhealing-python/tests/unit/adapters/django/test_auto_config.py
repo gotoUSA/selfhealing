@@ -498,3 +498,41 @@ class TestConfigureSelfhealingBehavior:
         configure_selfhealing(namespace=base_namespace)
         second_mw = base_namespace["MIDDLEWARE"]
         assert first_mw == second_mw
+
+
+# =========================================================================
+# Behavior Tests — _initialize_otel (logging)
+# =========================================================================
+
+
+class TestInitializeOtelBehavior:
+    """_initialize_otel OTEL 초기화 동작 검증."""
+
+    @patch("selfhealing.adapters.django.auto_config.logger")
+    def test_import_error_does_not_log_warning(self, mock_logger):
+        """OTEL 모듈 미설치 시 warning 로그를 남기지 않는다."""
+        from selfhealing.adapters.django.auto_config import _initialize_otel
+
+        ns: dict = {}
+        with patch.dict("sys.modules", {"selfhealing.observability": None}):
+            _initialize_otel(ns)
+
+        assert ns["_otel_initialized"] is False
+        mock_logger.warning.assert_not_called()
+
+    @patch("selfhealing.adapters.django.auto_config.logger")
+    @patch(
+        "selfhealing.observability.initialize_opentelemetry",
+        side_effect=RuntimeError("tracer init failed"),
+    )
+    def test_runtime_error_logs_warning(self, _mock_init, mock_logger):
+        """OTEL 초기화 중 예외 발생 시 warning 로그를 남긴다."""
+        from selfhealing.adapters.django.auto_config import _initialize_otel
+
+        ns: dict = {}
+        _initialize_otel(ns)
+
+        assert ns["_otel_initialized"] is False
+        mock_logger.warning.assert_called_once()
+        call_args = mock_logger.warning.call_args
+        assert call_args[0][0] == "self_healing.otel_initialization_failed"
