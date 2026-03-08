@@ -2,10 +2,11 @@
 
 > **Status**: Planning
 > **Severity**: P1 (HIGH) — repo 분리 선행 조건
-> **Target**: `selfhealing/celery_app.py` (신규)
+> **Target**: `selfhealing/adapters/celery/beat_schedule.py` (기존 구현 보강)
 > **References**:
 > - 319 — Repo Separation Overview (커플링 C2)
 > - 317 — Orphan Service Wiring (Beat 태스크 등록)
+> - 320 — Auto-Configuration (configure_selfhealing 래퍼)
 
 ---
 
@@ -41,177 +42,403 @@ app.conf.beat_schedule = {
 
 ## 2. 설계
 
-### 2.1 selfhealing 내부에 Beat Schedule 정의
+### 2.1 팩토리 함수 기반 동적 스케줄 생성 (현재 구현)
+
+> **Q1 반영**: 정적 딕셔너리 대신 팩토리 함수 + Pydantic Settings로 동적 구성.
+> 설정 객체는 `AdaptersGroup.celery_task` (`cached_property`)를 통해 싱글톤 캐싱되므로
+> 매 호출 시 환경변수를 재파싱하지 않는다.
 
 ```python
-# selfhealing/celery_app.py (신규)
-"""
-Celery Beat schedule and queue definitions for selfhealing.
+# selfhealing/adapters/celery/beat_schedule.py (현재 구현)
+from selfhealing.settings.celery_task import get_celery_task_settings
 
-Consumer usage:
-    from selfhealing.celery_app import SELFHEALING_BEAT_SCHEDULE
-    app.conf.beat_schedule.update(SELFHEALING_BEAT_SCHEDULE)
-"""
+def get_selfhealing_beat_schedule(
+    include_cleanup: bool = True,
+    include_intelligence: bool = True,
+    include_compliance: bool = True,
+    include_traffic_aware: bool = True,
+    include_canary_watchdog: bool = True,
+    include_governance: bool = True,
+    include_xtest_cleanup: bool = True,
+    include_audit_flush: bool = True,
+    include_saga: bool = True,
+    include_legacy: bool = True,
+) -> dict[str, Any]:
+    """모듈별 include/exclude 플래그로 스케줄을 동적 생성."""
+    settings = get_celery_task_settings()
+    # settings.trigger_check_interval → 60.0 대신 동적 값 참조
+    ...
+```
+
+각 모듈의 `get_*_beat_schedule()` 함수는 `CeleryTaskSettings`의 interval 값을 참조하여
+환경/부하 상태에 따라 주기를 조정할 수 있다:
+
+```python
+# 예시: 환경변수 SELFHEALING_CELERY_TRIGGER_CHECK_INTERVAL=120 → 주기 변경
+settings = get_celery_task_settings()
+"schedule": settings.trigger_check_interval,  # 하드코딩 60.0 대신
+```
+
+### 2.2 Crontab 타임존 명시 (UTC 고정)
+
+> **Q2 반영**: Consumer의 `CELERY_TIMEZONE` 설정에 의존하지 않도록
+> 모든 crontab에 `tz=timezone.utc`를 명시적으로 주입한다.
+> 경고 로그 방식은 글로벌 빅테크 환경에서 무시될 확률이 높으므로 채택하지 않는다.
+
+```python
+from datetime import timezone
 from celery.schedules import crontab
 
 SELFHEALING_BEAT_SCHEDULE = {
-    # === Circuit Breaker ===
-    "selfhealing-check-circuit-breaker-recovery": {
-        "task": "selfhealing.celery_tasks.check_circuit_breaker_recovery",
-        "schedule": 60.0,
-        "options": {"expires": 55},
-    },
-    "selfhealing-expire-manual-overrides": {
-        "task": "selfhealing.celery_tasks.expire_manual_overrides",
-        "schedule": 300.0,
-        "options": {"expires": 290},
-    },
-
-    # === Metrics ===
-    "selfhealing-collect-metrics": {
-        "task": "selfhealing.celery_tasks.collect_self_healing_metrics",
-        "schedule": 60.0,
-        "options": {"expires": 55},
-    },
-
-    # === SLA ===
-    "selfhealing-check-sla-breaches": {
-        "task": "selfhealing.celery_tasks.check_and_report_sla_breaches",
-        "schedule": 300.0,
-        "options": {"expires": 290},
-    },
-
     # === DLQ ===
     "selfhealing-cleanup-dlq-entries": {
         "task": "selfhealing.celery_tasks.cleanup_resolved_dlq_entries",
-        "schedule": crontab(hour=5, minute=0),
+        "schedule": crontab(hour=5, minute=0, nowfun=lambda: datetime.now(timezone.utc)),
         "options": {"expires": 3600},
     },
 
-    # === Chaos Engineering ===
-    "selfhealing-check-chaos-recovery-monitoring": {
-        "task": "selfhealing.celery_tasks.check_recovery_monitoring",
-        "schedule": 30.0,
-        "options": {"expires": 25, "queue": "chaos_monitoring"},
-    },
-    "selfhealing-chaos-hunt-zombie-experiments": {
-        "task": "selfhealing.celery_tasks.hunt_zombie_experiments",
-        "schedule": 60.0,
-        "options": {"expires": 55, "queue": "chaos"},
-    },
-    "selfhealing-run-scheduled-experiments": {
-        "task": "selfhealing.tasks.chaos_scheduler.run_scheduled_experiments_task",
-        "schedule": 300.0,
-        "options": {"expires": 290, "queue": "chaos"},
-    },
-
-    # === Config ===
-    "selfhealing-apply-pending-config-changes": {
-        "task": "selfhealing.apply_pending_config_changes",
-        "schedule": 30.0,
-        "options": {"expires": 25},
-    },
-
-    # === Saga ===
-    "selfhealing-scan-orphan-sagas": {
-        "task": "selfhealing.scan_orphan_sagas",
-        "schedule": 120.0,
-        "options": {"expires": 115},
-    },
-
-    # === Predictive Forecaster ===
-    "selfhealing-run-forecaster-cycle": {
-        "task": "selfhealing.celery_tasks.run_forecaster_cycle",
-        "schedule": 60.0,
-        "options": {"expires": 55, "queue": "monitoring"},
-    },
-
     # === Recovery Coordinator ===
-    "selfhealing-check-recovery-trigger": {
-        "task": "selfhealing.check_recovery_trigger",
-        "schedule": 60.0,
-        "options": {"expires": 55, "queue": "selfhealing.critical"},
-    },
-    "selfhealing-monitor-recovery-health": {
-        "task": "selfhealing.monitor_recovery_health",
-        "schedule": 30.0,
-        "options": {"expires": 25, "queue": "selfhealing.critical"},
-    },
-    "selfhealing-check-stale-pending-recoveries": {
-        "task": "selfhealing.check_stale_pending_recoveries",
-        "schedule": 600.0,
-        "options": {"expires": 590, "queue": "selfhealing.critical"},
-    },
     "selfhealing-cleanup-old-recovery-sessions": {
         "task": "selfhealing.cleanup_old_recovery_sessions",
-        "schedule": crontab(hour=6, minute=0),
+        "schedule": crontab(hour=6, minute=0, nowfun=lambda: datetime.now(timezone.utc)),
         "options": {"expires": 3600},
     },
 
     # === JWT Cleanup ===
     "selfhealing-flush-expired-jwt-tokens": {
         "task": "selfhealing.flush_expired_jwt_tokens",
-        "schedule": crontab(hour=2, minute=30),
+        "schedule": crontab(hour=2, minute=30, nowfun=lambda: datetime.now(timezone.utc)),
         "options": {"expires": 3600, "queue": "maintenance"},
     },
-}
-
-# selfhealing 전용 큐 정의
-SELFHEALING_QUEUES = {
-    "selfhealing.critical": {
-        "exchange": "selfhealing.critical",
-        "exchange_type": "direct",
-        "routing_key": "selfhealing.critical",
-    },
-    "chaos": {
-        "exchange": "chaos",
-        "exchange_type": "direct",
-        "routing_key": "chaos",
-    },
-    "chaos_monitoring": {
-        "exchange": "chaos_monitoring",
-        "exchange_type": "direct",
-        "routing_key": "chaos.monitoring",
-    },
-}
-
-# selfhealing 태스크 라우팅 정의
-SELFHEALING_TASK_ROUTES = {
-    "selfhealing.celery_tasks.execute_recovery_step": {
-        "queue": "selfhealing.critical",
-        "routing_key": "selfhealing.critical",
-    },
-    "selfhealing.celery_tasks.check_recovery_trigger": {
-        "queue": "selfhealing.critical",
-        "routing_key": "selfhealing.critical",
-    },
-    "selfhealing.celery_tasks.monitor_recovery_health": {
-        "queue": "selfhealing.critical",
-        "routing_key": "selfhealing.critical",
-    },
-    "selfhealing.celery_tasks.check_circuit_breaker_recovery": {
-        "queue": "selfhealing.critical",
-        "routing_key": "selfhealing.critical",
-    },
+    # ...
 }
 ```
 
-### 2.2 Consumer 사용법
+> **참고**: Celery 5.x의 `crontab`은 `tz` 파라미터를 직접 지원하지 않고 `nowfun`을 통해
+> 현재 시각 기준을 주입한다. 이 방식으로 Consumer의 `CELERY_TIMEZONE` 설정과 무관하게
+> 항상 UTC 기준으로 crontab이 실행된다.
+
+### 2.3 Queue 네임스페이스 격리 (다중 Consumer 환경)
+
+> **Q3 반영**: 여러 마이크로서비스가 동일한 브로커를 공유할 때
+> 메시지 탈취(Message Stealing) 방지를 위해 Queue, Exchange, Routing Key 모두에
+> Consumer 앱의 Prefix를 동적으로 적용한다.
 
 ```python
-# myproject/celery.py — 분리 후
+# settings/celery_task.py 확장
+queue_prefix: str = Field(
+    default="",
+    description="큐 네임스페이스 접두사 (멀티서비스 격리). "
+                "예: 'shopping' → 'shopping.selfhealing.critical'",
+)
+```
+
+```python
+# beat_schedule.py — 네임스페이스 격리 팩토리
+def get_selfhealing_queues(prefix: str = "") -> list[Queue]:
+    """Consumer에 전달할 kombu.Queue 리스트.
+
+    prefix가 지정되면 큐 이름, Exchange 이름, Routing Key 모두에 적용.
+    브로커(RabbitMQ) 레벨에서 완벽한 메시지 격리 보장.
+    """
+    if not prefix:
+        return list(_QUEUE_DEFINITIONS)
+
+    return [
+        Queue(
+            f"{prefix}.{q.name}",
+            exchange=Exchange(
+                f"{prefix}.{q.exchange.name}",
+                type=q.exchange.type,
+                durable=q.exchange.durable,
+            ),
+            routing_key=f"{prefix}.{q.routing_key}",
+            queue_arguments=q.queue_arguments,
+        )
+        for q in _QUEUE_DEFINITIONS
+    ]
+```
+
+### 2.4 kombu.Queue/Exchange 객체 기반 큐 정의
+
+> **Q4 반영**: 엔터프라이즈 스케일에서 dict 구조는 오타/스키마 누락에 취약하다.
+> 초기 전환 비용이 가장 낮은 현 시점에 `kombu.Queue`/`kombu.Exchange` 객체로 전환하여
+> 타입 안전성 확보 및 RabbitMQ 고급 기능(Quorum Queue, DLX, Priority) 접근성을 확보한다.
+> 현재 코드베이스에 kombu import가 0건이므로 영향 범위는 `beat_schedule.py` 1개 파일.
+
+#### 2.4.1 kombu 객체 정의
+
+```python
+# selfhealing/adapters/celery/beat_schedule.py
+from kombu import Exchange, Queue
+
+_selfhealing_exchange = Exchange(
+    "selfhealing", type="direct", durable=True
+)
+
+_selfhealing_dlx = Exchange(
+    "selfhealing.dlx", type="direct", durable=True
+)
+
+_QUEUE_DEFINITIONS: list[Queue] = [
+    # 🧹 청소부 레인
+    Queue(
+        "maintenance",
+        exchange=_selfhealing_exchange,
+        routing_key="maintenance",
+        queue_arguments={
+            "x-max-priority": 3,
+            "x-queue-type": "quorum",
+        },
+    ),
+    Queue(
+        "critical_maintenance",
+        exchange=_selfhealing_exchange,
+        routing_key="critical_maintenance",
+        queue_arguments={
+            "x-max-priority": 10,
+            "x-queue-type": "quorum",
+            "x-dead-letter-exchange": "selfhealing.dlx",
+        },
+    ),
+    # 🧠 지능 레인
+    Queue(
+        "analysis",
+        exchange=_selfhealing_exchange,
+        routing_key="analysis",
+        queue_arguments={
+            "x-max-priority": 5,
+            "x-queue-type": "quorum",
+        },
+    ),
+    Queue(
+        "realtime",
+        exchange=_selfhealing_exchange,
+        routing_key="realtime",
+        queue_arguments={
+            "x-max-priority": 10,
+            "x-queue-type": "quorum",
+            "x-dead-letter-exchange": "selfhealing.dlx",
+            "x-message-ttl": 30000,  # 30초 TTL — 실시간 큐
+        },
+    ),
+    # 📋 증명 레인
+    Queue(
+        "compliance",
+        exchange=_selfhealing_exchange,
+        routing_key="compliance",
+        queue_arguments={
+            "x-max-priority": 7,
+            "x-queue-type": "quorum",
+        },
+    ),
+    Queue(
+        "reports",
+        exchange=_selfhealing_exchange,
+        routing_key="reports",
+        queue_arguments={
+            "x-max-priority": 2,
+            "x-queue-type": "quorum",
+        },
+    ),
+    Queue(
+        "metrics",
+        exchange=_selfhealing_exchange,
+        routing_key="metrics",
+        queue_arguments={
+            "x-max-priority": 1,
+            "x-queue-type": "quorum",
+        },
+    ),
+    # 📝 Audit 플러시
+    Queue(
+        "audit_flush",
+        exchange=_selfhealing_exchange,
+        routing_key="audit_flush",
+        queue_arguments={
+            "x-max-priority": 4,
+            "x-queue-type": "quorum",
+        },
+    ),
+    # Chaos Engineering
+    Queue(
+        "chaos",
+        exchange=_selfhealing_exchange,
+        routing_key="chaos",
+        queue_arguments={
+            "x-max-priority": 5,
+            "x-queue-type": "quorum",
+        },
+    ),
+    Queue(
+        "chaos_monitoring",
+        exchange=_selfhealing_exchange,
+        routing_key="chaos.monitoring",
+        queue_arguments={
+            "x-max-priority": 6,
+            "x-queue-type": "quorum",
+        },
+    ),
+    # Critical (Recovery)
+    Queue(
+        "selfhealing.critical",
+        exchange=Exchange("selfhealing.critical", type="direct", durable=True),
+        routing_key="selfhealing.critical",
+        queue_arguments={
+            "x-max-priority": 10,
+            "x-queue-type": "quorum",
+            "x-dead-letter-exchange": "selfhealing.dlx",
+        },
+    ),
+]
+
+# 하위호환: dict 형태도 제공 (점진적 마이그레이션)
+SELFHEALING_QUEUE_CONFIG = {
+    q.name: {
+        "exchange": q.exchange.name,
+        "routing_key": q.routing_key,
+        "queue_arguments": q.queue_arguments or {},
+    }
+    for q in _QUEUE_DEFINITIONS
+}
+```
+
+#### 2.4.2 Settings 연동
+
+```python
+# settings/celery_task.py 확장 필드
+queue_prefix: str = Field(
+    default="",
+    description="큐 네임스페이스 접두사 (멀티서비스 격리)",
+)
+queue_type: str = Field(
+    default="quorum",
+    pattern=r"^(classic|quorum|stream)$",
+    description="RabbitMQ 큐 타입 (quorum 권장 — Raft 합의 기반 메시지 유실 방지)",
+)
+enable_dlx: bool = Field(
+    default=True,
+    description="Dead Letter Exchange 활성화 (critical 큐에 DLX 바인딩)",
+)
+```
+
+#### 2.4.3 Kafka와의 관계 (관심사 분리)
+
+`kombu.Queue`/`Exchange`는 **AMQP(RabbitMQ) 전용** 객체이며 Kafka에는 적용되지 않는다.
+이 프로젝트의 브로커 아키텍처는 두 레이어로 분리되어 있다:
+
+| 레이어 | 브로커 | 라이브러리 | 용도 |
+|--------|--------|-----------|------|
+| **Task Queue** | RabbitMQ/Redis | Celery + kombu | Beat 태스크 실행, 큐 라우팅, DLQ 리플레이 |
+| **Event Bus** | Kafka | confluent-kafka | 감사 이벤트 스트리밍, 실시간 메트릭, CRDT 복제 |
+
+- **Celery 레이어** (`adapters/celery/`, `adapters/queues/celery_adapter.py`):
+  `kombu.Queue` 객체로 RabbitMQ Quorum Queue, DLX, Priority를 엄격하게 제어
+- **Kafka 레이어** (`adapters/kafka/`):
+  `KafkaAuditProducer`, `KafkaAuditConsumer`, `KafkaEventBus` 등 독립적 어댑터.
+  Topic 기반 구조이므로 Exchange/Queue 개념이 없으며, 파티션과 컨슈머 그룹으로 격리.
+  `NonBlockingRetryHandler`가 Retry Topic 체인(Main → Retry-1..3 → DLQ)을 자체 관리.
+
+따라서 321의 kombu 전환은 **Celery/RabbitMQ 레이어에만 해당**하며,
+Kafka 어댑터에는 영향을 주지 않는다. 두 브로커는 `TaskQueueInterface`와
+Kafka 어댑터라는 별도의 추상화 계층을 통해 독립적으로 동작한다.
+
+### 2.5 Opt-out 빌더 패턴 (팩토리 함수)
+
+> **Q5 반영**: `del` 기반 opt-out 대신 `include_*` 불리언 플래그 기반 팩토리 함수를
+> 이미 구현 완료 (`beat_schedule.py:136-199`). 타입 안전하고 오타 위험 없음.
+
+```python
+# Consumer 사용법 — 모듈 단위 opt-out
+from selfhealing.adapters.celery.beat_schedule import get_selfhealing_beat_schedule
+
+schedule = get_selfhealing_beat_schedule(
+    include_intelligence=False,  # Chaos/분석 제외
+    include_saga=False,          # Saga 미사용
+)
+app.conf.beat_schedule.update(schedule)
+```
+
+> **Deprecated**: 아래 `del` 방식은 더 이상 권장하지 않는다:
+> ```python
+> # (비권장) 오타 위험, 타입 안전하지 않음
+> schedule = dict(SELFHEALING_BEAT_SCHEDULE)
+> del schedule["selfhealing-chaos-hunt-zombie-experiments"]
+> ```
+
+### 2.6 Consumer 통합 래퍼: `configure_selfhealing_celery(app)`
+
+> **Q6 반영**: 320의 `configure_selfhealing(namespace=globals())` 패턴과 대칭적인
+> Celery 전용 래퍼를 제공하여, Consumer celery.py에서 1줄로 모든 설정을 주입한다.
+
+```python
+# selfhealing/adapters/celery/beat_schedule.py (신규 함수)
+def configure_selfhealing_celery(
+    app,
+    *,
+    include_cleanup: bool = True,
+    include_intelligence: bool = True,
+    include_compliance: bool = True,
+    include_traffic_aware: bool = True,
+    include_canary_watchdog: bool = True,
+    include_governance: bool = True,
+    include_xtest_cleanup: bool = True,
+    include_audit_flush: bool = True,
+    include_saga: bool = True,
+    include_legacy: bool = True,
+    queue_prefix: str = "",
+) -> None:
+    """Celery app에 selfhealing Beat 스케줄, 큐, 라우팅을 1줄로 주입.
+
+    configure_selfhealing(namespace=globals()) 과 대칭 구조.
+
+    Args:
+        app: Celery application instance
+        include_*: 모듈별 Beat 태스크 포함 여부
+        queue_prefix: 큐 네임스페이스 접두사 (멀티서비스 격리)
+    """
+    # 1. Beat Schedule merge
+    schedule = get_selfhealing_beat_schedule(
+        include_cleanup=include_cleanup,
+        include_intelligence=include_intelligence,
+        include_compliance=include_compliance,
+        include_traffic_aware=include_traffic_aware,
+        include_canary_watchdog=include_canary_watchdog,
+        include_governance=include_governance,
+        include_xtest_cleanup=include_xtest_cleanup,
+        include_audit_flush=include_audit_flush,
+        include_saga=include_saga,
+        include_legacy=include_legacy,
+    )
+    if not hasattr(app.conf, "beat_schedule") or app.conf.beat_schedule is None:
+        app.conf.beat_schedule = {}
+    app.conf.beat_schedule.update(schedule)
+
+    # 2. Queue 정의 merge (kombu.Queue 객체)
+    queues = get_selfhealing_queues(prefix=queue_prefix)
+    existing = list(app.conf.task_queues or [])
+    app.conf.task_queues = existing + queues
+
+    # 3. Task Routes merge
+    existing_routes = dict(app.conf.task_routes or {})
+    existing_routes.update(get_selfhealing_task_routes(prefix=queue_prefix))
+    app.conf.task_routes = existing_routes
+
+    # 4. Task 등록
+    register_all_tasks_with_celery(app)
+
+    logger.info("beat_schedule.celery_configured", queue_prefix=queue_prefix or "(none)")
+```
+
+### 2.7 Consumer 사용법 (최종)
+
+```python
+# myproject/celery.py — 최종 형태
 from celery import Celery
 
 app = Celery("myproject")
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks()
-
-# selfhealing Beat 스케줄 1줄 merge
-from selfhealing.celery_app import (
-    SELFHEALING_BEAT_SCHEDULE,
-    SELFHEALING_QUEUES,
-    SELFHEALING_TASK_ROUTES,
-)
 
 # Consumer 자체 Beat 스케줄
 app.conf.beat_schedule = {
@@ -223,27 +450,25 @@ app.conf.beat_schedule = {
     # ... consumer 태스크만
 }
 
-# selfhealing 스케줄 merge
-app.conf.beat_schedule.update(SELFHEALING_BEAT_SCHEDULE)
-
-# 큐/라우팅 merge
-app.conf.task_queues = {
-    # consumer 큐
-    "default": {"exchange": "default", "exchange_type": "direct", "routing_key": "default"},
-    "payment_critical": {"exchange": "payment_critical", "exchange_type": "direct", "routing_key": "payment.critical"},
-    # selfhealing 큐 merge
-    **SELFHEALING_QUEUES,
-}
-
-app.conf.task_routes = {
-    # consumer 라우팅
-    "shopping.tasks.payment_tasks.*": {"queue": "payment_critical"},
-    # selfhealing 라우팅 merge
-    **SELFHEALING_TASK_ROUTES,
-}
+# selfhealing 설정 1줄 주입 (Q3: 네임스페이스 격리, Q4: kombu 큐, Q6: 래퍼)
+from selfhealing.adapters.celery.beat_schedule import configure_selfhealing_celery
+configure_selfhealing_celery(app, include_intelligence=False, queue_prefix="shopping")
 ```
 
-### 2.3 AppConfig 자동 등록 (대안)
+```python
+# myproject/settings.py — 마지막 줄 (320에서 구현)
+from selfhealing.adapters.django import configure_selfhealing
+configure_selfhealing(namespace=globals())
+```
+
+> **대칭 구조 요약**:
+>
+> | 설정 대상 | 래퍼 함수 | 호출 위치 |
+> |----------|----------|----------|
+> | Django (MIDDLEWARE, DRF, OTEL) | `configure_selfhealing(namespace=globals())` | `settings.py` 마지막 |
+> | Celery (Beat, Queue, Routes) | `configure_selfhealing_celery(app)` | `celery.py` |
+
+### 2.8 AppConfig 자동 등록 (대안)
 
 320에서 구현하는 auto-config와 연동하여, AppConfig.ready()에서 자동으로 Beat schedule을 merge할 수도 있다:
 
@@ -256,31 +481,22 @@ def _auto_merge_beat_schedule(self):
 
     try:
         from celery import current_app
-        from selfhealing.celery_app import (
-            SELFHEALING_BEAT_SCHEDULE,
-            SELFHEALING_QUEUES,
-            SELFHEALING_TASK_ROUTES,
-        )
+        from selfhealing.adapters.celery.beat_schedule import configure_selfhealing_celery
 
-        current_app.conf.beat_schedule.update(SELFHEALING_BEAT_SCHEDULE)
-        # ... 큐/라우팅도 merge
+        configure_selfhealing_celery(current_app)
     except ImportError:
         pass
 ```
 
-**권장**: 명시적 merge (consumer celery.py에서 1줄) — Celery 설정은 명시적인 것이 디버깅에 유리
+**권장**: 명시적 `configure_selfhealing_celery(app)` 호출 — Celery 설정은 명시적인 것이 디버깅에 유리
 
 ---
 
 ## 3. 하위 호환성
 
 - 기존 consumer가 Beat 태스크를 직접 정의한 경우 → 중복 키 없도록 selfhealing 키에 `selfhealing-` 접두사 추가
-- `SELFHEALING_BEAT_SCHEDULE`에서 특정 태스크 제거하고 싶을 때:
-  ```python
-  schedule = dict(SELFHEALING_BEAT_SCHEDULE)
-  del schedule["selfhealing-chaos-hunt-zombie-experiments"]  # Chaos 불필요
-  app.conf.beat_schedule.update(schedule)
-  ```
+- `SELFHEALING_QUEUE_CONFIG` dict 형태도 계속 제공하여 kombu 전환 이전의 Consumer도 호환 가능
+- `include_*` 플래그를 통한 모듈 단위 opt-out으로 `del` 방식 대체
 
 ---
 
@@ -288,8 +504,27 @@ def _auto_merge_beat_schedule(self):
 
 | # | 테스트 | 검증 |
 |---|--------|------|
-| 1 | SELFHEALING_BEAT_SCHEDULE import | 15+ 태스크 키 존재 확인 |
-| 2 | Consumer beat_schedule.update() | selfhealing + consumer 태스크 모두 등록 확인 |
-| 3 | 큐 정의 완전성 | selfhealing.critical, chaos, chaos_monitoring 존재 확인 |
-| 4 | 라우팅 정의 완전성 | critical 태스크 4개 라우팅 확인 |
-| 5 | 태스크 제거 가능 | dict에서 del 후 등록 안 됨 확인 |
+| 1 | `get_selfhealing_beat_schedule()` 호출 | 15+ 태스크 키 존재 확인 |
+| 2 | `configure_selfhealing_celery(app)` 호출 | beat_schedule, task_queues, task_routes 모두 주입 확인 |
+| 3 | `include_*=False` 플래그 | 해당 모듈 태스크 제외 확인 |
+| 4 | 큐 정의 완전성 | kombu.Queue 객체로 모든 큐 생성, `x-queue-type: quorum` 확인 |
+| 5 | DLX 바인딩 | critical, realtime 큐에 `x-dead-letter-exchange` 존재 확인 |
+| 6 | 네임스페이스 격리 | `queue_prefix="shopping"` 시 큐/Exchange/Routing Key 모두 prefix 적용 확인 |
+| 7 | 라우팅 정의 완전성 | critical 태스크 4개 라우팅 확인, prefix 적용 시 큐 이름 변환 확인 |
+| 8 | crontab UTC 고정 | `nowfun` 기반 UTC 타임존 독립성 검증 |
+| 9 | Settings 캐싱 | `get_celery_task_settings()` 반복 호출 시 동일 인스턴스 반환 확인 |
+| 10 | dict 하위호환 | `SELFHEALING_QUEUE_CONFIG` dict가 kombu 객체와 동기화 확인 |
+| 11 | Kafka 무영향 | `adapters/kafka/` 어댑터가 kombu 전환과 독립적으로 동작 확인 |
+
+---
+
+## 5. 리뷰 반영 이력
+
+| Q | 리뷰 피드백 | 반영 섹션 | 변경 내용 |
+|---|-----------|----------|----------|
+| Q1 | 스케줄 주기 동적 구성 + Settings 싱글톤 캐싱 | §2.1 | 팩토리 함수 + `cached_property` 캐싱 명시 |
+| Q2 | crontab UTC 명시적 고정 | §2.2 | `nowfun=lambda: datetime.now(timezone.utc)` 적용 |
+| Q3 | Queue 네임스페이스 격리 (Exchange/RK 포함) | §2.3 | `queue_prefix` 파라미터 + 3요소 모두 prefix 적용 |
+| Q4 | kombu.Queue 객체 전환 + Kafka 관계 정리 | §2.4 | kombu 객체 정의 + dict 하위호환 + Kafka 분리 아키텍처 문서화 |
+| Q5 | `include_*` 빌더 패턴 (del 방식 비권장) | §2.5 | 팩토리 함수 기반 opt-out, del 방식 deprecated 표시 |
+| Q6 | `configure_selfhealing_celery(app)` 래퍼 | §2.6, §2.7 | 320 대칭 구조 래퍼 + Consumer 최종 사용법 |
