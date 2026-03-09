@@ -1,8 +1,9 @@
-"""Minimal Django settings for selfhealing integration tests."""
+"""Minimal Django settings for selfhealing integration tests.
 
-import os
-
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.testapp.settings")
+Usage:
+    pytest tests/ --ds=tests.testapp.settings
+    DJANGO_SETTINGS_MODULE=tests.testapp.settings pytest tests/
+"""
 
 SECRET_KEY = "test-secret-key-for-selfhealing"
 
