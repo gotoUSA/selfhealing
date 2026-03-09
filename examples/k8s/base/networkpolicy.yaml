@@ -1,0 +1,50 @@
+# NetworkPolicy — restrict pod-to-pod communication (per doc 325 section 5.4)
+
+# Django API: allow ingress only from ingress controller and Prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: django-api-netpol
+spec:
+  podSelector:
+    matchLabels:
+      app: django-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ingress-nginx
+      ports:
+        - port: 8000
+          protocol: TCP
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 8000
+          protocol: TCP
+
+---
+# Celery Workers: deny all ingress (workers only make outbound connections)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: celery-workers-netpol
+spec:
+  podSelector:
+    matchLabels:
+      component: worker
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow Prometheus scraping on metrics port
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - port: 9090
+          protocol: TCP

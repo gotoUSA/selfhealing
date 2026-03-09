@@ -1,0 +1,36 @@
+# PodDisruptionBudgets — single source of truth (per doc 325 section 5.4)
+
+# Django API PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: django-api-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: django-api
+
+---
+# Celery Default Worker PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-default-worker-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: celery-default-worker
+
+---
+# Celery Critical Worker PDB
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-critical-worker-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: celery-critical-worker

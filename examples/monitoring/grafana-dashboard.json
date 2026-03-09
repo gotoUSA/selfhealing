@@ -1,0 +1,151 @@
+{
+  "__inputs": [
+    {"name": "DS_PROMETHEUS", "type": "datasource", "pluginId": "prometheus", "label": "Prometheus"},
+    {"name": "DS_MIMIR", "type": "datasource", "pluginId": "prometheus", "label": "Mimir"},
+    {"name": "DS_TEMPO", "type": "datasource", "pluginId": "tempo", "label": "Tempo"},
+    {"name": "DS_LOKI", "type": "datasource", "pluginId": "loki", "label": "Loki"}
+  ],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "10.0.0"},
+    {"type": "datasource", "id": "prometheus", "name": "Prometheus"},
+    {"type": "datasource", "id": "tempo", "name": "Tempo"},
+    {"type": "datasource", "id": "loki", "name": "Loki"},
+    {"type": "panel", "id": "timeseries", "name": "Time series"},
+    {"type": "panel", "id": "stat", "name": "Stat"},
+    {"type": "panel", "id": "table", "name": "Table"}
+  ],
+  "id": null,
+  "uid": null,
+  "title": "Self-Healing Overview",
+  "description": "Unified view of selfhealing system health: Circuit Breaker, DLQ, Error Budget, Latency",
+  "tags": ["selfhealing"],
+  "timezone": "utc",
+  "editable": true,
+  "schemaVersion": 39,
+  "version": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Circuit Breaker State",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "selfhealing_circuit_breaker_state",
+          "legendFormat": "{{ service }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "CLOSED", "color": "green"}}},
+            {"type": "value", "options": {"1": {"text": "OPEN", "color": "red"}}},
+            {"type": "value", "options": {"2": {"text": "HALF-OPEN", "color": "yellow"}}}
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "DLQ Pending Count",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(selfhealing_dlq_pending_count)",
+          "legendFormat": "Pending"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Error Budget Remaining (%)",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "100 * (1 - (sum(increase(selfhealing_dlq_items_total[30d])) / (sum(increase(selfhealing_requests_total[30d])) * 0.001)))",
+          "legendFormat": "Budget"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {"value": 0, "color": "red"},
+              {"value": 25, "color": "orange"},
+              {"value": 50, "color": "yellow"},
+              {"value": 75, "color": "green"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "P95 Latency (ms)",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le)) * 1000",
+          "legendFormat": "P99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": {
+            "thresholdsStyle": {"mode": "line"}
+          },
+          "thresholds": {
+            "steps": [
+              {"value": 0, "color": "green"},
+              {"value": 300, "color": "yellow"},
+              {"value": 500, "color": "red"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Retry Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "targets": [
+        {
+          "expr": "sum(rate(selfhealing_retry_total[5m])) by (domain)",
+          "legendFormat": "{{ domain }}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {"unit": "reqps"}
+      }
+    },
+    {
+      "id": 6,
+      "title": "Recent Traces (Errors)",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "tempo", "uid": "${DS_TEMPO}"},
+      "targets": [
+        {
+          "queryType": "search",
+          "search": "status=error",
+          "limit": 20
+        }
+      ]
+    }
+  ]
+}

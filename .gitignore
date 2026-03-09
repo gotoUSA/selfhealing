@@ -70,6 +70,7 @@ logs/selfhealing_state/*.json
 *.csv
 *.jsonl
 *.json
+!examples/**/*.json
 gunicorn.ctl
 
 # Claude Code memory

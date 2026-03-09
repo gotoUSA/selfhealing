@@ -1,0 +1,118 @@
+# KEDA TriggerAuthentication for Redis
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-trigger-auth
+  labels:
+    app: keda
+    component: trigger-auth
+    backend: redis
+spec:
+  secretTargetRef:
+    - parameter: password
+      name: app-secrets
+      key: redis-password
+
+---
+# KEDA ScaledObject - Celery Default Worker
+#
+# Redis queue length triggers scale-out at 100 items.
+# CPU fallback trigger ensures scaling even when Redis is unavailable.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: celery-default-worker-scaledobject
+  labels:
+    app: celery-default-worker
+    component: worker
+    queue: default
+spec:
+  scaleTargetRef:
+    name: celery-default-worker
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  pollingInterval: 15
+  cooldownPeriod: 60
+
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-master:6379
+        listName: celery
+        listLength: "100"
+      authenticationRef:
+        name: redis-trigger-auth
+    # CPU fallback trigger (per doc 325 section 5.4)
+    - type: cpu
+      metadata:
+        type: Utilization
+        value: "70"
+
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 30
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 15
+        scaleDown:
+          stabilizationWindowSeconds: 120
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 30
+
+---
+# KEDA ScaledObject - Celery Critical Worker
+#
+# Hardening (per doc 325 section 5.4):
+#   - minReplicaCount: 2 (was 1, HA guarantee)
+#   - CPU fallback trigger added
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: celery-critical-worker-scaledobject
+  labels:
+    app: celery-critical-worker
+    component: worker
+    queue: critical
+    priority: p0
+spec:
+  scaleTargetRef:
+    name: celery-critical-worker
+  minReplicaCount: 2
+  maxReplicaCount: 5
+  pollingInterval: 5
+  cooldownPeriod: 30
+
+  triggers:
+    - type: redis
+      metadata:
+        address: redis-master:6379
+        listName: critical
+        listLength: "10"
+      authenticationRef:
+        name: redis-trigger-auth
+    # CPU fallback trigger (per doc 325 section 5.4)
+    - type: cpu
+      metadata:
+        type: Utilization
+        value: "70"
+
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 10
+        scaleDown:
+          stabilizationWindowSeconds: 60
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 30

@@ -1,0 +1,140 @@
+# Celery Default Worker Deployment
+#
+# Hardening applied (per doc 325 section 5.4):
+#   - Image tag: placeholder v0.0.0
+#   - Namespace: removed from base
+#   - securityContext: runAsNonRoot, drop ALL capabilities
+#   - Celery app name generalized to "myproject"
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-default-worker
+  labels:
+    app: celery-default-worker
+    component: worker
+    tier: backend
+    queue: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: celery-default-worker
+  template:
+    metadata:
+      labels:
+        app: celery-default-worker
+        component: worker
+        queue: default
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - celery-default-worker
+                topologyKey: kubernetes.io/hostname
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      terminationGracePeriodSeconds: 120
+
+      containers:
+        - name: celery-worker
+          image: myproject:v0.0.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - celery
+            - -A
+            - myproject
+            - worker
+            - --loglevel=info
+            - --concurrency=4
+            - --queues=celery
+            - --prefetch-multiplier=4
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+
+          env:
+            - name: CELERY_WORKER_POOL
+              value: "prefork"
+            - name: CELERY_WORKER_HIJACK_ROOT_LOGGER
+              value: "false"
+            - name: CELERY_WORKER_HOSTNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: celery-broker-url
+            - name: DJANGO_SETTINGS_MODULE
+              value: "myproject.settings.production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: database-url
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - myproject
+                - inspect
+                - ping
+                - --timeout
+                - "10"
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 15
+            failureThreshold: 3
+
+          readinessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - myproject
+                - inspect
+                - ping
+                - --timeout
+                - "5"
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    celery -A myproject control cancel_consumer celery || true
+                    sleep 60
