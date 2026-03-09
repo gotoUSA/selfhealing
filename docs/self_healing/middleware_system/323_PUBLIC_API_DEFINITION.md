@@ -210,6 +210,7 @@ import할 때 최상위 `selfhealing`을 참조하다 순환 참조(`ImportError
 
 ```ini
 [importlinter:contract:no-top-level-self-import]
+name = Internal modules must not import from top-level selfhealing
 type = forbidden
 source_modules =
     selfhealing.core
