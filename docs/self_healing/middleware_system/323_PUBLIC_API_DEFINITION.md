@@ -1,6 +1,6 @@
 # 323. Public API Definition — 안정적 Public API 명세
 
-> **Status**: Planning
+> **Status**: Implemented
 > **Severity**: P2 (MEDIUM) — repo 분리 선행 조건
 > **Target**: `selfhealing/__init__.py`
 > **References**:
@@ -177,13 +177,17 @@ structlog 초기화 코드를 완전히 제거한다. 로깅 초기화는 다음
 ```python
 # observability/structlog_config.py
 _configured = False
+_configure_lock = threading.Lock()
 
 def configure_structlog() -> None:
     global _configured
-    if _configured:
+    if _configured:                   # fast path — no lock
         return
-    # ... 기존 초기화 로직 ...
-    _configured = True
+    with _configure_lock:             # DCL — thread-safe
+        if _configured:
+            return
+        # ... 기존 초기화 로직 ...
+        _configured = True
 
 def reset_structlog_config() -> None:
     """테스트에서 structlog 설정을 리셋한다."""
@@ -192,6 +196,8 @@ def reset_structlog_config() -> None:
 ```
 
 이 `reset_*` 함수는 프로젝트의 settings 싱글턴 패턴(`get_*/reset_*`)과 일관된다.
+
+호출 지점: `configure_selfhealing()` 래퍼 내부 (`adapters/django/auto_config.py`)에서 호출한다.
 
 #### 2.3.2 순환 참조(Circular Dependency) 방어
 

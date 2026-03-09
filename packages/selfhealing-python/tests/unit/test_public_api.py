@@ -118,7 +118,7 @@ class TestPublicApiBehavior:
         assert selfhealing.get_circuit_breaker_service is deep_get_cb
         assert selfhealing.ReplayService is DeepReplayService
 
-    def test_lazy_import_does_not_load_heavy_modules_until_accessed(self):
+    def test_lazy_import_does_not_load_heavy_modules_until_accessed(self, monkeypatch):
         """CircuitState만 사용 시 factory, services 모듈이 로드되지 않아야 한다."""
         import selfhealing
 
@@ -126,8 +126,10 @@ class TestPublicApiBehavior:
         for name in list(selfhealing.__dict__):
             if name in selfhealing._LAZY_IMPORTS:
                 selfhealing.__dict__.pop(name, None)
-        sys.modules.pop("selfhealing.factory", None)
-        sys.modules.pop("selfhealing.services.replay_service", None)
+        monkeypatch.delitem(sys.modules, "selfhealing.factory", raising=False)
+        monkeypatch.delitem(
+            sys.modules, "selfhealing.services.replay_service", raising=False
+        )
 
         # When — eager import만 접근
         _ = selfhealing.CircuitState

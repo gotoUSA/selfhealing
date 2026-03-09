@@ -103,6 +103,12 @@ def configure_selfhealing(
     if domains is not None:
         namespace["SELFHEALING_CORE_DOMAINS"] = domains
 
+    # structlog 전역 설정 (멱등 — 중복 호출 안전)
+    # 323 설계: __init__.py side-effect 제거 후 이 래퍼에서 초기화
+    from selfhealing.observability.structlog_config import configure_structlog
+
+    configure_structlog()
+
     otel_enabled = auto_settings.otel and not disable_auto_otel
     if otel_enabled and not _is_gunicorn_master():
         _initialize_otel(namespace)

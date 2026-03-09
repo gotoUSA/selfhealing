@@ -52,12 +52,12 @@ _otel_injection_in_progress = threading.local()
 _COMPONENT_LOGGER_MAP: dict[str, list[str]] = {
     "dlq_log_level": [
         "selfhealing.services.dlq",
-        "selfhealing.services.dlq",
+        "selfhealing.services.dlq.base",
         "selfhealing.services.dlq.models",
     ],
     "circuit_breaker_log_level": [
         "selfhealing.services.circuit_breaker",
-        "selfhealing.services.circuit_breaker",
+        "selfhealing.services.circuit_breaker.service",
     ],
     "replay_log_level": [
         "selfhealing.services.replay_service",
@@ -85,6 +85,7 @@ _COMPONENT_LOGGER_MAP: dict[str, list[str]] = {
 
 
 _configured = False
+_configure_lock = threading.Lock()
 
 
 def configure_structlog() -> None:
@@ -92,84 +93,91 @@ def configure_structlog() -> None:
 
     멱등성이 보장되며 중복 호출 시 즉시 반환한다.
     `structured_json` 설정에 따라 렌더러를 선택한다.
+
+    Thread-safe: Double-Checked Locking으로 concurrent 호출에 안전하다.
     """
     global _configured
     if _configured:
         return
-    from selfhealing.settings.logging_settings import get_logging_settings
+    with _configure_lock:
+        if _configured:
+            return
+        from selfhealing.settings.logging_settings import get_logging_settings
 
-    settings = get_logging_settings()
+        settings = get_logging_settings()
 
-    renderer: structlog.types.Processor
-    if settings.structured_json:
-        renderer = structlog.processors.JSONRenderer()
-    else:
-        renderer = structlog.dev.ConsoleRenderer()
+        renderer: structlog.types.Processor
+        if settings.structured_json:
+            renderer = structlog.processors.JSONRenderer()
+        else:
+            renderer = structlog.dev.ConsoleRenderer()
 
-    shared_processors: list[structlog.types.Processor] = [
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.add_logger_name,
-        rate_limit_processor,
-        sampling_processor,
-        structlog.processors.TimeStamper(fmt="iso"),
-        _inject_otel_trace_context,
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-    ]
+        shared_processors: list[structlog.types.Processor] = [
+            structlog.contextvars.merge_contextvars,
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.add_logger_name,
+            rate_limit_processor,
+            sampling_processor,
+            structlog.processors.TimeStamper(fmt="iso"),
+            _inject_otel_trace_context,
+            structlog.processors.StackInfoRenderer(),
+            structlog.processors.format_exc_info,
+        ]
 
-    structlog.configure(
-        processors=[
-            *shared_processors,
-            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-        ],
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
-
-    # stdlib logging 핸들러에 structlog ProcessorFormatter 적용
-    formatter = structlog.stdlib.ProcessorFormatter(
-        processors=[
-            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            renderer,
-        ],
-        foreign_pre_chain=shared_processors,
-    )
-
-    root_logger = logging.getLogger()
-    # 중복 핸들러 방지: structlog 포매터를 가진 핸들러만 교체
-    root_logger.handlers = [
-        h
-        for h in root_logger.handlers
-        if not isinstance(
-            getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter
+        structlog.configure(
+            processors=[
+                *shared_processors,
+                structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+            ],
+            logger_factory=structlog.stdlib.LoggerFactory(),
+            wrapper_class=structlog.stdlib.BoundLogger,
+            cache_logger_on_first_use=True,
         )
-    ]
 
-    # 테스트 환경에서는 NullHandler로 콘솔 출력을 완전 차단한다.
-    # StreamHandler(sys.stdout)는 pytest_configure 시점에 원본 stdout 참조를 잡아
-    # pytest 캡처를 우회하므로, 테스트에서는 NullHandler가 유일한 해결책이다.
-    # pytest의 caplog는 자체 LogCaptureHandler를 사용하므로 영향 없음.
-    _test_level_name = os.environ.get("SELFHEALING_TEST_LOG_LEVEL")
-    if _test_level_name:
-        handler = logging.NullHandler()
-        _effective_level = getattr(logging, _test_level_name.upper(), logging.WARNING)
-        root_logger.setLevel(_effective_level)
-    else:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(formatter)
-        root_logger.setLevel(logging.DEBUG)
-    root_logger.addHandler(handler)
+        # stdlib logging 핸들러에 structlog ProcessorFormatter 적용
+        formatter = structlog.stdlib.ProcessorFormatter(
+            processors=[
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                renderer,
+            ],
+            foreign_pre_chain=shared_processors,
+        )
 
-    # =========================================================================
-    # 컴포넌트별 로그 레벨 적용 (280_LOGGING_SETTINGS_APPLY)
-    # LoggingSettings 의 8개 레벨 값을 실제 stdlib 로거에 setLevel()로 적용.
-    # 이렇게 하면 환경변수만으로 제어 가능:
-    #   SELFHEALING_LOGGING_CIRCUIT_BREAKER_LOG_LEVEL=WARNING
-    # =========================================================================
-    _apply_component_log_levels(settings)
-    _configured = True
+        root_logger = logging.getLogger()
+        # 중복 핸들러 방지: structlog 포매터를 가진 핸들러만 교체
+        root_logger.handlers = [
+            h
+            for h in root_logger.handlers
+            if not isinstance(
+                getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter
+            )
+        ]
+
+        # 테스트 환경에서는 NullHandler로 콘솔 출력을 완전 차단한다.
+        # StreamHandler(sys.stdout)는 pytest_configure 시점에 원본 stdout 참조를 잡아
+        # pytest 캡처를 우회하므로, 테스트에서는 NullHandler가 유일한 해결책이다.
+        # pytest의 caplog는 자체 LogCaptureHandler를 사용하므로 영향 없음.
+        _test_level_name = os.environ.get("SELFHEALING_TEST_LOG_LEVEL")
+        if _test_level_name:
+            handler = logging.NullHandler()
+            _effective_level = getattr(
+                logging, _test_level_name.upper(), logging.WARNING
+            )
+            root_logger.setLevel(_effective_level)
+        else:
+            handler = logging.StreamHandler(sys.stdout)
+            handler.setFormatter(formatter)
+            root_logger.setLevel(logging.DEBUG)
+        root_logger.addHandler(handler)
+
+        # =====================================================================
+        # 컴포넌트별 로그 레벨 적용 (280_LOGGING_SETTINGS_APPLY)
+        # LoggingSettings 의 8개 레벨 값을 실제 stdlib 로거에 setLevel()로 적용.
+        # 이렇게 하면 환경변수만으로 제어 가능:
+        #   SELFHEALING_LOGGING_CIRCUIT_BREAKER_LOG_LEVEL=WARNING
+        # =====================================================================
+        _apply_component_log_levels(settings)
+        _configured = True
 
 
 def reset_structlog_config() -> None:
