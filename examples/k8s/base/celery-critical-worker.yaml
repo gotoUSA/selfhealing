@@ -14,8 +14,8 @@ metadata:
   name: celery-critical-worker
   labels:
     app: celery-critical-worker
-    component: selfhealing
-    tier: worker
+    component: worker
+    tier: backend
     priority: p0
 spec:
   replicas: 2
@@ -26,7 +26,7 @@ spec:
     metadata:
       labels:
         app: celery-critical-worker
-        component: selfhealing
+        component: worker
         priority: p0
       annotations:
         prometheus.io/scrape: "true"

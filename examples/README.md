@@ -60,7 +60,7 @@ kubectl apply -k examples/k8s/overlays/production
 
 - **prometheus-alerts.yml** — Alert rules for DLQ, Circuit Breaker, SLO, Latency.
 - **prometheus-adapter.yaml** — Custom metrics adapter config for HPA.
-- **grafana-dashboard.json** — Portable dashboard with `__inputs` for DS mapping.
+- **grafana-dashboard.json** — Dashboard with provisioned datasource UIDs (mimir/tempo/loki).
 - **otel-collector.yml** — Generalized collector with Tail Sampling.
 
 ### 6. Dashboard Portability
@@ -103,7 +103,13 @@ examples/
 │   └── otel-collector.yml
 ├── docker/
 │   ├── Dockerfile
-│   └── docker-compose.yml
+│   ├── docker-compose.yml
+│   └── config/
+│       ├── tempo.yml
+│       ├── mimir.yml
+│       ├── loki.yml
+│       ├── grafana-datasources.yml
+│       └── grafana-dashboards.yml
 └── scripts/
     └── sanitize-dashboards.sh
 ```

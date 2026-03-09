@@ -316,12 +316,18 @@ resources:
   - deployment.yaml
   - celery-worker.yaml
   - celery-critical-worker.yaml
-  - hpa.yaml
-  - keda-scaledobject.yaml
+  - hpa.yaml                  # Django API only
+  - keda-scaledobject.yaml    # Celery workers only
   - pdb.yaml
   - servicemonitor.yaml
   - networkpolicy.yaml
 ```
+
+> **주의 — HPA/KEDA 분리 원칙**:
+> Django API는 `hpa.yaml`(Prometheus Adapter 커스텀 메트릭)로 스케일링하고,
+> Celery Workers(default + critical)는 `keda-scaledobject.yaml`(Redis 큐 길이 + CPU 폴백)로 스케일링한다.
+> 동일 Deployment에 HPA와 KEDA ScaledObject를 동시에 적용하면
+> KEDA가 내부적으로 생성하는 HPA와 충돌하여 스케일링 진동이 발생한다.
 
 ### 5.3 Overlay 예시 (Production)
 
@@ -361,7 +367,11 @@ images:
 | PDB 중복 | deployment 파일 + 별도 PDB 파일 공존 | 단일 소스 (base/pdb.yaml)로 통합 | MEDIUM |
 | Secret 참조 | 이름 하드코딩 (`postgres-secrets`) | Kustomize secretGenerator 또는 placeholder | MEDIUM |
 
-### 5.5 Production Overlay: securityContext 패치
+### 5.5 Production Overlay: securityContext 패치 (Defense-in-Depth)
+
+> base에 이미 securityContext가 적용되어 있으나, production overlay에도
+> 동일한 값을 명시적으로 패치한다. base가 변경되더라도 production 환경의
+> 보안 컨텍스트가 유지되도록 하는 안전망 역할이다.
 
 ```yaml
 # examples/k8s/overlays/production/patches/security-context.yaml
@@ -446,20 +456,25 @@ for f in "$DASHBOARD_DIR"/*.json; do
 done
 ```
 
-### 6.3 `__inputs` 블록 삽입
+### 6.3 대시보드 Datasource UID 전략
 
-추출된 각 대시보드 JSON 상단에 `__inputs` 블록을 삽입한다.
-Grafana Import UI에서 자동으로 Data Source 매핑 프롬프트가 표시된다.
+대시보드 JSON은 **두 가지 용도**로 사용된다:
 
-```json
-{
-  "__inputs": [
-    {"name": "DS_PROMETHEUS", "type": "datasource", "pluginId": "prometheus", "label": "Prometheus"},
-    {"name": "DS_MIMIR", "type": "datasource", "pluginId": "prometheus", "label": "Mimir"},
-    {"name": "DS_TEMPO", "type": "datasource", "pluginId": "tempo", "label": "Tempo"},
-    {"name": "DS_LOKI", "type": "datasource", "pluginId": "loki", "label": "Loki"}
-  ]
-}
+| 용도 | Datasource UID 형식 | 동작 |
+|------|---------------------|------|
+| **파일 기반 프로비저닝** (docker-compose) | 직접 UID (`"uid": "mimir"`) | Grafana가 프로비저닝된 DS UID로 즉시 연결 |
+| **수동 Import** (Grafana UI) | `__inputs` 변수 (`"uid": "${DS_MIMIR}"`) | Import 시 DS 매핑 프롬프트 표시 |
+
+docker-compose 샌드박스에서는 **파일 기반 프로비저닝**이 주 사용 경로이므로,
+대시보드 JSON에는 `grafana-datasources.yml`에 정의된 실제 UID (`mimir`, `tempo`, `loki`)를 사용한다.
+
+Consumer가 자체 Grafana에 수동 Import할 때는 `sanitize-dashboards.sh`를 실행하여
+하드코딩된 UID를 `__inputs` 변수로 치환한 후 Import한다.
+
+```bash
+# 수동 Import 전 UID → __inputs 변수 치환
+bash examples/scripts/sanitize-dashboards.sh examples/monitoring
+# 이후 Grafana UI에서 Import → DS 매핑 프롬프트에서 자신의 DS 선택
 ```
 
 ### 6.4 장기 과제: Grafonnet 마이그레이션
@@ -592,9 +607,9 @@ OTEL Gateway (Cluster, 512MiB × 3 replicas)
 | k8s/base/*.yaml | `k8s/selfhealing-*.yaml` | namespace 제거, securityContext 추가, `:latest` → placeholder, 보안 하드닝 체크리스트(5.4절) 적용 |
 | k8s/overlays/ | 신규 작성 | dev/staging/production overlay 생성, Kustomize 구조 |
 | monitoring/prometheus-alerts.yml | `docker/prometheus/rules/alerts.yml` | 그대로 복사 (selfhealing 메트릭 기반) |
-| monitoring/grafana-dashboard.json | `docker/grafana/` | JSON export → Sanitizer 스크립트(6.2절) 실행 → `__inputs` 블록 삽입(6.3절) |
+| monitoring/grafana-dashboard.json | `docker/grafana/` | JSON export → 프로비저닝용 직접 UID 사용 (6.3절), 수동 Import 시 Sanitizer 실행 |
 | monitoring/otel-collector.yml | `docker/otel-collector/` | service.name 일반화, Tail Sampling 정책 추가(7.2절), retry 시간 상향(7.4절) |
-| docker/Dockerfile | `Dockerfile` | packages/ 제거, pip install 방식으로 단순화 |
+| docker/Dockerfile | `Dockerfile` | packages/ 제거, `COPY . .` 후 `pip install .` (non-editable) |
 | docker/docker-compose.yml | `docker-compose.yml` | shopping 제거, selfhealing infra만 유지 (Phase 1 범위, 4절) |
 | docker/config/tempo.yml | `docker/tempo/tempo.yml` | 한국어 → 영어 주석, 설정 동일 유지 |
 | docker/config/mimir.yml | `docker/mimir/mimir.yml` | 한국어 → 영어 주석, 설정 동일 유지 |

@@ -5,6 +5,10 @@
 # making dashboards portable across Grafana instances.
 #
 # Usage: bash sanitize-dashboards.sh [DASHBOARD_DIR]
+#
+# Note: Uses GNU sed. On macOS, install GNU sed via:
+#   brew install gnu-sed
+# Then use 'gsed' or add gnubin to PATH.
 set -euo pipefail
 
 DASHBOARD_DIR="${1:-examples/monitoring}"

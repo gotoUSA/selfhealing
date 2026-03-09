@@ -103,7 +103,7 @@ services:
   # Grafana Loki — log storage
   loki:
     image: grafana/loki:2.9.4
-    user: "0"
+    user: "0"  # Required: Loki 2.9.x has volume permission issues without root in Docker
     command: ["-config.file=/etc/loki/loki.yml"]
     volumes:
       - ./config/loki.yml:/etc/loki/loki.yml:ro

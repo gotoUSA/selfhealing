@@ -51,31 +51,6 @@ spec:
           value: 50
           periodSeconds: 60
 
----
-# Celery Critical Worker HPA
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: celery-critical-worker-hpa
-  labels:
-    app: celery-critical-worker
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: celery-critical-worker
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
-    - type: Resource
-      resource:
-        name: memory
-        target:
-          type: Utilization
-          averageUtilization: 80
+# Note: Celery workers (default + critical) are scaled by KEDA ScaledObjects
+# (see keda-scaledobject.yaml). Do NOT add HPA for KEDA-managed deployments
+# — KEDA creates its own HPA internally, and dual HPAs cause scaling conflicts.

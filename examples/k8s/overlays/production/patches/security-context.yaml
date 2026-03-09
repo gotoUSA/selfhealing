@@ -1,3 +1,5 @@
+# Defense-in-depth: enforce production security context even if base is modified.
+# Values intentionally duplicate base/deployment.yaml as a safety net.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
