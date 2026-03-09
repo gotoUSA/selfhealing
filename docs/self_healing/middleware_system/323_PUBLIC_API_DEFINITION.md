@@ -338,36 +338,17 @@ from selfhealing.settings import get_config
 
 **후보**: `selfhealing.testing` — Consumer에게 테스트 픽스처를 제공하는 공개 모듈
 
-**현재 상태**: 존재하지 않음. 모든 테스트 유틸리티는 `packages/selfhealing-python/tests/conftest.py` 내부에만 존재한다.
+**결정**: ❌ 불필요 — Public API에 포함하지 않는다.
 
-**공개가 필요한 이유**:
+**근거**:
 
-selfhealing은 Django 앱에 깊숙이 통합되는 라이브러리다. Consumer(shopping 등)가 자체 통합 테스트를 작성할 때 다음이 반복 필요하다:
+selfhealing은 Consumer가 **블랙박스로 사용하는 판매용 라이브러리**다. Consumer는 자신의 비즈니스 로직만 테스트하면 되며, 라이브러리 내부의 싱글톤 리셋이나 ContextVar 격리를 알 필요가 없다.
 
-1. **Settings 싱글톤 리셋** — selfhealing의 캐시된 설정이 테스트 간 누수되는 것을 방지
-2. **Audit 싱글톤 리셋** — CausationContext, InMemoryAuditBuffer 등 ContextVar 격리
-3. **InMemory Repository** — DB 없이 CB/DLQ 로직을 검증하는 Mock 구현체
-4. **Chaos Fixture** — failure_injector, latency_injector 등 장애 주입 도구
+- Consumer가 Settings 싱글톤 리셋을 직접 해야 한다면, 그것은 **라이브러리 설계의 결함**이다
+- shopping은 테스트베드이지 실제 Consumer가 아니다 — shopping의 테스트 요구사항으로 Public API를 확장해서는 안 된다
+- pytest-django의 `TestCase`나 DRF의 `APIClient`는 프레임워크가 테스트 러너를 제어하기 때문에 필요한 것이며, selfhealing은 프레임워크가 아닌 라이브러리다
 
-이러한 유틸리티가 없으면 Consumer마다 동일한 boilerplate를 직접 작성하게 되며, 라이브러리 내부 구조 변경 시 모든 Consumer의 테스트 코드가 깨진다. pytest-django가 `django.test.TestCase`를, DRF가 `rest_framework.test.APIClient`를 제공하는 것과 동일한 패턴이다.
-
-**결정**: repo 분리 후 Consumer가 2개 이상이 될 때까지는 공개하지 않는다. 단, 내부적으로 conftest.py의 fixture를 모듈 단위로 분리(`tests/_fixtures/`)하여 공개 전환 비용을 최소화한다.
-
-| 단계 | 시점 | 작업 |
-|------|------|------|
-| 1 (현재) | 324 이관 시 | conftest.py → `tests/_fixtures/` 모듈 분리 |
-| 2 | repo 분리 완료 | Consumer 1개(shopping) — conftest import로 충분 |
-| 3 | Consumer 2개+ | `selfhealing.testing` 공개, `__init__.py` §3에 추가 |
-
-**공개 시 예상 API**:
-
-```python
-# === Testing Utilities (Consumer 2개+ 시점) ===
-from selfhealing.testing import auto_reset_settings  # fixture
-from selfhealing.testing import InMemoryCircuitBreakerRepository
-from selfhealing.testing import InMemoryDLQRepository
-from selfhealing.testing import failure_injector, latency_injector
-```
+테스트 유틸리티(`conftest.py`의 싱글톤 리셋, InMemory Repository 등)는 **라이브러리 내부 테스트 전용**으로 유지한다. 324 이관 시 `tests/_fixtures/`로 모듈 분리하는 것은 내부 정리 차원에서 유효하지만, 외부 공개 경로(`selfhealing.testing`)는 만들지 않는다.
 
 ---
 
@@ -452,11 +433,11 @@ Kafka도 고유 topic prefix(`test.{uuid}.*`)와 `consumer_auto_offset_reset="ea
 
 `flaky_task`의 `random` 사용은 테스트 재현성을 해치므로, `failure_rate=1.0`(항상 실패) / `0.0`(항상 성공)으로 결정적 사용을 원칙으로 한다.
 
-### 5.5 Testing Utilities 공개 전략
+### 5.5 Testing Utilities 공개 여부
 
-**결정**: ⚠️ 시기 조건부 채택 — §3.1에 상세 기술
+**결정**: ❌ 불채택 — §3.1에 상세 기술
 
-repo 분리 후 Consumer가 2개 이상이 될 때까지는 공개하지 않는다. 324 이관 시 conftest.py를 `tests/_fixtures/` 모듈로 분리하여 공개 전환 비용을 최소화한다.
+Consumer는 selfhealing을 블랙박스로 사용한다. 싱글톤 리셋, ContextVar 격리 같은 내부 테스트 유틸리티를 Consumer에게 노출할 이유가 없다. Consumer가 이런 것을 알아야 한다면 라이브러리 설계 결함이다. 테스트 유틸리티는 라이브러리 내부 전용으로 유지한다.
 
 ### 5.6 Import 패턴 기반 테스트 분류 기준
 
