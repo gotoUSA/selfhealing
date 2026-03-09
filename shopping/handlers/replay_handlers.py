@@ -22,7 +22,7 @@ from selfhealing.services.replay_service import (
 )
 
 if TYPE_CHECKING:
-    from selfhealing.interfaces.repositories import FailedOperationData
+    from selfhealing import FailedOperationData
 
 logger = logging.getLogger(__name__)
 
@@ -97,17 +97,25 @@ class PaymentReplayHandler(ReplayHandler):
         try:
             callback = self._recovery_callback
             if callback is None:
-                from shopping.services.payment_recovery_service import get_payment_recovery_handler
+                from shopping.services.payment_recovery_service import (
+                    get_payment_recovery_handler,
+                )
 
                 recovery_handler = get_payment_recovery_handler()
-                callback = lambda pid, oid, att: recovery_handler.schedule_retry(payment_id=pid, order_id=oid, attempt=att)
+                callback = lambda pid, oid, att: recovery_handler.schedule_retry(
+                    payment_id=pid, order_id=oid, attempt=att
+                )
 
             snapshot = failed_op.snapshot_data or {}
-            payment_id = getattr(failed_op, "payment_id", None) or snapshot.get("payment_id")
+            payment_id = getattr(failed_op, "payment_id", None) or snapshot.get(
+                "payment_id"
+            )
             order_id = getattr(failed_op, "order_id", None) or snapshot.get("order_id")
 
             if not payment_id or not order_id:
-                return ReplayResult.failed(failed_op.id, "Missing payment_id or order_id for replay")
+                return ReplayResult.failed(
+                    failed_op.id, "Missing payment_id or order_id for replay"
+                )
 
             task_id = callback(payment_id, order_id, 0)
 
@@ -134,7 +142,9 @@ class PointReplayHandler(ReplayHandler):
     This handler contains shopping-specific point replay logic.
     """
 
-    def __init__(self, add_point_callback: Callable[[int, int, str], None] | None = None):
+    def __init__(
+        self, add_point_callback: Callable[[int, int, str], None] | None = None
+    ):
         """
         Initialize point replay handler.
 
@@ -167,7 +177,9 @@ class PointReplayHandler(ReplayHandler):
             reason_text = snapshot.get("reason", "Replay from DLQ")
 
             if amount <= 0:
-                return ReplayResult.failed(failed_op.id, "Invalid point amount in snapshot")
+                return ReplayResult.failed(
+                    failed_op.id, "Invalid point amount in snapshot"
+                )
 
             callback = self._add_point_callback
             if callback is None:
@@ -184,7 +196,9 @@ class PointReplayHandler(ReplayHandler):
             else:
                 callback(user_id, amount, f"[DLQ Replay] {reason_text}")
 
-            return ReplayResult.succeeded(failed_op.id, f"Added {amount} points to user {user_id}")
+            return ReplayResult.succeeded(
+                failed_op.id, f"Added {amount} points to user {user_id}"
+            )
 
         except Exception as e:
             logger.error(f"[PointReplayHandler] Replay failed: {e}")
@@ -236,7 +250,9 @@ class WebhookReplayHandler(ReplayHandler):
             amount = request_data.get("amount")
 
             if not all([payment_key, order_id, amount]):
-                return ReplayResult.failed(failed_op.id, "Missing required fields in request_data")
+                return ReplayResult.failed(
+                    failed_op.id, "Missing required fields in request_data"
+                )
 
             callback = self._webhook_callback
             if callback is None:

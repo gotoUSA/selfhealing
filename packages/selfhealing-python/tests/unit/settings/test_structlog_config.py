@@ -24,12 +24,15 @@ import structlog
 
 @pytest.fixture(autouse=True)
 def reset_logging_settings():
-    """각 테스트 전후로 LoggingSettings 싱글톤을 초기화해 환경 격리."""
+    """각 테스트 전후로 LoggingSettings 싱글톤 및 structlog 설정을 초기화해 환경 격리."""
+    from selfhealing.observability.structlog_config import reset_structlog_config
     from selfhealing.settings.logging_settings import reset_logging_settings
 
     reset_logging_settings()
+    reset_structlog_config()
     yield
     reset_logging_settings()
+    reset_structlog_config()
 
 
 @pytest.fixture()
@@ -56,11 +59,15 @@ class TestStructlogConfigContract:
 
     def test_inject_otel_trace_context_is_callable(self):
         """_inject_otel_trace_context 함수가 모듈에 존재해야 한다."""
-        from selfhealing.observability.structlog_config import _inject_otel_trace_context
+        from selfhealing.observability.structlog_config import (
+            _inject_otel_trace_context,
+        )
 
         assert callable(_inject_otel_trace_context)
 
-    def test_inject_otel_trace_context_accepts_three_positional_args(self, inject_otel_fn):
+    def test_inject_otel_trace_context_accepts_three_positional_args(
+        self, inject_otel_fn
+    ):
         """structlog 프로세서 시그니처: (logger, method_name, event_dict) → event_dict."""
         result = inject_otel_fn(None, "info", {"event": "test"})
         assert isinstance(result, dict)
@@ -127,7 +134,9 @@ class TestInjectOtelTraceContextBehavior:
         mock_observability.get_current_trace_id_from_otel.return_value = "abc123trace"
         mock_observability.get_current_span_id_from_otel.return_value = "def456span"
 
-        with patch.dict("sys.modules", {"selfhealing.observability": mock_observability}):
+        with patch.dict(
+            "sys.modules", {"selfhealing.observability": mock_observability}
+        ):
             result = inject_otel_fn(None, "info", event_dict)
 
         assert result["trace_id"] == "abc123trace"
@@ -141,7 +150,9 @@ class TestInjectOtelTraceContextBehavior:
         mock_observability.get_current_trace_id_from_otel.return_value = None
         mock_observability.get_current_span_id_from_otel.return_value = "span999"
 
-        with patch.dict("sys.modules", {"selfhealing.observability": mock_observability}):
+        with patch.dict(
+            "sys.modules", {"selfhealing.observability": mock_observability}
+        ):
             result = inject_otel_fn(None, "error", event_dict)
 
         assert "trace_id" not in result
@@ -155,7 +166,9 @@ class TestInjectOtelTraceContextBehavior:
         mock_observability.get_current_trace_id_from_otel.return_value = "trace_abc"
         mock_observability.get_current_span_id_from_otel.return_value = None
 
-        with patch.dict("sys.modules", {"selfhealing.observability": mock_observability}):
+        with patch.dict(
+            "sys.modules", {"selfhealing.observability": mock_observability}
+        ):
             result = inject_otel_fn(None, "info", event_dict)
 
         assert result["trace_id"] == "trace_abc"
@@ -163,13 +176,17 @@ class TestInjectOtelTraceContextBehavior:
 
     def test_both_none_leaves_event_dict_without_trace_fields(self, inject_otel_fn):
         """trace_id, span_id 모두 None이면 event_dict에 아무 trace 필드도 추가되지 않아야 한다."""
-        event_dict: dict[str, Any] = {"event": "resilient_storage.degraded_mode_entered"}
+        event_dict: dict[str, Any] = {
+            "event": "resilient_storage.degraded_mode_entered"
+        }
 
         mock_observability = MagicMock()
         mock_observability.get_current_trace_id_from_otel.return_value = None
         mock_observability.get_current_span_id_from_otel.return_value = None
 
-        with patch.dict("sys.modules", {"selfhealing.observability": mock_observability}):
+        with patch.dict(
+            "sys.modules", {"selfhealing.observability": mock_observability}
+        ):
             result = inject_otel_fn(None, "critical", event_dict)
 
         assert "trace_id" not in result
@@ -188,7 +205,9 @@ class TestInjectOtelTraceContextBehavior:
         mock_observability.get_current_trace_id_from_otel.return_value = "tid"
         mock_observability.get_current_span_id_from_otel.return_value = "sid"
 
-        with patch.dict("sys.modules", {"selfhealing.observability": mock_observability}):
+        with patch.dict(
+            "sys.modules", {"selfhealing.observability": mock_observability}
+        ):
             result = inject_otel_fn(None, "warning", event_dict)
 
         assert result["event"] == "adaptive_throttle.governance_blocked"
@@ -246,7 +265,9 @@ class TestConfigureStructlogBehavior:
         renderer = formatter.processors[-1]
         assert isinstance(renderer, structlog.dev.ConsoleRenderer)
 
-    def test_duplicate_calls_do_not_add_multiple_processor_formatters(self, monkeypatch):
+    def test_duplicate_calls_do_not_add_multiple_processor_formatters(
+        self, monkeypatch
+    ):
         """프로덕션 모드에서 configure_structlog()을 여러 번 호출해도 ProcessorFormatter 핸들러가 중복 등록되지 않아야 한다."""
         monkeypatch.setenv("SELFHEALING_LOGGING_STRUCTURED_JSON", "true")
         monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
@@ -259,7 +280,11 @@ class TestConfigureStructlogBehavior:
 
         root = logging.getLogger()
         processor_formatter_count = sum(
-            1 for h in root.handlers if isinstance(getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter)
+            1
+            for h in root.handlers
+            if isinstance(
+                getattr(h, "formatter", None), structlog.stdlib.ProcessorFormatter
+            )
         )
         assert processor_formatter_count == 1
 
@@ -311,6 +336,9 @@ class TestConfigureStructlogBehavior:
         assert root.level == logging.WARNING
 
         # 프로덕션 환경: 환경변수 미설정이면 DEBUG(10)
+        from selfhealing.observability.structlog_config import reset_structlog_config
+
+        reset_structlog_config()
         monkeypatch.delenv("SELFHEALING_TEST_LOG_LEVEL", raising=False)
         configure_structlog()
         assert root.level == logging.DEBUG

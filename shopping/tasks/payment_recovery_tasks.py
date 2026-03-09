@@ -46,14 +46,18 @@ def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int) -> 
     from ..services.payment_recovery_service import get_payment_recovery_handler
     from ..utils.toss_payment import TossPaymentClient, TossPaymentError
 
-    logger.info(f"결제 재시도 시작: payment_id={payment_id}, order_id={order_id}, attempt={attempt}")
+    logger.info(
+        f"결제 재시도 시작: payment_id={payment_id}, order_id={order_id}, attempt={attempt}"
+    )
 
     recovery = get_payment_recovery_handler()
     config = get_recovery_config()
 
     try:
         # 1. 거버넌스 체크 (서비스 레이어에서 수행)
-        governance_block = recovery.check_governance_for_retry(payment_id, "retry_failed_payment")
+        governance_block = recovery.check_governance_for_retry(
+            payment_id, "retry_failed_payment"
+        )
         if governance_block:
             return governance_block
 
@@ -127,7 +131,9 @@ def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int) -> 
             # finalize 태스크 트리거
             from .payment_tasks import finalize_payment_confirm
 
-            finalize_payment_confirm.delay(payment_data, payment_id, payment.order.user_id)
+            finalize_payment_confirm.delay(
+                payment_data, payment_id, payment.order.user_id
+            )
 
             return {
                 "status": "success",
@@ -139,7 +145,9 @@ def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int) -> 
             # 실패 - Circuit Breaker 기록
             recovery.record_circuit_breaker_result(success=False)
 
-            logger.error(f"결제 재시도 실패: payment_id={payment_id}, attempt={attempt}, error={e.message}")
+            logger.error(
+                f"결제 재시도 실패: payment_id={payment_id}, attempt={attempt}, error={e.message}"
+            )
 
             # 실패 처리 (재시도 또는 DLQ)
             result = recovery.handle_failure(
@@ -161,7 +169,9 @@ def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int) -> 
             return result
 
     except Exception as e:
-        logger.exception(f"결제 재시도 중 예외: payment_id={payment_id}, error={str(e)}")
+        logger.exception(
+            f"결제 재시도 중 예외: payment_id={payment_id}, error={str(e)}"
+        )
         return {
             "status": "error",
             "message": str(e),
@@ -234,7 +244,9 @@ def check_sla_violations(self, threshold_minutes: int | None = None) -> dict:
             logger.error(f"SLA abort 처리 실패: {error_msg}")
 
     if detected_count > 0:
-        logger.warning(f"SLA 위반 감지 완료: detected={detected_count}, aborted={aborted_count}, errors={len(errors)}")
+        logger.warning(
+            f"SLA 위반 감지 완료: detected={detected_count}, aborted={aborted_count}, errors={len(errors)}"
+        )
     else:
         logger.info("SLA 위반 결제 없음")
 
@@ -293,7 +305,9 @@ def cleanup_expired_dlq(self) -> dict:
     time_limit=300,
     soft_time_limit=290,
 )
-def process_dlq_batch(self, batch_size: int = 10, failure_types: list | None = None) -> dict:
+def process_dlq_batch(
+    self, batch_size: int = 10, failure_types: list | None = None
+) -> dict:
     """
     DLQ 배치 재처리
 
@@ -369,7 +383,10 @@ def process_dlq_batch(self, batch_size: int = 10, failure_types: list | None = N
             record.status = "pending"
             record.save(update_fields=["status"])
 
-    logger.info(f"DLQ 배치 처리 완료: processed={processed}, retried={retried}, " f"rejected={rejected}, errors={len(errors)}")
+    logger.info(
+        f"DLQ 배치 처리 완료: processed={processed}, retried={retried}, "
+        f"rejected={rejected}, errors={len(errors)}"
+    )
 
     return {
         "status": "completed",
@@ -411,7 +428,7 @@ def reset_circuit_breaker(
     Returns:
         처리 결과
     """
-    from selfhealing.services import get_circuit_breaker_service
+    from selfhealing import get_circuit_breaker_service
     from ..models.user import User
 
     logger.info(f"Circuit Breaker 제어 요청: service={service_name}, action={action}")

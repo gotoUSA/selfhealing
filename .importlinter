@@ -1,0 +1,14 @@
+[importlinter]
+root_packages =
+    selfhealing
+
+[importlinter:contract:no-top-level-self-import]
+name = Internal modules must not import from top-level selfhealing
+type = forbidden
+source_modules =
+    selfhealing.core
+    selfhealing.services
+    selfhealing.adapters
+    selfhealing.interfaces
+    selfhealing.settings
+forbidden_modules = selfhealing

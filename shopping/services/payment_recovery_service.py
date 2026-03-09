@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 class PaymentRecoveryError(Exception):
     """결제 복구 관련 에러"""
 
-    def __init__(self, message: str, code: str = "RECOVERY_ERROR", recoverable: bool = True):
+    def __init__(
+        self, message: str, code: str = "RECOVERY_ERROR", recoverable: bool = True
+    ):
         self.message = message
         self.code = code
         self.recoverable = recoverable
@@ -133,7 +135,9 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
     # Governance Integration
     # =========================================================================
 
-    def is_circuit_breaker_blocking(self, service_name: str = "toss_payment") -> tuple[bool, str]:
+    def is_circuit_breaker_blocking(
+        self, service_name: str = "toss_payment"
+    ) -> tuple[bool, str]:
         """
         Circuit Breaker가 차단 중인지 확인합니다.
 
@@ -323,7 +327,9 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
 
         if payment_id:
             try:
-                payment = Payment.objects.select_related("order__user").get(pk=payment_id)
+                payment = Payment.objects.select_related("order__user").get(
+                    pk=payment_id
+                )
                 order = payment.order
                 user = order.user if order else None
             except Payment.DoesNotExist:
@@ -373,7 +379,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         if not self.config.get("CIRCUIT_BREAKER_ENABLED", False):
             return True
 
-        from selfhealing.factory import ProviderRegistry
+        from selfhealing import ProviderRegistry
 
         try:
             repo = ProviderRegistry.get_circuit_breaker_repo()
@@ -393,7 +399,7 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         if not self.config.get("CIRCUIT_BREAKER_ENABLED", False):
             return
 
-        from selfhealing.factory import ProviderRegistry
+        from selfhealing import ProviderRegistry
 
         try:
             repo = ProviderRegistry.get_circuit_breaker_repo()
@@ -439,7 +445,8 @@ class CeleryPaymentRecovery(PaymentRecoveryHandler):
         elapsed = (timezone.now() - created_at).total_seconds()
 
         logger.error(
-            f"SLA 타임아웃 abort: payment_id={payment_id}, order_id={order_id}, " f"elapsed={elapsed:.1f}s, sla={sla_timeout}s"
+            f"SLA 타임아웃 abort: payment_id={payment_id}, order_id={order_id}, "
+            f"elapsed={elapsed:.1f}s, sla={sla_timeout}s"
         )
 
         # DLQ로 이동

@@ -84,12 +84,18 @@ _COMPONENT_LOGGER_MAP: dict[str, list[str]] = {
 }
 
 
+_configured = False
+
+
 def configure_structlog() -> None:
     """structlog 전역 설정을 초기화한다.
 
-    중복 호출에 안전하도록 설계되어 있으며,
+    멱등성이 보장되며 중복 호출 시 즉시 반환한다.
     `structured_json` 설정에 따라 렌더러를 선택한다.
     """
+    global _configured
+    if _configured:
+        return
     from selfhealing.settings.logging_settings import get_logging_settings
 
     settings = get_logging_settings()
@@ -163,6 +169,13 @@ def configure_structlog() -> None:
     #   SELFHEALING_LOGGING_CIRCUIT_BREAKER_LOG_LEVEL=WARNING
     # =========================================================================
     _apply_component_log_levels(settings)
+    _configured = True
+
+
+def reset_structlog_config() -> None:
+    """테스트에서 structlog 설정을 리셋한다."""
+    global _configured
+    _configured = False
 
 
 def _apply_component_log_levels(settings: Any) -> None:
