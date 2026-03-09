@@ -86,14 +86,14 @@ class TestSuccessViewContract:
 class TestErrorViewBehavior:
     """ErrorView exception behavior for middleware testing."""
 
-    def test_get_returns_500_via_exception_handler(self):
-        """GET triggers 500 — DRF exception handler converts RuntimeError to response."""
+    def test_get_raises_runtime_error(self):
+        """GET raises RuntimeError — middleware (not DRF) handles 500 conversion."""
         from tests.testapp.views import ErrorView
 
         request = _make_request("/test/error/")
-        response = ErrorView.as_view()(request)
 
-        assert response.status_code == 500
+        with pytest.raises(RuntimeError, match="Deliberate 500"):
+            ErrorView.as_view()(request)
 
 
 # ============================================================
