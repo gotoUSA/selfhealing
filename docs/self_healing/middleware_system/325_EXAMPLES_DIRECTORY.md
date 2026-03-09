@@ -59,7 +59,13 @@ examples/
 │   └── otel-collector.yml           # OTEL Collector (Tail Sampling 포함)
 ├── docker/
 │   ├── Dockerfile                   # 컨테이너 빌드
-│   └── docker-compose.yml           # Phase 1 최소 인프라 샌드박스
+│   ├── docker-compose.yml           # Phase 1 최소 인프라 샌드박스
+│   └── config/
+│       ├── tempo.yml                # Tempo 설정 (분산 추적 저장소)
+│       ├── mimir.yml                # Mimir 설정 (메트릭 장기 저장소)
+│       ├── loki.yml                 # Loki 설정 (로그 저장소)
+│       ├── grafana-datasources.yml  # Grafana 데이터소스 프로비저닝
+│       └── grafana-dashboards.yml   # Grafana 대시보드 프로비저닝
 └── scripts/
     └── sanitize-dashboards.sh       # Grafana Dashboard UID Sanitizer
 ```
@@ -590,4 +596,9 @@ OTEL Gateway (Cluster, 512MiB × 3 replicas)
 | monitoring/otel-collector.yml | `docker/otel-collector/` | service.name 일반화, Tail Sampling 정책 추가(7.2절), retry 시간 상향(7.4절) |
 | docker/Dockerfile | `Dockerfile` | packages/ 제거, pip install 방식으로 단순화 |
 | docker/docker-compose.yml | `docker-compose.yml` | shopping 제거, selfhealing infra만 유지 (Phase 1 범위, 4절) |
+| docker/config/tempo.yml | `docker/tempo/tempo.yml` | 한국어 → 영어 주석, 설정 동일 유지 |
+| docker/config/mimir.yml | `docker/mimir/mimir.yml` | 한국어 → 영어 주석, 설정 동일 유지 |
+| docker/config/loki.yml | `docker/loki/loki.yml` | 한국어 → 영어 주석, 설정 동일 유지 |
+| docker/config/grafana-datasources.yml | `docker/grafana/provisioning/datasources/datasource.yml` | 멀티 리전 템플릿 제거, Loki 파생 필드 간소화, Mimir을 기본 DS로 설정 |
+| docker/config/grafana-dashboards.yml | `docker/grafana/provisioning/dashboards/dashboard.yml` | 대시보드 경로를 /var/lib/grafana/dashboards 로 변경 |
 | scripts/sanitize-dashboards.sh | 신규 작성 | UID/이름/타임존/Exemplar 링크 Sanitizer (6.2절) |

@@ -1,0 +1,16 @@
+# Grafana dashboard provisioning
+# Auto-loads dashboards from /var/lib/grafana/dashboards/ on startup.
+
+apiVersion: 1
+
+providers:
+  - name: 'Self-Healing Dashboards'
+    orgId: 1
+    folder: 'Self-Healing'
+    folderUid: 'self-healing'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
