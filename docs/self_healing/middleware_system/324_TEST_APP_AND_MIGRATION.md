@@ -164,6 +164,25 @@ from django.conf import settings  # shopping settings 가정
 
 shopping 비즈니스 로직을 직접 테스트하는 테스트 → **shopping repo에 남김** (hybrid/).
 
+### 3.5 Import 패턴 기반 분류 기준
+
+37개 파일을 분류할 때, 테스트가 import하는 모듈로 판단한다:
+
+```
+├─ selfhealing.* 만 import → selfhealing repo (tests/integration/)
+│   라이브러리 순수 로직 검증
+│   예: CB 상태 전이, DLQ 저장/재생, Retry 정책 단독 검증
+│
+├─ shopping.* + selfhealing.* 양쪽 import → shopping repo (tests/hybrid/)
+│   소비자 계약 테스트 (Consumer Contract Test)
+│   예: Toss API 실패 → CB OPEN → 결제 차단 연동 시나리오
+│
+└─ shopping.* 만 import → shopping repo (tests/unit/ 또는 tests/integration/)
+    순수 비즈니스 로직 검증
+```
+
+§5 step 2(37파일 분석)에서 이 트리를 적용한다.
+
 ---
 
 ## 4. 파일 이동 계획
@@ -225,3 +244,77 @@ tests/factories/                       → shopping tests/factories/ (유지)
 | 1 | testapp 독립 실행 | `pytest tests/ --ds=tests.testapp.settings` 성공 |
 | 2 | shopping import 0개 | selfhealing tests/에서 `from shopping` grep 결과 0 |
 | 3 | 기존 테스트 전체 통과 | 전환 후 기존 테스트 결과 동일 |
+
+---
+
+## 7. 설계 리뷰 결정사항
+
+### 7.1 CI 파이프라인 — 테스트 계층 Job 분리
+
+**결정**: ✅ 채택
+
+`pyproject.toml`에 이미 정의된 4-tier 마커 체계(`tier1`~`tier4_load`)를 CI 워크플로우에 반영한다.
+
+| CI 단계 | 티어 | DB 엔진 | 인프라 | 대상 |
+|---------|------|---------|-------|------|
+| PR 검증 | tier1 | SQLite / InMemory | 없음 | testapp 기반 어댑터 바인딩 + 순수 단위 테스트 |
+| Merge 전 | tier2 | Docker PostgreSQL 15 | Redis 7, Celery | `requires_db`, `requires_redis` 마커 테스트 |
+| Nightly | tier3_chaos | Docker 전체 | 전체 인프라 | 카오스 엔지니어링, 부하 테스트 |
+
+testapp이 완성되면 PR 단계에서 Docker 인프라를 제거하여 피드백을 2분 이내로 단축한다. 현재 `django-ci.yml`이 PR에서도 PostgreSQL + Redis를 띄우는 구조는 testapp 전환 후 개선 대상이다.
+
+### 7.2 Redis / Kafka Teardown — State Leak 방지
+
+**결정**: ✅ 채택 (기존 구현 견고, Saga 키 prefix 1건 수정)
+
+기존 구현의 3중 Redis 정리 전략은 충분하다:
+
+| 패턴 | 위치 | 설명 |
+|------|------|------|
+| Session flushdb | `tests/conftest.py:160` | 세션 종료 시 전체 DB flush |
+| Function pre/post flush | `tests/conftest.py:265-267` | 매 테스트 전후 flush |
+| Pattern-based delete | `tests/conftest.py:189-191` | `test:selfhealing:*` 키만 삭제 |
+
+Kafka도 고유 topic prefix(`test.{uuid}.*`)와 `consumer_auto_offset_reset="earliest"`로 격리된다.
+
+**수정 필요 1건**: `test_saga_orchestrator_integration.py`의 `KEY_PREFIX = "selfhealing:state:"`가 `test:` prefix를 사용하지 않아 프로덕션 키와 충돌 가능. 이관 시 `test:selfhealing:state:`로 변경한다.
+
+### 7.3 미들웨어 검증용 Dummy Views
+
+**결정**: ✅ 채택
+
+§2.2 구조에 `views.py`가 누락되어 있으므로 추가한다. 다음 더미 뷰로 미들웨어 커버리지를 확보한다:
+
+| 뷰 | 반환 | 검증 대상 |
+|----|------|----------|
+| `SuccessView` | 200 OK | 정상 경로 미들웨어 체인 |
+| `ErrorView` | 500 raise | CB 장애 감지, HealthBridge |
+| `SlowView` | 지연 후 200 | 타임아웃, Pool 소진 |
+| `RateLimitTestView` | 429 | HybridRateLimitMiddleware L1/L2 전환 |
+| `TieredEndpointView` | 200 (헤더 분기) | TieringMiddleware API 티어 분류 |
+
+### 7.4 Celery 더미 태스크 확장 — 장애 시나리오
+
+**결정**: ✅ 채택
+
+§2.5의 `tasks.py`에 항상 성공하는 태스크만 존재. CB/DLQ 극한 시나리오 검증을 위해 3종 추가:
+
+| 태스크 | 동작 | 검증 대상 |
+|--------|------|----------|
+| `always_failing_task` | 즉시 `raise RuntimeError` | CB failure_threshold 도달, DLQ 저장 |
+| `deterministic_failing_task` | `failure_rate` 파라미터로 실패율 제어 | CB half-open 판정 |
+| `slow_task` | `time.sleep(delay)` + `soft_time_limit` | 워커 타임아웃, 데몬 스레드 상호작용 |
+
+`random` 사용은 테스트 재현성을 해치므로, `failure_rate=1.0`(항상 실패) / `0.0`(항상 성공)으로 결정적 사용을 원칙으로 한다.
+
+### 7.5 Testing Utilities 공개 여부
+
+**결정**: ❌ 불채택
+
+selfhealing은 Consumer가 블랙박스로 사용하는 판매용 라이브러리다. 싱글톤 리셋, ContextVar 격리 같은 내부 테스트 유틸리티를 Consumer에게 노출할 이유가 없다. Consumer가 이런 것을 알아야 한다면 라이브러리 설계 결함이다. 테스트 유틸리티는 라이브러리 내부 전용으로 유지한다. 이관 시 `tests/_fixtures/`로 모듈 분리하는 것은 내부 정리 차원에서 유효하다.
+
+### 7.6 SQLite 사용 범위 명확화
+
+**결정**: ✅ 현행 유지
+
+§2.3의 SQLite in-memory DB는 testapp의 어댑터 바인딩 검증용으로 적합하다. `select_for_update` 같은 DB 종속 기능은 `@pytest.mark.requires_db` + Docker PostgreSQL 15로 테스트하며, 이 문서의 testapp 범위에 포함하지 않는다.
