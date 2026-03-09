@@ -65,8 +65,8 @@ from selfhealing.services.coordination.recovery_coordinator import (
 # 로컬 테스트: redis://localhost:16379/0
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
-# Saga 전용 Redis key prefix (기존 selfhealing:state: prefix와 동일)
-KEY_PREFIX = "selfhealing:state:"
+# Saga 전용 Redis key prefix (test: prefix로 프로덕션 키와 격리)
+KEY_PREFIX = "test:selfhealing:state:"
 
 
 # ---------------------------------------------------------------------------
@@ -440,7 +440,9 @@ class TestRedisOCC:
         redis_client.set(key, v2_data)
 
         # v1 → v2 CAS 시도 (expected=1이지만 현재 v2)
-        v2_again = json.dumps({"id": "test-003", "version": 2, "status": "compensating"})
+        v2_again = json.dumps(
+            {"id": "test-003", "version": 2, "status": "compensating"}
+        )
         result = redis_client.eval(
             SAGA_INSTANCE_CAS_SCRIPT,
             1,
@@ -460,7 +462,9 @@ class TestRedisOCC:
         key = f"{KEY_PREFIX}saga:instance:test-seq-{uuid.uuid4().hex[:8]}"
 
         for version in range(1, 4):
-            data = json.dumps({"id": "test-seq", "version": version, "status": f"v{version}"})
+            data = json.dumps(
+                {"id": "test-seq", "version": version, "status": f"v{version}"}
+            )
             expected = version - 1
             result = redis_client.eval(
                 SAGA_INSTANCE_CAS_SCRIPT,
@@ -613,10 +617,14 @@ class TestRedisTransitionScript:
 class TestConcurrencyConflict:
     """두 쓰레드가 동시에 같은 SagaInstance를 수정할 때 OCC로 충돌을 감지하는지 검증."""
 
-    def test_concurrent_save_instance_one_wins_one_loses(self, redis_client, backend, unique_id):
+    def test_concurrent_save_instance_one_wins_one_loses(
+        self, redis_client, backend, unique_id
+    ):
         """동시 _save_instance 호출 시 하나는 성공, 하나는 SessionVersionConflictError."""
         # 초기 인스턴스 Redis에 저장 (version=1)
-        instance_data = _create_test_instance_data(unique_id, version=1, status="running")
+        instance_data = _create_test_instance_data(
+            unique_id, version=1, status="running"
+        )
         backend.set(f"saga:instance:{unique_id}", instance_data)
 
         orchestrator = _make_orchestrator(backend)
@@ -654,7 +662,9 @@ class TestConcurrencyConflict:
         assert "success" in outcomes, f"하나는 성공해야 한다: {outcomes}"
         assert "conflict" in outcomes, f"하나는 충돌이어야 한다: {outcomes}"
 
-    def test_sequential_version_increments_via_save_instance(self, redis_client, backend, unique_id):
+    def test_sequential_version_increments_via_save_instance(
+        self, redis_client, backend, unique_id
+    ):
         """순차적 _save_instance 호출이 버전을 올바르게 증가시키는지 확인."""
         orchestrator = _make_orchestrator(backend)
 
@@ -688,12 +698,16 @@ class TestConcurrencyConflict:
         stored = backend.get(f"saga:instance:{unique_id}")
         assert stored["version"] == 3
 
-    def test_stale_write_rejected_after_concurrent_update(self, redis_client, backend, unique_id):
+    def test_stale_write_rejected_after_concurrent_update(
+        self, redis_client, backend, unique_id
+    ):
         """먼저 저장된 워커의 결과가 있으면 뒤늦은 워커의 저장이 거부되는지 확인."""
         orchestrator = _make_orchestrator(backend)
 
         # 초기 v0 저장
-        instance_data = _create_test_instance_data(unique_id, version=0, status="pending")
+        instance_data = _create_test_instance_data(
+            unique_id, version=0, status="pending"
+        )
         backend.set(f"saga:instance:{unique_id}", instance_data)
 
         # 워커 A: v0 → v1 (성공)
@@ -756,7 +770,9 @@ class TestSagaLifecycleRedis:
         assert stored["status"] == "completed"
         assert stored["version"] >= 1
 
-    def test_step_failure_triggers_compensation_all_compensated(self, redis_client, backend):
+    def test_step_failure_triggers_compensation_all_compensated(
+        self, redis_client, backend
+    ):
         """Step 2 실패 시 Step 1만 역순 compensate하여 COMPENSATED."""
         step1 = SuccessStep("payment")
         step2 = FailingStep("inventory")
@@ -772,8 +788,12 @@ class TestSagaLifecycleRedis:
         result = orchestrator.execute_saga("order_failing_test", {"order_id": 456})
 
         assert result.status == SagaStatus.COMPENSATED
-        assert result.step_instances[0].status == SagaStepStatus.COMPENSATED  # payment 보상됨
-        assert result.step_instances[1].status == SagaStepStatus.EXECUTE_FAILED  # inventory 실패
+        assert (
+            result.step_instances[0].status == SagaStepStatus.COMPENSATED
+        )  # payment 보상됨
+        assert (
+            result.step_instances[1].status == SagaStepStatus.EXECUTE_FAILED
+        )  # inventory 실패
 
         # Context Injection 확인 (R5)
         assert result.context.failed_step_name == "inventory"
@@ -804,7 +824,9 @@ class TestSagaLifecycleRedis:
         assert result.step_instances[1].status == SagaStepStatus.COMPENSATED
         assert result.step_instances[2].status == SagaStepStatus.EXECUTE_FAILED
 
-    def test_partial_execution_step_included_in_compensation(self, redis_client, backend):
+    def test_partial_execution_step_included_in_compensation(
+        self, redis_client, backend
+    ):
         """R4: partial_execution=True인 EXECUTE_FAILED Step도 보상 대상에 포함."""
         step1 = SuccessStep("payment")
         step2 = PartialExecutionFailStep("inventory")
@@ -883,7 +905,9 @@ class TestSagaLifecycleRedis:
 
         assert result.status == SagaStatus.COMPLETED
         # 정확한 Checkpoint 횟수: 초기(1) + RUNNING(1) + Step성공×3(3) + COMPLETED(1) = 6
-        assert result.version == 6, f"3-step 전체 성공 시 version=6이어야 한다. 실제: {result.version}"
+        assert result.version == 6, (
+            f"3-step 전체 성공 시 version=6이어야 한다. 실제: {result.version}"
+        )
 
 
 # =========================================================================
@@ -917,7 +941,9 @@ class TestCeleryTaskDispatch:
         # resume_saga_instance_task는 orchestrator 내부에서 lazy import 됨:
         #   from selfhealing.services.saga.tasks import resume_saga_instance_task
         # 따라서 tasks 모듈의 원본을 패치해야 함
-        with patch("selfhealing.services.saga.tasks.resume_saga_instance_task") as mock_task:
+        with patch(
+            "selfhealing.services.saga.tasks.resume_saga_instance_task"
+        ) as mock_task:
             mock_task.apply_async = MagicMock()
 
             result = orchestrator.execute_saga("retry_dispatch_test", {"order_id": 300})
@@ -945,7 +971,9 @@ class TestCeleryTaskDispatch:
         orchestrator = _make_orchestrator(backend)
 
         # 첫 실행: Step 2 retryable 실패 → RETRY_SCHEDULED
-        with patch("selfhealing.services.saga.tasks.resume_saga_instance_task") as mock_task:
+        with patch(
+            "selfhealing.services.saga.tasks.resume_saga_instance_task"
+        ) as mock_task:
             mock_task.apply_async = MagicMock()
             result = orchestrator.execute_saga("resume_retry_test", {"order_id": 400})
 
@@ -959,7 +987,9 @@ class TestCeleryTaskDispatch:
         assert resumed.step_instances[0].status == SagaStepStatus.EXECUTED
         assert resumed.step_instances[1].status == SagaStepStatus.EXECUTED
 
-    def test_resume_saga_max_count_exceeded_compensation_failed(self, redis_client, backend):
+    def test_resume_saga_max_count_exceeded_compensation_failed(
+        self, redis_client, backend
+    ):
         """R2: MAX_RESUME_COUNT 초과 시 COMPENSATION_FAILED + DLQ."""
         # SUSPENDED 상태 인스턴스를 Redis에 직접 저장 (resume_count=10)
         instance_id = f"saga-max-resume-{uuid.uuid4().hex[:8]}"
@@ -989,7 +1019,9 @@ class TestCeleryTaskDispatch:
         assert "Max resume count" in result.error_message
         mock_dlq.store_failure.assert_called_once()
 
-    def test_resume_saga_lock_acquisition_failure_returns_unchanged(self, redis_client, backend):
+    def test_resume_saga_lock_acquisition_failure_returns_unchanged(
+        self, redis_client, backend
+    ):
         """R2: 분산 락 획득 실패 시 재개하지 않고 현재 상태 반환 (GC Pause 방어)."""
         instance_id = f"saga-lock-fail-{uuid.uuid4().hex[:8]}"
         step1 = SuccessStep("payment")
@@ -1005,7 +1037,9 @@ class TestCeleryTaskDispatch:
             saga_name="lock_fail_test",
             version=3,
             status="suspended",
-            step_instances=[{"step_name": "payment", "order": 0, "status": "not_started"}],
+            step_instances=[
+                {"step_name": "payment", "order": 0, "status": "not_started"}
+            ],
         )
         backend.set(f"saga:instance:{instance_id}", instance_data)
 
@@ -1102,7 +1136,9 @@ class TestOrphanSagaScan:
             instances = _scan_active_saga_instances()
 
         terminal_ids = [i.id for i in instances if "terminal" in i.id]
-        assert len(terminal_ids) == 0, f"터미널 상태는 스캔에서 제외되어야 한다: {terminal_ids}"
+        assert len(terminal_ids) == 0, (
+            f"터미널 상태는 스캔에서 제외되어야 한다: {terminal_ids}"
+        )
 
 
 # =========================================================================
@@ -1138,7 +1174,9 @@ class TestLockHeartbeat:
 
         # lock.extend가 호출되었는지 확인
         # SlowStep이 3초 동안 실행, HEARTBEAT_INTERVAL=1초 → 최소 2회 extend
-        assert mock_lock.extend.call_count >= 2, f"lock.extend가 최소 2회 호출되어야 한다. 실제: {mock_lock.extend.call_count}"
+        assert mock_lock.extend.call_count >= 2, (
+            f"lock.extend가 최소 2회 호출되어야 한다. 실제: {mock_lock.extend.call_count}"
+        )
 
     def test_lock_extend_in_compensation_loop(self, redis_client, backend):
         """보상 루프에서 매 Step 보상 전 lock.extend가 호출되는지 확인."""
@@ -1163,7 +1201,9 @@ class TestLockHeartbeat:
         # 보상 루프에서 매 step 보상 전 _try_extend_lock → lock.extend 호출
         # step_a, step_b 2개가 보상 대상이므로 최소 2회
         extend_calls = mock_lock.extend.call_count
-        assert extend_calls >= 2, f"보상 루프에서 lock.extend가 최소 2회 호출되어야 한다. 실제: {extend_calls}"
+        assert extend_calls >= 2, (
+            f"보상 루프에서 lock.extend가 최소 2회 호출되어야 한다. 실제: {extend_calls}"
+        )
 
 
 # =========================================================================
@@ -1174,7 +1214,9 @@ class TestLockHeartbeat:
 class TestEventDispatchChain:
     """Saga 실행 중 EventBus 이벤트 발행이 올바른 순서로 이루어지는지 검증."""
 
-    def test_success_saga_emits_started_step_completed_completed(self, redis_client, backend):
+    def test_success_saga_emits_started_step_completed_completed(
+        self, redis_client, backend
+    ):
         """전체 성공 시 이벤트 순서: STARTED → STEP_COMPLETED ×N → COMPLETED."""
         step1 = SuccessStep("payment")
         step2 = SuccessStep("inventory")
@@ -1194,17 +1236,23 @@ class TestEventDispatchChain:
 
         # emit 호출 순서 확인
         calls = mock_event_bus.emit.call_args_list
-        event_types = [c.kwargs.get("event_type", c.args[0] if c.args else None) for c in calls]
+        event_types = [
+            c.kwargs.get("event_type", c.args[0] if c.args else None) for c in calls
+        ]
 
         # STARTED가 첫 번째
         assert event_types[0] == SagaEventType.SAGA_STARTED
         # STEP_COMPLETED 2개
-        step_completed = [e for e in event_types if e == SagaEventType.SAGA_STEP_COMPLETED]
+        step_completed = [
+            e for e in event_types if e == SagaEventType.SAGA_STEP_COMPLETED
+        ]
         assert len(step_completed) == 2
         # 마지막은 COMPLETED
         assert event_types[-1] == SagaEventType.SAGA_COMPLETED
 
-    def test_failed_saga_emits_step_failed_compensating_compensated(self, redis_client, backend):
+    def test_failed_saga_emits_step_failed_compensating_compensated(
+        self, redis_client, backend
+    ):
         """실패 + 보상 시: STARTED → STEP_COMPLETED → STEP_FAILED → COMPENSATING → COMPENSATED."""
         step1 = SuccessStep("payment")
         step2 = FailingStep("inventory")
@@ -1223,7 +1271,9 @@ class TestEventDispatchChain:
         assert result.status == SagaStatus.COMPENSATED
 
         calls = mock_event_bus.emit.call_args_list
-        event_types = [c.kwargs.get("event_type", c.args[0] if c.args else None) for c in calls]
+        event_types = [
+            c.kwargs.get("event_type", c.args[0] if c.args else None) for c in calls
+        ]
 
         assert SagaEventType.SAGA_STARTED in event_types
         assert SagaEventType.SAGA_STEP_COMPLETED in event_types
@@ -1240,7 +1290,9 @@ class TestEventDispatchChain:
 class TestGovernanceBlockIntegration:
     """거버넌스 차단 시 Saga가 실행되지 않고 즉시 반환되는지 검증."""
 
-    def test_governance_blocked_returns_compensation_failed(self, redis_client, backend):
+    def test_governance_blocked_returns_compensation_failed(
+        self, redis_client, backend
+    ):
         """거버넌스 차단 시 COMPENSATION_FAILED, 실제 Step은 실행되지 않음."""
         step1 = SuccessStep("payment")
 
@@ -1258,7 +1310,9 @@ class TestGovernanceBlockIntegration:
         blocked_result.allowed = False
         blocked_result.block_message = "Kill switch activated"
 
-        with patch.object(orchestrator, "_check_governance", return_value=blocked_result):
+        with patch.object(
+            orchestrator, "_check_governance", return_value=blocked_result
+        ):
             result = orchestrator.execute_saga("governance_test", {"order_id": 700})
 
         assert result.status == SagaStatus.COMPENSATION_FAILED
