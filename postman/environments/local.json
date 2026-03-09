@@ -1,0 +1,139 @@
+{
+  "id": "local-env",
+  "name": "Local Development",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "product_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "order_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "payment_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "idempotency_key",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "old_stock",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "old_point",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "old_sold_count",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "used_points",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "earned_points",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "cart_item_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "quantity",
+      "value": "1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_email",
+      "value": "test@example.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_username",
+      "value": "test_user1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_password",
+      "value": "testpass123!",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "admin_username",
+      "value": "admin",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "admin_password",
+      "value": "admin123!",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "product_id",
+      "value": "1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "use_points",
+      "value": "1000",
+      "type": "default",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}

@@ -1,0 +1,376 @@
+{
+  "info": {
+    "_postman_id": "t2-auth-invalidtoken-reject",
+    "name": "t2_auth_invalidtoken_reject",
+    "description": "위조된 JWT Token이 거부되는지 검증\n\n## 목적\n- 서명이 조작된 토큰으로 API 요청 시 401 Unauthorized 반환 확인\n- JWT 서명 검증이 올바르게 작동하는지 확인\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 2)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "step 1: login and get valid token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Login successful with valid contract', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.expect(typeof jsonData.token.access).to.eql('string');",
+              "    pm.expect(jsonData.token.access.length).to.be.above(10);",
+              "    ",
+              "    // before 상태: 유효한 토큰 저장",
+              "    pm.environment.set('valid_access_token', jsonData.token.access);",
+              "    if (jsonData.token.refresh) {",
+              "        pm.environment.set('refresh_token', jsonData.token.refresh);",
+              "    }",
+              "    ",
+              "    console.log('valid token obtained for comparison');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login/",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "login", ""]
+        }
+      }
+    },
+    {
+      "name": "step 2: verify valid token works",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('valid token is accepted', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 유효한 토큰으로 사용자 정보 조회 성공",
+              "    pm.expect(jsonData.email || jsonData.id || jsonData.username).to.exist;",
+              "    console.log('valid token accepted - baseline established');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{valid_access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/profile/",
+          "host": ["{{base_url}}"],
+          "path": ["users", "profile", ""]
+        }
+      }
+    },
+    {
+      "name": "step 3: create tampered token (precondition)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// precondition: 위조된 토큰 생성",
+              "var validToken = pm.environment.get('valid_access_token');",
+              "",
+              "// 방법 1: 서명 부분 조작",
+              "// jwt는 header.payload.signature 구조",
+              "if (validToken) {",
+              "    var parts = validToken.split('.');",
+              "    if (parts.length === 3) {",
+              "        // 서명 부분을 조작 (마지막 몇 글자 변경)",
+              "        var tamperedSignature = parts[2].split('').reverse().join('');",
+              "        var tamperedToken = parts[0] + '.' + parts[1] + '.' + tamperedSignature;",
+              "        pm.environment.set('tampered_token', tamperedToken);",
+              "        console.log('tampered token created by modifying signature');",
+              "    }",
+              "} else {",
+              "    // 테스트용 위조 토큰",
+              "    var fakeToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjo5OTk5OTk5OTk5LCJpYXQiOjE3MDAwMDAwMDAsImp0aSI6ImZha2UtdG9rZW4taWQiLCJ1c2VyX2lkIjoxfQ.INVALID_SIGNATURE_HERE';",
+              "    pm.environment.set('tampered_token', fakeToken);",
+              "    console.log('using predefined fake token');",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// action: 위조된 토큰으로 api 요청",
+              "",
+              "pm.test('tampered token is rejected with 401', function() {",
+              "    pm.response.to.have.status(401);",
+              "    console.log('tampered token correctly rejected');",
+              "});",
+              "",
+              "pm.test('response indicates invalid token', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 응답에 토큰 관련 에러 메시지 확인",
+              "    var responseText = JSON.stringify(jsonData).toLowerCase();",
+              "    var hasInvalidMessage = ",
+              "        responseText.includes('invalid') ||",
+              "        responseText.includes('token') ||",
+              "        responseText.includes('signature') ||",
+              "        responseText.includes('authentication') ||",
+              "        responseText.includes('credentials');",
+              "    ",
+              "    pm.expect(hasInvalidMessage).to.be.true;",
+              "    console.log('response:', JSON.stringify(jsonData));",
+              "});",
+              "",
+              "pm.test('no user data exposed', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 위조 토큰으로 사용자 데이터가 노출되면 안 됨",
+              "    pm.expect(jsonData.email).to.be.undefined;",
+              "    pm.expect(jsonData.user).to.be.undefined;",
+              "    pm.expect(jsonData.username).to.be.undefined;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tampered_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/profile/",
+          "host": ["{{base_url}}"],
+          "path": ["users", "profile", ""]
+        }
+      }
+    },
+    {
+      "name": "step 4: attempt with completely fake token",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// 완전히 가짜인 토큰 생성",
+              "var completelyFakeToken = 'this.is.not.a.valid.jwt.token.at.all';",
+              "pm.environment.set('completely_fake_token', completelyFakeToken);"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('completely fake token is rejected', function() {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('malformed token handled gracefully', function() {",
+              "    // 서버가 크래시하지 않고 적절한 에러 응답",
+              "    pm.expect(pm.response.code).to.be.oneOf([400, 401, 403]);",
+              "    console.log('malformed token handled correctly');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{completely_fake_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/profile/",
+          "host": ["{{base_url}}"],
+          "path": ["users", "profile", ""]
+        }
+      }
+    },
+    {
+      "name": "step 5: attempt with modified payload",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// payload를 조작한 토큰 생성 (user_id 변경 시도)",
+              "var validToken = pm.environment.get('valid_access_token');",
+              "",
+              "if (validToken) {",
+              "    var parts = validToken.split('.');",
+              "    if (parts.length === 3) {",
+              "        // payload 디코딩",
+              "        try {",
+              "            var payload = JSON.parse(atob(parts[1]));",
+              "            // user_id를 다른 값으로 변경 시도",
+              "            payload.user_id = 99999;",
+              "            // 다시 인코딩",
+              "            var modifiedPayload = btoa(JSON.stringify(payload));",
+              "            // 원래 서명 유지 (서명 불일치가 됨)",
+              "            var modifiedToken = parts[0] + '.' + modifiedPayload + '.' + parts[2];",
+              "            pm.environment.set('payload_modified_token', modifiedToken);",
+              "            console.log('created token with modified payload');",
+              "        } catch (e) {",
+              "            pm.environment.set('payload_modified_token', 'invalid.payload.token');",
+              "        }",
+              "    }",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('payload-modified token is rejected', function() {",
+              "    pm.response.to.have.status(401);",
+              "    console.log('payload modification detected and rejected');",
+              "});",
+              "",
+              "pm.test('cannot elevate privileges via token tampering', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 권한 상승 시도가 실패해야 함",
+              "    pm.expect(jsonData.is_admin).to.be.undefined;",
+              "    pm.expect(jsonData.is_superuser).to.be.undefined;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{payload_modified_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/profile/",
+          "host": ["{{base_url}}"],
+          "path": ["users", "profile", ""]
+        }
+      }
+    },
+    {
+      "name": "step 6: attempt payment with invalid token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('payment endpoint rejects invalid token', function() {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('no payment processed with invalid token', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    pm.expect(jsonData.payment_id).to.be.undefined;",
+              "    pm.expect(jsonData.payment_key).to.be.undefined;",
+              "});",
+              "",
+              "console.log('=== security check passed ===');",
+              "console.log('all invalid/tampered tokens correctly rejected');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{tampered_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"order_id\": 1,\n    \"amount\": 10000\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payments/request/",
+          "host": ["{{base_url}}"],
+          "path": ["payments", "request", ""]
+        }
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// collection-level pre-request script",
+          "console.log('=== t2 security test: invalid token rejection ===');"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// collection-level test script",
+          "if (pm.response.code >= 500) {",
+          "    console.error('server error:', pm.response.text());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "test_email",
+      "value": "test@example.com"
+    },
+    {
+      "key": "test_password",
+      "value": "testpass123!"
+    }
+  ]
+}

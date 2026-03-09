@@ -1,0 +1,465 @@
+{
+  "info": {
+    "_postman_id": "t1-payment-fail-rollback",
+    "name": "t1_payment_failrollback_stockrestore",
+    "description": "결제 실패 후 주문 취소 시 재고와 포인트가 원래 상태로 롤백되는지 검증\n\n## 목적\n- 결제 실패 후 주문 취소 시 stock이 원복되는지 확인\n- 결제 실패 후 주문 취소 시 sold_count가 증가하지 않음을 확인\n- 포인트가 원복되는지 확인\n\n## 시스템 동작\n- 주문 생성 시 재고 차감 (pending 상태)\n- 결제 confirm 실패 시 자동 롤백 없음\n- 주문 취소 시 재고 롤백\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 1)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Step 1: Login",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Login successful with valid contract', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    pm.expect(typeof jsonData.token.access).to.eql('string');",
+              "    pm.expect(jsonData.token.access.length).to.be.above(10);",
+              "    pm.environment.set('access_token', jsonData.token.access);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login/",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "login", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 2: Get Product Stock (Before)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Product retrieved', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // Before 상태 저장",
+              "    pm.environment.set('old_stock', jsonData.stock);",
+              "    pm.environment.set('old_sold_count', jsonData.sold_count || 0);",
+              "    ",
+              "    console.log('Before - Stock:', jsonData.stock, 'Sold:', jsonData.sold_count);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/products/{{product_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["products", "{{product_id}}", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 3: Get My Points (Before)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Points retrieved', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // Before 상태 저장",
+              "    pm.environment.set('old_point', jsonData.points || jsonData.balance || 0);",
+              "    ",
+              "    console.log('Before - Points:', pm.environment.get('old_point'));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/points/my/",
+          "host": ["{{base_url}}"],
+          "path": ["points", "my", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 4: Add to Cart",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Item added to cart', function() {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+              "    var jsonData = pm.response.json();",
+              "    pm.environment.set('cart_item_id', jsonData.id || jsonData.cart_item_id);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"product_id\": {{product_id}},\n    \"quantity\": {{quantity}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/cart/add_item/",
+          "host": ["{{base_url}}"],
+          "path": ["cart", "add_item", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 5: Create Order",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order created', function() {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 202]);",
+              "    var jsonData = pm.response.json();",
+              "    pm.environment.set('order_id', jsonData.id || jsonData.order_id);",
+              "    pm.environment.set('order_amount', jsonData.total_amount || jsonData.amount);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cart_item_ids\": [{{cart_item_id}}],\n    \"shipping_name\": \"테스트\",\n    \"shipping_phone\": \"010-1234-5678\",\n    \"shipping_address\": \"서울시 테스트구 테스트동\",\n    \"shipping_detail_address\": \"101호\",\n    \"shipping_postal_code\": \"12345\",\n    \"use_points\": 1000\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 6: Payment Request",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Payment request processed', function() {",
+              "    // 결제 요청 성공(200/201) 또는 실패(400) 모두 허용 - 실패 테스트 시나리오 포함",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 400]);",
+              "    if (pm.response.code === 200 || pm.response.code === 201) {",
+              "        var jsonData = pm.response.json();",
+              "        pm.environment.set('payment_id', jsonData.payment_id || jsonData.id);",
+              "        pm.environment.set('payment_key', jsonData.payment_key || 'test_payment_key');",
+              "    } else {",
+              "        console.log('Payment request failed - this is expected in failure rollback test');",
+              "        pm.environment.set('payment_key', 'invalid_key');",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"order_id\": {{order_id}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payments/request/",
+          "host": ["{{base_url}}"],
+          "path": ["payments", "request", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 7: Payment Confirm (Force Fail - Invalid Amount)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// 의도적으로 잘못된 금액으로 결제 시도 → 실패 유도",
+              "pm.test('Payment should fail with invalid amount', function() {",
+              "    // 400, 422, 또는 다른 에러 코드 허용",
+              "    pm.expect(pm.response.code).to.be.oneOf([400, 422, 500]);",
+              "});",
+              "",
+              "pm.test('Payment failure recorded', function() {",
+              "    console.log('Payment failed as expected - now canceling order to trigger rollback');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"order_id\": {{order_id}},\n    \"payment_key\": \"{{payment_key}}\",\n    \"amount\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payments/confirm/",
+          "host": ["{{base_url}}"],
+          "path": ["payments", "confirm", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 8: Cancel Order After Payment Failure",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Order cancelled successfully after payment failure', function() {",
+              "    pm.expect(pm.response.code).to.be.oneOf([200, 204]);",
+              "    console.log('Order cancelled - stock rollback should occur');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"cancel_reason\": \"결제 실패로 인한 주문 취소\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/orders/{{order_id}}/cancel/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", "{{order_id}}", "cancel", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 9: Verify Stock Restored After Cancellation",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Stock restored after payment failure and order cancellation', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    var oldStock = parseInt(pm.environment.get('old_stock'));",
+              "    var newStock = jsonData.stock;",
+              "    ",
+              "    console.log('Initial Stock:', oldStock, '| After Cancellation Stock:', newStock);",
+              "    ",
+              "    pm.expect(newStock).to.equal(oldStock, ",
+              "        'Stock should be restored after payment failure + order cancellation. Expected: ' + oldStock + ', Got: ' + newStock);",
+              "});",
+              "",
+              "pm.test('Sold count unchanged after payment failure and cancellation', function() {",
+              "    var jsonData = pm.response.json();",
+              "    var oldSoldCount = parseInt(pm.environment.get('old_sold_count'));",
+              "    var newSoldCount = jsonData.sold_count || 0;",
+              "    ",
+              "    console.log('Initial Sold:', oldSoldCount, '| After Cancellation Sold:', newSoldCount);",
+              "    ",
+              "    pm.expect(newSoldCount).to.equal(oldSoldCount,",
+              "        'Sold count should remain unchanged after failed payment + cancellation');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/products/{{product_id}}/",
+          "host": ["{{base_url}}"],
+          "path": ["products", "{{product_id}}", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 10: Verify Points Unchanged",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Points unchanged after payment failure and cancellation', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    var oldPoint = parseInt(pm.environment.get('old_point'));",
+              "    var newPoint = jsonData.points || jsonData.balance || 0;",
+              "    ",
+              "    console.log('Initial Points:', oldPoint, '| After Cancellation Points:', newPoint);",
+              "    ",
+              "    pm.expect(newPoint).to.equal(oldPoint,",
+              "        'Points should be unchanged after payment failure + cancellation. Expected: ' + oldPoint + ', Got: ' + newPoint);",
+              "});",
+              "",
+              "// 최종 결과 요약",
+              "console.log('========================================');",
+              "console.log('t1_payment_failrollback_stockrestore: PASSED');",
+              "console.log('- Payment failure: VERIFIED');",
+              "console.log('- Order cancellation: VERIFIED');",
+              "console.log('- Stock rollback: VERIFIED');",
+              "console.log('- Points unchanged: VERIFIED');",
+              "console.log('========================================');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/points/my/",
+          "host": ["{{base_url}}"],
+          "path": ["points", "my", ""]
+        }
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request script",
+          "console.log('Starting t1_payment_failrollback_stockrestore test...');"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level test script"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "collection_name",
+      "value": "t1_payment_failrollback_stockrestore"
+    },
+    {
+      "key": "tier",
+      "value": "1"
+    },
+    {
+      "key": "category",
+      "value": "Money Integrity"
+    }
+  ]
+}

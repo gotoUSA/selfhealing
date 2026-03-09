@@ -65,12 +65,14 @@ backup.json
 db.sqlite3.backup
 .hypothesis/
 
-# Runtime state files (auto-generated)
-logs/selfhealing_state/*.json
+# Runtime state & log files (auto-generated)
+logs/
 *.csv
 *.jsonl
 *.json
 !examples/**/*.json
+!postman/**/*.json
+!scripts/**/*.json
 gunicorn.ctl
 
 # Claude Code memory

@@ -1,0 +1,109 @@
+{
+  "id": "staging-env",
+  "name": "Staging",
+  "values": [
+    {
+      "key": "base_url",
+      "value": "https://staging.example.com/api",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "refresh_token",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "product_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "order_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "payment_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "idempotency_key",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "old_stock",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "old_point",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "old_sold_count",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "used_points",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "earned_points",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "cart_item_id",
+      "value": "",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "quantity",
+      "value": "1",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_email",
+      "value": "staging-test@example.com",
+      "type": "default",
+      "enabled": true
+    },
+    {
+      "key": "test_password",
+      "value": "",
+      "type": "secret",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}

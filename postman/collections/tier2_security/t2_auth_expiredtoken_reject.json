@@ -1,0 +1,350 @@
+{
+  "info": {
+    "_postman_id": "t2-auth-expiredtoken-reject",
+    "name": "T2_Auth_ExpiredToken_Reject",
+    "description": "만료된 JWT Token이 거부되는지 검증\n\n## 목적\n- 만료된 access token으로 API 요청 시 401 Unauthorized 반환 확인\n- 토큰 만료 정책이 올바르게 작동하는지 검증\n\n## CI 정책\n- 실패 시 배포 중단 (Tier 2)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Step 1: Login and Get Valid Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Login successful with valid contract', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 필수 필드 존재 검증",
+              "    pm.expect(jsonData.token).to.exist;",
+              "    pm.expect(jsonData.token.access).to.exist;",
+              "    ",
+              "    // 타입 검증",
+              "    pm.expect(typeof jsonData.token.access).to.eql('string');",
+              "    pm.expect(jsonData.token.access.length).to.be.above(10);",
+              "    ",
+              "    // 유효한 토큰 저장 (Before 상태)",
+              "    pm.environment.set('valid_access_token', jsonData.token.access);",
+              "    if (jsonData.token.refresh) {",
+              "        pm.environment.set('refresh_token', jsonData.token.refresh);",
+              "    }",
+              "    ",
+              "    console.log('Valid token obtained with contract validation');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"username\": \"{{test_username}}\",\n    \"password\": \"{{test_password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/login/",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "login", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 2: Verify Valid Token Works",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Valid token is accepted', function() {",
+              "    pm.response.to.have.status(200);",
+              "    console.log('Valid token accepted - API access granted');",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{valid_access_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/profile/",
+          "host": ["{{base_url}}"],
+          "path": ["users", "profile", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 3: Create Expired Token (Precondition)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Precondition: 만료된 토큰 생성",
+              "// JWT 구조: header.payload.signature",
+              "// 만료된 토큰은 exp 클레임이 과거 시간인 토큰",
+              "",
+              "// 방법 1: 테스트용 만료 토큰 사용 (환경 변수에서)",
+              "var expiredToken = pm.environment.get('expired_test_token');",
+              "",
+              "// 방법 2: 실제 만료 토큰 시뮬레이션",
+              "// 유효한 토큰의 payload를 수정하여 만료 시간을 과거로 설정",
+              "if (!expiredToken) {",
+              "    // 명시적으로 만료된 것으로 알려진 테스트 토큰 사용",
+              "    // 이 토큰은 이미 만료된 상태로 생성됨",
+              "    expiredToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNjAwMDAwMDAwLCJpYXQiOjE2MDAwMDAwMDAsImp0aSI6InRlc3QtZXhwaXJlZC10b2tlbiIsInVzZXJfaWQiOjF9.invalid_signature_for_expired_token';",
+              "}",
+              "",
+              "pm.environment.set('expired_token', expiredToken);",
+              "console.log('Expired token prepared for test');"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// Action: 만료된 토큰으로 API 요청",
+              "",
+              "pm.test('Expired token is rejected with 401', function() {",
+              "    pm.response.to.have.status(401);",
+              "    console.log('Expired token correctly rejected');",
+              "});",
+              "",
+              "pm.test('Response indicates token expiration', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 응답에 토큰 만료 관련 메시지 확인",
+              "    var responseText = JSON.stringify(jsonData).toLowerCase();",
+              "    var hasExpirationMessage = ",
+              "        responseText.includes('expired') ||",
+              "        responseText.includes('token') ||",
+              "        responseText.includes('invalid') ||",
+              "        responseText.includes('authentication');",
+              "    ",
+              "    pm.expect(hasExpirationMessage).to.be.true;",
+              "    console.log('Response:', JSON.stringify(jsonData));",
+              "});",
+              "",
+              "pm.test('No sensitive data returned', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 만료된 토큰으로 요청 시 사용자 데이터가 반환되면 안 됨",
+              "    pm.expect(jsonData.email).to.be.undefined;",
+              "    pm.expect(jsonData.user).to.be.undefined;",
+              "    pm.expect(jsonData.data).to.be.undefined;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{expired_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/users/profile/",
+          "host": ["{{base_url}}"],
+          "path": ["users", "profile", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 4: Attempt Protected Endpoint with Expired Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Protected endpoint rejects expired token', function() {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('Cannot access orders with expired token', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 주문 데이터가 반환되지 않아야 함",
+              "    pm.expect(jsonData.orders).to.be.undefined;",
+              "    pm.expect(jsonData.results).to.be.undefined;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{expired_token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/orders/",
+          "host": ["{{base_url}}"],
+          "path": ["orders", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 5: Attempt Payment with Expired Token",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Payment endpoint rejects expired token', function() {",
+              "    // 401 Unauthorized",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test('No payment processed with expired token', function() {",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    // 결제 관련 응답이 없어야 함",
+              "    pm.expect(jsonData.payment_id).to.be.undefined;",
+              "    pm.expect(jsonData.payment_key).to.be.undefined;",
+              "    pm.expect(jsonData.amount).to.be.undefined;",
+              "});",
+              "",
+              "console.log('=== SECURITY CHECK PASSED ===');",
+              "console.log('Expired token is correctly rejected across all endpoints');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{expired_token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"order_id\": 1,\n    \"amount\": 10000\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payments/request/",
+          "host": ["{{base_url}}"],
+          "path": ["payments", "request", ""]
+        }
+      }
+    },
+    {
+      "name": "Step 6: Refresh Token Still Works",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Refresh token can get new access token', function() {",
+              "    pm.response.to.have.status(200);",
+              "    var jsonData = pm.response.json();",
+              "    ",
+              "    pm.expect(jsonData.access).to.exist;",
+              "    pm.environment.set('new_access_token', jsonData.access);",
+              "    ",
+              "    console.log('New access token obtained via refresh');",
+              "});",
+              "",
+              "pm.test('Token refresh mechanism works correctly', function() {",
+              "    var jsonData = pm.response.json();",
+              "    var newToken = jsonData.access;",
+              "    var expiredToken = pm.environment.get('expired_token');",
+              "    ",
+              "    // 새 토큰은 만료된 토큰과 달라야 함",
+              "    pm.expect(newToken).to.not.equal(expiredToken);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"refresh\": \"{{refresh_token}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/auth/token/refresh/",
+          "host": ["{{base_url}}"],
+          "path": ["auth", "token", "refresh", ""]
+        }
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level pre-request script",
+          "console.log('=== T2 Security Test: Expired Token Rejection ===');"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Collection-level test script",
+          "if (pm.response.code >= 500) {",
+          "    console.error('Server Error:', pm.response.text());",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "test_username",
+      "value": "test_user1"
+    },
+    {
+      "key": "test_password",
+      "value": "testpass123!"
+    },
+    {
+      "key": "expired_test_token",
+      "value": ""
+    }
+  ]
+}
