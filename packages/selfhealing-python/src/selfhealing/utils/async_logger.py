@@ -182,6 +182,10 @@ class AsyncHealingLogger:
     _queue_count: int = 0
     _queue_count_lock = threading.Lock()
 
+    # flush() ↔ _worker() 협조: 워커의 로컬 batch를 포함한 완전 플러시
+    _flush_requested = threading.Event()
+    _flush_done = threading.Event()
+
     # 재시도 관련
     _retry_policy: BatchRetryPolicy = BatchRetryPolicy()
     _pending_retries: list[tuple[list[dict], int, float]] = []
@@ -329,7 +333,9 @@ class AsyncHealingLogger:
             # 설정에서 max_queue_size 로드
             try:
                 settings = cls._get_settings()
-                cls._max_queue_size = getattr(settings, "async_logger_max_queue_size", 5000)
+                cls._max_queue_size = getattr(
+                    settings, "async_logger_max_queue_size", 5000
+                )
             except Exception:
                 pass
 
@@ -386,7 +392,9 @@ class AsyncHealingLogger:
     # -------------------------------------------------------------------------
 
     @classmethod
-    def log(cls, event: dict[str, Any], severity: EventSeverity = EventSeverity.INFO) -> None:
+    def log(
+        cls, event: dict[str, Any], severity: EventSeverity = EventSeverity.INFO
+    ) -> None:
         """
         이벤트 로깅 (논블로킹, ~0.01ms)
 
@@ -436,7 +444,9 @@ class AsyncHealingLogger:
                 cls._critical_executor.submit(cls._flush_immediate, [enriched_event])
             else:
                 # Fallback: 스레드 풀 미초기화 시 직접 스레드 생성
-                threading.Thread(target=cls._flush_immediate, args=([enriched_event],), daemon=True).start()
+                threading.Thread(
+                    target=cls._flush_immediate, args=([enriched_event],), daemon=True
+                ).start()
         else:
             # 일반: Priority Queue에 추가 (배압 적용)
             cls._enqueue_with_backpressure(prioritized)
@@ -457,7 +467,9 @@ class AsyncHealingLogger:
                     cls._stats["queue_overflows"] += 1
 
                     if cls._overflow_policy == QueueOverflowPolicy.DROP_NEWEST:
-                        logger.warning("async_healing_logger.queue_full_dropping_newest")
+                        logger.warning(
+                            "async_healing_logger.queue_full_dropping_newest"
+                        )
                         return
                     elif cls._overflow_policy == QueueOverflowPolicy.DROP_OLDEST:
                         # 성능2: atomic하게 get + put 수행
@@ -466,7 +478,9 @@ class AsyncHealingLogger:
                             # 카운터는 그대로 (get 후 put이므로)
                         except queue.Empty:
                             pass
-                        logger.warning("async_healing_logger.queue_full_dropping_oldest")
+                        logger.warning(
+                            "async_healing_logger.queue_full_dropping_oldest"
+                        )
                         # DROP_OLDEST에서는 아래에서 put
                     # BLOCK은 put() 사용 (Non-blocking 위반이므로 권장 안함)
 
@@ -482,11 +496,22 @@ class AsyncHealingLogger:
 
     @classmethod
     def flush(cls) -> None:
-        """수동 플러시 (즉시 모든 대기 이벤트 전송)"""
+        """수동 플러시 (즉시 모든 대기 이벤트 전송).
+
+        워커 스레드가 실행 중이면 워커에 플러시를 요청하고 완료를 대기한다.
+        워커의 로컬 batch에 이미 dequeue된 이벤트도 포함하여 완전 플러시.
+        """
+        if cls._running and cls._worker_thread is not None:
+            # 워커에 플러시 요청 → 워커가 로컬 batch + 큐 잔여를 모두 플러시
+            cls._flush_done.clear()
+            cls._flush_requested.set()
+            cls._flush_done.wait(timeout=5.0)
+            return
+
+        # 워커 미실행 시 직접 드레인 (기존 로직)
         events = []
         extracted_count = 0
 
-        # Priority Queue에서 모든 이벤트 추출
         if cls._priority_queue:
             while not cls._priority_queue.empty():
                 try:
@@ -496,7 +521,6 @@ class AsyncHealingLogger:
                 except queue.Empty:
                     break
 
-        # 기존 Queue에서도 추출 (호환성)
         if cls._queue:
             while not cls._queue.empty():
                 try:
@@ -505,7 +529,6 @@ class AsyncHealingLogger:
                 except queue.Empty:
                     break
 
-        # 성능2: 카운터 업데이트
         if extracted_count > 0:
             with cls._queue_count_lock:
                 cls._queue_count = max(0, cls._queue_count - extracted_count)
@@ -578,7 +601,27 @@ class AsyncHealingLogger:
                 cls._flush_batch(critical_batch)
                 critical_batch = []
 
-            # 4. 일반 배치 조건부 플러시
+            # 4. flush() 요청 처리: 큐 잔여 + 로컬 batch 모두 플러시
+            if cls._flush_requested.is_set():
+                # 큐에 남은 이벤트도 로컬 batch로 드레인
+                if cls._priority_queue:
+                    while not cls._priority_queue.empty():
+                        try:
+                            p = cls._priority_queue.get_nowait()
+                            with cls._queue_count_lock:
+                                cls._queue_count = max(0, cls._queue_count - 1)
+                            batch.append(p.event)
+                        except queue.Empty:
+                            break
+                if batch:
+                    cls._flush_batch(batch)
+                    batch = []
+                    last_flush = time.time()
+                cls._flush_requested.clear()
+                cls._flush_done.set()
+                continue
+
+            # 5. 일반 배치 조건부 플러시
             if cls._should_flush(batch, last_flush):
                 cls._flush_batch(batch)
                 batch = []
@@ -641,7 +684,8 @@ class AsyncHealingLogger:
             if attempt < cls._retry_policy.max_retries:
                 # 재시도 스케줄링
                 delay = min(
-                    cls._retry_policy.initial_delay_seconds * (cls._retry_policy.backoff_multiplier**attempt),
+                    cls._retry_policy.initial_delay_seconds
+                    * (cls._retry_policy.backoff_multiplier**attempt),
                     cls._retry_policy.max_delay_seconds,
                 )
                 next_retry = time.time() + delay
@@ -766,7 +810,9 @@ class AsyncHealingLogger:
                     "error_count": error_count,
                     "threshold": cls._alert_config.threshold_count,
                     "window_seconds": cls._alert_config.window_seconds,
-                    "queue_size": cls._priority_queue.qsize() if cls._priority_queue else 0,
+                    "queue_size": cls._priority_queue.qsize()
+                    if cls._priority_queue
+                    else 0,
                 },
             )
 
@@ -835,6 +881,8 @@ class AsyncHealingLogger:
             cls._pending_retries = []
             cls._error_timestamps = deque(maxlen=100)
             cls._last_alert_time = 0
+            cls._flush_requested.clear()
+            cls._flush_done.clear()
             cls._stats = {
                 "events_logged": 0,
                 "events_flushed": 0,

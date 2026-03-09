@@ -103,7 +103,9 @@ def _wait_for_observed(observer: WildcardObserver, expected: int, timeout: float
 class TestWildcardObserverEventFlowIntegration:
     """EventBus → WildcardObserver → CoOccurrenceTracker 파이프라인 검증."""
 
-    def test_100_events_reach_co_occurrence_tracker(self, registered_observer, event_bus, co_occurrence):
+    def test_100_events_reach_co_occurrence_tracker(
+        self, registered_observer, event_bus, co_occurrence
+    ):
         """100개 이벤트 연속 발행 시 CoOccurrenceTracker에 기록되어야 한다."""
         event_types = [
             EventType.CIRCUIT_BREAKER_OPENED,
@@ -122,7 +124,9 @@ class TestWildcardObserverEventFlowIntegration:
         # EventWindow에 이벤트가 기록되었는지 확인
         assert len(registered_observer._window._events) >= event_count
 
-    def test_multiple_event_types_recorded_in_window(self, registered_observer, event_bus):
+    def test_multiple_event_types_recorded_in_window(
+        self, registered_observer, event_bus
+    ):
         """다양한 EventType이 윈도우의 type_distribution에 모두 반영되어야 한다."""
         types_to_publish = [
             EventType.CIRCUIT_BREAKER_OPENED,
@@ -178,7 +182,9 @@ class TestWildcardObserverRateAnomalyIntegration:
 class TestWildcardObserverStatisticsIntegration:
     """get_statistics() 통합 검증."""
 
-    def test_statistics_backpressure_fields_present(self, registered_observer, event_bus):
+    def test_statistics_backpressure_fields_present(
+        self, registered_observer, event_bus
+    ):
         """통계에 backpressure 지표가 포함되어야 한다."""
         event_bus.publish(_make_event())
         _wait_for_observed(registered_observer, 1)
@@ -191,18 +197,29 @@ class TestWildcardObserverStatisticsIntegration:
         assert stats["events_dropped"] == 0
         assert stats["total_observed"] >= 1
 
-    def test_statistics_type_distribution_reflects_published(self, registered_observer, event_bus):
+    def test_statistics_type_distribution_reflects_published(
+        self, registered_observer, event_bus
+    ):
         """type_distribution이 실제 발행된 이벤트 타입을 반영해야 한다."""
         event_bus.publish(_make_event(event_type=EventType.CIRCUIT_BREAKER_OPENED))
         event_bus.publish(_make_event(event_type=EventType.ERROR_BUDGET_CRITICAL))
 
         _wait_for_observed(registered_observer, 2)
 
-        stats = registered_observer.get_statistics()
-        dist = stats["type_distribution"]
+        # type_distribution은 consumer 스레드의 _event_counts에서 조회되므로
+        # _total_observed와 별도로 가시성을 폴링 대기한다.
+        cb_key = EventType.CIRCUIT_BREAKER_OPENED.value
+        eb_key = EventType.ERROR_BUDGET_CRITICAL.value
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            dist = registered_observer.get_statistics()["type_distribution"]
+            if dist.get(cb_key, 0) >= 1 and dist.get(eb_key, 0) >= 1:
+                break
+            time.sleep(0.05)
 
-        assert dist.get(EventType.CIRCUIT_BREAKER_OPENED.value, 0) >= 1
-        assert dist.get(EventType.ERROR_BUDGET_CRITICAL.value, 0) >= 1
+        dist = registered_observer.get_statistics()["type_distribution"]
+        assert dist.get(cb_key, 0) >= 1
+        assert dist.get(eb_key, 0) >= 1
 
 
 # =============================================================================
