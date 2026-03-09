@@ -334,6 +334,41 @@ from selfhealing.server import post_fork_reset  # 322
 from selfhealing.settings import get_config
 ```
 
+### 3.1 Testing Utilities 공개 여부
+
+**후보**: `selfhealing.testing` — Consumer에게 테스트 픽스처를 제공하는 공개 모듈
+
+**현재 상태**: 존재하지 않음. 모든 테스트 유틸리티는 `packages/selfhealing-python/tests/conftest.py` 내부에만 존재한다.
+
+**공개가 필요한 이유**:
+
+selfhealing은 Django 앱에 깊숙이 통합되는 라이브러리다. Consumer(shopping 등)가 자체 통합 테스트를 작성할 때 다음이 반복 필요하다:
+
+1. **Settings 싱글톤 리셋** — selfhealing의 캐시된 설정이 테스트 간 누수되는 것을 방지
+2. **Audit 싱글톤 리셋** — CausationContext, InMemoryAuditBuffer 등 ContextVar 격리
+3. **InMemory Repository** — DB 없이 CB/DLQ 로직을 검증하는 Mock 구현체
+4. **Chaos Fixture** — failure_injector, latency_injector 등 장애 주입 도구
+
+이러한 유틸리티가 없으면 Consumer마다 동일한 boilerplate를 직접 작성하게 되며, 라이브러리 내부 구조 변경 시 모든 Consumer의 테스트 코드가 깨진다. pytest-django가 `django.test.TestCase`를, DRF가 `rest_framework.test.APIClient`를 제공하는 것과 동일한 패턴이다.
+
+**결정**: repo 분리 후 Consumer가 2개 이상이 될 때까지는 공개하지 않는다. 단, 내부적으로 conftest.py의 fixture를 모듈 단위로 분리(`tests/_fixtures/`)하여 공개 전환 비용을 최소화한다.
+
+| 단계 | 시점 | 작업 |
+|------|------|------|
+| 1 (현재) | 324 이관 시 | conftest.py → `tests/_fixtures/` 모듈 분리 |
+| 2 | repo 분리 완료 | Consumer 1개(shopping) — conftest import로 충분 |
+| 3 | Consumer 2개+ | `selfhealing.testing` 공개, `__init__.py` §3에 추가 |
+
+**공개 시 예상 API**:
+
+```python
+# === Testing Utilities (Consumer 2개+ 시점) ===
+from selfhealing.testing import auto_reset_settings  # fixture
+from selfhealing.testing import InMemoryCircuitBreakerRepository
+from selfhealing.testing import InMemoryDLQRepository
+from selfhealing.testing import failure_injector, latency_injector
+```
+
 ---
 
 ## 4. 테스트 계획
@@ -352,3 +387,96 @@ from selfhealing.settings import get_config
 | 10 | Lazy Import 검증 | `CircuitState`만 import 시 `factory`, `services` 모듈이 로드되지 않음 확인 |
 | 11 | Side Effect 부재 확인 | `from selfhealing import CircuitState` 시 structlog 전역 설정 미변경 확인 |
 | 12 | `py.typed` 마커 존재 | `selfhealing/py.typed` 파일 존재 및 wheel 배포 시 포함 확인 |
+
+---
+
+## 5. 324 연계 설계 리뷰
+
+324 문서(Test App and Migration)의 설계 리뷰에서 도출된 6가지 결정사항.
+
+### 5.1 CI 파이프라인 — 테스트 계층 Job 분리
+
+**결정**: ✅ 채택
+
+`pyproject.toml`에 이미 정의된 4-tier 마커 체계(`tier1`~`tier4_load`)를 CI 워크플로우에 반영한다.
+
+| CI 단계 | 티어 | DB 엔진 | 인프라 | 대상 |
+|---------|------|---------|-------|------|
+| PR 검증 | tier1 | SQLite / InMemory | 없음 | testapp 기반 어댑터 바인딩 + 순수 단위 테스트 |
+| Merge 전 | tier2 | Docker PostgreSQL 15 | Redis 7, Celery | `requires_db`, `requires_redis` 마커 테스트 |
+| Nightly | tier3_chaos | Docker 전체 | 전체 인프라 | 카오스 엔지니어링, 부하 테스트 |
+
+testapp(324)이 완성되면 PR 단계에서 Docker 인프라를 제거하여 피드백을 2분 이내로 단축한다. 현재 `django-ci.yml`이 PR에서도 PostgreSQL + Redis를 띄우는 구조는 testapp 전환 후 개선 대상이다.
+
+### 5.2 Redis / Kafka Teardown — State Leak 방지
+
+**결정**: ✅ 채택 (기존 구현 견고, Saga 키 prefix 1건 수정)
+
+기존 구현의 3중 Redis 정리 전략은 충분하다:
+
+| 패턴 | 위치 | 설명 |
+|------|------|------|
+| Session flushdb | `tests/conftest.py:160` | 세션 종료 시 전체 DB flush |
+| Function pre/post flush | `tests/conftest.py:265-267` | 매 테스트 전후 flush |
+| Pattern-based delete | `tests/conftest.py:189-191` | `test:selfhealing:*` 키만 삭제 |
+
+Kafka도 고유 topic prefix(`test.{uuid}.*`)와 `consumer_auto_offset_reset="earliest"`로 격리된다.
+
+**수정 필요 1건**: `test_saga_orchestrator_integration.py`의 `KEY_PREFIX = "selfhealing:state:"`가 `test:` prefix를 사용하지 않아 프로덕션 키와 충돌 가능. 324 이관 시 `test:selfhealing:state:`로 변경한다.
+
+### 5.3 미들웨어 검증용 Dummy Views
+
+**결정**: ✅ 채택
+
+324 testapp의 §2.2 구조에 `views.py`가 누락되어 있으므로 추가한다. 다음 더미 뷰로 미들웨어 커버리지를 확보한다:
+
+| 뷰 | 반환 | 검증 대상 |
+|----|------|----------|
+| `SuccessView` | 200 OK | 정상 경로 미들웨어 체인 |
+| `ErrorView` | 500 raise | CB 장애 감지, HealthBridge |
+| `SlowView` | 지연 후 200 | 타임아웃, Pool 소진 |
+| `RateLimitTestView` | 429 | HybridRateLimitMiddleware L1/L2 전환 |
+| `TieredEndpointView` | 200 (헤더 분기) | TieringMiddleware API 티어 분류 |
+
+### 5.4 Celery 더미 태스크 확장 — 장애 시나리오
+
+**결정**: ✅ 채택
+
+324 testapp의 `tasks.py`에 항상 성공하는 태스크만 존재. CB/DLQ 극한 시나리오 검증을 위해 3종 추가:
+
+| 태스크 | 동작 | 검증 대상 |
+|--------|------|----------|
+| `always_failing_task` | 즉시 `raise RuntimeError` | CB failure_threshold 도달, DLQ 저장 |
+| `deterministic_failing_task` | `failure_rate` 파라미터로 실패율 제어 | CB half-open 판정 |
+| `slow_task` | `time.sleep(delay)` + `soft_time_limit` | 워커 타임아웃, 데몬 스레드 상호작용 |
+
+`flaky_task`의 `random` 사용은 테스트 재현성을 해치므로, `failure_rate=1.0`(항상 실패) / `0.0`(항상 성공)으로 결정적 사용을 원칙으로 한다.
+
+### 5.5 Testing Utilities 공개 전략
+
+**결정**: ⚠️ 시기 조건부 채택 — §3.1에 상세 기술
+
+repo 분리 후 Consumer가 2개 이상이 될 때까지는 공개하지 않는다. 324 이관 시 conftest.py를 `tests/_fixtures/` 모듈로 분리하여 공개 전환 비용을 최소화한다.
+
+### 5.6 Import 패턴 기반 테스트 분류 기준
+
+**결정**: ✅ 채택
+
+324 §3(shopping import 전환 전략)에 다음 분류 트리를 명시적 가이드라인으로 추가한다:
+
+```
+37개 파일 분류 기준 — 테스트가 import하는 모듈로 판단
+
+├─ selfhealing.* 만 import → selfhealing repo (tests/integration/)
+│   라이브러리 순수 로직 검증
+│   예: CB 상태 전이, DLQ 저장/재생, Retry 정책 단독 검증
+│
+├─ shopping.* + selfhealing.* 양쪽 import → shopping repo (tests/hybrid/)
+│   소비자 계약 테스트 (Consumer Contract Test)
+│   예: Toss API 실패 → CB OPEN → 결제 차단 연동 시나리오
+│
+└─ shopping.* 만 import → shopping repo (tests/unit/ 또는 tests/integration/)
+    순수 비즈니스 로직 검증
+```
+
+이 기준을 324 문서에 §3.5로 추가하고, 37개 파일 분석(§5 step 2) 시 이 트리를 적용한다.
