@@ -53,9 +53,6 @@ tests/testapp/
 
 ```python
 # tests/testapp/settings.py
-import os
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.testapp.settings")
-
 SECRET_KEY = "test-secret-key-for-selfhealing"
 
 INSTALLED_APPS = [
@@ -75,6 +72,28 @@ DATABASES = {
     }
 }
 
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+AUTH_USER_MODEL = "testapp.TestUser"
+
+ROOT_URLCONF = "tests.testapp.urls"
+
+MIDDLEWARE = [
+    "selfhealing.api.django.middleware.HealthBridgeMiddleware",
+    "selfhealing.api.django.middleware.SelfHealingMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+]
+
+REST_FRAMEWORK = {
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+}
+
 # selfhealing 최소 설정
 SELFHEALING_CORE_DOMAINS = ["payment", "order", "test"]
 SELFHEALING_AUTO_MIDDLEWARE = False  # 테스트에서는 수동 제어
@@ -90,7 +109,9 @@ from django.contrib.auth.models import AbstractUser
 
 class TestUser(AbstractUser):
     """테스트용 User 모델."""
-    pass
+
+    class Meta:
+        app_label = "testapp"
 
 
 class TestOrder(models.Model):

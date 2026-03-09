@@ -13,6 +13,8 @@ import time
 from django.http import JsonResponse
 from rest_framework.views import APIView
 
+DEFAULT_SLOW_VIEW_DELAY = 2.0
+
 
 class SuccessView(APIView):
     """Returns 200 OK. Verifies normal middleware chain."""
@@ -48,7 +50,7 @@ class SlowView(APIView):
     permission_classes = []
 
     def get(self, request):
-        delay = float(request.GET.get("delay", "2"))
+        delay = float(request.GET.get("delay", str(DEFAULT_SLOW_VIEW_DELAY)))
         time.sleep(delay)
         return JsonResponse({"status": "ok", "delay": delay})
 

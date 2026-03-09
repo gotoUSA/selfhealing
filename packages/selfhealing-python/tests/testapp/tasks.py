@@ -14,6 +14,9 @@ import time
 
 from celery import shared_task
 
+DEFAULT_SLOW_TASK_DELAY = 5.0
+SLOW_TASK_SOFT_TIME_LIMIT = 10
+
 
 @shared_task
 def dummy_payment_task(order_id: int):
@@ -64,8 +67,8 @@ def deterministic_failing_task(order_id: int, *, failure_rate: float = 1.0):
     return {"order_id": order_id, "status": "processed", "call_number": counter}
 
 
-@shared_task(soft_time_limit=10)
-def slow_task(order_id: int, *, delay: float = 5.0):
+@shared_task(soft_time_limit=SLOW_TASK_SOFT_TIME_LIMIT)
+def slow_task(order_id: int, *, delay: float = DEFAULT_SLOW_TASK_DELAY):
     """Sleeps for `delay` seconds before returning.
 
     Use for: worker timeout, daemon thread interaction tests.

@@ -16,6 +16,8 @@ import pytest
 
 from tests.factories.time_helpers import mock_sleep
 from tests.testapp.tasks import (
+    DEFAULT_SLOW_TASK_DELAY,
+    SLOW_TASK_SOFT_TIME_LIMIT,
     always_failing_task,
     deterministic_failing_task,
     dummy_order_task,
@@ -120,6 +122,19 @@ class TestDeterministicFailingTaskBehavior:
 
 
 # ============================================================
+# Contract: Slow task configuration
+# ============================================================
+
+
+class TestSlowTaskContract:
+    """slow_task configuration contract."""
+
+    def test_soft_time_limit_configured(self):
+        """Task has soft_time_limit matching SLOW_TASK_SOFT_TIME_LIMIT."""
+        assert slow_task.soft_time_limit == SLOW_TASK_SOFT_TIME_LIMIT
+
+
+# ============================================================
 # Behavior: Slow task
 # ============================================================
 
@@ -128,11 +143,11 @@ class TestSlowTaskBehavior:
     """slow_task sleep and return behavior."""
 
     def test_calls_sleep_with_default_delay(self):
-        """Calls time.sleep with default delay of 5.0 seconds."""
+        """Calls time.sleep with default delay value from source."""
         with mock_sleep() as sleep_mock:
             slow_task.run(order_id=1)
 
-        sleep_mock.assert_called_with(5.0)
+        sleep_mock.assert_called_with(DEFAULT_SLOW_TASK_DELAY)
 
     def test_calls_sleep_with_custom_delay(self):
         """Calls time.sleep with the specified delay value."""
@@ -152,7 +167,3 @@ class TestSlowTaskBehavior:
             "status": "slow_completed",
             "delay": 2.5,
         }
-
-    def test_soft_time_limit_configured(self):
-        """Task has soft_time_limit=10 for Celery timeout detection."""
-        assert slow_task.soft_time_limit == 10

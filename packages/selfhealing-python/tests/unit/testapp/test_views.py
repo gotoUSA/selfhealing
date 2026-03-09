@@ -106,8 +106,8 @@ class TestSlowViewBehavior:
     """SlowView delay behavior."""
 
     def test_get_calls_sleep_with_default_delay(self):
-        """GET without delay param sleeps for 2 seconds."""
-        from tests.testapp.views import SlowView
+        """GET without delay param sleeps for DEFAULT_SLOW_VIEW_DELAY."""
+        from tests.testapp.views import DEFAULT_SLOW_VIEW_DELAY, SlowView
 
         request = _make_request("/test/slow/")
 
@@ -115,7 +115,7 @@ class TestSlowViewBehavior:
             response = SlowView.as_view()(request)
 
         assert response.status_code == 200
-        sleep_mock.assert_called_with(2.0)
+        sleep_mock.assert_called_with(DEFAULT_SLOW_VIEW_DELAY)
 
     def test_get_reads_delay_query_param(self):
         """GET with ?delay=0.5 sleeps for 0.5 seconds."""
