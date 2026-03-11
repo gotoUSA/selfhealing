@@ -2,7 +2,7 @@
 Global pytest configuration and fixtures.
 
 ⚠️  전역 tests 폴더는 **통합 테스트 전용**입니다.
-    - Unit Test: packages/selfhealing-python/tests/unit/
+    - selfhealing Unit Test: https://github.com/gotoUSA/selfhealing-python
     - Integration Test: 이 폴더 (실제 Docker 서비스 연결)
 
 Auto-skip logic for infrastructure-dependent tests.
@@ -62,13 +62,19 @@ def pytest_collection_modifyitems(config, items):
     if not redis_available and not os.environ.get("TEST_REDIS_AVAILABLE"):
         redis_available = _check_redis_connection()
 
-    skip_db = pytest.mark.skip(reason="Database not available (set TEST_DB_AVAILABLE=true)")
-    skip_redis = pytest.mark.skip(reason="Redis not available (set TEST_REDIS_AVAILABLE=true)")
+    skip_db = pytest.mark.skip(
+        reason="Database not available (set TEST_DB_AVAILABLE=true)"
+    )
+    skip_redis = pytest.mark.skip(
+        reason="Redis not available (set TEST_REDIS_AVAILABLE=true)"
+    )
 
     for item in items:
         if not db_available and "requires_db" in [m.name for m in item.iter_markers()]:
             item.add_marker(skip_db)
-        if not redis_available and "requires_redis" in [m.name for m in item.iter_markers()]:
+        if not redis_available and "requires_redis" in [
+            m.name for m in item.iter_markers()
+        ]:
             item.add_marker(skip_redis)
 
 
@@ -152,7 +158,9 @@ def redis_client():
     try:
         client.ping()
     except redis.ConnectionError:
-        pytest.skip("Redis not available. Run: docker-compose -f docker-compose.test.yml up -d")
+        pytest.skip(
+            "Redis not available. Run: docker-compose -f docker-compose.test.yml up -d"
+        )
 
     yield client
 
@@ -172,7 +180,9 @@ def redis_circuit_breaker_repository(redis_client):
         ResilientStorageBackend,
         ResilientStorageConfig,
     )
-    from selfhealing.adapters.redis.circuit_breaker import RedisCircuitBreakerStateRepository
+    from selfhealing.adapters.redis.circuit_breaker import (
+        RedisCircuitBreakerStateRepository,
+    )
 
     # Create backend with test namespace using RedisTestConfig
     config_redis = RedisTestConfig()

@@ -1,4 +1,8 @@
 # Docker Compose for testing Stage 26, 27, 28
+#
+# ⚠️  WARNING: selfhealing 패키지가 별도 repo로 분리되었습니다 (doc 326).
+# packages/selfhealing-python/ 경로를 참조하는 서비스들은 업데이트가 필요합니다.
+# selfhealing 패키지 테스트: https://github.com/gotoUSA/selfhealing-python
 
 # ---------------------------------------------------------------------------
 # Extension fields - YAML anchors to eliminate redundancy
@@ -14,7 +18,7 @@ x-base-test: &base-test
 
 # Base Python environment variables
 x-base-env: &base-env
-  PYTHONPATH: /code:/code/packages/selfhealing-python/src
+  PYTHONPATH: /code
   PYTHONDONTWRITEBYTECODE: "1"
   PYTHONUNBUFFERED: "1"
 
@@ -243,7 +247,7 @@ services:
       - .:/code
     working_dir: /code
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONPATH=/code
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - DJANGO_SETTINGS_MODULE=myproject.settings.test
@@ -253,7 +257,7 @@ services:
       - SELFHEALING_ENABLED=true
     command: >
       sh -c "
-        pip install -e /code/packages/selfhealing-python --no-deps -q &&
+        pip install -e /code --no-deps -q &&
         celery -A myproject worker -l info -Q default,selfhealing,selfhealing.critical,dlq,payment_critical,order_processing,selfhealing_recovery,selfhealing_notifications,selfhealing_maintenance --concurrency=2
       "
     healthcheck:
@@ -315,7 +319,7 @@ services:
     ports:
       - "18000:8000"
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONPATH=/code
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
       - DJANGO_SETTINGS_MODULE=myproject.settings.test

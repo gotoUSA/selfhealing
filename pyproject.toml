@@ -473,12 +473,8 @@ addopts = """
     --strict-markers
     -m 'not load_test and not manual and not concurrency and not performance and not auth_race and not payment_race and not order_race and not point_race and not return_race and not heavy and not slow and not e2e and not requires_redis and not requires_db and not flaky'
 """
-# Selfhealing 패키지 Coverage 측정:
-# 1. 통합 테스트 (Docker 환경 필요): shopping/tests, tests 에서 실행
-# 2. 패키지 유닛 테스트 (로컬 실행 가능):
-#    cd packages/selfhealing-python && python -m pytest tests --cov=src/selfhealing --cov-report=term-missing
+# selfhealing coverage는 별도 repo에서 측정 (https://github.com/gotoUSA/selfhealing-python)
 testpaths = ["shopping/tests", "tests"]
-# selfhealing coverage는 별도 repo에서 측정
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "unit: marks tests as unit tests (fast, no external deps)",
@@ -541,18 +537,6 @@ PGCLIENTENCODING = "UTF8"
 PYTHONIOENCODING = "utf-8"
 SELFHEALING_TEST_LOG_LEVEL = "WARNING"
 
-# ==========================================
-# Selfhealing Coverage 측정 가이드
-# ==========================================
-# 1. Selfhealing 패키지 유닛 테스트 (로컬 실행, Docker 불필요):
-#    cd packages/selfhealing-python
-#    python -m pytest tests --cov=src/selfhealing --cov-report=term-missing
-#
-# 2. Django 통합 테스트 (Docker 환경 필요):
-#    docker-compose up -d && python -m pytest tests/self_healing
-#
-# 3. 전체 테스트 (shopping 테스트베드 포함):
-#    Root에서: python -m pytest (shopping/tests + tests 실행)
 # ==========================================
 # coverage Configuration
 # ==========================================

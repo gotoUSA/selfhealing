@@ -45,8 +45,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # gRPC 추가 설치 (선택적)
 RUN pip install --no-cache-dir grpcio grpcio-tools || true
 
-# selfhealing 패키지 복사
-COPY packages/selfhealing-python/src/selfhealing /app/selfhealing
+# selfhealing 패키지 설치 (별도 repo: https://github.com/gotoUSA/selfhealing-python)
+RUN pip install --no-cache-dir "selfhealing[django] @ git+https://github.com/gotoUSA/selfhealing-python.git@main"
 
 # 사이드카 진입점 복사
 COPY sidecar/entrypoint.py /app/entrypoint.py

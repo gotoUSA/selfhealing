@@ -43,13 +43,13 @@ repos:
           - --max-complexity=15
         exclude: ^.*/migrations/.*$
 
-  # bandit - 보안 취약점 스캔 (selfhealing 패키지 대상)
+  # bandit - 보안 취약점 스캔 (shopping 앱 대상)
   - repo: https://github.com/PyCQA/bandit
     rev: 1.9.2
     hooks:
       - id: bandit
         args: ["-c", "pyproject.toml", "-r"]
-        files: ^packages/selfhealing-python/src/selfhealing/
+        files: ^shopping/
         additional_dependencies: ["bandit[toml]"]
 
   # 추가 유용한 hooks

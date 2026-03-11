@@ -4,7 +4,7 @@ Test Factories for Global Integration Tests.
 전역 tests 폴더는 **통합 테스트 전용**입니다.
 실제 Docker 서비스(Redis, PostgreSQL, Celery)를 연결하여 테스트합니다.
 
-⚠️  Unit Test는 packages/selfhealing-python/tests/unit/ 에서 진행하세요.
+⚠️  selfhealing Unit Test는 별도 repo에서 진행: https://github.com/gotoUSA/selfhealing-python
 
 주요 구성요소:
 - Constants: 테스트 상수 (Domains, Services, FailureTypes, Status, CircuitState)
@@ -15,13 +15,13 @@ Test Factories for Global Integration Tests.
 사용 예시:
     # Integration Test (실제 Docker 연결)
     from tests.factories.integration import RealRedisClientFactory
-    
+
     real_redis = RealRedisClientFactory.create()
     real_redis.set("key", "value")  # 실제 Redis에 저장
-    
+
     # Builder 패턴
     from tests.factories import CircuitBreakerStateBuilder
-    
+
     cb_state = (CircuitBreakerStateBuilder()
         .payment_service()
         .opened()
