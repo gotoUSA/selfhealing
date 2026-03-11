@@ -46,7 +46,7 @@ services:
       - .env
     environment:
       # Python 경로 (selfhealing 패키지 포함)
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONPATH=/code
       # Chaos Mode Configuration (disabled by default)
       - CHAOS_MODE=${CHAOS_MODE:-false}
       - CHAOS_PAYMENT_CONFIRM_DELAY=${CHAOS_PAYMENT_CONFIRM_DELAY:-false}
@@ -111,7 +111,7 @@ services:
       - .env
     environment:
       # Python 경로 (selfhealing 패키지 포함)
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONPATH=/code
       # Chaos Mode Configuration (disabled by default)
       - CHAOS_MODE=${CHAOS_MODE:-false}
       - CHAOS_PAYMENT_CONFIRM_DELAY=${CHAOS_PAYMENT_CONFIRM_DELAY:-false}
@@ -146,7 +146,7 @@ services:
     env_file:
       - .env
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONPATH=/code
     depends_on:
       db:
         condition: service_healthy
@@ -162,7 +162,7 @@ services:
     env_file:
       - .env
     environment:
-      - PYTHONPATH=/code:/code/packages/selfhealing-python/src
+      - PYTHONPATH=/code
     ports:
       - "5555:5555"
     depends_on:

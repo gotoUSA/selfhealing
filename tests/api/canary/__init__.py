@@ -1,1 +1,0 @@
-"""Canary API tests package."""

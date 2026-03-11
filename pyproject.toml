@@ -14,6 +14,13 @@ authors = [
 
 dependencies = [
     # ==========================================
+    # Self-Healing Library
+    # ==========================================
+    # Phase 1: Git dependency (임시)
+    # Phase 2(GitHub Releases .whl) / Phase 3(Private PyPI)으로 전환 예정
+    "selfhealing[django,celery,prometheus] @ git+https://github.com/gotoUSA/selfhealing-python.git@main",
+
+    # ==========================================
     # Django Core
     # ==========================================
     "Django>=5.2.9",
@@ -457,7 +464,8 @@ python_functions = ["test_*"]
 addopts = """
     -n auto
     --dist=loadscope
-    --cov=packages/selfhealing-python/src/selfhealing
+    --cov=shopping
+    --cov=myproject
     --cov-report=html
     --cov-report=term-missing:skip-covered
     --cov-fail-under=70
@@ -470,6 +478,7 @@ addopts = """
 # 2. 패키지 유닛 테스트 (로컬 실행 가능):
 #    cd packages/selfhealing-python && python -m pytest tests --cov=src/selfhealing --cov-report=term-missing
 testpaths = ["shopping/tests", "tests"]
+# selfhealing coverage는 별도 repo에서 측정
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "unit: marks tests as unit tests (fast, no external deps)",
@@ -548,7 +557,7 @@ SELFHEALING_TEST_LOG_LEVEL = "WARNING"
 # coverage Configuration
 # ==========================================
 [tool.coverage.run]
-source = ["packages/selfhealing-python/src/selfhealing"]
+source = ["shopping", "myproject"]
 omit = [
     "*/migrations/*",
     "*/tests/*",
@@ -602,7 +611,7 @@ cc_min = "C"  # Show complexity C or above (A=1-5, B=6-10, C=11-20, D=21-30, E=3
 [tool.bandit]
 exclude_dirs = ["tests", "migrations", "venv", "env", "htmlcov", "load_tests"]
 skips = ["B101", "B311"]  # B101: assert usage, B311: random (non-security use)
-targets = ["packages/selfhealing-python/src/selfhealing"]
+targets = ["shopping"]
 
 # ==========================================
 # vulture Configuration (Dead Code Detection)

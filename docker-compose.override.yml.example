@@ -1,0 +1,16 @@
+# docker-compose.override.yml (local dev only)
+#
+# selfhealing 라이브러리 로컬 개발 시, 두 repo를 같은 상위 폴더에 배치하고
+# 이 파일을 docker-compose.override.yml로 복사하여 사용:
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#
+# 구조:
+#   parent/
+#   ├── myproject/           (이 repo)
+#   └── selfhealing-python/  (라이브러리 repo)
+services:
+  web:
+    volumes:
+      - ../selfhealing-python/src:/code/selfhealing-src:ro
+    environment:
+      - PYTHONPATH=/code:/code/selfhealing-src

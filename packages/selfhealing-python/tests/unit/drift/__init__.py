@@ -1,3 +1,0 @@
-"""
-Drift detection tests package.
-"""

@@ -1,1 +1,0 @@
-# Audit integration tests package

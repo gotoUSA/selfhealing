@@ -26,16 +26,13 @@ COPY requirements-dev.txt /code/
 COPY pyproject.toml /code/
 COPY setup.cfg /code/
 
-# selfhealing 패키지 먼저 복사 (editable 설치 위해)
-COPY packages/ /code/packages/
-
 # Python 패키지 설치
 # requirements-dev.txt가 이미 requirements.txt를 포함(-r)하므로 한 번만 설치
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
-# selfhealing 패키지 editable 설치
-RUN pip install --no-cache-dir -e /code/packages/selfhealing-python
+# selfhealing 라이브러리 설치 (pip dependency)
+RUN pip install --no-cache-dir -e .
 
 # crontab 패키지 충돌 해결: crontab(1.0.5)이 python-crontab(django-celery-beat 의존성)을 shadow함
 RUN pip uninstall -y crontab 2>/dev/null || true
@@ -46,7 +43,7 @@ COPY . /code/
 # 환경변수 설정
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/code:/code/packages/selfhealing-python/src
+ENV PYTHONPATH=/code
 
 # 포트 노출
 EXPOSE 8000

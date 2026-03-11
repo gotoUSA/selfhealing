@@ -75,5 +75,8 @@ logs/
 !scripts/**/*.json
 gunicorn.ctl
 
+# Docker compose override (local dev only)
+docker-compose.override.yml
+
 # Claude Code memory
 memory/
