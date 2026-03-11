@@ -1,4 +1,0 @@
-# file: /code/shopping/signals.py
-# hypothesis_version: 6.148.6
-
-['%Y%m%d', 'is_email_verified']

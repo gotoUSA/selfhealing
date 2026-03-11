@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0016_add_stock_check_constraint.py
-# hypothesis_version: 6.148.6
-
-['0015_sellerprofile', 'product', 'shopping', '재고는 0 이상이어야 합니다.', '판매량은 0 이상이어야 합니다.']

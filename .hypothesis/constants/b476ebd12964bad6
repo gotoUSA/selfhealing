@@ -1,4 +1,0 @@
-# file: /code/shopping/services/return_service.py
-# hypothesis_version: 6.148.6
-
-['%Y%m%d', '-return_number', '0', 'accountNumber', 'approved', 'bank', 'cancel_deduct', 'cancel_refund', 'completed', 'delivered', 'exchange', 'exchange_product', 'holderName', 'order_id', 'order_item', 'order_item__product', 'order_item_id', 'order_number', 'payment', 'product_name', 'product_price', 'quantity', 'received', 'refund', 'refund_amount', 'refunded', 'rejected', 'requested', 'return', 'return_id', 'return_number', 'shipping', 'status', 'stock', 'success', 'tracking_number', '교환 상품의 재고가 부족합니다.', '교환 완료', '교환 타입에서만 사용 가능합니다.', '반품 도착 확인', '반품할 상품을 선택해주세요.', '배송 완료된 주문만 신청 가능합니다.', '신청 상태에서만 거부할 수 있습니다.', '신청 상태에서만 승인할 수 있습니다.', '환불 완료', '환불 타입에서만 사용 가능합니다.']

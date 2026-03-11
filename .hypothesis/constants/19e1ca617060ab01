@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0013_alter_user_email.py
-# hypothesis_version: 6.148.6
-
-[254, 'email', 'shopping', 'unique', 'user', '이메일 주소', '이미 사용중인 이메일입니다.']

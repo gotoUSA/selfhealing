@@ -1,4 +1,0 @@
-# file: /code/shopping/admin/circuit_breaker_admin.py
-# hypothesis_version: 6.148.7
-
-['Control', 'Counters', 'Manual Control', 'Service Information', 'State', 'Timestamps', 'classes', 'closed', 'collapse', 'control_reason', 'controlled_by', 'created_at', 'failure_count', 'fields', 'force_close_selected', 'force_open_selected', 'gray', 'green', 'half_open', 'last_failure_at', 'manually_controlled', 'open', 'opened_at', 'orange', 'red', 'reset_selected', 'service_name', 'state', 'state_display', 'success_count', 'updated_at']

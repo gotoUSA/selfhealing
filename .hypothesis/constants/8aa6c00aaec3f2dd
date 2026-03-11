@@ -1,4 +1,0 @@
-# file: /code/shopping/views/auth_views.py
-# hypothesis_version: 6.148.6
-
-[200, 201, 400, 401, 'Auth', 'DEBUG 모드에서만 포함', 'GET', 'JWT Access Token', 'Lax', 'TOKEN_REQUIRED', 'access', 'email', 'error', 'message', 'refresh', 'refresh_token', 'request', 'token', 'tokens', 'user', 'username', 'valid', 'verification_code', 'verification_result', '로그아웃 되었습니다.', '로그아웃을 처리한다.', '로그인 되었습니다.', '사용자 인증 후 토큰을 발급한다.', '새 사용자를 생성한다.', '새로운 JWT Access Token', '유효한 토큰입니다.', '토큰이 갱신되었습니다.']

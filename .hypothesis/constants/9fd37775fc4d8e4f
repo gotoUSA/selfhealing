@@ -1,4 +1,0 @@
-# file: /code/shopping/utils/spectacular_hooks.py
-# hypothesis_version: 6.148.6
-
-['Auth', 'Cart', 'Categories', 'Notifications', 'Orders', 'Payments', 'Points', 'Product Q&A', 'Product QA', 'Products', 'Webhooks', 'Wishlist', 'auth', 'cart', 'categories', 'name', 'notifications', 'orders', 'paths', 'payments', 'points', 'products', 'tags', 'webhooks', 'wishlist', '결제', '상품', '알림', '인증', '장바구니', '주문', '찜하기', '포인트']

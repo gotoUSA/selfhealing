@@ -1,4 +1,0 @@
-# file: /code/myproject/settings/local.py
-# hypothesis_version: 6.148.6
-
-[600, '.', '.1', '1/min', '10/min', '100/hour', '100/min', '1000/hour', '1000/min', '10000/hour', '127.0.0.1', '3/hour', '3/min', '5/min', '5432', 'BACKEND', 'CLIENT_CLASS', 'CONN_HEALTH_CHECKS', 'CONN_MAX_AGE', 'DATABASE_HOST', 'DATABASE_NAME', 'DATABASE_PASSWORD', 'DATABASE_PORT', 'DATABASE_USER', 'ENGINE', 'FALSE', 'HOST', 'LOCATION', 'NAME', 'OPTIONS', 'PASSWORD', 'PORT', 'REDIS_URL', 'TRUE', 'USER', 'anon_global', 'connect_timeout', 'debug_toolbar', 'default', 'email_verification', 'localhost', 'login', 'myproject_dev', 'options', 'order_cancel', 'order_create', 'password_reset', 'payment_cancel', 'payment_confirm', 'payment_request', 'postgres', 'register', 'token_refresh', 'user_global', 'webhook']

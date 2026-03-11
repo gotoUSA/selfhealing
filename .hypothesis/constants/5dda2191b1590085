@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0012_order_failure_reason.py
-# hypothesis_version: 6.148.6
-
-['failure_reason', 'order', 'shopping', '실패 사유']

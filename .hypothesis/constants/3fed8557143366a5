@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0010_user_is_seller.py
-# hypothesis_version: 6.148.6
-
-['is_seller', 'shopping', 'user', '판매자 여부']

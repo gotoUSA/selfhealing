@@ -1,4 +1,0 @@
-# file: /code/shopping/services/self_healing/retry_handler.py
-# hypothesis_version: 6.148.7
-
-[180, 500, 1000, 'DOMAIN_CONFIG', 'RetryConfig', 'SELF_HEALING', 'T', 'Unknown', 'abort', 'attempt', 'backoff_base', 'backoff_max', 'default', 'dlq', 'domain', 'error_message', 'error_type', 'final_attempt', 'max_attempts', 'order', 'payment', 'request_data', 'response_data', 'retry', 'retry_history', 'snapshot_data', 'success', 'timestamp', 'user']

@@ -1,4 +1,0 @@
-# file: /code/myproject/__init__.py
-# hypothesis_version: 6.148.6
-
-['celery_app']

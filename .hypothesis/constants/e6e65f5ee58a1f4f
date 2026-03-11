@@ -1,4 +1,0 @@
-# file: /code/shopping/services/product_qa_service.py
-# hypothesis_version: 6.148.6
-
-['answer_id', 'is_answered', 'product_id', 'qa_answer', 'question_id', '상품 문의에 답변이 달렸습니다']

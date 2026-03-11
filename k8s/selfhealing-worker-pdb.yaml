@@ -8,7 +8,7 @@
 #
 # Reference:
 #   docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#11.3
-#   packages/selfhealing-python/src/selfhealing/services/coordination/recovery_shutdown.py
+#   https://github.com/gotoUSA/selfhealing-python → src/selfhealing/services/coordination/recovery_shutdown.py
 #
 # 적용 방법:
 #   kubectl apply -f k8s/selfhealing-worker-pdb.yaml

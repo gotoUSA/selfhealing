@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0004_emailverificationtoken_emaillog_and_more.py
-# hypothesis_version: 6.148.6
-
-[254, 255, '-created_at', 'EmailLog', 'ID', 'clicked', 'clicked_at', 'created_at', 'db_table', 'email_logs', 'email_tokens', 'email_type', 'emaillog', 'error_message', 'failed', 'id', 'is_used', 'marketing', 'opened', 'opened_at', 'order_confirm', 'ordering', 'password_reset', 'pending', 'recipient_email', 'sent', 'sent_at', 'shopping', 'status', 'subject', 'token', 'used_at', 'user', 'verbose_name', 'verbose_name_plural', 'verification', 'verification_code', 'verified', 'verified_at', '대기중', '마케팅', '발송실패', '발송완료', '발송일시', '비밀번호 재설정', '사용 여부', '사용일시', '사용자', '상태', '생성일시', '수신자 이메일', '에러 메시지', '열람됨', '열람일시', '이메일 로그', '이메일 유형', '이메일 인증', '이메일 인증 토큰', '인증 코드', '인증 토큰', '인증완료', '인증완료일시', '제목', '주문 확인', '클릭됨', '클릭일시']

@@ -1,4 +1,0 @@
-# file: /code/shopping/services/email_verification_service.py
-# hypothesis_version: 6.148.6
-
-['-created_at', 'ALREADY_VERIFIED', 'CODE_EXPIRED', 'CODE_MISMATCH', 'CODE_MISSING', 'NO_VALID_TOKEN', 'RESEND_COOLDOWN', 'TOKEN_EXPIRED', 'TOKEN_INVALID', 'TOKEN_MISSING', 'TOKEN_USED', 'cooldown_seconds', 'created_at', 'id', 'is_email_verified', 'is_used', 'user', '발송', '유효하지 않은 토큰입니다.', '이미 사용된 토큰입니다.', '이미 이메일 인증이 완료되었습니다.', '인증 코드가 일치하지 않습니다.', '인증 코드가 제공되지 않았습니다.', '재발송', '토큰이 제공되지 않았습니다.']

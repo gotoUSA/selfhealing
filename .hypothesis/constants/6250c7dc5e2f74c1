@@ -1,4 +1,0 @@
-# file: /code/shopping/services/self_healing/backoff_calculator.py
-# hypothesis_version: 6.148.7
-
-[100.0, 180, 'BackoffConfig', 'DOMAIN_CONFIG', 'SELF_HEALING', 'backoff_base']

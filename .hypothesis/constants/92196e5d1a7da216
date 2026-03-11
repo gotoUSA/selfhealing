@@ -1,4 +1,0 @@
-# file: /code/shopping/services/self_healing/circuit_breaker_service.py
-# hypothesis_version: 6.148.7
-
-[0.0, 0.1, 0.25, 1.0, 2.0, 60.0, 100, 'CircuitBreakerConfig', 'CircuitBreakerResult', 'CircuitBreakerState', 'User | None', 'backoff', 'circuit_state', 'closed', 'control_reason', 'controlled_by_id', 'count_in_window', 'current_level', 'detected', 'enabled', 'failure_count', 'half_open', 'last_failure_at', 'manually_controlled', 'open', 'opened_at', 'rate_limit_cascade', 'self_ddos_protection', 'service_name', 'state', 'success_count', 'threshold', 'updated_at', 'window_seconds']

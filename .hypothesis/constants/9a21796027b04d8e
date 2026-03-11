@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0020_rename_shopping_we_source_f4c8e3_idx_shopping_we_source_fa6bc6_idx_and_more.py
-# hypothesis_version: 6.148.6
-
-['shopping', 'webhookevent']

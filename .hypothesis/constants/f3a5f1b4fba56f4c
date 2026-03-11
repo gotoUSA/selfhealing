@@ -1,4 +1,0 @@
-# file: /code/shopping/models/user.py
-# hypothesis_version: 6.148.6
-
-[255, '-date_joined', 'Product', 'VIP', 'bronze', 'gold', 'shopping_users', 'shopping_wishlist', 'silver', 'unique', 'update_fields', 'vip', 'wished_by_users', 'withdrawn_at', '골드', '기본주소', '마지막 로그인 IP', '마케팅 sms 수신 동의', '마케팅 이메일 수신 동의', '브론즈', '사용자', '사용자 목록', '상세주소', '생년월일', '실버', '우편번호', '이메일 인증 여부', '이메일 주소', '이미 사용중인 이메일입니다.', '전화번호', '찜한 상품', '탈퇴 여부', '탈퇴 일시', '판매자 여부', '포인트', '회원등급', '휴대폰 인증 여부']

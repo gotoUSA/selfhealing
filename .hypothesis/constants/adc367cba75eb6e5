@@ -1,4 +1,0 @@
-# file: /code/shopping/services/self_healing/replay_service.py
-# hypothesis_version: 6.148.7
-
-[100, 500, 'DLQ', 'DLQ entry not found', 'DUPLICATE_PAYMENT', 'FCM_ERROR', 'FailedOperation', 'MAX_REPLAY_ATTEMPTS', 'Order is cancelled', 'PG_500_ERROR', 'PG_CONNECTION_ERROR', 'PG_TIMEOUT', 'Replay failed', 'Replay from DLQ', 'ReplayResult', 'SELF_HEALING', 'SMTP_TIMEOUT', 'User not found', 'amount', 'cancelled', 'created_at', 'default', 'handler_exception', 'max_replay_attempts', 'max_replays_exceeded', 'message', 'metadata', 'notification', 'occurred_at', 'order_id', 'payment', 'payment_id', 'payment_key', 'point', 'reason', 'task_id', 'toss_payment', 'type', 'updated_at', 'webhook']

@@ -1,4 +1,0 @@
-# file: /code/shopping/views/product_qa_views.py
-# hypothesis_version: 6.148.6
-
-[100, 200, 201, 204, 400, 404, '-created_at', 'Product Q&A', 'answer', 'create', 'delete', 'error', 'is_answered', 'list', 'message', 'page_size', 'partial_update', 'patch', 'post', 'product', 'product__seller', 'product_pk', 'question', 'request', 'retrieve', 'seller', 'update', 'user', '내 문의 상세 정보를 조회한다.', '내가 작성한 문의 목록을 조회한다.', '답변을 삭제한다.', '답변을 수정한다.', '답변이 삭제되었습니다.', '답변이 없습니다.', '로그인이 필요합니다.', '문의 상세 정보를 조회한다.', '문의를 부분 수정한다.', '문의를 삭제한다.', '문의를 수정한다.', '문의에 답변을 작성한다.', '삭제 권한이 없습니다.', '상품 문의 목록을 조회한다.', '상품 문의를 작성한다.', '수정 권한이 없습니다.', '이 문의를 볼 권한이 없습니다.', '이미 답변이 등록되어 있습니다.']

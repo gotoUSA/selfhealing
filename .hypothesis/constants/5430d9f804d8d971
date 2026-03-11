@@ -1,4 +1,0 @@
-# file: /code/shopping/services/self_healing/security_notification_service.py
-# hypothesis_version: 6.148.7
-
-[150, 200, 202, 500, 3000, '#critical-alerts', '#dev-alerts', '#ops-alerts', '...', 'CRITICAL', 'CRITICAL_CHANNEL', 'DRY_RUN', 'EMAIL_RECIPIENTS', 'ENABLED', 'HIGH', 'HIGH_CHANNEL', 'MEDIUM', 'MEDIUM_CHANNEL', 'N/A', 'NOTIFICATIONS', 'NotificationConfig', 'PAGERDUTY_ENABLED', 'SELF_HEALING', 'SITE_URL', 'SLACK_WEBHOOK_URL', 'SMS_RECIPIENTS', 'SecurityIncident', 'action_taken', 'admin_url', 'blocks', 'channel', 'context', 'critical', 'custom_details', 'dedup_key', 'description', 'detected_at', 'elements', 'email', 'emoji', 'event_action', 'fields', 'header', 'high', 'incident_id', 'mrkdwn', 'pagerduty', 'payload', 'plain_text', 'routing_key', 'section', 'severity', 'slack', 'sms', 'source', 'source_ip', 'status', 'summary', 'text', 'title', 'trigger', 'type', 'user_id', '⚪', '🔴', '🟠', '🟡']

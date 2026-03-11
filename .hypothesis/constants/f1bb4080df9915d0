@@ -1,4 +1,0 @@
-# file: /code/shopping/services/cart_service.py
-# hypothesis_version: 6.148.6
-
-[999, '-added_at', 'CART_EMPTY', 'CART_ERROR', 'EMPTY_ITEMS', 'INSUFFICIENT_STOCK', 'INVALID_QUANTITY', 'ITEM_NOT_FOUND', 'MISSING_IDENTITY', 'PRODUCT_NOT_FOUND', 'QUANTITY_EXCEEDED', 'added_at', 'available', 'cart', 'decreased', 'detail', 'errors', 'inactive', 'increased', 'index', 'insufficient', 'is_active', 'item_id', 'items', 'new_quantity', 'old_quantity', 'out_of_stock', 'price_at_add', 'product', 'product_id', 'product_name', 'quantity', 'reason', 'removed', 'removed_count', 'requested', 'updated', 'updated_count', '사용자 또는 세션 정보가 필요합니다.', '상품 ID가 필요합니다.', '알 수 없는 문제', '장바구니가 이미 비어있습니다.', '장바구니에 해당 상품이 없습니다.', '재고 부족', '추가할 상품 정보가 없습니다.', '판매 중단', '품절']

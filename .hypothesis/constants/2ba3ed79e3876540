@@ -1,4 +1,0 @@
-# file: /code/shopping/services/base.py
-# hypothesis_version: 6.148.6
-
-[100, 1000, '.', 'SERVICE_ERROR', 'Service', 'T', '_service', 'code', 'message', 'password', 'secret', 'token']

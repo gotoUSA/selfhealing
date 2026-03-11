@@ -1,4 +1,0 @@
-# file: /code/shopping/services/order_service.py
-# hypothesis_version: 6.148.7
-
-[100, '0', 'additional_fee', 'cancel_deduct', 'cancel_refund', 'canceled', 'confirmed', 'final_amount', 'is_active', 'is_free_shipping', 'order_id', 'order_number', 'paid', 'pending', 'shipping_fee', 'sold_count', 'status', 'stock', 'success', 'total_amount', 'updated_at', 'use', '장바구니가 비어있습니다.', '취소할 수 없는 주문입니다.']

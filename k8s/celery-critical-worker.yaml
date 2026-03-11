@@ -7,7 +7,7 @@
 #
 # Reference:
 #   docs/self_healing/middleware_system/77_RECOVERY_COORDINATOR.md#11.2
-#   packages/selfhealing-python/src/selfhealing/services/coordination/critical_worker.py
+#   https://github.com/gotoUSA/selfhealing-python → src/selfhealing/services/coordination/critical_worker.py
 #
 # 적용 방법:
 #   kubectl apply -f k8s/celery-critical-worker.yaml

@@ -1,4 +1,0 @@
-# file: /code/shopping/admin/base.py
-# hypothesis_version: 6.148.7
-
-['#000000', '#008000', '#198754', '#4169E1', '#6c757d', '#808080', '#8B0000', '#DC143C', '#FFA500', '#dc3545', ',', '-', '...', '<pre>{}</pre>', '@', 'FAILED', 'HTTP_USER_AGENT', 'HTTP_X_FORWARDED_FOR', 'PENDING', 'REMOTE_ADDR', 'SUCCESS', 'aborted', 'action', 'approved', 'canceled', 'closed', 'completed', 'done', 'expired', 'failed', 'gray', 'green', 'half_open', 'in_progress', 'ip_address', 'new_values', 'old_values', 'open', 'orange', 'pending', 'processing', 'ready', 'red', 'rejected', 'success', 'user_agent']

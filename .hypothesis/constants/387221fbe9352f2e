@@ -1,4 +1,0 @@
-# file: /code/shopping/models/email_verification.py
-# hypothesis_version: 6.148.6
-
-[255, '-created_at', 'clicked', 'clicked_at', 'created_at', 'email_logs', 'email_tokens', 'email_type', 'error_message', 'failed', 'is_used', 'marketing', 'opened', 'opened_at', 'order_confirm', 'password_reset', 'pending', 'sent', 'sent_at', 'status', 'token', 'used_at', 'user', 'verification', 'verification_code', 'verified', 'verified_at', '대기중', '마케팅', '발송 실패 시 에러 메시지', '발송된 이메일의 유형', '발송실패', '발송완료', '발송일시', '비밀번호 재설정', '사용 여부', '사용일시', '사용자', '상태', '생성일시', '수신자 이메일', '에러 메시지', '열람됨', '열람일시', '이메일 내 링크가 클릭된 일시', '이메일 로그', '이메일 수신자 주소', '이메일 유형', '이메일 인증', '이메일 인증 토큰', '이메일 제목', '이메일이 발송된 일시', '이메일이 열람된 일시', '인증 코드', '인증 토큰', '인증 토큰을 소유한 사용자', '인증완료', '인증완료일시', '인증이 완료된 일시', '제목', '주문 확인', '클릭됨', '클릭일시', '토큰이 사용된 일시']

@@ -1,4 +1,0 @@
-# file: /code/shopping/serializers/cart_serializers.py
-# hypothesis_version: 6.148.6
-
-[999, 'added_at', 'available_stock', 'created_at', 'current_price', 'id', 'is_active', 'is_all_available', 'is_available', 'is_price_changed', 'item_count', 'item_id', 'items', 'price_at_add', 'price_difference', 'product', 'product.id', 'product.name', 'product.price', 'product.stock', 'product_id', 'product_name', 'product_price', 'quantity', 'reason', 'requested_quantity', 'subtotal', 'total_amount', 'total_quantity', 'unavailable_items', 'updated_at', 'user.id', 'user.username', 'user_id', 'user_username', '가격 변경 여부', '구매 가능 여부 (재고 확인)', '구매 불가능한 상품 목록', '담은 시점 가격', '모든 상품 구매 가능 여부', '변경할 수량 (0이면 삭제)', '사용자 ID', '사용자명', '상품 ID', '상품 단가', '상품 종류 수', '상품명', '소계 (단가 x 수량)', '장바구니 비우기를 확인해주세요.', '총 금액', '총 수량', '추가할 상품 ID', '추가할 수량 (기본값: 1)', '판매 중단', '품절', '현재 가격', '현재 재고 수량']

@@ -1,4 +1,0 @@
-# file: /code/shopping/tasks/__init__.py
-# hypothesis_version: 6.148.7
-
-['check_sla_violations', 'cleanup_expired_dlq', 'expire_points_task', 'process_dlq_batch', 'retry_failed_payment', 'send_email_task']

@@ -1,4 +1,0 @@
-# file: /code/shopping/tasks/cleanup_tasks.py
-# hypothesis_version: 6.148.6
-
-['cutoff_date', 'deleted_count', 'deleted_emails', 'failed', 'kept_count', 'kept_emails', 'message', 'orders', 'send', 'sent', 'status_counts', 'success', 'total_unverified', 'verified', '✅ 삭제할 만료된 토큰이 없습니다.', '✅ 삭제할 미인증 계정이 없습니다.', '✅ 삭제할 사용된 토큰이 없습니다.']

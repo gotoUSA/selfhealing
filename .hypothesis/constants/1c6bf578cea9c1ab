@@ -1,4 +1,0 @@
-# file: /code/shopping/services/toss_webhook_service.py
-# hypothesis_version: 6.148.7
-
-['1', '100', 'PAYMENT.CANCELED', 'PAYMENT.DONE', 'PAYMENT.FAILED', 'aborted', 'cancel_deduct', 'canceled', 'card', 'confirmed', 'done', 'earn', 'earn_rate', 'earned_points', 'failReason', 'failed', 'orderId', 'paid', 'payment_method', 'pending', 'preparing', 'sold_count', 'source', 'status', 'stock', 'toss', 'updated_at', 'webhook', '결제 실패 (웹훅)', '결제 완료 웹훅 처리', '결제 취소 웹훅 처리']

@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0022_order_earn_rate_at_order_order_membership_at_order.py
-# hypothesis_version: 6.148.6
-
-['earn_rate_at_order', 'membership_at_order', 'order', 'shopping', '주문 생성 시점의 회원 등급', '주문 시점 적립률', '주문 시점 회원등급']

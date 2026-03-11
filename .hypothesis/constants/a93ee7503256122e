@@ -1,4 +1,0 @@
-# file: /code/shopping/views/order_views.py
-# hypothesis_version: 6.148.6
-
-[100, 200, 202, 400, 403, '-created_at', 'Orders', 'cancel', 'create', 'created_at', 'detail', 'error', 'list', 'message', 'order_id', 'order_items', 'order_items__product', 'order_number', 'page_size', 'pending', 'post', 'status', 'status_url', 'task_id', 'user', 'verification_url', '비동기 작업 ID', '새 주문을 생성한다.', '생성된 주문 ID', '이메일 인증이 필요합니다.', '주문 목록을 조회한다.', '주문 번호', '주문 상세 정보를 조회한다.', '주문 상태 (pending)', '주문 상태 확인 URL', '주문 생성 중 오류가 발생했습니다.', '주문 정보를 부분 수정한다.', '주문 정보를 전체 수정한다.', '주문을 삭제한다.', '주문을 취소한다.', '주문이 취소되었습니다.']

@@ -1,4 +1,0 @@
-# file: /code/shopping/services/self_healing/idempotency_service.py
-# hypothesis_version: 6.148.7
-
-['IdempotencyKey', 'Payment', 'PointHistory', 'T', 'action', 'amount', 'done', 'event_id', 'in_progress', 'inventory', 'notification', 'order_id', 'order_item_id', 'payment', 'payment_key', 'point', 'point_type', 'ready', 'webhook']

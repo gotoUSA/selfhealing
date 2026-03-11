@@ -1,4 +1,0 @@
-# file: /code/shopping/models/__init__.py
-# hypothesis_version: 6.148.6
-
-['Cart', 'CartItem', 'Category', 'EmailLog', 'Notification', 'Order', 'OrderItem', 'PasswordResetToken', 'Payment', 'PaymentLog', 'PointHistory', 'Product', 'ProductAnswer', 'ProductImage', 'ProductQuestion', 'ProductReview', 'Return', 'ReturnItem', 'SellerProfile', 'User', 'WebhookEvent']

@@ -1,4 +1,0 @@
-# file: /code/shopping/models/product_qa.py
-# hypothesis_version: 6.148.6
-
-[200, '-created_at', 'Product', '[비밀]', 'answer', 'is_answered', 'product', 'product_answers', 'product_questions', 'question', 'questions', 'seller', 'user', '답변 내용', '답변 완료', '답변일', '답변자', '문의', '문의 내용', '문의 답변', '비밀글', '상품', '상품 문의', '수정일', '작성일', '작성자', '제목', '탈퇴한 사용자의 문의는 보존됩니다', '탈퇴한 판매자의 답변은 보존됩니다']

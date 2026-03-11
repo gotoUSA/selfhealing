@@ -1,4 +1,0 @@
-# file: /code/shopping/admin/order_admin.py
-# hypothesis_version: 6.148.7
-
-['-created_at', 'Item Count', 'Order Information', 'Payment Information', 'Points', 'Shipping Information', 'Subtotal', 'Timestamps', 'Total Amount', 'added_at', 'classes', 'collapse', 'created_at', 'delivered', 'earned_points', 'fields', 'final_amount', 'get_subtotal', 'id', 'item_count', 'mark_as_delivered', 'mark_as_paid', 'mark_as_shipped', 'order_memo', 'order_number', 'paid', 'payment_method', 'price', 'product', 'quantity', 'session_key', 'shipped', 'shipping_address', 'shipping_name', 'shipping_phone', 'shipping_postal_code', 'status', 'total_amount', 'updated_at', 'used_points', 'user', 'user__email', 'user__username']

@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0017_remove_product_product_stock_non_negative_and_more.py
-# hypothesis_version: 6.148.6
-
-['product', 'shopping']

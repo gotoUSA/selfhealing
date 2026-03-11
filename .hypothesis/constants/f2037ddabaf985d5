@@ -1,4 +1,0 @@
-# file: /code/shopping/serializers/point_serializers.py
-# hypothesis_version: 6.148.6
-
-[100, 255, 'admin_add', 'admin_deduct', 'amount', 'available_points', 'balance', 'can_use', 'cancel_deduct', 'cancel_refund', 'canceled', 'created_at', 'description', 'earn', 'event', 'expire', 'expires_at', 'expiring_soon', 'get_type_display', 'id', 'invalid', 'invalid_choice', 'max_usable', 'message', 'metadata', 'min_value', 'order', 'order.order_number', 'order_amount', 'order_number', 'points', 'request', 'required', 'result', 'total_earned', 'total_used', 'type', 'type_display', 'use', 'use_points', 'username', '관련 주문 ID', '사용 사유', '사용하려는 포인트', '사용할 포인트', '사용할 포인트를 입력해주세요.', '유효하지 않은 주문입니다.', '잔액은 음수가 될 수 없습니다.', '주문 ID는 숫자로 입력해주세요.', '주문 ID는 필수입니다.', '주문 금액', '처리 사유', '처리할 포인트', '취소된 주문 ID', '취소차감', '취소환불', '포인트 금액을 입력해주세요.', '포인트 처리 유형을 선택해주세요.', '포인트는 1 이상이어야 합니다.', '포인트는 100 이상이어야 합니다.', '포인트는 숫자로 입력해주세요.', '포인트를 사용하지 않습니다.']

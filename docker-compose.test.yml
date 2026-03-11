@@ -1,8 +1,15 @@
-# Docker Compose for testing Stage 26, 27, 28
+# Docker Compose for integration testing
 #
 # ⚠️  WARNING: selfhealing 패키지가 별도 repo로 분리되었습니다 (doc 326).
-# packages/selfhealing-python/ 경로를 참조하는 서비스들은 업데이트가 필요합니다.
-# selfhealing 패키지 테스트: https://github.com/gotoUSA/selfhealing-python
+# 아래 서비스 중 packages/selfhealing-python/ 또는 삭제된 tests/ 경로를 참조하는 서비스는
+# 동작하지 않습니다. 새로 작성이 필요합니다.
+# - 깨진 서비스: test, test-inmemory, test-statistics-unit, test-kafka-event-bus,
+#   test-async-audit, test-cross-region, test-leader-election, test-hybrid-storage,
+#   test-audit-integration, test-session-signals, test-postmortem-celery-delegation,
+#   test-integrity-triad, test-tiered-regional-error-budget, test-saga-orchestrator
+# - 정상 서비스: test-hybrid, test-global, test-otel-*, test-grafana-*, test-mimir-*,
+#   test-throttle-*, test-settings-redis-ttl
+# selfhealing 단독 테스트: https://github.com/gotoUSA/selfhealing-python
 
 # ---------------------------------------------------------------------------
 # Extension fields - YAML anchors to eliminate redundancy

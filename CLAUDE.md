@@ -7,7 +7,7 @@ Built on Django 5.2 + DRF + PostgreSQL 15 + Redis 7 + Celery + Kafka + Prometheu
 
 - **Application code**: `shopping/` (orders, payments, points)
 - **Project config**: `myproject/` (settings, celery, wsgi, middleware)
-- **Self-Healing library**: installed as pip dependency from [selfhealing-python](https://github.com/gotoUSA/selfhealing-python)
+- **Self-Healing framework**: installed as pip dependency from [selfhealing-python](https://github.com/gotoUSA/selfhealing-python)
 
 ## Code Rules
 
@@ -22,7 +22,7 @@ Built on Django 5.2 + DRF + PostgreSQL 15 + Redis 7 + Celery + Kafka + Prometheu
 - Do not suggest refactoring unless the user explicitly requests it
 - Do not write line numbers in code comments
 - Do not use document-reference terms (`phase`, `reference`, etc.) in class/function/file names
-- selfhealing library code is maintained in a separate repo — do not modify it here
+- selfhealing framework code is maintained in a separate repo — do not modify it here
 
 ## Test Location Rules
 

@@ -1,4 +1,0 @@
-# file: /code/shopping/services/wishlist_service.py
-# hypothesis_version: 6.148.6
-
-['-created_at', '-price', '0', 'EMPTY_PRODUCT_IDS', 'NOT_IN_WISHLIST', 'PRODUCT_NOT_FOUND', 'WISHLIST_EMPTY', 'WISHLIST_ERROR', 'available_count', 'category', 'compare_price', 'created_at', 'id', 'images', 'is_wished', 'name', 'on_sale_count', 'out_of_stock_count', 'price', 'product_id', 'quantity', 'requested_ids', 'total_count', 'total_discount', 'total_price', 'total_sale_price', 'user_wishlist_ids', 'wishlist_count', '상품을 선택해주세요.', '상품을 찾을 수 없습니다.', '이미 찜한 상품입니다.', '찜 목록에 없는 상품입니다.', '찜 목록에 추가되었습니다.', '찜 목록에 해당 상품이 없습니다.', '찜 목록에서 제거되었습니다.', '찜 목록이 이미 비어있습니다.', '처리할 상품이 없습니다.', '추가할 상품이 없습니다.']

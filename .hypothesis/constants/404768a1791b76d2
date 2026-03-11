@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0018_payment_idempotency_key.py
-# hypothesis_version: 6.148.6
-
-['idempotency_key', 'payment', 'shopping', '멱등성 키']

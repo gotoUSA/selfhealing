@@ -1,4 +1,0 @@
-# file: /code/shopping/services/self_healing/circuit_breaker_service.py
-# hypothesis_version: 6.148.7
-
-['CircuitBreakerConfig', 'CircuitBreakerResult', 'CircuitBreakerState', 'User | None', 'closed', 'control_reason', 'controlled_by_id', 'failure_count', 'half_open', 'last_failure_at', 'manually_controlled', 'open', 'opened_at', 'service_name', 'state', 'success_count', 'updated_at']

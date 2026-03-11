@@ -1,4 +1,0 @@
-# file: /code/shopping/migrations/0021_cartitem_price_at_add.py
-# hypothesis_version: 6.148.6
-
-['cartitem', 'price_at_add', 'shopping', '담은 시점 가격', '장바구니에 담을 때의 상품 가격']

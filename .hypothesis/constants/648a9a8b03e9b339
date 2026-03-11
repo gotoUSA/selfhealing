@@ -1,4 +1,0 @@
-# file: /code/shopping/serializers/__init__.py
-# hypothesis_version: 6.148.6
-
-['CartClearSerializer', 'CartItemSerializer', 'CartSerializer', 'CategorySerializer', 'LoginSerializer', 'OrderItemSerializer', 'OrderListSerializer', 'PaymentLogSerializer', 'PaymentSerializer', 'PointUseSerializer', 'RegisterSerializer', 'ReturnItemSerializer', 'ReturnListSerializer', 'SimpleCartSerializer', 'UserPointSerializer', 'UserSerializer']

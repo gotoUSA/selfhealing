@@ -1,4 +1,0 @@
-# file: /code/shopping/services/point_service.py
-# hypothesis_version: 6.148.7
-
-[100, '%Y년 %m월 %d일', 'amount', 'cancel_deduct', 'created_at', 'earn', 'expire', 'expired', 'expired_amount', 'expired_at', 'expires_at', 'expiry_notified', 'history_id', 'message', 'metadata', 'notified_at', 'original_history_id', 'original_points', 'points', 'success', 'total', 'usage_history', 'use', 'used_amount', 'used_at', 'used_details', 'user', '사용할 포인트는 0보다 커야 합니다.', '포인트 사용 (FIFO)', '포인트가 부족합니다.']

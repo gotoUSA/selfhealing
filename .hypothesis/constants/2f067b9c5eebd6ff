@@ -1,4 +1,0 @@
-# file: /code/shopping/models/webhook_event.py
-# hypothesis_version: 6.148.6
-
-[100, 200, '-processed_at', 'source', 'toss', '소스', '웹훅 이벤트', '웹훅 이벤트 목록', '이벤트 ID', '이벤트 타입', '주문 ID', '처리 시간']

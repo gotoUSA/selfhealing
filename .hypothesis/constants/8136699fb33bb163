@@ -1,4 +1,0 @@
-# file: /code/shopping/views/social_auth_views.py
-# hypothesis_version: 6.148.6
-
-['/api/social/test/', 'HttpRequest', '_', 'access', 'access_token', 'code', 'error', 'error_description', 'oauth_error', 'refresh', 'refresh_token', 'state']

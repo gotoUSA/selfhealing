@@ -1,4 +1,0 @@
-# file: /code/shopping/admin/notification_admin.py
-# hypothesis_version: 6.148.7
-
-[100, '#17a2b8', '#28a745', '#6610f2', '#6c757d', '#dc3545', '#ffc107', '-created_at', '0%', 'Basic Information', 'Expired', 'Link', 'Status', 'Timestamps', 'User Email', 'Verification Code', 'classes', 'clicked', 'clicked_at', 'collapse', 'created_at', 'email_type', 'failed', 'fields', 'id', 'is_expired_display', 'is_read', 'is_used', 'link', 'mark_as_failed', 'mark_as_sent', 'message', 'notification_type', 'opened', 'opened_at', 'pending', 'read_at', 'recipient_email', 'sent', 'sent_at', 'status', 'status_badge', 'status_display', 'subject', 'summary', 'title', 'today_failed', 'today_sent', 'today_verified', 'token', 'total_sent', 'total_verified', 'used_at', 'user', 'user__email', 'user__username', 'user_email', 'verification', 'verification_code', 'verification_rate', 'verified', 'verified_at', '⏳', '✅', '✉️', '❌', '👁️', '👆']

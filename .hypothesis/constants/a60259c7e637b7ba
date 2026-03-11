@@ -1,4 +1,0 @@
-# file: /code/shopping/tasks/payment_tasks.py
-# hypothesis_version: 6.148.7
-
-[110, 120, 180, 500, 'TIMEOUT', 'aborted', 'already_processed', 'approve', 'canceled', 'completed', 'confirmed', 'critical', 'default', 'detected', 'error', 'error_code', 'error_message', 'errors', 'external_api', 'fail_reason', 'failed', 'failure_reason', 'failure_type', 'message', 'notified', 'order not found', 'order_id', 'order_number', 'paid', 'payment', 'payment_critical', 'payment_fail_refund', 'payment_failed', 'payment_id', 'payment_method', 'pending', 'points_refunded', 'reason', 'rollback', 'severity', 'skipped', 'sold_count', 'status', 'status_code', 'stock', 'stock_restored', 'success', 'timeout', 'triggered', 'updated_at', 'warning', '결제 승인 실패', '결제 승인 완료', '결제 처리 시간 초과']

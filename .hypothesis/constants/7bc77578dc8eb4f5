@@ -1,4 +1,0 @@
-# file: /code/shopping/tasks/__init__.py
-# hypothesis_version: 6.148.6
-
-['expire_points_task', 'send_email_task']
