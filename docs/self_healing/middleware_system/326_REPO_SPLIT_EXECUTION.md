@@ -32,7 +32,14 @@
 - filter-branch는 복잡하고 실수 위험 높음
 - 새 repo 시작이 깔끔하고 안전
 
+> **ADR**: 팀 스케일업(2인 이상) 또는 첫 프로덕션 배포 시점에
+> `git filter-repo`를 활용한 히스토리 포함 마이그레이션을 재검토한다.
+> 해당 시점에 새 repo의 자체 커밋이 충분히 쌓여 있으면 불필요.
+
 ### 2.2 실행 절차
+
+> **Safety Protocol**: Step 1~검증 완료까지 모노레포에 어떠한 변경도 가하지 않는다.
+> Step 2(모노레포 정리) 실행 전에 `git tag pre-repo-split`으로 롤백 지점을 확보한다.
 
 #### Step 1: selfhealing-python repo 생성
 
@@ -82,6 +89,9 @@ git push -u origin main
 
 ```bash
 cd ~/myproject  # 현재 monorepo
+
+# 0. 롤백 지점 확보
+git tag pre-repo-split
 
 # 1. packages/ 디렉토리 제거
 rm -rf packages/
@@ -191,7 +201,8 @@ shopping/                             # (현재 myproject 이름 유지 또는 �
 [project]
 name = "shopping"
 dependencies = [
-    # selfhealing 라이브러리 (Git dependency)
+    # selfhealing 라이브러리 — Phase 1: Git dependency (임시)
+    # Phase 2(GitHub Releases .whl) / Phase 3(Private PyPI)으로 전환 예정, 327 참조
     "selfhealing[django,celery,prometheus] @ git+https://github.com/USER/selfhealing-python.git@v0.1.0",
     # 기존 dependencies...
     "django>=5.2",
@@ -234,6 +245,22 @@ environment:
   - PYTHONPATH=/code
 ```
 
+### 4.4 docker-compose.override.yml (로컬 개발 전용)
+
+분리 후 로컬에서 selfhealing 코드 수정을 즉시 반영하려면,
+두 repo를 같은 상위 폴더에 배치하고 override로 Volume Mount한다.
+(327 Local Development 섹션 참조)
+
+```yaml
+# docker-compose.override.yml (.gitignore에 추가)
+services:
+  web:
+    volumes:
+      - ../selfhealing-python/src:/code/selfhealing-src:ro
+    environment:
+      - PYTHONPATH=/code:/code/selfhealing-src
+```
+
 ---
 
 ## 5. CLAUDE.md 수정
@@ -260,3 +287,5 @@ selfhealing을 외부 dependency로 참조하도록 수정.
 - [ ] shopping repo: Docker 빌드 성공
 - [ ] shopping repo: docker-compose up 정상 동작
 - [ ] selfhealing import 경로 변경 없음 (`from selfhealing import ...`)
+- [ ] selfhealing repo: CI가 GitHub Secrets 없이 전체 테스트 통과 (라이브러리 독립성 검증)
+- [ ] shopping repo: 기존 GitHub Secrets (`DJANGO_SECRET_KEY`, `ENCRYPTION_KEY`) 유지 확인
