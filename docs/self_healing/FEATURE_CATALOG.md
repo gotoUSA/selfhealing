@@ -45,7 +45,7 @@ Minimum infrastructure: Redis (or in-memory fallback)
 
 - **Tier**: OSS | **Category**: Resilience | **Module**: `services/circuit_breaker/`
 - **What**: Detects consecutive failures and automatically blocks requests to prevent cascading failure across services. Supports half-open state for gradual traffic recovery, rate limit cascade detection (auto-open on 429 storms), self-DDoS protection, and adaptive threshold linking to Emergency Level. Operators can manually force-open or force-close circuits.
-- **Key Config**: `SELFHEALING_CIRCUIT_BREAKER_ENABLED`, `SELFHEALING_CB_FAILURE_THRESHOLD`, `SELFHEALING_CB_RECOVERY_TIMEOUT`
+- **Key Config**: `SELFHEALING_CB_ENABLED`, `SELFHEALING_CB_FAILURE_THRESHOLD`, `SELFHEALING_CB_RECOVERY_TIMEOUT`
 - **ENT Upgrade**: + Circuit Mesh (multi-service CB coordination)
 - **See also**: `docs/self_healing/03_CIRCUIT_BREAKER.md`
 
@@ -53,7 +53,7 @@ Minimum infrastructure: Redis (or in-memory fallback)
 
 - **Tier**: OSS | **Category**: Recovery | **Module**: `services/dlq/`, `services/replay_service/`
 - **What**: Captures failed operations into a Dead Letter Queue with full forensic context (stack trace, request data, failure reason) so no work is lost. Provides manual replay, batch replay by failure type, and conditional replay when circuit breaker recovers. Uses Repository pattern for pluggable storage backends.
-- **Key Config**: `SELFHEALING_DLQ_ENABLED`, `SELFHEALING_DLQ_MAX_RETRY_COUNT`, `SELFHEALING_REPLAY_AUTOMATION_ENABLED`
+- **Key Config**: `SELFHEALING_DLQ_ENABLED`, `SELFHEALING_DLQ_MAX_RETRIES`, `SELFHEALING_REPLAY_TRACK1_ENABLED`
 - **Includes**: Adaptive Replay (dynamic batch sizing based on success rate)
 - **See also**: `docs/self_healing/04_DEAD_LETTER_QUEUE.md`, `docs/self_healing/06_REPLAY_SYSTEM.md`
 
@@ -61,7 +61,7 @@ Minimum infrastructure: Redis (or in-memory fallback)
 
 - **Tier**: OSS | **Category**: Resilience | **Module**: `services/retry_handler/`, `services/backoff_calculator/`
 - **What**: Reusable retry mechanism with configurable max attempts and multiple backoff strategies (exponential, linear, constant, decorrelated jitter). Includes idempotency checking before each attempt, DLQ routing on exhaustion, forensic context capture, and rate limit awareness to prevent self-DDoS during retry storms.
-- **Key Config**: `SELFHEALING_RETRY_MAX_RETRIES`, `SELFHEALING_RETRY_MAX_DELAY`, `SELFHEALING_BACKOFF_STRATEGY`
+- **Key Config**: `SELFHEALING_RETRY_MAX_ATTEMPTS`, `SELFHEALING_RETRY_MAX_DELAY`, `SELFHEALING_RETRY_BACKOFF_STRATEGY`
 - **Includes**: Backoff Calculator (exponential, linear, constant, decorrelated jitter strategies)
 - **See also**: `docs/self_healing/05_RETRY_BACKOFF.md`
 
@@ -69,7 +69,7 @@ Minimum infrastructure: Redis (or in-memory fallback)
 
 - **Tier**: OSS | **Category**: Resilience | **Module**: `services/idempotency/`
 - **What**: Manages idempotency keys to ensure retried operations produce exactly the same result as the original execution. Prevents duplicate side effects across failure boundaries with domain-scoped key management and anti-flapping window to avoid rapid state oscillations.
-- **Key Config**: `SELFHEALING_IDEMPOTENCY_ENABLED`, `SELFHEALING_IDEMPOTENCY_TTL`, `SELFHEALING_ANTI_FLAPPING_WINDOW`
+- **Key Config**: `SELFHEALING_IDEMPOTENCY_DEFAULT_CACHE_TTL`, `SELFHEALING_IDEMPOTENCY_EXTENDED_CACHE_TTL`, `SELFHEALING_ANTI_FLAPPING_WINDOW_SECONDS`
 
 ### 5. Metrics (basic)
 
@@ -82,7 +82,7 @@ Minimum infrastructure: Redis (or in-memory fallback)
 
 - **Tier**: OSS | **Category**: Security & Compliance | **Module**: `audit/`
 - **What**: GDPR/CCPA-compliant audit logging for all configuration changes and healing decisions. Includes privacy-safe IP masking (hashed), trace ID correlation for distributed tracing, and pluggable storage backends (file-based in OSS). Records who changed what, when, and why with tamper-evident formatting.
-- **Key Config**: `SELFHEALING_AUDIT_ENABLED`, `SELFHEALING_AUDIT_BACKEND`
+- **Key Config**: `SELFHEALING_AUDIT_RETENTION_DAYS`, `SELFHEALING_AUDIT_MAX_HISTORY`
 - **ENT Upgrade**: + WORM storage, Hash Chain integrity, Signed Manifest (RFC 3161)
 - **See also**: `docs/self_healing/15_METRIC_COLLECTION_ADVANCED.md`
 
@@ -125,53 +125,53 @@ Minimum infrastructure: Redis + Celery + Prometheus (recommended)
 
 - **Tier**: PRO | **Category**: Resilience | **Module**: `resilience/bulkhead/`
 - **What**: Resource isolation to prevent cascading failures across service boundaries. Provides three isolation strategies: SemaphoreBulkhead (I/O bound), ThreadPoolBulkhead (CPU bound), and AsyncSemaphoreBulkhead (async workloads). Includes BulkheadRegistry for domain-based management and `@bulkhead` decorator for easy annotation.
-- **Key Config**: `SELFHEALING_BULKHEAD_ENABLED`, `SELFHEALING_BULKHEAD_MAX_CONCURRENT`, `SELFHEALING_BULKHEAD_MAX_WAIT`
+- **Key Config**: `SELFHEALING_BULKHEAD_ENABLED`, `SELFHEALING_BULKHEAD_DEFAULT_MAX_CONCURRENT`, `SELFHEALING_BULKHEAD_DEFAULT_ACQUIRE_TIMEOUT`
 
 ### 12. Hedging
 
 - **Tier**: PRO | **Category**: Resilience | **Module**: `resilience/policies/hedging.py`
 - **What**: Tail latency reduction via parallel competitive execution. Sends identical requests to multiple candidates simultaneously and adopts the fastest response, significantly reducing P99 latency. Includes backpressure logic that adjusts hedging behavior based on system load to prevent resource waste under stress.
-- **Key Config**: `SELFHEALING_HEDGING_ENABLED`, `SELFHEALING_HEDGING_MAX_PARALLEL`, `SELFHEALING_HEDGING_DELAY`
+- **Key Config**: `SELFHEALING_HEDGING_ENABLED`, `SELFHEALING_HEDGING_MAX_CANDIDATES`, `SELFHEALING_HEDGING_DEFAULT_DELAY`
 
 ### 13. Error Budget
 
 - **Tier**: PRO | **Category**: Observability | **Module**: `services/error_budget/`
 - **What**: SRE Error Budget calculator and deployment policy advisor based on SLO targets. Computes remaining error budget, fast/slow burn rates, and recommends deployment freezes when budget is low. Design principle: "system advises, humans decide" — all recommendations are advisory, not enforcement. Includes crisis multiplier and shadow budget for safe experimentation.
-- **Key Config**: `SELFHEALING_ERROR_BUDGET_ENABLED`, `SELFHEALING_ERROR_BUDGET_SLO_TARGET`, `SELFHEALING_BURN_RATE_THRESHOLDS_*`
+- **Key Config**: `SELFHEALING_ERROR_BUDGET_THRESHOLD_HEALTHY`, `SELFHEALING_ERROR_BUDGET_BURN_RATE_FAST_CRITICAL`, `SELFHEALING_ERROR_BUDGET_FAILSAFE_ALERT_ENABLED`
 - **See also**: `docs/self_healing/12_ERROR_BUDGET.md`
 
 ### 14. Pool Monitor
 
 - **Tier**: PRO | **Category**: Operations | **Module**: `core/pool_monitor.py`
 - **What**: Database connection pool health monitoring with leak detection and exhaustion prediction. Continuously tracks active/available connections, wait queue length, and connection lifecycle. Reports health as HEALTHY/WARNING(70%+)/CRITICAL(90%+)/EXHAUSTED/LEAK_SUSPECTED with actionable alerts.
-- **Key Config**: `SELFHEALING_POOL_MONITOR_ENABLED`, `SELFHEALING_POOL_MONITOR_INTERVAL`
+- **Key Config**: `SELFHEALING_POOL_MONITOR_WARNING_THRESHOLD`, `SELFHEALING_POOL_MONITOR_CRITICAL_THRESHOLD`
 
 ### 15. Coordination
 
 - **Tier**: PRO | **Category**: Operations | **Module**: `coordination/`
 - **What**: Distributed leader election ensuring single-leader operations in multi-worker environments. Provides factory-based backend selection (Redis in PRO, etcd in ENT) with abstract LeaderElector interface. Includes DLQConsumerCoordinator to prevent duplicate DLQ processing and LeaderScheduler for distributed cron jobs.
-- **Key Config**: `SELFHEALING_LEADER_ENABLED`, `SELFHEALING_LEADER_BACKEND`, `SELFHEALING_LEADER_TTL`
+- **Key Config**: `SELFHEALING_LEADER_ENABLED`, `SELFHEALING_LEADER_BACKEND`, `SELFHEALING_LEADER_LEASE_TTL_SECONDS`
 - **ENT Upgrade**: + etcd backend, distributed scheduler
 
 ### 16. Canary Recovery (w/ Rollback)
 
 - **Tier**: PRO | **Category**: Operations | **Module**: `services/canary/`, `services/rollback/`
 - **What**: Gradual configuration deployment with automatic rollback on degradation. Rolls out config changes through progressive stages with health validation at each step. Includes CanaryChaosGuard for conflict detection with running chaos experiments, cross-cluster notification, and safety interlocks. Rollback subsystem provides zero-downtime safe rollback with policy management.
-- **Key Config**: `SELFHEALING_CANARY_ENABLED`, `SELFHEALING_CANARY_STAGES`, `SELFHEALING_CANARY_GOVERNANCE_*`
+- **Key Config**: `SELFHEALING_CANARY_ROLLOUT_TTL_DAYS`, `SELFHEALING_CANARY_LOCK_TIMEOUT_MINUTES`, `SELFHEALING_CANARY_GOVERNANCE_*`
 - **Includes**: Rollback Service (zero-downtime safe rollback with policy management)
 
 ### 17. Runtime Config (w/ History, Shadow)
 
 - **Tier**: PRO | **Category**: Configuration | **Module**: `services/runtime_config/`, `services/config_history/`, `services/config_shadow/`
 - **What**: Runtime configuration management allowing updates without server restart. Supports three apply strategies: IMMEDIATE, DELAYED (with cancellation), and GRACEFUL (waits for in-progress operations). Config History stores last N versions in Redis with version-specific rollback. Config Shadow simulates config changes by replaying past events to predict impact before applying.
-- **Key Config**: `SELFHEALING_CONFIG_SHADOW_ENABLED`, `SELFHEALING_APPLY_STRATEGY`
+- **Key Config**: `SELFHEALING_SHADOW_GATE_ENABLED`, `SELFHEALING_SHADOW_REQUIRE_EVALUATION`
 - **Includes**: Config History (versioned change history with rollback), Config Shadow (pre-simulation via event replay)
 
 ### 18. Throttle (w/ Rate Limit Coordinator)
 
 - **Tier**: PRO | **Category**: Scaling | **Module**: `services/throttle/`, `services/rate_limit_coordinator/`
 - **What**: Framework-agnostic adaptive throttling using Netflix Gradient algorithm that dynamically adjusts admission rates based on real-time system load. Includes sliding window and token bucket implementations, circuit breaker bridge for integrated protection, DLQ routing for rejected requests, and recovery dampening to prevent load spikes during recovery. Rate Limit Coordinator prevents self-DDoS by coordinating retry behavior across workers.
-- **Key Config**: `SELFHEALING_THROTTLE_ENABLED`, `SELFHEALING_THROTTLE_GRADIENT_*`
+- **Key Config**: `SELFHEALING_THROTTLE_INITIAL_LIMIT`, `SELFHEALING_THROTTLE_MIN_LIMIT`, `SELFHEALING_THROTTLE_MAX_LIMIT`
 - **Includes**: Rate Limit Coordinator (distributed retry coordination for self-DDoS prevention)
 - **ENT Upgrade**: + Distributed Rate Limit (Kafka-based cluster-wide 429 propagation)
 
@@ -179,13 +179,13 @@ Minimum infrastructure: Redis + Celery + Prometheus (recommended)
 
 - **Tier**: PRO | **Category**: Security & Compliance | **Module**: `services/corruption_shield/`
 - **What**: Multi-layer data integrity protection with three defense levels. L1: Schema validation (syntax, format, types). L2: Business rule validation (logic, constraints, consistency). L3: Anomaly detection using Z-Score statistical analysis to catch outliers that pass structural validation.
-- **Key Config**: `SELFHEALING_CORRUPTION_SHIELD_ENABLED`, `SELFHEALING_CORRUPTION_SHIELD_*`
+- **Key Config**: `SELFHEALING_CORRUPTION_SHIELD_L1_ENABLED`, `SELFHEALING_CORRUPTION_SHIELD_L2_ENABLED`, `SELFHEALING_CORRUPTION_SHIELD_L3_ENABLED`
 
 ### 20. Learning + Auto-Tuning
 
 - **Tier**: PRO | **Category**: Intelligence | **Module**: `services/learning/`, `services/auto_tuning/`
 - **What**: Self-learning system that recognizes failure patterns and automatically tunes recovery parameters. Learning service identifies recurring patterns and suggests optimizations. Auto-Tuning service tracks tuning sessions and applies parameter adjustments autonomously with recorded decision history for auditability.
-- **Key Config**: `SELFHEALING_LEARNING_ENABLED`, `SELFHEALING_AUTO_TUNING_ENABLED`
+- **Key Config**: Service-internal config (no dedicated settings file)
 - **Includes**: Auto-Tuning Service (autonomous parameter adjustment with decision recording), Decision Engine
 - **Settings Gap**: No dedicated `settings/learning.py` or `settings/auto_tuning.py` — config is service-internal
 
@@ -193,20 +193,20 @@ Minimum infrastructure: Redis + Celery + Prometheus (recommended)
 
 - **Tier**: PRO | **Category**: Intelligence | **Module**: `services/predictive_forecaster/`
 - **What**: Time-series anomaly forecasting engine that predicts threshold breaches 5-15 minutes ahead using Holt Linear, EWMA, and Holt-Winters models. Includes Z-Score and IQR anomaly detectors, spike classifier, and ProactiveActionTrigger that initiates preventive measures before failures occur.
-- **Key Config**: `SELFHEALING_PREDICTIVE_FORECASTER_ENABLED`, `SELFHEALING_PREDICTIVE_FORECASTER_HORIZON`
+- **Key Config**: `SELFHEALING_FORECASTER_PREDICTION_STEPS`, `SELFHEALING_FORECASTER_DRY_RUN`
 
 ### 22. Daily Report (w/ Dashboard)
 
 - **Tier**: PRO | **Category**: Observability | **Module**: `services/daily_report/`, `services/dashboard_service/`
 - **What**: Automated daily operational report generation with Slack and email formatting. Aggregates daily healing results including recovery counts, MTTR, success rates, and cost savings. Dashboard service provides centralized statistics API for real-time monitoring UIs with multi-tier caching and cache invalidation support.
-- **Key Config**: `SELFHEALING_DAILY_REPORT_ENABLED`, `SELFHEALING_DASHBOARD_ENABLED`
+- **Key Config**: `SELFHEALING_DAILY_REPORT_MAX_RETRIES`, `SELFHEALING_DASHBOARD_CACHE_TTL_SECONDS`
 - **Includes**: Dashboard Service (centralized statistics API with multi-tier caching)
 
 ### 23. Precomputed Cache
 
 - **Tier**: PRO | **Category**: Scaling | **Module**: `services/precomputed_cache/`
 - **What**: 3-tier cache optimization for L3 observability endpoints achieving sub-50ms overhead. L1: in-process TTLCache (2s TTL, 0ms). L2: Redis pre-computed JSON (15s TTL, 1-5ms). L3: direct compute fallback (50-200ms). Background worker pre-computes health, error budget, and pool status every 15 seconds with drift detection between cache tiers.
-- **Key Config**: `SELFHEALING_PRECOMPUTED_CACHE_ENABLED`, `SELFHEALING_PRECOMPUTED_CACHE_INTERVAL`
+- **Key Config**: `SELFHEALING_PRECOMPUTED_CACHE_REFRESH_INTERVAL_SECONDS`, `SELFHEALING_PRECOMPUTED_CACHE_L1_TTL_SECONDS`
 
 ### 24. ML Settings Recommendation
 
@@ -233,27 +233,27 @@ Minimum infrastructure: Redis Cluster + Kafka + PostgreSQL + K8s + OTEL Collecto
 
 - **Tier**: ENT | **Category**: Security & Compliance | **Module**: `services/governance/`
 - **What**: Emergency mode tracking and governance validation layer that enforces safety checks before any automated action. GovernanceCheckMixin provides decorator-based guard that blocks operations during active emergencies or when governance policies are violated. Includes TTL-based expiry management and API service for external governance queries.
-- **Key Config**: `SELFHEALING_GOVERNANCE_ENABLED`, `SELFHEALING_GOVERNANCE_*`
+- **Key Config**: `SELFHEALING_GOVERNANCE_FOUR_EYES_ENABLED`, `SELFHEALING_GOVERNANCE_BREAK_GLASS_ENABLED`, `SELFHEALING_GOVERNANCE_*`
 - **See also**: `docs/self_healing/16_GOVERNANCE_IMPLEMENTATION_PART1.md`
 
 ### 27. Error Budget Gate
 
 - **Tier**: ENT | **Category**: Operations | **Module**: `services/error_budget_gate/`
 - **What**: Automation control gate that blocks all self-healing automation when error budget drops below threshold, forcing manual human intervention. Design philosophy: "crisis situations force human intervention." Fails open on gate failure (allows automation with warning). Provides `@automation_gate` decorator and `check_automation_allowed()` / `require_automation_allowed()` APIs.
-- **Key Config**: `SELFHEALING_ERROR_BUDGET_GATE_ENABLED`, `SELFHEALING_ERROR_BUDGET_GATE_THRESHOLD`
+- **Key Config**: `SELFHEALING_ERROR_BUDGET_GATE_ENABLED`, `SELFHEALING_ERROR_BUDGET_GATE_CRITICAL_THRESHOLD_PERCENT`
 
 ### 28. Postmortem (w/ Correlation Engine)
 
 - **Tier**: ENT | **Category**: Observability | **Module**: `services/postmortem/`, `services/correlation_engine/`
 - **What**: Automated post-incident analysis system. IncidentGroupManager merges cascading circuit breaker events into correlated incident groups. NotificationAggregator prevents alert storms. IntegritySealer provides hash-chain-based postmortem integrity. Correlation Engine builds DAG from event bus events for root cause ranking and incident timeline reconstruction.
-- **Key Config**: `SELFHEALING_POSTMORTEM_ENABLED`, `SELFHEALING_POSTMORTEM_*`
+- **Key Config**: `SELFHEALING_POSTMORTEM_AUTO_ENABLED`, `SELFHEALING_POSTMORTEM_NOTIFICATION_ENABLED`, `SELFHEALING_POSTMORTEM_*`
 - **Includes**: Correlation Engine (DAG-based root cause ranking), Notification Aggregator (alert storm prevention), Integrity Sealer (hash-chain postmortem sealing)
 
 ### 29. FinOps
 
 - **Tier**: ENT | **Category**: Observability | **Module**: `services/finops/`
 - **What**: Recovery cost tracking and budget management for financial accountability. Tracks cost per healing operation, manages cost budgets with alerts on budget threshold breaches, and generates cost efficiency reports. Provides CFO dashboard data for executive visibility into self-healing ROI.
-- **Key Config**: `SELFHEALING_FINOPS_ENABLED`
+- **Key Config**: Service-internal config (no dedicated settings file)
 - **Settings Gap**: No dedicated `settings/finops.py` — cost rates and budget thresholds are service-internal
 
 ### 30. Scaling / HPA
@@ -266,7 +266,7 @@ Minimum infrastructure: Redis Cluster + Kafka + PostgreSQL + K8s + OTEL Collecto
 
 - **Tier**: ENT | **Category**: Recovery | **Module**: `services/saga/`
 - **What**: Distributed saga orchestrator implementing forward/compensate pattern for multi-step transactions spanning multiple services. Uses Redis for state management with Lua-scripted atomic transitions and CAS (Compare-And-Swap). Includes SagaRegistry for definition management, Celery task integration for async execution, and orphan saga detection.
-- **Key Config**: `SELFHEALING_SAGA_ENABLED`
+- **Key Config**: Service-internal config (no dedicated settings file)
 - **Settings Gap**: No dedicated `settings/saga.py` — timeout/retry/concurrency params are service-internal
 
 ### 32. Multi-Region (w/ Cell Topology, Isolation Gate)
@@ -280,20 +280,20 @@ Minimum infrastructure: Redis Cluster + Kafka + PostgreSQL + K8s + OTEL Collecto
 
 - **Tier**: ENT | **Category**: Operations | **Module**: `meta/`
 - **What**: Self-monitoring system for the self-healing infrastructure itself. HealthProbeManager collects health status from all subsystems. StuckDetector identifies zero-variance metrics indicating frozen components. EscalationManager triggers human intervention via PagerDuty or Slack when automated recovery fails. "Who watches the watchman?" — this does.
-- **Key Config**: `SELFHEALING_META_WATCHDOG_ENABLED`, `SELFHEALING_META_*`
+- **Key Config**: `SELFHEALING_META_ENABLED`, `SELFHEALING_META_PROBE_INTERVAL_SECONDS`, `SELFHEALING_META_*`
 
 ### 34. Compliance
 
 - **Tier**: ENT | **Category**: Security & Compliance | **Module**: `services/compliance/`
 - **What**: Regulatory compliance automation supporting DORA and PCI-DSS standards. Tracks compliance status across services, generates audit reports for compliance officers, and detects regulation violations. Provides ComplianceCheck and ComplianceReport models for standardized compliance assessment.
-- **Key Config**: `SELFHEALING_COMPLIANCE_ENABLED`
+- **Key Config**: Service-internal config (no dedicated settings file)
 - **Settings Gap**: No dedicated `settings/compliance.py` — regulation rules and check intervals are service-internal
 
 ### 35. Security (w/ Security Notification)
 
 - **Tier**: ENT | **Category**: Security & Compliance | **Module**: `services/security/`, `services/security_notification/`
 - **What**: Security violation handling that NEVER self-heals — violations are immediately blocked and routed to security team. SecurityViolationService detects and classifies violations by type and severity. ProtectionOrchestrator takes immediate protective actions with ActionPolicy-based rollback support. Security Notification delivers alerts across multiple channels (Slack, Email, SMS, PagerDuty).
-- **Key Config**: `SELFHEALING_SECURITY_ENABLED`, `SELFHEALING_SECURITY_*`
+- **Key Config**: `SELFHEALING_SECURITY_RATE_LIMIT_MAX_REQUESTS`, `SELFHEALING_SECURITY_*`
 - **Includes**: Security Notification (multi-channel alert delivery: Slack, Email, SMS, PagerDuty)
 
 ### 36. Runbook
