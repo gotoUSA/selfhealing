@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Enterprise-grade Self-Healing library built on Django 5.2 + DRF + PostgreSQL 15 + Redis 7 + Celery + Kafka + Prometheus + OTEL + K8s.
+Enterprise-grade Self-Healing framework built on Django 5.2 + DRF + PostgreSQL 15 + Redis 7 + Celery + Kafka + Prometheus + OTEL + K8s.
 
 - **Core package**: `packages/selfhealing-python/src/selfhealing/`
 - **Testbed**: `shopping/` (orders/payments/points) — a demo app for integration testing. Do NOT use as basis for architectural decisions.
@@ -47,6 +47,7 @@ Enterprise-grade Self-Healing library built on Django 5.2 + DRF + PostgreSQL 15 
 - `docs/laws/UNIT_TEST_GUIDELINES.md` — unit test rules and verification techniques
 - `docs/laws/INTEGRATION_TEST_GUIDELINES.md` — integration test rules and infra markers
 - `docs/laws/LOGGING_STANDARDS.md` — logging event name conventions, exception chaining rules, log level guidelines
+- `docs/self_healing/FEATURE_CATALOG.md` — authoritative feature list (38 features, tier classification, settings mapping). When features are added, changed, or removed, update this catalog.
 - `docs/self_healing/` — implementation plan documents (feature specs and design docs)
 
 ## Test Location Rules
