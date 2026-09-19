@@ -1,0 +1,4 @@
+# Locust load-test reports embed the full chart library inline (~1 MB each).
+# Keep them out of the GitHub language statistics.
+load_tests/reports/** linguist-vendored
+load_tests/results/** linguist-vendored
