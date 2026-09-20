@@ -6,6 +6,9 @@ Django 환경에서 api/django/rate_limit.py와 ApiRateLimitSettings 연동 검�
 
 import pytest
 
+pytest.importorskip("selfhealing", reason="selfhealing 라이브러리(선택)가 설치된 환경에서만 실행")
+
+
 
 @pytest.mark.django_db
 class TestApiRateLimitSettingsIntegration:

@@ -31,7 +31,7 @@ COPY setup.cfg /code/
 RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
-# selfhealing 라이브러리 설치 (pip dependency)
+# 프로젝트 설치 (pyproject.toml 의존성)
 RUN pip install --no-cache-dir -e .
 
 # crontab 패키지 충돌 해결: crontab(1.0.5)이 python-crontab(django-celery-beat 의존성)을 shadow함

@@ -31,8 +31,9 @@ if hasattr(settings, "CELERY_RESULT_BACKEND"):
 # 등록된 Django 앱에서 tasks.py 자동 로드
 app.autodiscover_tasks()
 
-# selfhealing 패키지의 Celery tasks 자동 로드
-app.autodiscover_tasks(["selfhealing.celery_tasks"])
+# selfhealing 패키지의 Celery tasks 자동 로드 (설치된 경우에만)
+if settings.SELFHEALING_AVAILABLE:
+    app.autodiscover_tasks(["selfhealing.celery_tasks"])
 
 # =============================================================================
 # Self-Healing Signal Hooks (Zero-Code Integration)
@@ -309,6 +310,15 @@ app.conf.beat_schedule = {
     # 새벽 시간대에 정리 작업을 몰아서 처리하여
     # 서버 부하를 최소화합니다.
 }
+
+# selfhealing 패키지가 없으면 그 패키지의 태스크를 가리키는 스케줄 항목을 뺀다
+# (등록되지 않은 태스크를 Beat가 계속 발행하는 것을 막음)
+if not settings.SELFHEALING_AVAILABLE:
+    app.conf.beat_schedule = {
+        name: entry
+        for name, entry in app.conf.beat_schedule.items()
+        if not entry["task"].startswith("selfhealing.")
+    }
 
 
 # Celery 설정

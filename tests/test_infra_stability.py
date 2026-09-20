@@ -26,6 +26,9 @@ Note:
 """
 
 import pytest
+
+pytest.importorskip("selfhealing", reason="selfhealing 라이브러리(선택)가 설치된 환경에서만 실행")
+
 import uuid
 from datetime import datetime, timezone
 

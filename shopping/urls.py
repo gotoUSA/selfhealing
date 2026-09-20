@@ -413,9 +413,13 @@ urlpatterns = [
         name="social-test-page",
     ),
     # ==========================================================================
-    # Self-Healing Control API (now using selfhealing package)
+    # Self-Healing Control API (선택 라이브러리가 설치된 경우에만)
     # ==========================================================================
-    path("self-healing/", include("selfhealing.api.django.urls", namespace="selfhealing")),
+    *(
+        [path("self-healing/", include("selfhealing.api.django.urls", namespace="selfhealing"))]
+        if settings.SELFHEALING_AVAILABLE
+        else []
+    ),
 ]
 
 # ==========================================================================

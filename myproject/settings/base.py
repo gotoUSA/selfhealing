@@ -2,6 +2,7 @@
 Django Base Settings - 모든 환경에서 공통으로 사용되는 설정
 """
 
+import importlib.util
 import os
 from datetime import timedelta
 from pathlib import Path
@@ -9,6 +10,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# ==========================================================================
+# Optional: self-healing library
+# ==========================================================================
+# 결제 복구 계층(서킷 브레이커·DLQ·재실행)이 쓰던 라이브러리. 이 레포에서 추출돼
+# 별도 레포로 갔고 이후 baldur로 개명됐다. 설치돼 있으면 아래에서 앱·예외 핸들러·
+# 미들웨어를 붙이고, 없으면 쇼핑몰만으로 동작한다.
+SELFHEALING_AVAILABLE = importlib.util.find_spec("selfhealing") is not None
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -50,9 +59,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Local apps
     "shopping",
-    # Self-Healing system (Archive 테이블, RBAC 그룹 관리)
-    # Runtime 저장소는 Redis, Archive/통계용 Django ORM 사용
-    "selfhealing.adapters.django",
     # Third party apps
     "mptt",
     "rest_framework",
@@ -76,6 +82,11 @@ INSTALLED_APPS = [
     # Prometheus HTTP metrics (RED metrics auto-instrumentation)
     "django_prometheus",
 ]
+
+if SELFHEALING_AVAILABLE:
+    # Self-Healing system (Archive 테이블, RBAC 그룹 관리)
+    # Runtime 저장소는 Redis, Archive/통계용 Django ORM 사용
+    INSTALLED_APPS.insert(INSTALLED_APPS.index("shopping") + 1, "selfhealing.adapters.django")
 
 AUTH_USER_MODEL = "shopping.User"
 
@@ -230,9 +241,11 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    # 표준화된 예외 핸들러 (Pool Timeout, Audit 연동, 민감정보 마스킹 포함)
-    "EXCEPTION_HANDLER": "selfhealing.api.django.exceptions.handler.selfhealing_exception_handler",
 }
+
+if SELFHEALING_AVAILABLE:
+    # 표준화된 예외 핸들러 (Pool Timeout, Audit 연동, 민감정보 마스킹 포함)
+    REST_FRAMEWORK["EXCEPTION_HANDLER"] = "selfhealing.api.django.exceptions.handler.selfhealing_exception_handler"
 
 # drf-spectacular 설정
 SPECTACULAR_SETTINGS = {
@@ -395,6 +408,7 @@ from myproject.settings.components.payment import *  # noqa: F401, F403, E402
 # ==========================================================================
 # MIDDLEWARE에 selfhealing 미들웨어 자동 삽입, DRF EXCEPTION_HANDLER 설정,
 # 개발 서버에서 OTEL 초기화. 반드시 settings.py 맨 마지막에 호출.
-from selfhealing.adapters.django import configure_selfhealing
+if SELFHEALING_AVAILABLE:
+    from selfhealing.adapters.django import configure_selfhealing  # noqa: E402
 
-configure_selfhealing(namespace=globals())
+    configure_selfhealing(namespace=globals())

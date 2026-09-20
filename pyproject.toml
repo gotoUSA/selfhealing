@@ -4,21 +4,19 @@
 [project]
 name = "myproject"
 version = "0.1.0"
-description = "Django REST API with Self-Healing capabilities"
+description = "Django 쇼핑몰 REST API (토스페이먼츠 결제 · JWT · 포인트 · Celery)"
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 authors = [
     { name = "Admin" }
 ]
 
 dependencies = [
-    # ==========================================
-    # Self-Healing Library
-    # ==========================================
-    # Phase 1: Git dependency (임시)
-    # Phase 2(GitHub Releases .whl) / Phase 3(Private PyPI)으로 전환 예정
-    "selfhealing[django,celery,prometheus] @ git+https://github.com/gotoUSA/selfhealing-python.git@main",
+    # 결제 복구 계층이 쓰던 self-healing 라이브러리는 필수 의존성이 아니다.
+    # 이 레포에서 추출돼 별도 레포로 갔고 이후 baldur로 개명됐으며, 이 레포의
+    # 통합 코드는 개명 전 API를 쓴다. 설치돼 있으면 settings.SELFHEALING_AVAILABLE
+    # 로 붙고, 없으면 쇼핑몰만으로 동작한다. (README "결제 복구 계층" 참고)
 
     # ==========================================
     # Django Core

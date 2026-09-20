@@ -17,8 +17,11 @@ Requirements:
 Reference: docs/self_healing/middleware_system/07_HYBRID_STORAGE_ARCHITECTURE.md
 """
 
-import os
 import pytest
+
+pytest.importorskip("selfhealing", reason="selfhealing 라이브러리(선택)가 설치된 환경에서만 실행")
+
+import os
 from unittest.mock import MagicMock
 
 # Setup Django before importing selfhealing

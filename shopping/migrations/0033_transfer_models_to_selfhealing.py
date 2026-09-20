@@ -1,6 +1,7 @@
 # 223 Host App Decoupling: 모델 소유권을 selfhealing 패키지로 이전
 # DB 변경 없음 — state만 제거하여 shopping 앱에서 모델을 해제
 
+from django.conf import settings
 from django.db import migrations
 
 
@@ -17,9 +18,15 @@ class Migration(migrations.Migration):
     selfhealing 0002 migration이 state_operations으로 해당 모델을 등록한다.
     """
 
+    # selfhealing 라이브러리는 선택 의존성이다. 설치돼 있을 때만 그 패키지의
+    # migration을 선행 조건으로 건다 (없으면 state 제거만 수행, DB 변경 없음).
     dependencies = [
         ("shopping", "0032_remove_legacy_models"),
-        ("selfhealing", "0002_add_dlq_and_security_models"),
+        *(
+            [("selfhealing", "0002_add_dlq_and_security_models")]
+            if getattr(settings, "SELFHEALING_AVAILABLE", False)
+            else []
+        ),
     ]
 
     operations = [

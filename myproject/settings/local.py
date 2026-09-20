@@ -30,7 +30,7 @@ MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")  # noqa:
 
 USE_POOL_CIRCUIT_BREAKER = os.getenv("USE_POOL_CIRCUIT_BREAKER", "FALSE") == "TRUE"
 
-if USE_POOL_CIRCUIT_BREAKER:
+if USE_POOL_CIRCUIT_BREAKER and SELFHEALING_AVAILABLE:  # noqa: F405
     # v6.2.0: PoolCircuitBreakerMiddleware 블로킹 이슈 해결됨!
     # - 캐시 기반 Pool 상태 조회 (백그라운드 스레드에서 100ms 간격 갱신)
     # - 매 요청에서 Non-Blocking 으로 Pool 상태 확인

@@ -2,12 +2,12 @@
 
 ## Project Overview
 
-Django REST API application (orders/payments/points) with Self-Healing capabilities.
-Built on Django 5.2 + DRF + PostgreSQL 15 + Redis 7 + Celery + Kafka + Prometheus + OTEL + K8s.
+Django REST API application (orders/payments/points).
+Built on Django 5.2 + DRF + PostgreSQL 15 + Redis 7 + Celery + Prometheus + OTEL.
 
 - **Application code**: `shopping/` (orders, payments, points)
 - **Project config**: `myproject/` (settings, celery, wsgi, middleware)
-- **Self-Healing framework**: installed as pip dependency from [selfhealing-python](https://github.com/gotoUSA/selfhealing-python)
+- **Payment-recovery library (optional)**: the `selfhealing` package that grew out of this repo was extracted and later renamed to `baldur`; the integration code here targets the pre-rename API. `settings.SELFHEALING_AVAILABLE` gates every hook (app, exception handler, URLs, beat schedule, middleware). The app must boot and pass `shopping/tests/` without the package — see README "결제 복구 계층에 대해"
 
 ## Code Rules
 
@@ -22,12 +22,12 @@ Built on Django 5.2 + DRF + PostgreSQL 15 + Redis 7 + Celery + Kafka + Prometheu
 - Do not suggest refactoring unless the user explicitly requests it
 - Do not write line numbers in code comments
 - Do not use document-reference terms (`phase`, `reference`, etc.) in class/function/file names
-- selfhealing framework code is maintained in a separate repo — do not modify it here
+- The self-healing library is optional: never add an unconditional import of `selfhealing` to production code or to `shopping/tests/`; hooks go behind `settings.SELFHEALING_AVAILABLE`, tests that need the package use `pytest.importorskip("selfhealing")`
 
 ## Test Location Rules
 
-- `shopping/tests/` — shopping app unit/integration tests
-- `tests/hybrid/` — shopping + selfhealing combined integration tests
+- `shopping/tests/` — shopping app tests; must pass without the optional library (this is what CI runs)
+- `tests/hybrid/` — Celery worker crash / idempotency tests; `tests/integration/` — Kafka/OTEL, real infra required
 - `tests/conftest.py` — shared test fixtures
 
 ## Custom Skills

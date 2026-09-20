@@ -12,6 +12,9 @@ Reference: docs/self_healing/middleware_system/09_AUTONOMOUS_TASK_EXPANSION.md �
 from __future__ import annotations
 
 import pytest
+
+pytest.importorskip("selfhealing", reason="selfhealing 라이브러리(선택)가 설치된 환경에서만 실행")
+
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 

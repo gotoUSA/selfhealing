@@ -11,6 +11,9 @@ Risk Covered: R-016 (Double processing on retry without idempotency)
 
 import pytest
 
+pytest.importorskip("selfhealing", reason="selfhealing 라이브러리(선택)가 설치된 환경에서만 실행")
+
+
 # 이 파일의 모든 테스트는 DB 필요
 pytestmark = pytest.mark.requires_db
 
