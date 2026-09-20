@@ -20,10 +20,8 @@ class TestAdminModuleStructure:
         from shopping.admin import (
             CartAdmin,
             CategoryAdmin,
-            CircuitBreakerStateAdmin,
             EmailLogAdmin,
             EmailVerificationTokenAdmin,
-            FailedOperationAdmin,
             NotificationAdmin,
             OrderAdmin,
             PaymentAdmin,
@@ -43,10 +41,8 @@ class TestAdminModuleStructure:
         admin_classes = [
             CartAdmin,
             CategoryAdmin,
-            CircuitBreakerStateAdmin,
             EmailLogAdmin,
             EmailVerificationTokenAdmin,
-            FailedOperationAdmin,
             NotificationAdmin,
             OrderAdmin,
             PaymentAdmin,
@@ -87,8 +83,6 @@ class TestAdminModuleStructure:
             "NotificationAdmin",
             "EmailVerificationTokenAdmin",
             "EmailLogAdmin",
-            "CircuitBreakerStateAdmin",
-            "FailedOperationAdmin",
         }
 
         assert set(admin_module.__all__) == expected_exports
@@ -111,7 +105,6 @@ class TestAdminModuleStructure:
             "shopping.admin.point_admin",
             "shopping.admin.return_admin",
             "shopping.admin.notification_admin",
-            "shopping.admin.dlq_admin",
         ]
 
         for mod_name in modules:
@@ -145,14 +138,13 @@ class TestAdminRegistrations:
             ReturnItem,
             User,
         )
-        from shopping.models import FailedOperation, SellerProfile
+        from shopping.models import SellerProfile
 
         models_to_check = [
             Cart,
             Category,
             EmailLog,
             EmailVerificationToken,
-            FailedOperation,
             Notification,
             Order,
             Payment,

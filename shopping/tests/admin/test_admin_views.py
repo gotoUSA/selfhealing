@@ -176,24 +176,3 @@ class TestReturnAdminListView:
         response = admin_client.get(url)
         assert response.status_code == 200
 
-
-@pytest.mark.django_db
-class TestCircuitBreakerAdminListView:
-    """Tests for CircuitBreakerStateAdmin list view."""
-
-    def test_circuit_breaker_list_view_loads(self, admin_client):
-        """Test that circuit breaker list view loads successfully."""
-        url = reverse("admin:shopping_circuitbreakerstate_changelist")
-        response = admin_client.get(url)
-        assert response.status_code == 200
-
-
-@pytest.mark.django_db
-class TestFailedOperationAdminListView:
-    """Tests for FailedOperationAdmin list view."""
-
-    def test_failed_operation_list_view_loads(self, admin_client):
-        """Test that failed operation list view loads successfully."""
-        url = reverse("admin:shopping_failedoperation_changelist")
-        response = admin_client.get(url)
-        assert response.status_code == 200
