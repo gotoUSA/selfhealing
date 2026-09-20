@@ -428,8 +428,10 @@ class TestPaymentSecurityException:
             )
 
             # Assert - IntegerField가 자동으로 문자열을 거부
+            # (DRF 번역 문구는 버전마다 바뀌므로 문장이 아니라 필드와 오류 코드로 단언)
             assert response.status_code == status.HTTP_400_BAD_REQUEST
-            assert "유효한 정수(integer)를 넣어주세요" in str(response.data)
+            assert "order_id" in response.data
+            assert response.data["order_id"][0].code == "invalid"
 
     def test_xss_in_cancel_reason_sanitized(
         self,
