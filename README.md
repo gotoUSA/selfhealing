@@ -19,7 +19,7 @@
 
 | 주제 | 위치 | 한 줄 |
 |---|---|---|
-| 재고 차감 동시성 | `shopping/services/order_service.py` `_create_order_items_and_decrease_stock` | `select_for_update` 행 락 + `F("stock") - qty`로 검사와 갱신을 DB 안에서. 재고 1개에 스레드 N개 → 성공 정확히 1 (`tests/integration/test_order_concurrency.py`) |
+| 재고 차감 동시성 | `shopping/services/order_service.py` `_create_order_items_and_decrease_stock` | `select_for_update` 행 락 + `F("stock") - qty`로 검사와 갱신을 DB 안에서, 상품 ID 순으로 잠가 다품목 주문끼리의 데드락 방지. 재고 1개에 스레드 N개 → 성공 정확히 1 (`tests/integration/test_order_concurrency.py`) |
 | 웹훅 멱등성 | `shopping/services/toss_webhook_service.py` `handle_payment_done` | Redis TTL 60초(빠른 필터) → Payment 행 락 + `is_paid` 검사(진짜 보장) → Order 상태 검사. confirm 응답과 웹훅의 순서가 뒤바뀌어도 한 번만 처리 (`test_confirm_webhook_race.py`) |
 | 결제 승인: 외부 API를 트랜잭션 밖으로 | `shopping/services/payment_service.py` `confirm_payment_sync` vs `confirm_payment_async` | 같은 파일에 두 버전. sync는 행 락을 쥔 채 결제사 HTTP를 기다리고(커넥션·워커가 묶임), async는 `in_progress`로 바꾸고 커밋한 뒤 Celery 체인(`external_api` 큐 → `payment_critical` 큐)으로 넘긴다. 뷰는 async를 쓴다 |
 | 트랜잭션 범위와 Celery 발행 시점 | `order_service.py` `create_order_hybrid` | Order 한 행만 짧은 트랜잭션으로 만들고 **커밋 뒤에** `.delay()`. 워커는 다시 행 락을 잡고 재고·포인트를 처리, 실패 시 `failed` + 재고 복구 |
@@ -135,12 +135,10 @@ shopping/tests/
 
 코드를 읽으면서 확인한 것들이다. 고치는 방법도 같이 적었다.
 
-- **재고 락 순서**: 주문 생성이 장바구니 아이템을 담은 순서(`CartItem.Meta.ordering = ["-added_at"]`)로 상품 행을 잠근다. A→B로 담은 사람과 B→A로 담은 사람이 같은 두 상품을 동시에 주문하면 데드락이 가능하다(PostgreSQL이 한쪽을 죽이므로 재고는 안 깨지지만 그 요청은 실패). 상품 ID 순으로 잠그면 해결된다. 동시성 테스트가 전부 상품 1개짜리라 잡히지 않았다.
 - **웹훅 중복 마킹이 커밋보다 먼저**: `mark_webhook_processed`가 DB 트랜잭션 커밋 전에 Redis 키를 쓴다. 핸들러가 예외로 롤백돼도 키는 60초 남아, 그 안의 재전송은 1층에서 버려진다. `transaction.on_commit`으로 옮기면 된다(2층 행 락이 있어서 중복 처리는 안 생긴다).
 - **타임아웃 뒤 실제로는 승인된 결제**: 결제사 호출이 타임아웃된 뒤 재시도가 `ALREADY_PROCESSED_PAYMENT`를 받으면 비재시도 오류로 분류돼 주문을 롤백한다 — 고객은 결제됐는데 우리 DB는 실패. 맞는 처리는 결제 조회 API로 상태를 확인해 성공으로 마감하는 것이다. 카오스 모듈에 이 시나리오(`BP-21`)가 있지만 감지만 있고 정정은 없다.
-- **회원 등급 스냅샷 미저장**: `Order.membership_at_order` 필드가 있고 결제 서비스가 읽지만, 주문 생성이 채우지 않는다.
 - **포인트 적립 건별 사용량이 JSON 컬럼**(`PointHistory.metadata.used_amount`): 집계·인덱스가 안 된다. 사용자당 적립 건이 수천 개가 되면 할당 테이블로 빼야 한다.
-- **테스트 34건이 현재 코드와 어긋남**: 포인트 환불/적립 계산, 회원 등급 스냅샷, 비동기 응답 코드(202 vs 200), 주문 실패 사유 미기록. 라이브러리 분리 기간에 CI가 사설 의존성 때문에 돌지 않아 쌓였다. 하나씩 코드 결함인지 낡은 테스트인지 가르는 중이다.
+- **한 번의 머지가 코드를 떨어뜨렸던 일**: 2025-12-14, 쇼핑몰 브랜치와 결제 복구 브랜치를 합치면서 한쪽의 테스트와 다른 쪽의 코드가 섞여 들어갔다(취소 시 포인트 환불, 회원 등급 스냅샷, 락 순서 고정, 주문 실패 사유가 사라짐). CI가 사설 의존성 때문에 돌지 않아 9개월 뒤에야 발견했고, 사라진 코드는 git에서 되살렸다. 두 갈래를 오래 벌려 두지 말 것, 그리고 CI가 빨간 채로 두지 말 것 — 이 레포에서 배운 가장 비싼 교훈이다.
 
 ## 개발 노트
 
