@@ -29,14 +29,21 @@ def _is_running_in_docker():
 # Docker 내부에서는 'db' 호스트 사용, 외부에서는 'localhost' 사용
 _db_host = "db" if _is_running_in_docker() else "localhost"
 
+
+
+def _test_db(name: str, default: str) -> str:
+    """TEST_DATABASE_* 가 있으면 그것, 없으면 DATABASE_* (CI/.env 공용), 둘 다 없으면 기본값."""
+    return os.getenv(f"TEST_DATABASE_{name}", os.getenv(f"DATABASE_{name}", default))
+
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("TEST_DATABASE_NAME", "shopping_db"),
-        "USER": os.getenv("TEST_DATABASE_USER", "shopping_user"),
-        "PASSWORD": os.getenv("TEST_DATABASE_PASSWORD", "shopping_pass"),
+        "NAME": _test_db("NAME", "shopping_db"),
+        "USER": _test_db("USER", "shopping_user"),
+        "PASSWORD": _test_db("PASSWORD", "shopping_pass"),
         "HOST": os.getenv("TEST_DATABASE_HOST", _db_host),
-        "PORT": os.getenv("TEST_DATABASE_PORT", "5432"),
+        "PORT": _test_db("PORT", "5432"),
         # 테스트에서는 연결 즉시 닫기 (동시성 테스트에서 "too many clients" 방지)
         "CONN_MAX_AGE": 0,
         # Health checks 비활성화하여 연결 절약
