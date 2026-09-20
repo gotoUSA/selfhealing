@@ -59,6 +59,11 @@ else:
 # ---------------------------------------------------------------------------
 def post_fork(server, worker):
     """Reset all external connections after fork (Fail-fast)."""
+    if not server.cfg.preload_app:
+        # preload 가 꺼져 있으면(개발 모드) 앱은 워커 안에서 처음 로드된다: 마스터에서
+        # 상속받은 연결이 없고, Django 도 아직 로드 전이라 settings 에 접근하면 실패한다.
+        worker.log.info("Worker %s: preload_app off, nothing inherited to reset", worker.pid)
+        return
     try:
         _reset_db_connections(worker)
         _reset_redis_connections(worker)
