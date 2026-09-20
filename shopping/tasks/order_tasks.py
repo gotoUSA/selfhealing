@@ -14,11 +14,7 @@ logger = get_task_logger(__name__)
     max_retries=3,
     default_retry_delay=10,
 )
-def process_order_heavy_tasks(
-    order_id: int,
-    cart_id: int,
-    use_points: int = 0
-) -> dict:
+def process_order_heavy_tasks(order_id: int, cart_id: int, use_points: int = 0) -> dict:
     """
     주문 생성 후 무거운 작업 처리
     - 재고 차감
@@ -54,19 +50,28 @@ def process_order_heavy_tasks(
             cart = Cart.objects.select_for_update().get(pk=cart_id)
 
             # 3. 재고 차감 및 OrderItem 생성
-            for cart_item in cart.items.all():
+            # ✅ Deadlock 방지: Product ID 순서대로 정렬하여 락 획득 순서를 일관되게 유지
+            cart_items = cart.items.select_related("product").order_by("product_id").all()
+
+            for cart_item in cart_items:
                 product = Product.objects.select_for_update().get(pk=cart_item.product.pk)
 
                 # 재고 부족 체크
                 if product.stock < cart_item.quantity:
                     logger.error(
-                        f"재고 부족: product_id={product.pk}, "
-                        f"requested={cart_item.quantity}, available={product.stock}"
+                        f"재고 부족: product_id={product.pk}, " f"requested={cart_item.quantity}, available={product.stock}"
                     )
 
                     # 주문 실패 처리
                     order.status = "failed"
-                    order.save(update_fields=["status", "updated_at"])
+                    order.failure_reason = (
+                        f"재고 부족: {product.name} " f"(요청: {cart_item.quantity}개, 재고: {product.stock}개)"
+                    )
+                    order.save(update_fields=["status", "failure_reason", "updated_at"])
+
+                    # 장바구니 복구
+                    Cart.objects.filter(pk=cart_id).update(is_active=True)
+                    logger.info(f"장바구니 복구: cart_id={cart_id}")
 
                     return {
                         "status": "failed",
@@ -76,9 +81,7 @@ def process_order_heavy_tasks(
                     }
 
                 # 재고 차감
-                Product.objects.filter(pk=product.pk).update(
-                    stock=F("stock") - cart_item.quantity
-                )
+                Product.objects.filter(pk=product.pk).update(stock=F("stock") - cart_item.quantity)
 
                 logger.info(f"재고 차감: product_id={product.pk}, quantity={cart_item.quantity}")
 
@@ -103,7 +106,7 @@ def process_order_heavy_tasks(
                     metadata={
                         "order_id": order.id,
                         "order_number": order.order_number,
-                    }
+                    },
                 )
 
                 if not result["success"]:
@@ -111,12 +114,15 @@ def process_order_heavy_tasks(
 
                     # 주문 실패 처리 (재고는 이미 차감됨 → 복구 필요)
                     for item in order.order_items.all():
-                        Product.objects.filter(pk=item.product.pk).update(
-                            stock=F("stock") + item.quantity
-                        )
+                        Product.objects.filter(pk=item.product.pk).update(stock=F("stock") + item.quantity)
 
                     order.status = "failed"
-                    order.save(update_fields=["status", "updated_at"])
+                    order.failure_reason = f"포인트 사용 실패: {result['message']}"
+                    order.save(update_fields=["status", "failure_reason", "updated_at"])
+
+                    # 장바구니 복구
+                    Cart.objects.filter(pk=cart_id).update(is_active=True)
+                    logger.info(f"장바구니 복구: cart_id={cart_id}")
 
                     return {
                         "status": "failed",

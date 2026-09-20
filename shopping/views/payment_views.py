@@ -254,35 +254,19 @@ class PaymentConfirmView(EmailVerificationRequiredMixin, APIView):
                 user=request.user,
             )
 
-            # EAGER 모드 (테스트 환경)에서는 이미 동기 실행되었으므로 200 OK 반환
-            # 프로덕션에서는 비동기 처리 중이므로 202 Accepted 반환
-            is_eager_mode = getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False)
-
-            if is_eager_mode:
-                # 동기 실행 완료: 결제 결과를 직접 반환
-                payment.refresh_from_db()
-                return Response(
-                    {
-                        "status": "success" if payment.is_paid else "processing",
-                        "payment_id": payment.id,
-                        "task_id": result["task_id"],
-                        "message": "결제가 완료되었습니다." if payment.is_paid else "결제 처리 중입니다.",
-                        "status_url": f"/api/payments/{payment.id}/status/",
-                    },
-                    status=status.HTTP_200_OK if payment.is_paid else status.HTTP_202_ACCEPTED,
-                )
-            else:
-                # 비동기 처리 중: 202 Accepted 반환
-                return Response(
-                    {
-                        "status": "processing",
-                        "payment_id": result["payment_id"],
-                        "task_id": result["task_id"],
-                        "message": "결제 처리 중입니다. 완료 시 알림을 드립니다.",
-                        "status_url": f"/api/payments/{result['payment_id']}/status/",
-                    },
-                    status=status.HTTP_202_ACCEPTED,
-                )
+            # 비동기 승인 API의 계약: 실행 모드(eager/worker)와 무관하게 항상 202 Accepted.
+            # 결과는 status_url로 폴링한다.
+            return Response(
+                {
+                    "status": "processing",
+                    "payment_id": result["payment_id"],
+                    "task_id": result["task_id"],
+                    "message": "결제 처리 중입니다. 완료 시 알림을 드립니다.",
+                    # 프론트엔드가 결과를 확인할 수 있는 엔드포인트
+                    "status_url": f"/api/payments/{result['payment_id']}/status/",
+                },
+                status=status.HTTP_202_ACCEPTED,
+            )
 
         except PaymentConfirmError as e:
             # 결제 승인 에러 (중복 결제, 잘못된 상태 등)

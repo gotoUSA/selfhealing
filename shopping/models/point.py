@@ -313,7 +313,8 @@ class PointHistory(models.Model):
         Returns:
             int: 현재 포인트 잔액
         """
-        latest_history = cls.objects.filter(user=user).order_by("-created_at").only("balance").first()
+        # created_at 동률(같은 트랜잭션에서 연속 생성) 시 나중에 삽입된 행이 최신이 되도록 id로 끊는다
+        latest_history = cls.objects.filter(user=user).order_by("-created_at", "-id").only("balance").first()
         return latest_history.balance if latest_history else 0
 
     @classmethod

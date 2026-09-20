@@ -363,8 +363,8 @@ class TestCartClear:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert cart.items.count() == 1
 
-    def test_clear_empty_cart_fails(self, authenticated_client, user, cart_urls):
-        """빈 장바구니 비우기 시도 시 에러"""
+    def test_clear_empty_cart_is_idempotent(self, authenticated_client, user, cart_urls):
+        """이미 빈 장바구니 비우기는 멱등 — 200 OK와 안내 메시지"""
         # Arrange
         CartFactory(user=user)
 
@@ -372,7 +372,7 @@ class TestCartClear:
         response = authenticated_client.post(cart_urls["clear"], {"confirm": True}, format="json")
 
         # Assert
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.status_code == status.HTTP_200_OK
         assert "비어있습니다" in str(response.json())
 
 
