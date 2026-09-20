@@ -39,8 +39,9 @@ jobs:
 
     # 환경변수 설정 (job 레벨)
     env:
-      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY }}
-      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      # CI-only fallbacks: the repo secrets are optional (forks don't get them). Never real keys.
+      DJANGO_SECRET_KEY: ${{ secrets.DJANGO_SECRET_KEY || 'ci-only-insecure-django-secret-key-do-not-use' }}
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY || 'VvVmWHd4Rt_5Xi38i41Bk6dZkUa8AFRyMe-BBgo7ESo=' }}
       DJANGO_DEBUG: False
       DATABASE_ENGINE: django.db.backends.postgresql
       DATABASE_NAME: shopping_db
