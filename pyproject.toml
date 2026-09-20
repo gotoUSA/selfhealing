@@ -167,22 +167,9 @@ dependencies = [
     # ==========================================
     "etcd3>=0.12.0",
 
-    # ==========================================
-    # LMDB (Optional - Local Cache)
-    # ==========================================
-    "lmdb>=1.7.5",
-
-    # ==========================================
-    # Optional Adapters (lazy import)
-    # ==========================================
-    "pymemcache>=4.0.0",      # Memcached adapter
-    "kubernetes>=29.0.0",      # K8s deployment adapter
-    "rq>=1.16.0",              # RQ queue adapter
-    "rq-scheduler>=0.13.0",    # RQ scheduler
-    "boto3>=1.34.0",           # AWS S3 export
-    "pyarrow>=15.0.0",         # Parquet export
-    "croniter>=2.0.0",         # Cron expression parsing
-    "cachetools>=5.3.0",       # Precomputed cache
+    # (라이브러리 어댑터용이던 lmdb / pymemcache / kubernetes / rq / rq-scheduler / boto3 /
+    #  pyarrow / croniter / cachetools 는 이 앱이 쓰지 않아 제거. rq-scheduler 가 끌어오던
+    #  `crontab` 패키지가 django-celery-beat 의 python-crontab 을 가리는 문제도 함께 사라짐)
 ]
 
 [project.optional-dependencies]
