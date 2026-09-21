@@ -151,6 +151,16 @@ app.conf.beat_schedule = {
         },
         "kwargs": {"threshold_minutes": 10},  # 10분 이상 불일치 상태인 주문만
     },
+    # 미결제 주문 만료 (재고 반환) - 5분마다
+    # 기준 시간은 settings.ORDER_PAYMENT_TIMEOUT_MINUTES (기본 30분)
+    "expire-unpaid-orders": {
+        "task": "shopping.tasks.order_tasks.expire_unpaid_orders",
+        "schedule": crontab(minute="*/5"),  # 5분마다
+        "options": {
+            "expires": 290,
+            "queue": "order_processing",
+        },
+    },
     # ==========================================================================
     # Self-Healing Tasks (selfhealing package)
     # ==========================================================================
@@ -307,6 +317,8 @@ app.conf.beat_schedule = {
     # - 04:00 - 이메일 로그 정리 (일요일만)
     # - 04:30 - 사용된 토큰 정리 (일요일만)
     # - */5분 - 실패한 이메일 재시도
+    # - */5분 - 고아 주문 감지
+    # - */5분 - 미결제 주문 만료 (재고 반환)
     # 새벽 시간대에 정리 작업을 몰아서 처리하여
     # 서버 부하를 최소화합니다.
 }

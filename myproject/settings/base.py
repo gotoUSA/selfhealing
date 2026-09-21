@@ -227,6 +227,14 @@ ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
 RETURN_REQUEST_DEADLINE_DAYS = int(os.environ.get("RETURN_REQUEST_DEADLINE_DAYS", 7))
 
 # ==========================================================================
+# Order Settings
+# ==========================================================================
+
+# 주문 생성 후 이 시간(분) 안에 결제가 시작되지 않으면 주문을 자동 취소하고
+# 점유한 재고를 돌려놓는다 (Beat: expire-unpaid-orders)
+ORDER_PAYMENT_TIMEOUT_MINUTES = int(os.environ.get("ORDER_PAYMENT_TIMEOUT_MINUTES", 30))
+
+# ==========================================================================
 # REST Framework
 # ==========================================================================
 

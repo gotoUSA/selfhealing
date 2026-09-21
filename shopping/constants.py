@@ -12,6 +12,20 @@ LOCK_CONTENTION_WARNING_THRESHOLD = 1.0  # 초
 LOCK_CONTENTION_CRITICAL_THRESHOLD = 3.0  # 초
 
 
+# ==================== 미결제 주문 만료 ====================
+# 이 상태의 주문만 만료 대상 (재고를 점유한 채 결제를 기다리는 상태)
+ORDER_EXPIRABLE_STATUSES = frozenset(["pending", "confirmed"])
+
+# 결제가 이 상태이면 주문을 만료시키지 않는다
+# - in_progress: 승인 API 호출 중 (취소하면 승인된 결제가 고아가 됨)
+# - waiting_for_deposit: 가상계좌 입금 대기 (입금 기한은 PG가 관리)
+# - done: 승인 완료, 최종 처리(finalize) 대기 중
+ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES = frozenset(["in_progress", "waiting_for_deposit", "done"])
+
+# 만료된 주문에 기록하는 실패 사유
+ORDER_EXPIRED_FAILURE_REASON = "결제 시간 초과"
+
+
 # ==================== Toss 결제 API 에러 코드 분류 ====================
 # 재시도해도 의미 없는 오류 (비즈니스 로직 오류, 클라이언트 오류)
 TOSS_NON_RETRYABLE_ERRORS = frozenset(

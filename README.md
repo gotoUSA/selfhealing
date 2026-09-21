@@ -35,9 +35,9 @@
 - **결제**: 토스페이먼츠 연동(카드/계좌/가상계좌), HMAC 서명 검증 웹훅, 멱등성 키, 결제 취소·환불, 포인트 전액 결제
 - **상품**: 계층형 카테고리(MPTT), 다중 이미지, 리뷰, 상품 문의(Q&A), 판매자 프로필
 - **장바구니 · 찜**: 재고 검증, 위시리스트
-- **주문 · 반품**: 주문 생성(동기/비동기 두 경로), 취소 시 재고·판매량 복구, 반품 요청
+- **주문 · 반품**: 주문 생성(동기/비동기 두 경로), 취소 시 재고·판매량 복구, 미결제 주문은 30분(`ORDER_PAYMENT_TIMEOUT_MINUTES`) 뒤 자동 취소·재고 반환, 반품 요청
 - **포인트**: 등급별 적립률, FIFO 사용·만료, 만료 예정 알림
-- **비동기**: Celery 워커 4개 큐(`external_api`, `payment_critical`, `order_processing`, `default`), Beat 스케줄(포인트 만료, 미인증 계정 정리, 고아 주문 감지 등)
+- **비동기**: Celery 워커 4개 큐(`external_api`, `payment_critical`, `order_processing`, `default`), Beat 스케줄(포인트 만료, 미결제 주문 만료, 미인증 계정 정리, 고아 주문 감지 등)
 - **운영**: OpenAPI(drf-spectacular), Prometheus 메트릭, Docker Compose(Grafana 스택 포함), Locust 부하 테스트(`load_tests/`), 카오스 주입(`shopping/chaos/` — 결제 승인 뒤 부분 실패, PG 승인 후 DB 실패 같은 고장을 일부러 만들어 복구 경로를 시험)
 
 ## 구조
