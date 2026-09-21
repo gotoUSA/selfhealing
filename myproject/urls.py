@@ -42,6 +42,8 @@ def health_view(request):
 urlpatterns = [
     # 헬스 체크
     path("health/", health_view, name="health"),
+    # Prometheus 메트릭 (/metrics) - django_prometheus 미들웨어가 수집한 값을 노출
+    path("", include("django_prometheus.urls")),
     # 루트 경로 (API 문서로 리다이렉트)
     path("", root_view, name="root"),
     # 관리자 페이지
