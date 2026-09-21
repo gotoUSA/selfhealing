@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Avg, BooleanField, Case, Count, Q, Value, When
+from django.db.models import Avg, BooleanField, Count, Exists, FloatField, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
 from django.utils.text import slugify
 
 from shopping.dtos.product_filter import ProductFilterParams
@@ -59,6 +60,40 @@ class CategoryTreeItemSerializer(drf_serializers.Serializer):
     slug = drf_serializers.CharField()
     product_count = drf_serializers.IntegerField()
     children = drf_serializers.ListField()
+
+
+def annotate_list_stats(queryset: Any, user_id: int | None) -> Any:
+    """
+    상품 목록에 평균 평점·리뷰 수·찜 수·내 찜 여부를 붙인다 (상품당 정확히 한 행)
+
+    리뷰와 찜을 LEFT JOIN 하고 GROUP BY 하던 이전 방식은 두 가지 문제가 있었다:
+    - 상품 × 리뷰 × 찜으로 중간 행이 곱해진다 (상품 2만·리뷰 12만·찜 12만에서 64만 행, 700ms)
+    - is_wished 의 CASE 식이 GROUP BY 에 들어가, 내가 찜한 상품을 남도 찜했으면
+      (is_wished=True 그룹, False 그룹) 두 행으로 갈라져 목록에 같은 상품이 두 번 나오고
+      count() 와 wishlist_cnt 도 틀렸다
+    상관 서브쿼리는 상품마다 인덱스 조회 몇 번이고 GROUP BY 가 없어 둘 다 사라진다.
+
+    Args:
+        queryset: Product 쿼리셋
+        user_id: 현재 사용자 ID (비로그인이면 None → is_wished 는 항상 False)
+    """
+    reviews = ProductReview.objects.filter(product=OuterRef("pk")).order_by().values("product")
+    wishes = Product.wished_by_users.through.objects.filter(product=OuterRef("pk"))
+
+    if user_id is None:
+        is_wished = Value(False, output_field=BooleanField())
+    else:
+        is_wished = Exists(wishes.filter(user_id=user_id))
+
+    return queryset.annotate(
+        avg_rating=Subquery(reviews.annotate(v=Avg("rating")).values("v"), output_field=FloatField()),
+        review_cnt=Coalesce(Subquery(reviews.annotate(v=Count("id")).values("v"), output_field=IntegerField()), 0),
+        wishlist_cnt=Coalesce(
+            Subquery(wishes.order_by().values("product").annotate(v=Count("id")).values("v"), output_field=IntegerField()),
+            0,
+        ),
+        is_wished=is_wished,
+    )
 
 
 class ProductPagination(PageNumberPagination):
@@ -203,21 +238,10 @@ class ProductViewSet(viewsets.ModelViewSet):
         # 현재 사용자 ID (인증되지 않은 경우 None)
         user_id = self.request.user.id if self.request.user.is_authenticated else None
 
-        # 기본 쿼리셋 생성
-        queryset = (
-            Product.objects.filter(is_active=True)
-            .select_related("seller", "category")
-            .prefetch_related("images", "reviews")
-            .annotate(
-                avg_rating=Avg("reviews__rating"),
-                review_cnt=Count("reviews", distinct=True),
-                wishlist_cnt=Count("wished_by_users", distinct=True),
-                is_wished=Case(
-                    When(wished_by_users__id=user_id, then=Value(True)),
-                    default=Value(False),
-                    output_field=BooleanField(),
-                ),
-            )
+        # 기본 쿼리셋 생성 (통계는 서브쿼리 — 조인 폭발·중복 행 방지)
+        queryset = annotate_list_stats(
+            Product.objects.filter(is_active=True).select_related("seller", "category").prefetch_related("images", "reviews"),
+            user_id,
         )
 
         # Request에서 필터 파라미터 추출
@@ -668,23 +692,13 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         # 현재 카테고리와 모든 하위 카테고리 가져오기
         categories = category.get_descendants(include_self=True)
 
-        # 상품 조회
-        products = (
+        # 상품 조회 (통계는 서브쿼리 — 조인 폭발·중복 행 방지)
+        products = annotate_list_stats(
             Product.objects.filter(category__in=categories, is_active=True)
             .select_related("seller", "category")
-            .prefetch_related("images", "reviews")
-            .annotate(
-                avg_rating=Avg("reviews__rating"),
-                review_cnt=Count("reviews", distinct=True),
-                wishlist_cnt=Count("wished_by_users", distinct=True),
-                is_wished=Case(
-                    When(wished_by_users__id=user_id, then=Value(True)),
-                    default=Value(False),
-                    output_field=BooleanField(),
-                ),
-            )
-            .order_by("-created_at")
-        )
+            .prefetch_related("images", "reviews"),
+            user_id,
+        ).order_by("-created_at")
 
         # 페이지네이션 적용
         paginator = ProductPagination()

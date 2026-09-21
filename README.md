@@ -25,6 +25,7 @@
 | 트랜잭션 범위와 Celery 발행 시점 | `order_service.py` `create_order_hybrid` | Order 한 행만 짧은 트랜잭션으로 만들고 **커밋 뒤에** `.delay()`. 워커는 다시 행 락을 잡고 재고·포인트를 처리, 실패 시 `failed` + 재고 복구 |
 | Celery 재시도 정책 | `shopping/tasks/payment_tasks.py` `call_toss_confirm_api` | 토스 오류 코드를 비재시도/재시도/5xx/기타 4xx로 분류(`shopping/constants.py`), 지수 백오프 + jitter, 큐 분리로 결제사 지연이 다른 태스크를 막지 않게. 타임아웃 뒤 재시도가 `ALREADY_PROCESSED_PAYMENT`를 받으면 롤백하지 않고 결제 조회 API로 대사해 승인이면 정상 마감, 조회도 안 되면 롤백 대신 운영자 알림 (`shopping/tests/tasks/test_payment_tasks.py`) |
 | 포인트 FIFO | `shopping/services/point_service.py` `use_points_fifo` | 만료 임박 순으로 적립 건을 잠그고 차감, 만료 배치는 `Greatest(F("points") - n, 0)`으로 음수 방지 |
+| 목록 집계는 조인이 아니라 서브쿼리 | `shopping/views/product_views.py` `annotate_list_stats` | 평점·리뷰 수·찜 수·내 찜 여부를 LEFT JOIN 둘 + GROUP BY로 붙였더니 상품×리뷰×찜으로 행이 곱해지고(2만 상품에 64만 행, 700ms), `is_wished`의 CASE가 GROUP BY에 들어가 내가 찜한 상품을 남도 찜하면 목록에 두 번 나왔다. `EXPLAIN`을 보다가 찾았고 상관 서브쿼리(`Subquery`/`Exists`)로 바꿔 상품당 한 행, 1ms (`test_wishlist.py::TestProductListWishlistStats`) |
 | 결제 복구 계층(라이브러리의 원형) | `shopping/services/payment_recovery_service.py` | 서킷 브레이커 확인 · SLA 타임아웃 · 백오프 재시도 · DLQ 이동 규칙. 이 510줄이 세 군데 필요해지는 시점에 라이브러리로 뺐다 |
 
 아래 [알려진 한계](#알려진-한계)도 같이 보면 좋다. 위 코드에서 내가 아는 구멍을 적어 뒀다.

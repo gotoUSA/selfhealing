@@ -541,3 +541,73 @@ class TestWishlistOwnership:
 
         response = api_client.get(wishlist_urls["list"])
         assert response.data["count"] == 0  # 다른 사용자의 찜 목록은 비어있음
+
+
+# ==========================================
+# 상품 목록의 찜 통계 (조인 폭발·중복 행 회귀)
+# ==========================================
+
+
+class TestProductListWishlistStats:
+    """목록 API 의 is_wished / wishlist_count 가 상품당 정확히 한 행으로 나온다
+
+    이전 구현은 리뷰·찜을 LEFT JOIN 하고 is_wished 의 CASE 식을 GROUP BY 에 넣어서,
+    내가 찜한 상품을 다른 사용자도 찜했으면 같은 상품이 두 행(True/False)으로 갈라져 나왔다.
+    """
+
+    def test_product_wished_by_me_and_others_appears_once(
+        self, authenticated_wishlist_client, wishlist_user, other_user, wishlist_products
+    ):
+        # Arrange: product1 은 나와 다른 사용자가 모두 찜, product2 는 다른 사용자만 찜
+        product1, product2 = wishlist_products["product1"], wishlist_products["product2"]
+        wishlist_user.add_to_wishlist(product1)
+        other_user.add_to_wishlist(product1)
+        other_user.add_to_wishlist(product2)
+
+        # Act
+        response = authenticated_wishlist_client.get(reverse("product-list"))
+
+        # Assert: 상품 3개가 각각 한 번씩, count 도 3
+        assert response.status_code == status.HTTP_200_OK
+        rows = response.data["results"]
+        ids = [row["id"] for row in rows]
+        assert sorted(ids) == sorted([p.id for p in wishlist_products.values()])
+        assert response.data["count"] == 3
+
+        by_id = {row["id"]: row for row in rows}
+        assert by_id[product1.id]["is_wished"] is True
+        assert by_id[product1.id]["wishlist_count"] == 2
+        assert by_id[product2.id]["is_wished"] is False
+        assert by_id[product2.id]["wishlist_count"] == 1
+        assert by_id[wishlist_products["product3"].id]["wishlist_count"] == 0
+
+    def test_anonymous_sees_counts_but_never_is_wished(self, api_client, wishlist_user, other_user, wishlist_products):
+        product1 = wishlist_products["product1"]
+        wishlist_user.add_to_wishlist(product1)
+        other_user.add_to_wishlist(product1)
+
+        response = api_client.get(reverse("product-list"))
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["count"] == 3
+        row = next(r for r in response.data["results"] if r["id"] == product1.id)
+        assert row["is_wished"] is False
+        assert row["wishlist_count"] == 2
+
+    def test_category_products_action_uses_the_same_stats(
+        self, authenticated_wishlist_client, wishlist_user, other_user, wishlist_category, wishlist_products
+    ):
+        """카테고리별 상품 목록(/categories/{id}/products/)도 같은 경로를 탄다"""
+        product1 = wishlist_products["product1"]
+        wishlist_user.add_to_wishlist(product1)
+        other_user.add_to_wishlist(product1)
+
+        response = authenticated_wishlist_client.get(reverse("category-products", kwargs={"pk": wishlist_category.id}))
+
+        assert response.status_code == status.HTTP_200_OK
+        rows = response.data["results"]
+        assert [r["id"] for r in rows].count(product1.id) == 1
+        assert response.data["count"] == 3
+        row = next(r for r in rows if r["id"] == product1.id)
+        assert row["is_wished"] is True
+        assert row["wishlist_count"] == 2
