@@ -23,7 +23,7 @@
 | 웹훅 멱등성 | `shopping/services/toss_webhook_service.py` `handle_payment_done` | Redis TTL 60초(빠른 필터) → Payment 행 락 + `is_paid` 검사(진짜 보장) → Order 상태 검사. confirm 응답과 웹훅의 순서가 뒤바뀌어도 한 번만 처리 (`test_confirm_webhook_race.py`) |
 | 결제 승인: 외부 API를 트랜잭션 밖으로 | `shopping/services/payment_service.py` `confirm_payment_sync` vs `confirm_payment_async` | 같은 파일에 두 버전. sync는 행 락을 쥔 채 결제사 HTTP를 기다리고(커넥션·워커가 묶임), async는 `in_progress`로 바꾸고 커밋한 뒤 Celery 체인(`external_api` 큐 → `payment_critical` 큐)으로 넘긴다. 뷰는 async를 쓴다 |
 | 트랜잭션 범위와 Celery 발행 시점 | `order_service.py` `create_order_hybrid` | Order 한 행만 짧은 트랜잭션으로 만들고 **커밋 뒤에** `.delay()`. 워커는 다시 행 락을 잡고 재고·포인트를 처리, 실패 시 `failed` + 재고 복구 |
-| Celery 재시도 정책 | `shopping/tasks/payment_tasks.py` `call_toss_confirm_api` | 토스 오류 코드를 비재시도/재시도/5xx/기타 4xx로 분류(`shopping/constants.py`), 지수 백오프 + jitter, 큐 분리로 결제사 지연이 다른 태스크를 막지 않게 |
+| Celery 재시도 정책 | `shopping/tasks/payment_tasks.py` `call_toss_confirm_api` | 토스 오류 코드를 비재시도/재시도/5xx/기타 4xx로 분류(`shopping/constants.py`), 지수 백오프 + jitter, 큐 분리로 결제사 지연이 다른 태스크를 막지 않게. 타임아웃 뒤 재시도가 `ALREADY_PROCESSED_PAYMENT`를 받으면 롤백하지 않고 결제 조회 API로 대사해 승인이면 정상 마감, 조회도 안 되면 롤백 대신 운영자 알림 (`shopping/tests/tasks/test_payment_tasks.py`) |
 | 포인트 FIFO | `shopping/services/point_service.py` `use_points_fifo` | 만료 임박 순으로 적립 건을 잠그고 차감, 만료 배치는 `Greatest(F("points") - n, 0)`으로 음수 방지 |
 | 결제 복구 계층(라이브러리의 원형) | `shopping/services/payment_recovery_service.py` | 서킷 브레이커 확인 · SLA 타임아웃 · 백오프 재시도 · DLQ 이동 규칙. 이 510줄이 세 군데 필요해지는 시점에 라이브러리로 뺐다 |
 
@@ -136,7 +136,6 @@ shopping/tests/
 코드를 읽으면서 확인한 것들이다. 고치는 방법도 같이 적었다.
 
 - **웹훅 중복 마킹이 커밋보다 먼저**: `mark_webhook_processed`가 DB 트랜잭션 커밋 전에 Redis 키를 쓴다. 핸들러가 예외로 롤백돼도 키는 60초 남아, 그 안의 재전송은 1층에서 버려진다. `transaction.on_commit`으로 옮기면 된다(2층 행 락이 있어서 중복 처리는 안 생긴다).
-- **타임아웃 뒤 실제로는 승인된 결제**: 결제사 호출이 타임아웃된 뒤 재시도가 `ALREADY_PROCESSED_PAYMENT`를 받으면 비재시도 오류로 분류돼 주문을 롤백한다 — 고객은 결제됐는데 우리 DB는 실패. 맞는 처리는 결제 조회 API로 상태를 확인해 성공으로 마감하는 것이다. 카오스 모듈에 이 시나리오(`BP-21`)가 있지만 감지만 있고 정정은 없다.
 - **포인트 적립 건별 사용량이 JSON 컬럼**(`PointHistory.metadata.used_amount`): 집계·인덱스가 안 된다. 사용자당 적립 건이 수천 개가 되면 할당 테이블로 빼야 한다.
 - **한 번의 머지가 코드를 떨어뜨렸던 일**: 2025-12-14, 쇼핑몰 브랜치와 결제 복구 브랜치를 합치면서 한쪽의 테스트와 다른 쪽의 코드가 섞여 들어갔다(취소 시 포인트 환불, 회원 등급 스냅샷, 락 순서 고정, 주문 실패 사유가 사라짐). CI가 사설 의존성 때문에 돌지 않아 9개월 뒤에야 발견했고, 사라진 코드는 git에서 되살렸다. 두 갈래를 오래 벌려 두지 말 것, 그리고 CI가 빨간 채로 두지 말 것 — 이 레포에서 배운 가장 비싼 교훈이다.
 

@@ -12,6 +12,8 @@ from ..constants import (
     LOCK_CONTENTION_CRITICAL_THRESHOLD,
     LOCK_CONTENTION_WARNING_THRESHOLD,
     TOSS_NON_RETRYABLE_ERRORS,
+    TOSS_PAYMENT_STATUS_DONE,
+    TOSS_RECONCILE_ERRORS,
     TOSS_RETRYABLE_ERRORS,
 )
 from ..models.cart import Cart
@@ -36,6 +38,79 @@ from ..chaos.decorators import (
 )
 
 logger = get_task_logger(__name__)
+
+
+def _reconcile_confirmed_payment(
+    task, toss_client: TossPaymentClient, payment_key: str, order_id: int, amount: int, error: TossPaymentError
+) -> dict | None:
+    """
+    "이미 처리된 결제" 오류를 받았을 때 결제 조회 API 로 실제 상태를 확인한다 (PG 대사)
+
+    우리 승인 요청이 토스에 닿았는데 응답만 잃은 경우(타임아웃), 재시도는 ALREADY_PROCESSED_PAYMENT 를
+    받는다. 이때 롤백하면 고객 카드는 긁혔는데 우리 DB 는 실패로 남는다(고아 결제). 그래서 롤백 전에
+    조회 API 로 확인하고, 승인 완료(DONE) 이며 주문번호·금액이 일치하면 그 응답을 승인 응답 대신 돌려준다.
+
+    Returns:
+        승인이 확인되면 조회 응답 (finalize_payment_confirm 이 그대로 받을 수 있는 형식), 아니면 None
+
+    Raises:
+        조회 자체가 실패하면 재시도. 재시도까지 소진되면 롤백하지 않고 운영자 알림 후 실패로 남긴다
+        — 확인 없이 롤백하는 것이 바로 이 함수가 막으려는 사고이기 때문
+    """
+    logger.warning(f"승인 오류 {error.code} 수신, 조회 API 로 대사 시작: order_id={order_id}")
+
+    try:
+        payment_data = toss_client.get_payment(payment_key)
+    except TossPaymentError as lookup_error:
+        logger.error(f"결제 조회 실패: order_id={order_id}, error={lookup_error.code} - {lookup_error.message}")
+        try:
+            raise task.retry(exc=lookup_error)
+        except task.MaxRetriesExceededError:
+            logger.critical(
+                f"결제 조회 재시도 소진 — 승인 여부 미확인, 수동 대사 필요: order_id={order_id}, "
+                f"payment_key={payment_key}"
+            )
+            try:
+                payment = Payment.objects.get(order_id=order_id)
+                PaymentLog.objects.create(
+                    payment=payment,
+                    log_type="error",
+                    message="승인 여부 미확인 (조회 API 재시도 소진) — 수동 대사 필요",
+                    data={"error_code": error.code, "lookup_error_code": lookup_error.code, "order_id": order_id},
+                )
+            except Exception as log_error:
+                logger.error(f"대사 실패 로그 기록 실패: {str(log_error)}")
+            notify_payment_failure.delay(
+                order_id,
+                "reconcile_failed",
+                details=f"{error.code} 수신 후 조회 API 실패({lookup_error.code}) — 승인 여부 미확인",
+                severity="critical",
+            )
+            raise
+
+    status = payment_data.get("status")
+    order_id_matches = str(payment_data.get("orderId")) == str(order_id)
+    amount_matches = payment_data.get("totalAmount") is not None and int(payment_data["totalAmount"]) == int(amount)
+
+    if status == TOSS_PAYMENT_STATUS_DONE and order_id_matches and amount_matches:
+        logger.warning(f"조회 API 로 승인 확인, 정상 마감으로 진행: order_id={order_id}, payment_key={payment_key}")
+        try:
+            payment = Payment.objects.get(order_id=order_id)
+            PaymentLog.objects.create(
+                payment=payment,
+                log_type="approve",
+                message=f"{error.code} 수신 → 조회 API 로 승인 확인 (대사)",
+                data={"error_code": error.code, "order_id": order_id, "status": status},
+            )
+        except Exception as log_error:
+            logger.error(f"대사 로그 기록 실패: {str(log_error)}")
+        return payment_data
+
+    logger.error(
+        f"조회 결과 승인 아님, 롤백 진행: order_id={order_id}, status={status}, "
+        f"orderId={payment_data.get('orderId')}, totalAmount={payment_data.get('totalAmount')}, expected_amount={amount}"
+    )
+    return None
 
 
 @shared_task(
@@ -101,6 +176,13 @@ def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int) ->
 
     except TossPaymentError as e:
         logger.error(f"Toss API 호출 실패: order_id={order_id}, error={e.message}")
+
+        # 0. 승인이 이미 됐을 수 있는 오류 (타임아웃 뒤 재시도): 롤백 전에 조회 API 로 대사
+        if e.code in TOSS_RECONCILE_ERRORS:
+            confirmed_payment = _reconcile_confirmed_payment(self, toss_client, payment_key, order_id, amount, e)
+            if confirmed_payment is not None:
+                return confirmed_payment
+            # 조회 결과 승인 아님 → 아래 기존 롤백 경로로
 
         # 에러 로그 기록 및 Payment 상태만 업데이트
         try:
@@ -487,7 +569,9 @@ def detect_orphaned_orders(self, threshold_minutes: int = 10) -> dict:
             )
 
             # 롤백 태스크 트리거
-            rollback_payment_failure.delay(order_id=order.id, reason=f"Orphan detection (stale for >{threshold_minutes}min)")
+            rollback_payment_failure.delay(
+                order_id=order.id, fail_reason=f"Orphan detection (stale for >{threshold_minutes}min)"
+            )
             triggered_count += 1
 
         except Exception as e:
