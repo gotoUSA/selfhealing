@@ -115,7 +115,7 @@ class TestPaymentConfirm:
         # Assert - Toss API 호출 검증
         mock_confirm.assert_called_once_with(
             payment_key="test_payment_key_123",
-            order_id=str(order.id),  # Toss API는 문자열로 변환되어 호출됨
+            order_id=payment.toss_order_id,  # 결제창에 넘긴 토스 orderId 그대로
             amount=int(payment.amount),
         )
 

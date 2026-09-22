@@ -108,7 +108,7 @@ def retry_failed_payment(self, payment_id: int, order_id: int, attempt: int) -> 
         try:
             payment_data = toss_client.confirm_payment(
                 payment_key=payment.payment_key,
-                order_id=str(order_id),
+                order_id=payment.toss_order_id,
                 amount=int(payment.amount),
             )
 

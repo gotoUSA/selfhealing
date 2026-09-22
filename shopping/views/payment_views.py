@@ -892,14 +892,14 @@ def payment_success(request):
         )
 
     try:
-        # Payment 찾기 (toss_order_id는 str(order.id)로 저장됨)
+        # Payment 찾기 (toss_order_id = 결제창에 넘긴 orderId = 주문번호)
         payment = Payment.objects.get(toss_order_id=order_id)
 
         # PaymentService를 통한 결제 승인 처리
         result = PaymentService.confirm_payment_sync(
             payment=payment,
             payment_key=payment_key,
-            order_id=int(order_id),  # int로 변환
+            order_id=payment.order_id,
             amount=int(amount),
             user=request.user,
         )

@@ -43,7 +43,13 @@ logger = get_task_logger(__name__)
 
 
 def _reconcile_confirmed_payment(
-    task, toss_client: TossPaymentClient, payment_key: str, order_id: int, amount: int, error: TossPaymentError
+    task,
+    toss_client: TossPaymentClient,
+    payment_key: str,
+    order_id: int,
+    amount: int,
+    error: TossPaymentError,
+    toss_order_id: str | None = None,
 ) -> dict | None:
     """
     "이미 처리된 결제" 오류를 받았을 때 결제 조회 API 로 실제 상태를 확인한다 (PG 대사)
@@ -91,7 +97,8 @@ def _reconcile_confirmed_payment(
             raise
 
     status = payment_data.get("status")
-    order_id_matches = str(payment_data.get("orderId")) == str(order_id)
+    expected_order_id = toss_order_id or str(order_id)
+    order_id_matches = str(payment_data.get("orderId")) == expected_order_id
     amount_matches = payment_data.get("totalAmount") is not None and int(payment_data["totalAmount"]) == int(amount)
 
     # 카드 승인(DONE)뿐 아니라 가상계좌 발급(WAITING_FOR_DEPOSIT)도 "승인 요청이 닿은" 상태 — finalize 가 입금 대기로 기록한다
@@ -128,14 +135,15 @@ def _reconcile_confirmed_payment(
     soft_time_limit=25,
     acks_late=True,
 )
-def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int) -> dict:
+def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int, toss_order_id: str | None = None) -> dict:
     """
     Toss 결제 승인 API 호출 (외부 API만 호출, DB 작업 없음)
 
     Args:
         payment_key: 토스 결제 키
-        order_id: 주문 ID
+        order_id: 주문 ID (우리 PK — 로그·DB 조회용)
         amount: 결제 금액
+        toss_order_id: 결제창에 넘긴 토스 orderId (주문번호). 없으면 str(order_id) — 이미 큐에 있던 옛 메시지 호환
 
     Returns:
         Toss API 응답 데이터
@@ -143,13 +151,14 @@ def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int) ->
     Raises:
         TossPaymentError: API 호출 실패
     """
-    logger.info(f"Toss API 호출 시작: order_id={order_id}, amount={amount}")
+    toss_order_id = toss_order_id or str(order_id)
+    logger.info(f"Toss API 호출 시작: order_id={order_id}, toss_order_id={toss_order_id}, amount={amount}")
 
     try:
         toss_client = TossPaymentClient()
         payment_data = toss_client.confirm_payment(
             payment_key=payment_key,
-            order_id=str(order_id),  # Toss API는 문자열 orderId를 받음
+            order_id=toss_order_id,
             amount=amount,
         )
 
@@ -182,7 +191,9 @@ def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int) ->
 
         # 0. 승인이 이미 됐을 수 있는 오류 (타임아웃 뒤 재시도): 롤백 전에 조회 API 로 대사
         if e.code in TOSS_RECONCILE_ERRORS:
-            confirmed_payment = _reconcile_confirmed_payment(self, toss_client, payment_key, order_id, amount, e)
+            confirmed_payment = _reconcile_confirmed_payment(
+                self, toss_client, payment_key, order_id, amount, e, toss_order_id=toss_order_id
+            )
             if confirmed_payment is not None:
                 return confirmed_payment
             # 조회 결과 승인 아님 → 아래 기존 롤백 경로로

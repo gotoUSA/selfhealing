@@ -376,12 +376,22 @@ class Payment(models.Model):
         테스트 등에서 직접 생성 시 모든 필드를 명시적으로 설정해야 합니다:
             Payment.objects.create(
                 order=order,
-                toss_order_id=str(order.id),  # Toss orderId와 일치 (명시적 설정 필수)
+                toss_order_id=Payment.toss_order_id_for(order),  # Toss orderId와 일치 (명시적 설정 필수)
                 amount=order.final_amount,
                 status="ready",
             )
         """
         super().save(*args, **kwargs)
+
+    @staticmethod
+    def toss_order_id_for(order) -> str:
+        """
+        토스에 보내는 orderId — 주문번호를 쓴다
+
+        토스 규칙: 영문 대소문자·숫자·-·_ 만, 6자 이상 64자 이하. 주문 PK 는 짧으면(예: "9") 결제창에서
+        거부되므로 14자리 주문번호(예: 20260922000009)를 쓴다. 승인·조회·웹훅이 전부 이 값으로 우리 결제를 찾는다.
+        """
+        return order.order_number
 
 
 class PaymentLog(models.Model):

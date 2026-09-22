@@ -99,7 +99,11 @@ class TestPaymentRequestNormalCase:
         assert payment.order == order
         assert payment.status == "ready"
         assert payment.amount == order.final_amount
-        assert payment.toss_order_id == str(order.id)  # Toss에 전송하는 orderId와 일치
+        assert payment.toss_order_id == order.order_number  # 결제창·승인·웹훅이 쓰는 토스 orderId (6~64자 규칙 → 주문번호)
+        # 토스 orderId 규칙: 영문·숫자·-·_ 6~64자 — 주문 PK("1")를 쓰면 결제창이 거부한다
+        import re
+
+        assert re.fullmatch(r"[A-Za-z0-9_-]{6,64}", payment.toss_order_id)
         assert payment.method == "card"  # 기본값
 
     def test_response_data_structure(self, authenticated_client, order, user):

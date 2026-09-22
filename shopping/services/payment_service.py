@@ -129,7 +129,7 @@ class PaymentService:
         # 새 Payment 생성
         payment = Payment.objects.create(
             order=order,
-            toss_order_id=str(order.id),
+            toss_order_id=Payment.toss_order_id_for(order),
             amount=order.final_amount,
             method=payment_method,
             status="ready",
@@ -209,7 +209,7 @@ class PaymentService:
         logger.info(f"토스페이먼츠 결제 승인 요청: order_id={order_id}, amount={amount}")
         payment_data = toss_client.confirm_payment(
             payment_key=payment_key,
-            order_id=str(order_id),  # Toss API는 문자열 orderId를 받음
+            order_id=payment.toss_order_id,  # 결제창에 넘긴 orderId 와 같아야 한다 (주문번호)
             amount=amount,
         )
         logger.info(f"토스페이먼츠 결제 승인 성공: payment_id={payment.id}, order_id={order_id}")
@@ -441,7 +441,7 @@ class PaymentService:
 
         if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
             # Eager 모드: 직접 함수 호출 (동기 실행)
-            toss_result = call_toss_confirm_api(payment_key, order_id, amount)
+            toss_result = call_toss_confirm_api(payment_key, order_id, amount, toss_order_id=payment.toss_order_id)
             final_result = finalize_payment_confirm(toss_result, payment.id, user.id)
 
             # 응답 형식 통일을 위한 더미 AsyncResult
@@ -449,7 +449,8 @@ class PaymentService:
         else:
             # 프로덕션 환경: chain 사용
             task_chain = chain(
-                call_toss_confirm_api.s(payment_key, order_id, amount), finalize_payment_confirm.s(payment.id, user.id)
+                call_toss_confirm_api.s(payment_key, order_id, amount, toss_order_id=payment.toss_order_id),
+                finalize_payment_confirm.s(payment.id, user.id),
             )
             result = task_chain.apply_async()
 
