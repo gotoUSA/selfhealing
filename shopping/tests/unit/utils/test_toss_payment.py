@@ -50,6 +50,26 @@ class TestConfirmPayment:
         """각 테스트마다 자동 실행되는 설정"""
         self.client = TossPaymentClient()
 
+    @pytest.mark.parametrize("debug", [True, False])
+    def test_confirm_and_cancel_always_call_toss(self, mocker, settings, debug):
+        """DEBUG 값과 무관하게 실제 API를 부른다 — 개발 환경에서 가짜 응답을 돌려주면 안 된다
+
+        예전에는 DEBUG 이면 {"status": "SUCCESS"} 같은 가짜 응답을 돌려줬다. 토스에 없는 상태값이라
+        가상계좌(WAITING_FOR_DEPOSIT) 분기가 개발 환경에서 한 번도 실행되지 않았고, 취소 응답의
+        가짜 모양(최상위 cancelReason)이 그대로 모델 코드의 전제가 됐다.
+        """
+        settings.DEBUG = debug
+        mock_response = Mock(status_code=200)
+        mock_response.json.return_value = {"status": "DONE", "orderId": "ORDER_000001", "totalAmount": 1000}
+        post = mocker.patch("requests.post", return_value=mock_response)
+
+        self.client.confirm_payment(payment_key="k", order_id="ORDER_000001", amount=1000)
+        self.client.cancel_payment(payment_key="k", cancel_reason="테스트")
+
+        assert post.call_count == 2
+        assert post.call_args_list[0].args[0].endswith("/v1/payments/confirm")
+        assert post.call_args_list[1].args[0].endswith("/v1/payments/k/cancel")
+
     def test_confirm_payment_success(self, mocker):
         """정상적인 결제 승인"""
         # Mock 응답 데이터

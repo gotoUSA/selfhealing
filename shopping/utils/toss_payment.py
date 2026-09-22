@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime
 from typing import Any
 
 from django.conf import settings
@@ -14,6 +13,11 @@ class TossPaymentClient:
     토스페이먼츠 API 클라이언트
 
     공식 문서: https://docs.tosspayments.com/reference
+
+    Note:
+        외부 호출을 설정값(DEBUG 등)으로 가짜 응답으로 바꾸지 않는다. 개발 환경도 토스 테스트 키로
+        실제 API를 부른다 — 가짜 응답은 그 모양이 곧 계약으로 굳어져(취소 응답의 cancels[] 처럼)
+        나머지 코드를 잘못된 스키마 위에 세운다.
     """
 
     def __init__(self) -> None:
@@ -52,16 +56,6 @@ class TossPaymentClient:
         Raises:
             TossPaymentError: 결제 승인 실패시
         """
-        if settings.DEBUG:
-            return {
-                "orderId": str(order_id),
-                "status": "SUCCESS",
-                "approvedAt": datetime.now().isoformat(),
-                "paymentKey": str(payment_key),
-                "amount": int(amount),
-                "totalAmount": int(amount),  # Toss 응답 형식과 비슷하게
-                "balanceAmount": 0,
-            }
         url = f"{self.base_url}/v1/payments/confirm"
 
         data = {
@@ -119,12 +113,6 @@ class TossPaymentClient:
         Raises:
             TossPaymentError: 취소 실패시
         """
-        if settings.DEBUG:
-            return {
-                "status": "CANCELED",
-                "canceledAt": datetime.now().isoformat(),
-                "cancelReason": cancel_reason,
-            }
         url = f"{self.base_url}/v1/payments/{payment_key}/cancel"
 
         data = {
