@@ -63,14 +63,23 @@ class PaymentCancelResponseSerializer(drf_serializers.Serializer):
     deducted_points = drf_serializers.IntegerField(help_text="차감된 포인트")
 
 
+class VirtualAccountSerializer(drf_serializers.Serializer):
+    """가상계좌 입금 안내 (status=waiting_for_deposit 일 때만)"""
+
+    bank_code = drf_serializers.CharField()
+    account_number = drf_serializers.CharField()
+    due_date = drf_serializers.DateTimeField(allow_null=True)
+
+
 class PaymentStatusResponseSerializer(drf_serializers.Serializer):
     """결제 상태 응답"""
 
     payment_id = drf_serializers.IntegerField()
-    status = drf_serializers.CharField(help_text="결제 상태 (ready, done, canceled, aborted)")
+    status = drf_serializers.CharField(help_text="결제 상태 (ready, in_progress, waiting_for_deposit, done, canceled, aborted, expired)")
     is_paid = drf_serializers.BooleanField()
     order_status = drf_serializers.CharField(allow_null=True)
     order_id = drf_serializers.IntegerField(allow_null=True)
+    virtual_account = VirtualAccountSerializer(required=False, allow_null=True)
 
 
 class PaymentFailResponseSerializer(drf_serializers.Serializer):
@@ -414,6 +423,7 @@ class PaymentStatusView(APIView):
         description="""처리 내용:
 - 결제 처리 상태를 반환한다.
 - is_paid가 true면 결제 완료 상태이다.
+- 가상계좌는 status=waiting_for_deposit 과 함께 virtual_account(은행코드·계좌번호·입금기한)를 준다.
 - 결제 승인 후 폴링 시 사용한다.""",
         tags=["Payments"],
     )
@@ -422,15 +432,23 @@ class PaymentStatusView(APIView):
         try:
             payment = Payment.objects.select_related("order").get(id=payment_id, order__user=request.user)
 
-            return Response(
-                {
-                    "payment_id": payment.id,
-                    "status": payment.status,
-                    "is_paid": payment.is_paid,
-                    "order_status": payment.order.status if payment.order else None,
-                    "order_id": payment.order.id if payment.order else None,
+            response_data = {
+                "payment_id": payment.id,
+                "status": payment.status,
+                "is_paid": payment.is_paid,
+                "order_status": payment.order.status if payment.order else None,
+                "order_id": payment.order.id if payment.order else None,
+            }
+
+            # 가상계좌: 입금 대기 중이면 고객에게 안내할 계좌 정보를 함께 준다
+            if payment.is_waiting_for_deposit:
+                response_data["virtual_account"] = {
+                    "bank_code": payment.virtual_account_bank_code,
+                    "account_number": payment.virtual_account_number,
+                    "due_date": payment.virtual_account_due_date,
                 }
-            )
+
+            return Response(response_data)
 
         except Payment.DoesNotExist:
             return Response({"error": "결제 정보를 찾을 수 없습니다."}, status=status.HTTP_404_NOT_FOUND)

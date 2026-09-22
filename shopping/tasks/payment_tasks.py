@@ -13,6 +13,7 @@ from ..constants import (
     LOCK_CONTENTION_WARNING_THRESHOLD,
     TOSS_NON_RETRYABLE_ERRORS,
     TOSS_PAYMENT_STATUS_DONE,
+    TOSS_PAYMENT_STATUS_WAITING_FOR_DEPOSIT,
     TOSS_RECONCILE_ERRORS,
     TOSS_RETRYABLE_ERRORS,
 )
@@ -20,6 +21,7 @@ from ..models.cart import Cart
 from ..models.order import Order
 from ..models.payment import Payment, PaymentLog
 from ..models.product import Product
+from ..services.payment_service import PaymentService
 from ..services.point_service import PointService
 from ..utils.toss_payment import TossPaymentClient, TossPaymentError
 
@@ -92,7 +94,8 @@ def _reconcile_confirmed_payment(
     order_id_matches = str(payment_data.get("orderId")) == str(order_id)
     amount_matches = payment_data.get("totalAmount") is not None and int(payment_data["totalAmount"]) == int(amount)
 
-    if status == TOSS_PAYMENT_STATUS_DONE and order_id_matches and amount_matches:
+    # 카드 승인(DONE)뿐 아니라 가상계좌 발급(WAITING_FOR_DEPOSIT)도 "승인 요청이 닿은" 상태 — finalize 가 입금 대기로 기록한다
+    if status in (TOSS_PAYMENT_STATUS_DONE, TOSS_PAYMENT_STATUS_WAITING_FOR_DEPOSIT) and order_id_matches and amount_matches:
         logger.warning(f"조회 API 로 승인 확인, 정상 마감으로 진행: order_id={order_id}, payment_key={payment_key}")
         try:
             payment = Payment.objects.get(order_id=order_id)
@@ -314,6 +317,15 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
                 logger.warning(f"이미 처리된 결제: payment_id={payment_id}")
                 return {"status": "already_processed", "payment_id": payment_id}
 
+            # 가상계좌: 승인 응답은 "발급"이지 "입금"이 아니다 — 입금 웹훅이 올 때까지 결제 완료 처리하지 않는다
+            if toss_response.get("status") == TOSS_PAYMENT_STATUS_WAITING_FOR_DEPOSIT:
+                PaymentService.record_virtual_account_issued(payment, toss_response)
+                return {
+                    "status": "waiting_for_deposit",
+                    "payment_id": payment_id,
+                    "order_id": payment.order_id,
+                }
+
             payment.mark_as_paid(toss_response)
             order = payment.order
 
@@ -482,7 +494,8 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
             # 5. Payment 상태 확인 및 업데이트
             try:
                 payment = Payment.objects.get(order=order)
-                if payment.status not in ["aborted", "failed"]:
+                # 가상계좌 기한 만료(expired)는 실패 사유가 다르므로 aborted 로 덮어쓰지 않는다
+                if payment.status not in ["aborted", "failed", "expired"]:
                     payment.status = "aborted"
                     payment.save(update_fields=["status"])
 

@@ -1130,68 +1130,79 @@ class WebhookDataBuilder:
     """
     웹훅 데이터 빌더
 
-    Toss 웹훅 이벤트 데이터를 생성합니다.
+    토스 PAYMENT_STATUS_CHANGED 웹훅 본문을 생성합니다 — data 는 Payment 객체.
+    (뷰는 본문 대신 결제 조회 API 응답으로 처리하므로, 테스트에서는 data 를 get_payment mock 의 반환값으로도 쓴다)
 
     사용 예시:
         data = WebhookDataBuilder.payment_done(order_id="ORDER_001")
         data = WebhookDataBuilder.payment_canceled(order_id="ORDER_001")
+        data = WebhookDataBuilder.payment_failed(order_id="ORDER_001")
     """
 
     @staticmethod
+    def _envelope(payment):
+        return {
+            "eventType": "PAYMENT_STATUS_CHANGED",
+            "createdAt": timezone.now().isoformat(),
+            "data": payment,
+        }
+
+    @staticmethod
     def payment_done(order_id, payment_key="test_payment_key_123", amount=10000, method="카드", **kwargs):
-        """PAYMENT.DONE 이벤트"""
-        data = {
-            "eventType": "PAYMENT.DONE",
-            "data": {
-                "orderId": order_id,
-                "paymentKey": payment_key,
-                "status": "DONE",
-                "totalAmount": amount,
-                "method": method,
-                "approvedAt": timezone.now().isoformat(),
-            },
+        """status=DONE Payment 객체"""
+        payment = {
+            "orderId": order_id,
+            "paymentKey": payment_key,
+            "status": "DONE",
+            "totalAmount": amount,
+            "method": method,
+            "approvedAt": timezone.now().isoformat(),
         }
 
         # 카드 결제인 경우 카드 정보 추가
         if method == "카드":
-            data["data"]["card"] = {
+            payment["card"] = {
                 "company": "신한카드",
                 "number": "1234****",
                 "installmentPlanMonths": 0,
             }
 
         # 추가 필드 병합
-        data["data"].update(kwargs)
-        return data
+        payment.update(kwargs)
+        return WebhookDataBuilder._envelope(payment)
 
     @staticmethod
-    def payment_canceled(order_id, payment_key="test_payment_key_123", cancel_reason="사용자 요청", **kwargs):
-        """PAYMENT.CANCELED 이벤트"""
-        data = {
-            "eventType": "PAYMENT.CANCELED",
-            "data": {
-                "orderId": order_id,
-                "paymentKey": payment_key,
-                "status": "CANCELED",
-                "cancelReason": cancel_reason,
-                "canceledAt": timezone.now().isoformat(),
-            },
+    def payment_canceled(
+        order_id, payment_key="test_payment_key_123", amount=10000, cancel_reason="사용자 요청", **kwargs
+    ):
+        """status=CANCELED Payment 객체 (취소 이력은 cancels[])"""
+        payment = {
+            "orderId": order_id,
+            "paymentKey": payment_key,
+            "status": "CANCELED",
+            "totalAmount": amount,
+            "cancels": [
+                {
+                    "cancelAmount": amount,
+                    "cancelReason": cancel_reason,
+                    "canceledAt": timezone.now().isoformat(),
+                }
+            ],
         }
-        data["data"].update(kwargs)
-        return data
+        payment.update(kwargs)
+        return WebhookDataBuilder._envelope(payment)
 
     @staticmethod
-    def payment_failed(order_id, fail_reason="카드 한도 초과", **kwargs):
-        """PAYMENT.FAILED 이벤트"""
-        data = {
-            "eventType": "PAYMENT.FAILED",
-            "data": {
-                "orderId": order_id,
-                "failReason": fail_reason,
-            },
+    def payment_failed(order_id, payment_key="test_payment_key_123", fail_reason="카드 한도 초과", **kwargs):
+        """status=ABORTED Payment 객체 (실패 사유는 failure.message)"""
+        payment = {
+            "orderId": order_id,
+            "paymentKey": payment_key,
+            "status": "ABORTED",
+            "failure": {"code": "REJECT_CARD_COMPANY", "message": fail_reason},
         }
-        data["data"].update(kwargs)
-        return data
+        payment.update(kwargs)
+        return WebhookDataBuilder._envelope(payment)
 
 
 # ==========================================
@@ -1214,8 +1225,8 @@ class WebhookEventFactory(DjangoModelFactory):
     class Meta:
         model = "shopping.WebhookEvent"
 
-    event_id = factory.Sequence(lambda n: f"toss:ORDER_{n:06d}:PAYMENT.DONE")
-    event_type = "PAYMENT.DONE"
+    event_id = factory.Sequence(lambda n: f"toss:ORDER_{n:06d}:DONE")
+    event_type = "DONE"
     source = "toss"
     order_id = factory.Sequence(lambda n: f"ORDER_{n:06d}")
 
@@ -1224,8 +1235,8 @@ class WebhookEventFactory(DjangoModelFactory):
         """결제 완료 이벤트"""
         if order_id:
             kwargs["order_id"] = order_id
-            kwargs["event_id"] = f"toss:{order_id}:PAYMENT.DONE"
-        kwargs.setdefault("event_type", "PAYMENT.DONE")
+            kwargs["event_id"] = f"toss:{order_id}:DONE"
+        kwargs.setdefault("event_type", "DONE")
         return cls(**kwargs)
 
     @classmethod
@@ -1233,8 +1244,8 @@ class WebhookEventFactory(DjangoModelFactory):
         """결제 취소 이벤트"""
         if order_id:
             kwargs["order_id"] = order_id
-            kwargs["event_id"] = f"toss:{order_id}:PAYMENT.CANCELED"
-        kwargs.setdefault("event_type", "PAYMENT.CANCELED")
+            kwargs["event_id"] = f"toss:{order_id}:CANCELED"
+        kwargs.setdefault("event_type", "CANCELED")
         return cls(**kwargs)
 
     @classmethod
@@ -1242,8 +1253,8 @@ class WebhookEventFactory(DjangoModelFactory):
         """결제 실패 이벤트"""
         if order_id:
             kwargs["order_id"] = order_id
-            kwargs["event_id"] = f"toss:{order_id}:PAYMENT.FAILED"
-        kwargs.setdefault("event_type", "PAYMENT.FAILED")
+            kwargs["event_id"] = f"toss:{order_id}:ABORTED"
+        kwargs.setdefault("event_type", "ABORTED")
         return cls(**kwargs)
 
 

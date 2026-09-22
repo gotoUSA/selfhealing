@@ -48,6 +48,9 @@ class PaymentSerializer(serializers.ModelSerializer):
             "status_display",
             "approved_at",
             "receipt_url",
+            "virtual_account_bank_code",
+            "virtual_account_number",
+            "virtual_account_due_date",
             "is_canceled",
             "canceled_amount",
             "cancel_reason",
@@ -59,6 +62,9 @@ class PaymentSerializer(serializers.ModelSerializer):
             "payment_key",
             "approved_at",
             "receipt_url",
+            "virtual_account_bank_code",
+            "virtual_account_number",
+            "virtual_account_due_date",
             "canceled_at",
         ]
 
@@ -231,29 +237,53 @@ class PaymentLogSerializer(serializers.ModelSerializer):
 
 class PaymentWebhookSerializer(serializers.Serializer):
     """
-    토스페이먼츠 웹훅 처리용 시리얼라이저
+    토스페이먼츠 웹훅 본문 시리얼라이저
+
+    토스 웹훅 본문: {"eventType": "...", "createdAt": "...", "data": {...}}
+    - PAYMENT_STATUS_CHANGED: data = Payment 객체 (paymentKey, orderId, status, ...)
+    - 그 외 이벤트(DEPOSIT_CALLBACK, CANCEL_STATUS_CHANGED, ...)는 is_supported=False 로 표시만 하고 에러는 내지 않는다
     """
 
-    eventType = serializers.CharField(help_text="이벤트 타입")
+    SUPPORTED_EVENTS = ("PAYMENT_STATUS_CHANGED",)
 
-    data = serializers.JSONField(help_text="이벤트 데이터")
+    eventType = serializers.CharField(help_text="이벤트 타입 (PAYMENT_STATUS_CHANGED 등)")
+
+    createdAt = serializers.CharField(required=False, help_text="이벤트 생성 시각 (ISO 8601)")
+
+    data = serializers.JSONField(help_text="이벤트 데이터 (PAYMENT_STATUS_CHANGED 이면 Payment 객체)")
+
+    is_supported = False
 
     def validate_eventType(self, value):
-        """지원하는 이벤트 타입인지 확인"""
-        supported_events = [
-            "PAYMENT.DONE",  # 결제 완료
-            "PAYMENT.CANCELED",  # 결제 취소
-            "PAYMENT.FAILED",  # 결제 실패
-            "PAYMENT.PARTIAL_CANCELED",  # 부분 취소 (향후 지원)
-        ]
-
-        if value not in supported_events:
-            # 지원하지 않는 이벤트는 무시 (에러 발생시키지 않음)
-            self.is_supported = False
-        else:
-            self.is_supported = True
-
+        """지원하는 이벤트 타입인지 표시 (미지원은 무시 대상이지 에러가 아니다)"""
+        self.is_supported = value in self.SUPPORTED_EVENTS
         return value
+
+    def validate_data(self, value):
+        """data 는 객체여야 한다 (Payment 객체)"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("data must be an object.")
+        return value
+
+
+class DepositCallbackSerializer(serializers.Serializer):
+    """
+    토스페이먼츠 가상계좌 입금 웹훅(DEPOSIT_CALLBACK) 본문 시리얼라이저
+
+    이 이벤트만 본문이 평평하다 — eventType/data 래퍼 없이
+    {"createdAt", "secret", "status", "transactionKey", "orderId"}.
+    secret 은 승인 응답의 Payment.secret 과 같아야 한다.
+    """
+
+    createdAt = serializers.CharField(required=False, help_text="웹훅 생성 시각 (ISO 8601)")
+
+    secret = serializers.CharField(help_text="승인 응답의 secret 과 비교해 진위를 확인하는 값")
+
+    status = serializers.CharField(help_text="결제 상태 (DONE, CANCELED, ...)")
+
+    transactionKey = serializers.CharField(required=False, help_text="상태가 바뀐 가상계좌 거래 키")
+
+    orderId = serializers.CharField(help_text="주문번호")
 
 
 class PaymentFailSerializer(serializers.Serializer):

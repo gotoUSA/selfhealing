@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import F
 from django.db.models.functions import Greatest
 
+from ..constants import TOSS_PAYMENT_STATUS_WAITING_FOR_DEPOSIT
 from ..models.cart import Cart
 from ..models.order import Order
 from ..models.payment import Payment, PaymentLog
@@ -186,6 +187,10 @@ class PaymentService:
         if payment.is_paid:
             raise PaymentConfirmError("이미 완료된 결제입니다.")
 
+        # 가상계좌 발급 뒤 재승인 요청 차단 — 입금 웹훅이 마감한다
+        if payment.is_waiting_for_deposit:
+            raise PaymentConfirmError("가상계좌 입금 대기 중인 결제입니다.")
+
         # 유효하지 않은 상태 확인
         if payment.status in ["expired", "canceled", "aborted"]:
             raise PaymentConfirmError(f"유효하지 않은 결제 상태입니다: {payment.get_status_display()}")
@@ -232,6 +237,16 @@ class PaymentService:
 
         # [CHAOS] Payment confirm delay - expands race window before DB commit
         inject_payment_confirm_delay(payment_id=payment.id, order_id=order.id)
+
+        # 가상계좌: 승인 응답은 "발급"이지 "입금"이 아니다 — 입금 전엔 결제 완료 처리하지 않는다
+        if payment_data.get("status") == TOSS_PAYMENT_STATUS_WAITING_FOR_DEPOSIT:
+            PaymentService.record_virtual_account_issued(payment, payment_data)
+            return {
+                "payment": payment,
+                "points_earned": 0,
+                "receipt_url": "",
+                "waiting_for_deposit": True,
+            }
 
         # 2. Payment 정보 업데이트
         payment.mark_as_paid(payment_data)
@@ -340,6 +355,33 @@ class PaymentService:
         }
 
     @staticmethod
+    def record_virtual_account_issued(payment: Payment, payment_data: dict[str, Any]) -> None:
+        """
+        가상계좌 발급 기록 (승인 응답 status=WAITING_FOR_DEPOSIT)
+
+        입금 전이므로 판매량·주문 상태·장바구니·포인트는 건드리지 않는다.
+        주문은 confirmed 로 남아 입금 웹훅(DEPOSIT_CALLBACK / PAYMENT_STATUS_CHANGED)을 기다리고,
+        기한 만료(EXPIRED)는 웹훅이 롤백을 트리거한다. 미결제 주문 만료 배치는 이 상태를 건너뛴다.
+
+        Args:
+            payment: 결제 객체 (호출자가 락을 잡고 있어야 한다)
+            payment_data: 토스 승인 응답 (Payment 객체, virtualAccount · secret 포함)
+        """
+        payment.mark_as_waiting_for_deposit(payment_data)
+
+        PaymentLog.objects.create(
+            payment=payment,
+            log_type="approve",
+            message="가상계좌 발급 완료, 입금 대기",
+            data=payment_data,
+        )
+
+        logger.info(
+            f"가상계좌 발급: payment_id={payment.id}, order_id={payment.order_id}, "
+            f"bank={payment.virtual_account_bank_code}, due={payment.virtual_account_due_date}"
+        )
+
+    @staticmethod
     def confirm_payment_async(payment: Payment, payment_key: str, order_id: int, amount: int, user) -> dict[str, Any]:
         """
         결제 승인 처리 (비동기 버전)
@@ -379,6 +421,10 @@ class PaymentService:
             # 이미 처리 중인 결제 확인 (중복 요청 차단)
             if payment.status == "in_progress":
                 raise PaymentConfirmError("이미 처리 중인 결제입니다.")
+
+            # 가상계좌 발급 뒤 재승인 요청 차단 — 입금 웹훅이 마감한다
+            if payment.is_waiting_for_deposit:
+                raise PaymentConfirmError("가상계좌 입금 대기 중인 결제입니다.")
 
             # 유효하지 않은 상태 확인
             if payment.status in ["expired", "canceled", "aborted"]:

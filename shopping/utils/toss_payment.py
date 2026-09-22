@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
-import hashlib
-import hmac
-import json
 from typing import Any
 
 from django.conf import settings
@@ -162,21 +159,24 @@ class TossPaymentClient:
                 status_code=500,
             )
 
-    def get_payment(self, payment_key: str) -> dict[str, Any]:
+    def get_payment(self, payment_key: str, timeout: float = 30) -> dict[str, Any]:
         """
         결제 정보 조회
 
+        웹훅 진위 확인에도 쓰인다 — 웹훅 본문 대신 이 응답을 신뢰한다.
+
         Args:
             payment_key: 토스페이먼츠 결제 키
+            timeout: 요청 타임아웃(초). 웹훅 경로는 토스의 10초 응답 제한보다 짧게 준다.
 
         Returns:
-            결제 정보
+            결제 정보 (Payment 객체)
         """
 
         url = f"{self.base_url}/v1/payments/{payment_key}"
 
         try:
-            response = requests.get(url, headers=self.headers, timeout=30)
+            response = requests.get(url, headers=self.headers, timeout=timeout)
 
             if response.status_code == 200:
                 return response.json()
@@ -194,31 +194,6 @@ class TossPaymentClient:
                 message=f"네트워크 오류: {str(e)}",
                 status_code=500,
             )
-
-    def verify_webhook(self, webhook_data: dict[str, Any], signature: str) -> bool:
-        """
-        웹훅 서명 검증
-
-        토스페이먼츠에서 보낸 웹훅이 맞는지 검증합니다.
-
-        Args:
-            webhook_data: 웹훅 요청 본문
-            signature: 웹훅 헤더의 서명값
-
-        Returns:
-            검증 성공 여부
-        """
-        # 웹훅 시크릿 키 (settings.py에 정의)
-        webhook_secret = settings.TOSS_WEBHOOK_SECRET
-
-        # 웹훅 데이터를 JSON 문자열로 변환
-        message = json.dumps(webhook_data, separators=(",", ":"), ensure_ascii=False)
-
-        # HMAC-SHA256으로 서명 생성
-        expected_signature = hmac.new(webhook_secret.encode("utf-8"), message.encode("utf-8"), hashlib.sha256).hexdigest()
-
-        # 서명 비교 (타이밍 공격 방지를 위해 hmac.compare_digest 사용)
-        return hmac.compare_digest(signature, expected_signature)
 
     def create_billing_key(self, customer_key: str, auth_key: str) -> dict[str, Any]:
         """

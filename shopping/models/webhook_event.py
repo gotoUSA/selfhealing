@@ -9,6 +9,7 @@ class WebhookEvent(models.Model):
 
     토스페이먼츠 등 외부 서비스의 웹훅 이벤트를 기록합니다.
     중복 방지 목적이 아닌 순수 감사 로그 목적입니다.
+    event_type 은 토스 결제 상태(DONE, CANCELED, ABORTED, EXPIRED)를 그대로 쓴다.
 
     Note:
         - 중복 방지는 Redis TTL (60초)로 처리
@@ -19,12 +20,12 @@ class WebhookEvent(models.Model):
         max_length=200,
         db_index=True,
         verbose_name="이벤트 ID",
-        help_text="웹훅 고유 식별자 (orderId + createdAt 조합)",
+        help_text="웹훅 식별자 (toss:{orderId}:{status})",
     )
     event_type = models.CharField(
         max_length=50,
         verbose_name="이벤트 타입",
-        help_text="PAYMENT.DONE, PAYMENT.CANCELED 등",
+        help_text="토스 결제 상태: DONE, CANCELED, ABORTED, EXPIRED",
     )
     source = models.CharField(
         max_length=50,

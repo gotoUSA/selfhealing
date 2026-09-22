@@ -76,7 +76,6 @@ jobs:
       CELERY_RESULT_BACKEND: redis://localhost:6379/0
       TOSS_CLIENT_KEY: test_ck_fake_key
       TOSS_SECRET_KEY: test_sk_fake_key
-      TOSS_WEBHOOK_SECRET: test_webhook_secret
 
     steps:
       - name: Checkout code
@@ -157,7 +156,6 @@ jobs:
       CELERY_RESULT_BACKEND: redis://localhost:6379/0
       TOSS_CLIENT_KEY: test_ck_fake_key
       TOSS_SECRET_KEY: test_sk_fake_key
-      TOSS_WEBHOOK_SECRET: test_webhook_secret
 
     steps:
       - name: Checkout code
@@ -258,7 +256,6 @@ jobs:
       CELERY_RESULT_BACKEND: redis://localhost:6379/0
       TOSS_CLIENT_KEY: test_ck_fake_key
       TOSS_SECRET_KEY: test_sk_fake_key
-      TOSS_WEBHOOK_SECRET: test_webhook_secret
 
     steps:
       - name: Checkout code

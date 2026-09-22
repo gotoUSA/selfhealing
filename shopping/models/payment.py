@@ -119,6 +119,32 @@ class Payment(models.Model):
         verbose_name="영수증 URL",
     )
 
+    # 가상계좌 정보 (승인 응답 virtualAccount 객체 — 고객에게 안내할 입금 계좌)
+    virtual_account_bank_code = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="가상계좌 은행코드",
+    )
+
+    virtual_account_number = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="가상계좌 번호",
+    )
+
+    virtual_account_due_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="입금 기한",
+    )
+
+    # 토스가 승인 응답에 주는 웹훅 검증값 — 가상계좌 입금 웹훅(DEPOSIT_CALLBACK)의 secret 과 비교
+    toss_secret = models.CharField(
+        max_length=50,
+        blank=True,
+        verbose_name="토스 웹훅 검증값",
+    )
+
     # 취소 정보 (전체 취소시)
     is_canceled = models.BooleanField(
         default=False,
@@ -212,6 +238,11 @@ class Payment(models.Model):
         return self.status == "done"
 
     @property
+    def is_waiting_for_deposit(self) -> bool:
+        """가상계좌 입금 대기 여부"""
+        return self.status == "waiting_for_deposit"
+
+    @property
     def can_cancel(self) -> bool:
         """취소 가능 여부"""
         return self.status == "done" and not self.is_canceled
@@ -241,6 +272,33 @@ class Payment(models.Model):
 
         self.save()
 
+    def mark_as_waiting_for_deposit(self, payment_data: dict[str, Any]) -> None:
+        """
+        가상계좌 발급 처리 (status=WAITING_FOR_DEPOSIT)
+        토스페이먼츠 승인 응답으로 계좌 정보와 웹훅 검증값을 저장하고 입금을 기다린다
+        """
+        self.status = "waiting_for_deposit"
+        self.payment_key = payment_data.get("paymentKey") or self.payment_key
+        self.method = payment_data.get("method", "") or self.method
+
+        virtual_account = payment_data.get("virtualAccount") or {}
+        self.virtual_account_bank_code = virtual_account.get("bankCode", "")
+        self.virtual_account_number = virtual_account.get("accountNumber", "")
+        self.virtual_account_due_date = virtual_account.get("dueDate")
+
+        self.toss_secret = payment_data.get("secret", "") or self.toss_secret
+
+        # 민감 정보 제거 후 원본 응답 저장
+        self.raw_response = self.sanitize_raw_response(payment_data)
+
+        self.save()
+
+    def mark_as_expired(self, reason: str = "") -> None:
+        """결제 만료 처리 (가상계좌 입금 기한 경과 등)"""
+        self.status = "expired"
+        self.fail_reason = reason
+        self.save()
+
     def mark_as_failed(self, reason: str = "") -> None:
         """결제 실패 처리"""
         self.status = "aborted"
@@ -250,13 +308,17 @@ class Payment(models.Model):
     def mark_as_canceled(self, cancel_data: dict[str, Any]) -> None:
         """
         결제 취소 처리
-        토스페이먼츠 취소 응답으로 정보 업데이트
+        토스페이먼츠 Payment 객체(취소 API 응답 · 결제 조회 응답)로 정보 업데이트
         """
         self.status = "canceled"
         self.is_canceled = True
         self.canceled_amount = self.amount  # 전체 취소
-        self.cancel_reason = cancel_data.get("cancelReason", "")
-        self.canceled_at = cancel_data.get("canceledAt")
+
+        # 토스 Payment 객체는 취소 이력을 cancels[] 에 담는다 — 마지막 항목이 이번 취소
+        cancels = cancel_data.get("cancels") or []
+        latest_cancel = cancels[-1] if cancels else cancel_data
+        self.cancel_reason = latest_cancel.get("cancelReason", "")
+        self.canceled_at = latest_cancel.get("canceledAt")
 
         # 민감 정보 제거 후 원본 응답 업데이트
         self.raw_response = self.sanitize_raw_response(cancel_data)

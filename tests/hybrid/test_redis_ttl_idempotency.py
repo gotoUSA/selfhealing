@@ -148,14 +148,14 @@ class TestWebhookEventRedisTTL:
 
     def test_get_webhook_cache_key_format(self):
         """웹훅 캐시 키 형식 확인"""
-        cache_key = TossWebhookService._get_webhook_cache_key("ORDER_001", "PAYMENT.DONE")
-        assert cache_key == "webhook:toss:ORDER_001:PAYMENT.DONE"
+        cache_key = TossWebhookService._get_webhook_cache_key("ORDER_001", "DONE")
+        assert cache_key == "webhook:toss:ORDER_001:DONE"
 
     def test_mark_webhook_processed_sets_cache(self):
         """웹훅 처리 완료 시 Redis에 저장"""
         # Arrange
         order_id = "ORDER_001"
-        event_type = "PAYMENT.DONE"
+        event_type = "DONE"
 
         # Act
         TossWebhookService.mark_webhook_processed(order_id, event_type)
@@ -168,7 +168,7 @@ class TestWebhookEventRedisTTL:
         """TTL 내 동일 웹훅 중복 체크"""
         # Arrange
         order_id = "ORDER_002"
-        event_type = "PAYMENT.DONE"
+        event_type = "DONE"
         TossWebhookService.mark_webhook_processed(order_id, event_type)
 
         # Act & Assert
@@ -178,7 +178,7 @@ class TestWebhookEventRedisTTL:
         """TTL 만료 후 중복 아님"""
         # Arrange
         order_id = "ORDER_003"
-        event_type = "PAYMENT.DONE"
+        event_type = "DONE"
         TossWebhookService.mark_webhook_processed(order_id, event_type)
 
         # TTL 만료 시뮬레이션
@@ -191,17 +191,17 @@ class TestWebhookEventRedisTTL:
     def test_is_webhook_duplicate_returns_false_for_new_event(self):
         """처음 받는 이벤트는 중복 아님"""
         # Act & Assert
-        assert TossWebhookService.is_webhook_duplicate("NEW_ORDER_001", "PAYMENT.DONE") is False
+        assert TossWebhookService.is_webhook_duplicate("NEW_ORDER_001", "DONE") is False
 
     def test_different_event_types_are_independent(self):
         """다른 이벤트 타입은 독립적으로 처리"""
         # Arrange
         order_id = "ORDER_004"
-        TossWebhookService.mark_webhook_processed(order_id, "PAYMENT.DONE")
+        TossWebhookService.mark_webhook_processed(order_id, "DONE")
 
         # Act & Assert - DONE은 중복, CANCELED는 아님
-        assert TossWebhookService.is_webhook_duplicate(order_id, "PAYMENT.DONE") is True
-        assert TossWebhookService.is_webhook_duplicate(order_id, "PAYMENT.CANCELED") is False
+        assert TossWebhookService.is_webhook_duplicate(order_id, "DONE") is True
+        assert TossWebhookService.is_webhook_duplicate(order_id, "CANCELED") is False
 
 
 @pytest.mark.django_db
@@ -212,7 +212,7 @@ class TestWebhookEventLogging:
         """웹훅 이벤트 로깅 시 DB 레코드 생성"""
         # Arrange
         order_id = "ORDER_LOG_001"
-        event_type = "PAYMENT.DONE"
+        event_type = "DONE"
 
         # Act
         TossWebhookService.log_webhook_event(order_id, event_type)
@@ -230,14 +230,14 @@ class TestWebhookEventLogging:
         order_id = "ORDER_LOG_002"
 
         # Act
-        TossWebhookService.log_webhook_event(order_id, "PAYMENT.DONE")
-        TossWebhookService.log_webhook_event(order_id, "PAYMENT.CANCELED")
+        TossWebhookService.log_webhook_event(order_id, "DONE")
+        TossWebhookService.log_webhook_event(order_id, "CANCELED")
 
         # Assert
         events = WebhookEvent.objects.filter(order_id=order_id)
         assert events.count() == 2
         event_types = set(e.event_type for e in events)
-        assert event_types == {"PAYMENT.DONE", "PAYMENT.CANCELED"}
+        assert event_types == {"DONE", "CANCELED"}
 
 
 @pytest.mark.django_db

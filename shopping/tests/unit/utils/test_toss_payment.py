@@ -380,69 +380,35 @@ class TestGetPayment:
 
 
 @pytest.mark.django_db
-class TestVerifyWebhook:
-    """웹훅 서명 검증 테스트"""
+class TestGetPaymentTimeout:
+    """get_payment 의 timeout 인자 — 웹훅 경로는 토스 10초 제한보다 짧게 준다"""
 
     @pytest.fixture(autouse=True)
-    def setup(self, mocker):
+    def setup(self):
         """각 테스트마다 자동 실행되는 설정"""
         self.client = TossPaymentClient()
-        # 테스트용 웹훅 시크릿 키 설정
-        mocker.patch.object(settings, "TOSS_WEBHOOK_SECRET", "test_webhook_secret")
 
-    def test_verify_webhook_success(self, mocker):
-        """정상적인 웹훅 서명 검증"""
-        import hashlib
-        import hmac
-        import json
+    def test_get_payment_default_timeout_is_30(self, mocker):
+        """timeout 을 주지 않으면 30초"""
+        mock_get = mocker.patch(
+            "requests.get",
+            return_value=Mock(status_code=200, json=lambda: {"paymentKey": "test_key", "status": "DONE"}),
+        )
 
-        webhook_data = {
-            "eventType": "PAYMENT.DONE",
-            "data": {
-                "paymentKey": "test_key",
-                "orderId": "ORDER_001",
-            },
-        }
+        self.client.get_payment(payment_key="test_key")
 
-        # 올바른 서명 생성
-        message = json.dumps(webhook_data, separators=(",", ":"), ensure_ascii=False)
-        expected_signature = hmac.new(
-            "test_webhook_secret".encode("utf-8"),
-            message.encode("utf-8"),
-            hashlib.sha256,
-        ).hexdigest()
+        assert mock_get.call_args.kwargs["timeout"] == 30
 
-        # 검증 실행
-        is_valid = self.client.verify_webhook(webhook_data, expected_signature)
+    def test_get_payment_passes_explicit_timeout(self, mocker):
+        """timeout 을 주면 그대로 requests 에 전달"""
+        mock_get = mocker.patch(
+            "requests.get",
+            return_value=Mock(status_code=200, json=lambda: {"paymentKey": "test_key", "status": "DONE"}),
+        )
 
-        # 검증 성공
-        assert is_valid is True
+        self.client.get_payment(payment_key="test_key", timeout=5)
 
-    def test_verify_webhook_invalid_signature(self, mocker):
-        """잘못된 서명으로 웹훅 검증 실패"""
-        webhook_data = {
-            "eventType": "PAYMENT.DONE",
-            "data": {"paymentKey": "test_key"},
-        }
-
-        # 잘못된 서명
-        invalid_signature = "wrong_signature_12345"
-
-        # 검증 실행
-        is_valid = self.client.verify_webhook(webhook_data, invalid_signature)
-
-        # 검증 실패
-        assert is_valid is False
-
-    def test_verify_webhook_signature_format(self, mocker):
-        """웹훅 서명이 HMAC-SHA256 형식인지 확인"""
-        webhook_data = {"eventType": "TEST"}
-
-        # 빈 서명으로 검증
-        is_valid = self.client.verify_webhook(webhook_data, "")
-
-        # 서명이 맞지 않으면 False
-        assert is_valid is False
+        assert mock_get.call_args.kwargs["timeout"] == 5
 
 
 @pytest.mark.django_db

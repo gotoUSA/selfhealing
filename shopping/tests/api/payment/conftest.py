@@ -464,25 +464,6 @@ def toss_cancel_response():
 
 
 @pytest.fixture
-def toss_webhook_data():
-    """
-    토스 웹훅 요청 데이터 템플릿
-
-    - eventType: PAYMENT.DONE
-    - 서명 검증용 기본 데이터
-    """
-    return {
-        "eventType": "PAYMENT.DONE",
-        "data": {
-            "paymentKey": "test_key_123",
-            "orderId": "ORDER_001",
-            "status": "DONE",
-            "totalAmount": 10000,
-        },
-    }
-
-
-@pytest.fixture
 def mock_requests_response():
     """
     requests 라이브러리 Mock 헬퍼

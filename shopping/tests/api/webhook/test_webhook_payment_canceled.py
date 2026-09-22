@@ -1,7 +1,7 @@
 """
-결제 취소 웹훅 테스트 (PAYMENT.CANCELED)
+결제 취소 웹훅 테스트 (PAYMENT_STATUS_CHANGED · status=CANCELED)
 
-토스페이먼츠 PAYMENT.CANCELED 이벤트 처리 및 중복 요청 방지 테스트
+토스페이먼츠 결제 취소(CANCELED) 처리 및 중복 요청 방지 테스트
 """
 
 from decimal import Decimal
@@ -30,10 +30,10 @@ class TestPaymentCanceledWebhook:
     # 1단계: 정상 케이스 (Happy Path)
     # ==========================================
 
-    def test_payment_canceled_from_paid_order(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_canceled_from_paid_order(self, mock_get_payment, webhook_data_builder):
         """paid 상태 주문의 정상적인 결제 취소"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order와 Payment를 paid 상태로 설정
         self.order.status = "paid"
@@ -60,7 +60,7 @@ class TestPaymentCanceledWebhook:
         self.order.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(self.order.id),
             payment_key="test_payment_key_123",
             cancel_reason="사용자 요청",
@@ -71,7 +71,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -103,10 +102,10 @@ class TestPaymentCanceledWebhook:
         assert log is not None
         assert "취소" in log.message
 
-    def test_payment_canceled_from_preparing_order(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_canceled_from_preparing_order(self, mock_get_payment, webhook_data_builder):
         """preparing 상태에서 취소 - 재고 복구 및 포인트 회수"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order를 preparing 상태로 설정
         self.order.status = "preparing"
@@ -133,7 +132,7 @@ class TestPaymentCanceledWebhook:
         self.order.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(self.order.id),
             cancel_reason="상품 품절",
         )
@@ -143,7 +142,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -164,9 +162,8 @@ class TestPaymentCanceledWebhook:
 
     def test_payment_canceled_with_multiple_items(
         self,
-        mock_verify_webhook,
+        mock_get_payment,
         webhook_data_builder,
-        webhook_signature,
         order_with_multiple_items,
         multiple_products,
     ):
@@ -174,7 +171,7 @@ class TestPaymentCanceledWebhook:
         # Arrange
         from shopping.models.payment import Payment
 
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order를 paid 상태로 설정
         order_with_multiple_items.status = "paid"
@@ -197,7 +194,7 @@ class TestPaymentCanceledWebhook:
             product.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(order_with_multiple_items.id),
             payment_key="test_key_multi",
             cancel_reason="사용자 요청",
@@ -208,7 +205,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -224,10 +220,10 @@ class TestPaymentCanceledWebhook:
     # 2단계: 경계값/중복 케이스 (Boundary)
     # ==========================================
 
-    def test_payment_canceled_duplicate_request(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_canceled_duplicate_request(self, mock_get_payment, webhook_data_builder):
         """중복 웹훅 요청 - 재고 중복 복구 방지"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Payment를 이미 취소 상태로 설정
         self.payment.status = "canceled"
@@ -243,7 +239,7 @@ class TestPaymentCanceledWebhook:
         initial_sold_count = self.product.sold_count
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(self.order.id),
             payment_key="duplicate_key",
             cancel_reason="중복 요청",
@@ -254,7 +250,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -265,10 +260,10 @@ class TestPaymentCanceledWebhook:
         assert self.product.stock == initial_stock
         assert self.product.sold_count == initial_sold_count
 
-    def test_payment_canceled_order_already_canceled(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_canceled_order_already_canceled(self, mock_get_payment, webhook_data_builder):
         """주문이 이미 canceled 상태인 경우"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order를 이미 canceled 상태로 설정
         self.order.status = "canceled"
@@ -282,7 +277,7 @@ class TestPaymentCanceledWebhook:
         initial_stock = self.product.stock
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(self.order.id),
             cancel_reason="주문 취소",
         )
@@ -292,7 +287,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -307,10 +301,10 @@ class TestPaymentCanceledWebhook:
         self.product.refresh_from_db()
         assert self.product.stock == initial_stock
 
-    def test_payment_canceled_from_pending_order(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_canceled_from_pending_order(self, mock_get_payment, webhook_data_builder):
         """pending 상태에서 취소 - 재고 차감 전이므로 복구 불필요"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order는 pending 상태 (결제 대기)
         self.order.status = "pending"
@@ -323,7 +317,7 @@ class TestPaymentCanceledWebhook:
         initial_points = self.user.points
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(self.order.id),
             cancel_reason="결제 취소",
         )
@@ -333,7 +327,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -351,10 +344,10 @@ class TestPaymentCanceledWebhook:
         self.user.refresh_from_db()
         assert self.user.points == initial_points
 
-    def test_payment_canceled_from_shipped_order(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_canceled_from_shipped_order(self, mock_get_payment, webhook_data_builder):
         """shipped 상태에서 취소 - 재고 복구 및 포인트 회수 안 함"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order를 shipped 상태로 설정
         self.order.status = "shipped"
@@ -381,7 +374,7 @@ class TestPaymentCanceledWebhook:
         self.order.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(self.order.id),
             cancel_reason="환불 요청",
         )
@@ -391,7 +384,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -414,10 +406,10 @@ class TestPaymentCanceledWebhook:
     # 3단계: 예외 케이스 (Exception)
     # ==========================================
 
-    def test_payment_canceled_user_none(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_canceled_user_none(self, mock_get_payment, webhook_data_builder):
         """user가 None인 경우 포인트 회수 스킵"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order를 paid 상태로 설정
         self.order.status = "paid"
@@ -435,7 +427,7 @@ class TestPaymentCanceledWebhook:
         self.product.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(self.order.id),
             cancel_reason="사용자 요청",
         )
@@ -445,7 +437,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 에러 없이 처리되어야 함
@@ -459,13 +450,13 @@ class TestPaymentCanceledWebhook:
         self.product.refresh_from_db()
         assert self.product.stock == initial_stock
 
-    def test_payment_canceled_payment_not_found(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_canceled_payment_not_found(self, mock_get_payment, webhook_data_builder):
         """Payment가 존재하지 않는 경우"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id="nonexistent_order_123",
             cancel_reason="존재하지 않는 주문",
         )
@@ -475,18 +466,17 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 웹훅은 성공 응답 (로그만 남기고 처리)
         assert response.status_code == status.HTTP_200_OK
 
     def test_payment_canceled_insufficient_points_to_deduct(
-        self, mock_verify_webhook, webhook_data_builder, webhook_signature
+        self, mock_get_payment, webhook_data_builder
     ):
         """포인트 회수 시 사용자 포인트 부족 - 웹훅은 성공 처리"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order를 paid 상태로 설정
         self.order.status = "paid"
@@ -512,7 +502,7 @@ class TestPaymentCanceledWebhook:
         self.order.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.CANCELED",
+            status="CANCELED",
             order_id=str(self.order.id),
             cancel_reason="사용자 요청",
         )
@@ -522,7 +512,6 @@ class TestPaymentCanceledWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 웹훅은 성공 처리 (포인트 회수 실패해도 OK)

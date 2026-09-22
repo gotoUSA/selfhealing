@@ -41,7 +41,7 @@ def _create_order_with_payment(user, product, order_status="confirmed", payment_
 
 
 def _make_done_event(payment):
-    """DONE 웹훅 이벤트 생성"""
+    """DONE Payment 객체 생성"""
     return {
         "paymentKey": payment.payment_key,
         "orderId": payment.toss_order_id,
@@ -53,13 +53,19 @@ def _make_done_event(payment):
 
 
 def _make_canceled_event(payment, reason="사용자 취소"):
-    """CANCELED 웹훅 이벤트 생성"""
+    """CANCELED Payment 객체 생성 (토스는 취소 이력을 cancels[] 에 담는다)"""
     return {
         "paymentKey": payment.payment_key,
         "orderId": payment.toss_order_id,
         "status": "CANCELED",
-        "cancelReason": reason,
-        "canceledAt": "2025-01-15T11:00:00+09:00",
+        "totalAmount": int(payment.amount),
+        "cancels": [
+            {
+                "cancelAmount": int(payment.amount),
+                "cancelReason": reason,
+                "canceledAt": "2025-01-15T11:00:00+09:00",
+            }
+        ],
     }
 
 
@@ -199,8 +205,10 @@ class TestWebhookDuplicate:
         # Act
         TossWebhookService.handle_payment_failed(
             {
+                "paymentKey": payment.payment_key,
                 "orderId": payment.toss_order_id,
-                "failReason": "카드 한도 초과",
+                "status": "ABORTED",
+                "failure": {"code": "REJECT_CARD_COMPANY", "message": "카드 한도 초과"},
             }
         )
 

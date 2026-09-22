@@ -38,8 +38,10 @@ TOSS_RECONCILE_ERRORS = frozenset(
     ]
 )
 
-# 조회 API 응답에서 "승인 완료" 를 뜻하는 상태값
-TOSS_PAYMENT_STATUS_DONE = "DONE"
+# 토스 Payment 객체의 status 값 (승인 응답 · 조회 응답 · 웹훅 공통)
+TOSS_PAYMENT_STATUS_DONE = "DONE"  # 승인 완료
+TOSS_PAYMENT_STATUS_WAITING_FOR_DEPOSIT = "WAITING_FOR_DEPOSIT"  # 가상계좌 발급, 입금 대기
+TOSS_PAYMENT_STATUS_EXPIRED = "EXPIRED"  # 가상계좌 입금 기한 만료 / 결제 유효시간 만료
 
 # 재시도해도 의미 없는 오류 (비즈니스 로직 오류, 클라이언트 오류)
 TOSS_NON_RETRYABLE_ERRORS = frozenset(

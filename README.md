@@ -20,7 +20,7 @@
 | 주제 | 위치 | 한 줄 |
 |---|---|---|
 | 재고 차감 동시성 | `shopping/services/order_service.py` `_create_order_items_and_decrease_stock` | `select_for_update` 행 락 + `F("stock") - qty`로 검사와 갱신을 DB 안에서, 상품 ID 순으로 잠가 다품목 주문끼리의 데드락 방지. 재고 1개에 스레드 N개 → 성공 정확히 1 (`tests/integration/test_order_concurrency.py`) |
-| 웹훅 멱등성 | `shopping/services/toss_webhook_service.py` `handle_payment_done` | Redis TTL 60초(빠른 필터) → Payment 행 락 + `is_paid` 검사(진짜 보장) → Order 상태 검사. confirm 응답과 웹훅의 순서가 뒤바뀌어도 한 번만 처리 (`test_confirm_webhook_race.py`) |
+| 웹훅 진위·멱등성 | `shopping/webhooks/toss_webhook_view.py`, `shopping/services/toss_webhook_service.py` `handle_payment_done` | 토스 결제 웹훅엔 서명이 없어 본문을 믿지 않고 `paymentKey`로 결제 조회 API를 다시 불러 그 응답으로 처리(`test_webhook_authenticity.py`). 그 위에 Redis TTL 60초(빠른 필터) → Payment 행 락 + `is_paid` 검사(진짜 보장) → Order 상태 검사. confirm 응답과 웹훅의 순서가 뒤바뀌어도 한 번만 처리 (`test_confirm_webhook_race.py`) |
 | 결제 승인: 외부 API를 트랜잭션 밖으로 | `shopping/services/payment_service.py` `confirm_payment_sync` vs `confirm_payment_async` | 같은 파일에 두 버전. sync는 행 락을 쥔 채 결제사 HTTP를 기다리고(커넥션·워커가 묶임), async는 `in_progress`로 바꾸고 커밋한 뒤 Celery 체인(`external_api` 큐 → `payment_critical` 큐)으로 넘긴다. 뷰는 async를 쓴다 |
 | 트랜잭션 범위와 Celery 발행 시점 | `order_service.py` `create_order_hybrid` | Order 한 행만 짧은 트랜잭션으로 만들고 **커밋 뒤에** `.delay()`. 워커는 다시 행 락을 잡고 재고·포인트를 처리, 실패 시 `failed` + 재고 복구 |
 | Celery 재시도 정책 | `shopping/tasks/payment_tasks.py` `call_toss_confirm_api` | 토스 오류 코드를 비재시도/재시도/5xx/기타 4xx로 분류(`shopping/constants.py`), 지수 백오프 + jitter, 큐 분리로 결제사 지연이 다른 태스크를 막지 않게. 타임아웃 뒤 재시도가 `ALREADY_PROCESSED_PAYMENT`를 받으면 롤백하지 않고 결제 조회 API로 대사해 승인이면 정상 마감, 조회도 안 되면 롤백 대신 운영자 알림 (`shopping/tests/tasks/test_payment_tasks.py`) |
@@ -33,7 +33,7 @@
 ## 기능
 
 - **인증**: JWT(access 30분 / refresh 7일, 회전 + 블랙리스트), 소셜 로그인(구글·카카오·네이버 OAuth 코드 경로, 응답을 하나로 정규화 — 실계정 로그인 확인은 구글·네이버, 카카오 앱은 정지 상태라 모킹 테스트로만 검증), 이메일 인증, 비밀번호 재설정
-- **결제**: 토스페이먼츠 연동(카드/계좌/가상계좌), HMAC 서명 검증 웹훅, 멱등성 키, 결제 취소·환불, 포인트 전액 결제
+- **결제**: 토스페이먼츠 연동(카드/계좌/가상계좌 — 발급·입금 대기·입금 완료·기한 만료·입금 취소), 결제 조회 API로 진위를 확인하는 웹훅(`PAYMENT_STATUS_CHANGED`·`DEPOSIT_CALLBACK`), 멱등성 키, 결제 취소·환불, 포인트 전액 결제
 - **상품**: 계층형 카테고리(MPTT), 다중 이미지, 리뷰, 상품 문의(Q&A), 판매자 프로필
 - **장바구니 · 찜**: 재고 검증, 위시리스트
 - **주문 · 반품**: 주문 생성(동기/비동기 두 경로), 취소 시 재고·판매량 복구, 미결제 주문은 30분(`ORDER_PAYMENT_TIMEOUT_MINUTES`) 뒤 자동 취소·재고 반환, 반품 요청
@@ -50,7 +50,7 @@ shopping/
 ├── views/         # DRF 뷰 (62개 엔드포인트)
 ├── serializers/
 ├── tasks/         # Celery 태스크 (payment, order, email, cleanup, point)
-├── webhooks/      # 토스 웹훅 진입점 (서명 검증 → 디스패치)
+├── webhooks/      # 토스 웹훅 진입점 (결제 조회로 진위 확인 → 상태별 디스패치)
 ├── handlers/      # 실패 요청 재실행 핸들러 (결제 복구 계층)
 ├── chaos/         # 고장 주입 (CHAOS_MODE 환경변수로 켬)
 ├── admin/         # Django Admin
@@ -136,7 +136,9 @@ shopping/tests/
 
 코드를 읽으면서 확인한 것들이다. 고치는 방법도 같이 적었다.
 
-- **웹훅 중복 마킹이 커밋보다 먼저**: `mark_webhook_processed`가 DB 트랜잭션 커밋 전에 Redis 키를 쓴다. 핸들러가 예외로 롤백돼도 키는 60초 남아, 그 안의 재전송은 1층에서 버려진다. `transaction.on_commit`으로 옮기면 된다(2층 행 락이 있어서 중복 처리는 안 생긴다).
+- **웹훅 중복 마킹이 커밋보다 먼저**: `mark_webhook_processed`가 DB 트랜잭션 커밋 전에 Redis 키를 쓴다. 핸들러가 예외로 롤백돼도 키는 60초 남아, 토스의 첫 재전송(+1분)이 경계에서 1층에 버려질 수 있다 — 두 번째 재전송(+4분)에서 복구된다. `transaction.on_commit`으로 옮기면 된다(2층 행 락이 있어서 중복 처리는 안 생긴다).
+- **웹훅 계약을 지어낸 채 9개월을 갔다**: 처음 코드는 토스에 없는 `X-Toss-Webhook-Signature` HMAC 서명과 `PAYMENT.DONE` 같은 이벤트 이름을 구현했고, 그 계약을 검증하는 테스트가 초록이어서 아무도 몰랐다. 실제 계약(`PAYMENT_STATUS_CHANGED` + Payment 객체, 결제 웹훅엔 서명 없음)은 토스 문서를 대조하고서야 알았다. 같은 대조에서 가상계좌 승인 응답(`WAITING_FOR_DEPOSIT`)을 결제 완료로 처리하던 것과 취소 사유를 잘못된 필드에서 읽던 것도 나왔다. 외부 API는 문서를 읽고 계약 테스트를 그 문서에서 뽑아야지, 코드에서 뽑으면 안 된다.
+- **가상계좌 입금 취소 되돌리기는 포인트를 이미 썼으면 실패한다**: 입금 오류로 토스가 `DONE`을 `WAITING_FOR_DEPOSIT`으로 되돌리면 판매량·적립 포인트를 되돌리는데, 고객이 그 포인트를 이미 썼으면 회수가 실패해 500 → 토스 재전송이 7회 뒤 멈추고 주문은 `paid`로 남는다. 결제 취소 경로와 같은 성격의 한계다.
 - **결제 취소는 PG 취소 성공 뒤 DB 갱신이 실패할 수 있다**: `cancel_payment`는 하나의 `@transaction.atomic` 안에서 토스 취소 API를 부르고(승인의 sync 버전과 같은 모양) 이어서 결제·재고·주문·포인트를 갱신한다. 취소 API가 성공한 뒤 DB 쪽 어느 단계든 실패하면 트랜잭션 전체가 되돌아가 토스는 취소됐는데 우리는 `paid`. 맞는 처리는 외부 호출 결과를 먼저 기록하는 outbox 테이블인데, 이벤트 테이블을 들이는 설계 결정이라 여기서는 안 했다 — 빈도가 낮고 관리자가 수동으로 맞출 수 있다.
 - **포인트 적립 건별 사용량이 JSON 컬럼**(`PointHistory.metadata.used_amount`): 집계·인덱스가 안 된다. 사용자당 적립 건이 수천 개가 되면 할당 테이블로 빼야 한다.
 - **부하는 재지 않았다**: Locust 스크립트(`load_tests/`)와 캐시 설정은 있지만 수치를 남긴 측정은 없다. "몇 RPS까지 버티나"에는 답이 없다고 말하는 게 맞다.

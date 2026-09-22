@@ -1,7 +1,7 @@
 """
-결제 승인 웹훅 테스트 (PAYMENT.DONE)
+결제 승인 웹훅 테스트 (PAYMENT_STATUS_CHANGED · status=DONE)
 
-토스페이먼츠 PAYMENT.DONE 이벤트 처리 및 중복 요청 방지 테스트
+토스페이먼츠 결제 완료(DONE) 처리 및 중복 요청 방지 테스트
 """
 
 from decimal import Decimal
@@ -31,10 +31,10 @@ class TestPaymentDoneWebhook:
     # 1단계: 정상 케이스 (Happy Path)
     # ==========================================
 
-    def test_payment_done_success(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_done_success(self, mock_get_payment, webhook_data_builder):
         """정상적인 결제 승인 처리"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
         webhook_data = webhook_data_builder(
             order_id=str(self.order.id),
             amount=int(self.payment.amount),
@@ -45,7 +45,6 @@ class TestPaymentDoneWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -85,9 +84,8 @@ class TestPaymentDoneWebhook:
 
     def test_payment_done_with_multiple_items(
         self,
-        mock_verify_webhook,
+        mock_get_payment,
         webhook_data_builder,
-        webhook_signature,
         order_with_multiple_items,
         multiple_products,
     ):
@@ -98,7 +96,7 @@ class TestPaymentDoneWebhook:
         from shopping.models.payment import Payment
         from shopping.models.product import Product
 
-        mock_verify_webhook()
+        mock_get_payment()
 
         # 주문 상태를 confirmed로 변경하고 재고 차감 (비동기 처리 완료 시뮬레이션)
         order_with_multiple_items.status = "confirmed"
@@ -128,7 +126,6 @@ class TestPaymentDoneWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -144,10 +141,10 @@ class TestPaymentDoneWebhook:
     # 2단계: 경계값/중복 케이스 (Boundary)
     # ==========================================
 
-    def test_payment_done_duplicate_request(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_done_duplicate_request(self, mock_get_payment, webhook_data_builder):
         """중복 웹훅 요청 - 재고 중복 차감 방지"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Payment를 이미 완료 상태로 설정
         self.payment.status = "done"
@@ -167,7 +164,6 @@ class TestPaymentDoneWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -177,10 +173,10 @@ class TestPaymentDoneWebhook:
         self.product.refresh_from_db()
         assert self.product.stock == initial_stock
 
-    def test_payment_done_order_already_paid(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_done_order_already_paid(self, mock_get_payment, webhook_data_builder):
         """주문이 이미 paid 상태인 경우"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order를 이미 paid 상태로 설정
         self.order.status = "paid"
@@ -198,7 +194,6 @@ class TestPaymentDoneWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -212,10 +207,10 @@ class TestPaymentDoneWebhook:
         self.product.refresh_from_db()
         assert self.product.stock == initial_stock
 
-    def test_payment_done_insufficient_stock(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_done_insufficient_stock(self, mock_get_payment, webhook_data_builder):
         """재고 부족 시나리오 - 로그만 남기고 계속 진행"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # 재고를 0으로 설정
         self.product.stock = 0
@@ -231,7 +226,6 @@ class TestPaymentDoneWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -247,10 +241,10 @@ class TestPaymentDoneWebhook:
     # 3단계: 예외 케이스 (Exception)
     # ==========================================
 
-    def test_payment_done_user_none(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_done_user_none(self, mock_get_payment, webhook_data_builder):
         """user가 None인 경우 포인트 적립 스킵"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order의 user를 None으로 설정
         self.order.user = None
@@ -266,7 +260,6 @@ class TestPaymentDoneWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 에러 없이 처리되어야 함
@@ -276,10 +269,10 @@ class TestPaymentDoneWebhook:
         self.payment.refresh_from_db()
         assert self.payment.status == "done"
 
-    def test_payment_done_payment_not_found(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_done_payment_not_found(self, mock_get_payment, webhook_data_builder):
         """Payment가 존재하지 않는 경우"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         webhook_data = webhook_data_builder(
             order_id="nonexistent_order_123",
@@ -291,7 +284,6 @@ class TestPaymentDoneWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 웹훅은 성공 응답 (로그만 남기고 처리)

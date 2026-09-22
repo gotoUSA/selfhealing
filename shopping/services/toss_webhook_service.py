@@ -1,8 +1,9 @@
 """토스페이먼츠 웹훅 처리 서비스
 
-웹훅 이벤트 처리 비즈니스 로직:
-- 결제 완료, 취소, 실패 이벤트 처리
-- Redis 기반 중복 웹훅 방어
+PAYMENT_STATUS_CHANGED 웹훅의 결제 상태별 비즈니스 로직:
+- DONE → 결제 완료, CANCELED → 결제 취소, ABORTED/EXPIRED → 결제 실패, WAITING_FOR_DEPOSIT → 가상계좌 입금 대기
+- 입력은 토스 결제 조회 API 응답(Payment 객체) — 뷰가 웹훅 본문 대신 조회 응답을 넘긴다
+- Redis 기반 중복 웹훅 방어 (토스는 200 을 못 받으면 최대 7회 재전송한다)
 - 재고/포인트/주문 상태 관리
 """
 
@@ -16,6 +17,7 @@ from django.core.cache import cache
 from django.db import transaction
 from django.db.models import F
 
+from ..constants import TOSS_PAYMENT_STATUS_EXPIRED
 from ..models.cart import Cart
 from ..models.payment import Payment, PaymentLog
 from ..models.product import Product
@@ -24,8 +26,8 @@ from .point_service import PointService
 
 logger = logging.getLogger(__name__)
 
-# Redis TTL 상수 (Toss 실시간 결제 환경에 최적화)
-WEBHOOK_EVENT_TTL = 60  # 60초 - 웹훅 재전송 방어
+# Redis TTL 상수 — 토스 첫 재전송이 1분 뒤이므로, 정상 처리된 이벤트의 첫 재전송을 DB 전에 걸러낸다
+WEBHOOK_EVENT_TTL = 60  # 60초
 
 
 class TossWebhookServiceError(Exception):
@@ -79,7 +81,7 @@ class TossWebhookService:
 
     @staticmethod
     def _get_webhook_cache_key(order_id: str, event_type: str) -> str:
-        """웹훅 이벤트의 Redis 캐시 키 생성"""
+        """웹훅 이벤트의 Redis 캐시 키 생성 (event_type = 토스 결제 상태: DONE, CANCELED, ...)"""
         return f"webhook:toss:{order_id}:{event_type}"
 
     @staticmethod
@@ -89,7 +91,7 @@ class TossWebhookService:
 
         Args:
             order_id: 주문 ID
-            event_type: 웹훅 이벤트 타입
+            event_type: 토스 결제 상태 (DONE, CANCELED, ...)
 
         Returns:
             True if duplicate (already processed within 60s)
@@ -123,7 +125,7 @@ class TossWebhookService:
     @transaction.atomic
     def handle_payment_done(event_data: dict[str, Any]) -> None:
         """
-        결제 완료 이벤트 처리
+        결제 완료(status=DONE) 처리
 
         결제창에서 결제 완료 후 confirm API 호출 전에
         웹훅이 먼저 도착할 수 있으므로 중복 처리 방지 필요
@@ -133,17 +135,17 @@ class TossWebhookService:
         2. is_paid 상태 체크 (2차 방어)
 
         Args:
-            event_data: 토스페이먼츠 웹훅 이벤트 데이터
+            event_data: 토스 Payment 객체 (결제 조회 API 응답)
         """
         order_id = event_data.get("orderId")
 
         # 1. Redis 중복 체크 (60초 내 동일 웹훅 방어)
-        if TossWebhookService.is_webhook_duplicate(order_id, "PAYMENT.DONE"):
+        if TossWebhookService.is_webhook_duplicate(order_id, "DONE"):
             logger.info(f"Webhook duplicate blocked by Redis: {order_id}")
             return
 
         # 2. Redis에 먼저 마킹 (다른 요청 차단)
-        TossWebhookService.mark_webhook_processed(order_id, "PAYMENT.DONE")
+        TossWebhookService.mark_webhook_processed(order_id, "DONE")
 
         try:
             payment = Payment.objects.select_for_update().get(toss_order_id=order_id)
@@ -161,6 +163,17 @@ class TossWebhookService:
             logger.info(f"Payment in final state {payment.status}, ignoring DONE event: {order_id}")
             return
 
+        # 만료 처리(재고 복구·주문 취소) 뒤에 입금이 잡힌 경우 — 자동으로 되살리지 않고 사람이 본다
+        if payment.status == "expired":
+            logger.error(f"Deposit arrived after expiry, manual reconciliation needed: {order_id}")
+            PaymentLog.objects.create(
+                payment=payment,
+                log_type="error",
+                message="만료 처리된 결제에 입금 확인 — 수동 정산 필요",
+                data=event_data,
+            )
+            return
+
         # Payment 정보 업데이트
         payment.mark_as_paid(event_data)
 
@@ -170,7 +183,7 @@ class TossWebhookService:
         # 이미 paid 상태면 스킵 (confirm API에서 이미 처리)
         if order.status == "paid":
             logger.info(f"Order already paid: {order_id}")
-            TossWebhookService.log_webhook_event(order_id, "PAYMENT.DONE")
+            TossWebhookService.log_webhook_event(order_id, "DONE")
             return
 
         # sold_count 증가 (재고 차감은 주문 생성 시 이미 처리됨)
@@ -220,7 +233,7 @@ class TossWebhookService:
         )
 
         # 웹훅 이벤트 로깅
-        TossWebhookService.log_webhook_event(order_id, "PAYMENT.DONE")
+        TossWebhookService.log_webhook_event(order_id, "DONE")
 
         logger.info(f"Payment done webhook processed: {order_id}")
 
@@ -228,24 +241,24 @@ class TossWebhookService:
     @transaction.atomic
     def handle_payment_canceled(event_data: dict[str, Any]) -> None:
         """
-        결제 취소 이벤트 처리
+        결제 취소(status=CANCELED) 처리
 
         중복 방어:
         1. Redis TTL 60초 (빠른 중복 체크)
         2. is_canceled 상태 체크 (2차 방어)
 
         Args:
-            event_data: 토스페이먼츠 웹훅 이벤트 데이터
+            event_data: 토스 Payment 객체 (결제 조회 API 응답, 취소 이력은 cancels[])
         """
         order_id = event_data.get("orderId")
 
         # 1. Redis 중복 체크 (60초 내 동일 웹훅 방어)
-        if TossWebhookService.is_webhook_duplicate(order_id, "PAYMENT.CANCELED"):
+        if TossWebhookService.is_webhook_duplicate(order_id, "CANCELED"):
             logger.info(f"Webhook duplicate blocked by Redis: {order_id}")
             return
 
         # 2. Redis에 먼저 마킹 (다른 요청 차단)
-        TossWebhookService.mark_webhook_processed(order_id, "PAYMENT.CANCELED")
+        TossWebhookService.mark_webhook_processed(order_id, "CANCELED")
 
         try:
             payment = Payment.objects.select_for_update().get(toss_order_id=order_id)
@@ -272,7 +285,7 @@ class TossWebhookService:
         # 이미 cancelled 상태면 스킵
         if order.status == "canceled":
             logger.info(f"Order already cancelled: {order_id}")
-            TossWebhookService.log_webhook_event(order_id, "PAYMENT.CANCELED")
+            TossWebhookService.log_webhook_event(order_id, "CANCELED")
             return
 
         # 재고 복구 (재고가 차감된 상태들)
@@ -306,26 +319,105 @@ class TossWebhookService:
         )
 
         # 웹훅 이벤트 로깅
-        TossWebhookService.log_webhook_event(order_id, "PAYMENT.CANCELED")
+        TossWebhookService.log_webhook_event(order_id, "CANCELED")
 
         logger.info(f"Payment canceled webhook processed: {order_id}")
 
     @staticmethod
-    def handle_payment_failed(event_data: dict[str, Any]) -> None:
+    @transaction.atomic
+    def handle_waiting_for_deposit(event_data: dict[str, Any]) -> None:
         """
-        결제 실패 이벤트 처리
+        가상계좌 입금 대기(status=WAITING_FOR_DEPOSIT) 처리
 
-        결제 실패 시 롤백 처리:
-        1. Payment 상태를 aborted로 변경
-        2. 롤백 태스크 트리거 (재고 복구, 포인트 환불)
+        두 경우가 온다:
+        1. 발급 직후 — 승인 마감(finalize)보다 웹훅이 먼저 도착하면 여기서 입금 대기로 기록한다
+        2. 입금 취소 — 송금 한도 초과·네트워크 오류로 토스가 DONE 을 WAITING_FOR_DEPOSIT 으로 되돌린 경우.
+           이미 결제 완료 처리했으면 판매량·적립 포인트를 되돌리고 주문을 confirmed 로 내린다 (재고는 그대로 잡아 둔다)
 
         Args:
-            event_data: 토스페이먼츠 웹훅 이벤트 데이터
+            event_data: 토스 Payment 객체 (결제 조회 API 응답)
+        """
+        order_id = event_data.get("orderId")
+
+        try:
+            payment = Payment.objects.select_for_update().get(toss_order_id=order_id)
+        except Payment.DoesNotExist:
+            logger.error(f"Payment not found for order_id: {order_id}")
+            return
+
+        if payment.is_waiting_for_deposit:
+            logger.info(f"Payment already waiting for deposit: {order_id}")
+            return
+
+        if payment.status in ["canceled", "aborted", "expired"]:
+            logger.info(f"Payment in final state {payment.status}, ignoring WAITING_FOR_DEPOSIT event: {order_id}")
+            return
+
+        order = payment.order
+
+        if payment.is_paid:
+            # 입금 취소 — 결제 완료 처리를 되돌린다
+            logger.warning(f"Deposit reverted by Toss, un-paying order: {order_id}")
+
+            for order_item in order.order_items.select_for_update():
+                if order_item.product:
+                    Product.objects.filter(pk=order_item.product.pk, sold_count__gte=order_item.quantity).update(
+                        sold_count=F("sold_count") - order_item.quantity,
+                    )
+
+            if order.user and order.earned_points > 0:
+                PointService.use_points(
+                    user=order.user,
+                    amount=order.earned_points,
+                    type="cancel_deduct",
+                    order=order,
+                    description=f"가상계좌 입금 취소로 인한 적립 포인트 회수 ({order.order_number})",
+                )
+                order.earned_points = 0
+
+            order.status = "confirmed"
+            order.save(update_fields=["status", "earned_points", "updated_at"])
+
+            PaymentLog.objects.create(
+                payment=payment,
+                log_type="webhook",
+                message="가상계좌 입금 취소 — 입금 대기로 복귀",
+                data=event_data,
+            )
+        else:
+            PaymentLog.objects.create(
+                payment=payment,
+                log_type="webhook",
+                message="가상계좌 발급 웹훅 처리, 입금 대기",
+                data=event_data,
+            )
+
+        payment.mark_as_waiting_for_deposit(event_data)
+
+        TossWebhookService.log_webhook_event(order_id, "WAITING_FOR_DEPOSIT")
+
+        logger.info(f"Waiting-for-deposit webhook processed: {order_id}")
+
+    @staticmethod
+    def handle_payment_failed(event_data: dict[str, Any]) -> None:
+        """
+        결제 실패(status=ABORTED 승인 실패 / EXPIRED 가상계좌 입금 기한 만료) 처리
+
+        결제 실패 시 롤백 처리:
+        1. Payment 상태를 aborted(승인 실패) / expired(기한 만료)로 변경
+        2. 롤백 태스크 트리거 (재고 복구, 포인트 환불, 주문 취소)
+
+        Args:
+            event_data: 토스 Payment 객체 (결제 조회 API 응답, 실패 사유는 failure.message)
         """
         from ..tasks.payment_tasks import rollback_payment_failure
 
         order_id = event_data.get("orderId")
-        fail_reason = event_data.get("failReason", "")
+        toss_status = event_data.get("status", "ABORTED")
+        failure = event_data.get("failure") or {}
+        fail_reason = failure.get("message") or (
+            "가상계좌 입금 기한 만료" if toss_status == TOSS_PAYMENT_STATUS_EXPIRED else ""
+        )
 
         try:
             payment = Payment.objects.get(toss_order_id=order_id)
@@ -333,9 +425,9 @@ class TossWebhookService:
             logger.error(f"Payment not found for order_id: {order_id}")
             return
 
-        # 이미 실패 처리된 경우 스킵
-        if payment.status in ["aborted", "failed"]:
-            logger.info(f"Payment already failed: {order_id}")
+        # 이미 실패/만료 처리된 경우 스킵
+        if payment.status in ["aborted", "failed", "expired"]:
+            logger.info(f"Payment already failed: {order_id} ({payment.status})")
             return
 
         # 최종 상태 보호 - 완료/취소된 결제는 실패 처리 불가
@@ -343,8 +435,11 @@ class TossWebhookService:
             logger.info(f"Payment in final state {payment.status}, ignoring FAILED event: {order_id}")
             return
 
-        # Payment 실패 처리
-        payment.mark_as_failed(fail_reason)
+        # Payment 실패 처리 — 가상계좌 입금 기한 경과는 expired, 승인 실패는 aborted
+        if toss_status == TOSS_PAYMENT_STATUS_EXPIRED:
+            payment.mark_as_expired(fail_reason)
+        else:
+            payment.mark_as_failed(fail_reason)
 
         # 롤백 태스크 트리거 (재고 복구, 포인트 환불)
         order = payment.order
@@ -361,6 +456,6 @@ class TossWebhookService:
         )
 
         # 웹훅 이벤트 로깅
-        TossWebhookService.log_webhook_event(order_id, "PAYMENT.FAILED")
+        TossWebhookService.log_webhook_event(order_id, toss_status)
 
-        logger.info(f"Payment failed webhook processed: {order_id}")
+        logger.info(f"Payment failed webhook processed: {order_id} ({toss_status})")

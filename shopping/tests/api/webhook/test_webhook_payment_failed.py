@@ -1,7 +1,7 @@
 """
-결제 실패 웹훅 테스트 (PAYMENT.FAILED)
+결제 실패 웹훅 테스트 (PAYMENT_STATUS_CHANGED · status=ABORTED)
 
-토스페이먼츠 PAYMENT.FAILED 이벤트 처리 및 중복 요청 방지 테스트
+토스페이먼츠 결제 실패(ABORTED) 처리 및 중복 요청 방지 테스트
 """
 
 import uuid
@@ -39,12 +39,12 @@ class TestPaymentFailedWebhook:
     # 1단계: 정상 케이스 (Happy Path)
     # ==========================================
 
-    def test_payment_failed_success(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_success(self, mock_get_payment, webhook_data_builder):
         """정상적인 결제 실패 처리"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason="카드 한도 초과",
         )
@@ -54,7 +54,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -80,10 +79,10 @@ class TestPaymentFailedWebhook:
     # 2단계: 경계값/중복 케이스 (Boundary)
     # ==========================================
 
-    def test_payment_failed_duplicate_request(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_duplicate_request(self, mock_get_payment, webhook_data_builder):
         """중복 웹훅 요청 - 이미 실패 처리된 결제"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Payment를 이미 실패 상태로 설정
         self.payment.status = "aborted"
@@ -93,7 +92,7 @@ class TestPaymentFailedWebhook:
         initial_log_count = PaymentLog.objects.filter(payment=self.payment).count()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason="중복 요청",
         )
@@ -103,7 +102,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 응답 검증
@@ -116,17 +114,17 @@ class TestPaymentFailedWebhook:
         # Assert - 중복 로그 생성 안 됨
         assert PaymentLog.objects.filter(payment=self.payment).count() == initial_log_count
 
-    def test_payment_failed_from_in_progress_status(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_from_in_progress_status(self, mock_get_payment, webhook_data_builder):
         """in_progress 상태에서 결제 실패"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Payment를 in_progress 상태로 설정
         self.payment.status = "in_progress"
         self.payment.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason="결제 진행 중 오류",
         )
@@ -136,7 +134,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -146,17 +143,17 @@ class TestPaymentFailedWebhook:
         assert self.payment.status == "aborted"
         assert self.payment.fail_reason == "결제 진행 중 오류"
 
-    def test_payment_failed_from_waiting_for_deposit(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_from_waiting_for_deposit(self, mock_get_payment, webhook_data_builder):
         """가상계좌 입금 대기 중 결제 실패"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Payment를 waiting_for_deposit 상태로 설정
         self.payment.status = "waiting_for_deposit"
         self.payment.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason="가상계좌 발급 실패",
         )
@@ -166,7 +163,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -176,17 +172,17 @@ class TestPaymentFailedWebhook:
         assert self.payment.status == "aborted"
         assert self.payment.fail_reason == "가상계좌 발급 실패"
 
-    def test_payment_failed_triggers_rollback(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_triggers_rollback(self, mock_get_payment, webhook_data_builder):
         """결제 실패 시 Order 상태가 payment_failed로 변경되고 롤백 실행됨"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # Order를 pending 상태로 설정
         self.order.status = "pending"
         self.order.save()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason="결제 실패",
         )
@@ -196,7 +192,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - Payment는 실패 처리됨
@@ -208,16 +203,16 @@ class TestPaymentFailedWebhook:
         self.order.refresh_from_db()
         assert self.order.status == "payment_failed"
 
-    def test_payment_failed_restores_stock(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_restores_stock(self, mock_get_payment, webhook_data_builder):
         """결제 실패 시 재고가 복구됨 (롤백 태스크 실행)"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         initial_stock = self.product.stock
         initial_sold_count = self.product.sold_count
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason="결제 실패",
         )
@@ -227,7 +222,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -238,15 +232,15 @@ class TestPaymentFailedWebhook:
         assert self.product.stock == initial_stock + 1  # 롤백으로 재고 복구
         assert self.product.sold_count == initial_sold_count  # sold_count는 결제 전이므로 변경 없음
 
-    def test_payment_failed_no_point_change(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_no_point_change(self, mock_get_payment, webhook_data_builder):
         """결제 실패 시 포인트는 변경되지 않음"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         initial_points = self.user.points
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason="결제 실패",
         )
@@ -256,7 +250,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -270,13 +263,13 @@ class TestPaymentFailedWebhook:
     # 3단계: 예외 케이스 (Exception)
     # ==========================================
 
-    def test_payment_failed_payment_not_found(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_payment_not_found(self, mock_get_payment, webhook_data_builder):
         """Payment가 존재하지 않는 경우"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id="nonexistent_order_999",
             fail_reason="존재하지 않는 주문",
         )
@@ -286,19 +279,18 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 웹훅은 성공 응답 (로그만 남기고 처리)
         assert response.status_code == status.HTTP_200_OK
 
-    def test_payment_failed_empty_fail_reason(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_empty_fail_reason(self, mock_get_payment, webhook_data_builder):
         """빈 실패 사유로 처리"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason="",
         )
@@ -308,7 +300,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 빈 사유도 정상 처리
@@ -318,15 +309,15 @@ class TestPaymentFailedWebhook:
         assert self.payment.status == "aborted"
         assert self.payment.fail_reason == ""
 
-    def test_payment_failed_very_long_reason(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_very_long_reason(self, mock_get_payment, webhook_data_builder):
         """매우 긴 실패 사유 처리"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         long_reason = "결제 실패: " + "매우 긴 오류 메시지입니다. " * 50  # 약 1000자
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason=long_reason,
         )
@@ -336,7 +327,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 긴 사유도 정상 처리 (TextField는 제한 없음)
@@ -347,16 +337,16 @@ class TestPaymentFailedWebhook:
         assert self.payment.fail_reason == long_reason
         assert len(self.payment.fail_reason) > 500
 
-    def test_payment_failed_special_characters_in_reason(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_special_characters_in_reason(self, mock_get_payment, webhook_data_builder):
         """특수문자가 포함된 실패 사유 처리"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         # XSS/SQL Injection 방지 확인
         special_reason = "<script>alert('xss')</script> 카드 오류 '; DROP TABLE payment; --"
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason=special_reason,
         )
@@ -366,7 +356,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert - 특수문자도 안전하게 저장됨
@@ -381,15 +370,15 @@ class TestPaymentFailedWebhook:
         assert log is not None
         assert special_reason in log.message
 
-    def test_payment_failed_unicode_characters_in_reason(self, mock_verify_webhook, webhook_data_builder, webhook_signature):
+    def test_payment_failed_unicode_characters_in_reason(self, mock_get_payment, webhook_data_builder):
         """유니코드 문자가 포함된 실패 사유 처리"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
 
         unicode_reason = "결제 실패 🚫 カード エラー 💳 支付失败"
 
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason=unicode_reason,
         )
@@ -399,7 +388,6 @@ class TestPaymentFailedWebhook:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
@@ -445,13 +433,13 @@ class TestPaymentFailedVariousReasons:
         ],
     )
     def test_payment_failed_with_various_reasons(
-        self, mock_verify_webhook, webhook_data_builder, webhook_signature, fail_reason
+        self, mock_get_payment, webhook_data_builder, fail_reason
     ):
         """다양한 실패 사유 처리"""
         # Arrange
-        mock_verify_webhook()
+        mock_get_payment()
         webhook_data = webhook_data_builder(
-            event_type="PAYMENT.FAILED",
+            status="ABORTED",
             order_id=str(self.order.id),
             fail_reason=fail_reason,
         )
@@ -461,7 +449,6 @@ class TestPaymentFailedVariousReasons:
             self.webhook_url,
             webhook_data,
             format="json",
-            HTTP_X_TOSS_WEBHOOK_SIGNATURE=webhook_signature,
         )
 
         # Assert
