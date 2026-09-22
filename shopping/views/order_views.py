@@ -192,8 +192,11 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        # 본문 파싱은 try 밖에서 — 깨진 JSON 은 DRF 의 ParseError(400)로 답해야지, 아래 except Exception 이 500 으로 바꾸면 안 된다
+        data = request.data
+
         try:
-            serializer = self.get_serializer(data=request.data)
+            serializer = self.get_serializer(data=data)
             serializer.is_valid(raise_exception=True)
 
             # 비동기 처리를 위해 하이브리드 방식 사용

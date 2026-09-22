@@ -480,6 +480,20 @@ class TestOrderCreateException:
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_create_order_with_malformed_json_is_400_not_500(self, authenticated_client, user, product, add_to_cart_helper):
+        """깨진 JSON 본문은 클라이언트 오류(400 ParseError)다 — 서버 오류(500)로 포장하면 안 된다"""
+        add_to_cart_helper(user, product, quantity=1)
+
+        response = authenticated_client.post(
+            "/api/orders/",
+            data='{"shipping_name": "±è",',  # 잘린 JSON + 유효하지 않은 UTF-8
+            content_type="application/json",
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "JSON parse error" in response.data["detail"]
+        assert Order.objects.filter(user=user).count() == 0
+
     def test_create_order_with_negative_points(self, authenticated_client, user, product, add_to_cart_helper, shipping_data):
         """음수 포인트 사용 시도"""
         # Arrange
