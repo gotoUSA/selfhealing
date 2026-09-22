@@ -117,7 +117,7 @@ class TestTossConfirmPayment:
         assert "paymentKey" in result
         assert "orderId" in result
         assert "approvedAt" in result
-        assert result["card"]["company"] == "신한카드"
+        assert result["card"]["issuerCode"] == "41"  # 토스는 카드사 이름이 아니라 코드를 준다
 
 
 @pytest.mark.django_db

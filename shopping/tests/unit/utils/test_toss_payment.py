@@ -81,7 +81,7 @@ class TestConfirmPayment:
             "method": "카드",
             "approvedAt": "2025-01-15T10:00:00+09:00",
             "card": {
-                "company": "신한카드",
+                "issuerCode": "41",
                 "number": "1234****",
                 "installmentPlanMonths": 0,
                 "isInterestFree": False,
@@ -400,6 +400,38 @@ class TestGetPayment:
 
 
 @pytest.mark.django_db
+class TestCardIssuerMapping:
+    """토스 card 객체에는 카드사 이름이 없다 — issuerCode 를 이름으로 옮긴다"""
+
+    def test_issuer_code_becomes_company_name(self):
+        from shopping.models.payment import Payment
+
+        payment = Payment(status="ready")
+        payment.save = lambda *a, **k: None  # DB 접근 없이 필드 매핑만 본다
+
+        payment.mark_as_paid({"paymentKey": "k", "card": {"issuerCode": "61", "number": "4045****"}})
+
+        assert payment.card_company == "현대카드"
+        assert payment.card_number == "4045****"
+
+    def test_unknown_issuer_code_is_kept_as_is(self):
+        from shopping.models.payment import Payment
+
+        payment = Payment(status="ready")
+        payment.save = lambda *a, **k: None
+
+        payment.mark_as_paid({"paymentKey": "k", "card": {"issuerCode": "99"}})
+
+        assert payment.card_company == "99"
+
+    def test_virtual_account_bank_code_becomes_bank_name(self):
+        from shopping.models.payment import Payment
+
+        assert Payment(virtual_account_bank_code="06").virtual_account_bank_name == "KB국민은행"
+        assert Payment(virtual_account_bank_code="99").virtual_account_bank_name == "99"
+
+
+@pytest.mark.django_db
 class TestGetPaymentTimeout:
     """get_payment 의 timeout 인자 — 웹훅 경로는 토스 10초 제한보다 짧게 준다"""
 
@@ -609,7 +641,7 @@ class TestCreateBillingKey:
             "customerKey": "CUST_001",
             "authenticatedAt": "2025-01-20T10:00:00+09:00",
             "card": {
-                "company": "신한카드",
+                "issuerCode": "41",
                 "number": "1234****",
                 "cardType": "신용",
             },

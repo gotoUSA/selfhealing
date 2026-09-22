@@ -38,6 +38,29 @@ TOSS_RECONCILE_ERRORS = frozenset(
     ]
 )
 
+# 토스 기관 코드 → 이름 (docs.tosspayments.com/codes/org-codes)
+# 토스 응답의 card 객체에는 카드사 "이름"이 없다 — issuerCode 두 자리만 온다.
+TOSS_CARD_ISSUER_NAMES = {
+    "11": "KB국민카드",
+    "21": "하나카드",
+    "31": "BC카드",
+    "41": "신한카드",
+    "51": "삼성카드",
+    "61": "현대카드",
+    "71": "롯데카드",
+    "91": "NH농협카드",
+}
+
+# 가상계좌 입금 은행 코드 → 이름
+TOSS_BANK_NAMES = {
+    "04": "KB국민은행",
+    "06": "KB국민은행",
+    "11": "NH농협은행",
+    "20": "우리은행",
+    "88": "신한은행",
+}
+
+
 # 토스 Payment 객체의 status 값 (승인 응답 · 조회 응답 · 웹훅 공통)
 TOSS_PAYMENT_STATUS_DONE = "DONE"  # 승인 완료
 TOSS_PAYMENT_STATUS_WAITING_FOR_DEPOSIT = "WAITING_FOR_DEPOSIT"  # 가상계좌 발급, 입금 대기

@@ -163,7 +163,7 @@ def webhook_data_builder(toss_payments):
             # 카드 결제인 경우 카드 정보 추가
             if method == "카드":
                 payment["card"] = {
-                    "company": "신한카드",
+                    "issuerCode": "41",
                     "number": "1234****",
                     "installmentPlanMonths": 0,
                 }

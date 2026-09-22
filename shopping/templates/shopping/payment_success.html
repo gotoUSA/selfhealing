@@ -55,7 +55,7 @@
         <div class="info">
             <p><strong>주문번호:</strong> {{ order.order_number }}</p>
             <p><strong>입금금액:</strong> {{ payment.amount|floatformat:0 }}원</p>
-            <p><strong>입금은행:</strong> {{ payment.virtual_account_bank_code }}</p>
+            <p><strong>입금은행:</strong> {{ payment.virtual_account_bank_name }}</p>
             <p><strong>계좌번호:</strong> {{ payment.virtual_account_number }}</p>
             <p><strong>입금기한:</strong> {{ payment.virtual_account_due_date }}</p>
             <p>입금이 확인되면 주문이 자동으로 결제 완료로 바뀝니다.</p>

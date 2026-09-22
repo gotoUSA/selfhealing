@@ -422,7 +422,7 @@ def toss_success_response():
         "method": "카드",
         "approvedAt": "2025-01-15T10:00:00+09:00",
         "card": {
-            "company": "신한카드",
+            "issuerCode": "41",  # 신한카드 (docs.tosspayments.com/codes/org-codes)
             "number": "1234****",
             "installmentPlanMonths": 0,
             "isInterestFree": False,
@@ -715,7 +715,7 @@ def toss_response_builder():
             status="DONE",
             payment_key="custom_key",
             amount=30000,
-            card_company="국민카드"
+            card_issuer_code="11"  # KB국민카드
         )
     """
     import uuid
@@ -726,7 +726,7 @@ def toss_response_builder():
         order_id="ORDER_001",
         amount=10000,
         method="카드",
-        card_company="신한카드",
+        card_issuer_code="41",
         approved_at="2025-01-15T10:00:00+09:00",
         **kwargs,
     ):
@@ -746,7 +746,7 @@ def toss_response_builder():
         # 카드 결제인 경우 카드 정보 추가
         if method == "카드":
             base_response["card"] = {
-                "company": card_company,
+                "issuerCode": card_issuer_code,
                 "number": "1234****",
                 "installmentPlanMonths": 0,
                 "isInterestFree": False,

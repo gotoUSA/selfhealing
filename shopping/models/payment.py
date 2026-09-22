@@ -7,6 +7,8 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
+from ..constants import TOSS_BANK_NAMES, TOSS_CARD_ISSUER_NAMES
+
 
 class Payment(models.Model):
     """
@@ -243,6 +245,11 @@ class Payment(models.Model):
         return self.status == "waiting_for_deposit"
 
     @property
+    def virtual_account_bank_name(self) -> str:
+        """가상계좌 은행 이름 (토스는 은행 코드만 준다)"""
+        return TOSS_BANK_NAMES.get(self.virtual_account_bank_code, self.virtual_account_bank_code)
+
+    @property
     def can_cancel(self) -> bool:
         """취소 가능 여부"""
         return self.status == "done" and not self.is_canceled
@@ -260,7 +267,9 @@ class Payment(models.Model):
         # 카드 정보 저장
         card = payment_data.get("card", {})
         if card:
-            self.card_company = card.get("company", "")
+            # 토스 card 객체에는 카드사 이름이 없다 — issuerCode(두 자리)를 이름으로 옮긴다
+            issuer_code = card.get("issuerCode", "")
+            self.card_company = TOSS_CARD_ISSUER_NAMES.get(issuer_code, issuer_code)
             self.card_number = card.get("number", "")
             self.installment_plan_months = card.get("installmentPlanMonths", 0)
 

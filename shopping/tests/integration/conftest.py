@@ -206,7 +206,7 @@ def toss_response_builder():
         order_id="ORDER_001",
         amount=10000,
         method="카드",
-        card_company="신한카드",
+        card_issuer_code="41",
         approved_at="2025-01-15T10:00:00+09:00",
         **kwargs,
     ):
@@ -224,7 +224,7 @@ def toss_response_builder():
 
         if method == "카드":
             base_response["card"] = {
-                "company": card_company,
+                "issuerCode": card_issuer_code,
                 "number": "1234****",
                 "installmentPlanMonths": 0,
                 "isInterestFree": False,

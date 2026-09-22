@@ -1093,7 +1093,7 @@ class TossResponseBuilder:
             "method": method,
             "approvedAt": approved_at or TestConstants.DEFAULT_APPROVED_AT,
             "card": {
-                "company": "신한카드",
+                "issuerCode": "41",
                 "number": "1234****5678",
                 "installmentPlanMonths": 0,
                 "cardType": "신용",
@@ -1162,7 +1162,7 @@ class WebhookDataBuilder:
         # 카드 결제인 경우 카드 정보 추가
         if method == "카드":
             payment["card"] = {
-                "company": "신한카드",
+                "issuerCode": "41",
                 "number": "1234****",
                 "installmentPlanMonths": 0,
             }
