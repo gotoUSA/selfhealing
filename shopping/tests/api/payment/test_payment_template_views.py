@@ -66,15 +66,28 @@ class TestPaymentTestPageNormalCase:
             in html
         )
 
+    def test_page_shows_the_payable_amount(self, client, user, order):
+        """화면의 결제금액·버튼은 실제 결제 금액(배송비 포함) — 상품금액만 보여 주면 결제창 금액과 달라진다"""
+        order.final_amount = order.total_amount + 3000  # 배송비
+        order.save(update_fields=["final_amount"])
+        client.force_login(user)
+
+        response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
+        html = response.content.decode()
+
+        assert f"결제하기 ({int(order.final_amount)}원)" in html
+        assert f"결제하기 ({int(order.total_amount)}원)" not in html
+
     def test_toss_window_uses_payment_request_response(self, client, user, order):
-        """결제창의 orderId·amount 는 /api/payments/request/ 응답값 — Payment.toss_order_id(str(order.id))·결제 금액과 같아야 승인·조회가 맞는다"""
+        """결제창의 orderId·amount 는 /api/payments/request/ 응답값 — 저장된 toss_order_id·결제 금액과 같아야 승인·조회가 맞는다"""
         client.force_login(user)
         response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
         html = response.content.decode()
 
-        assert "orderId: String(data.order_id)" in html
+        assert "orderId: data.toss_order_id" in html
         assert "amount: data.amount" in html
         assert "orderId: '" + order.order_number + "'" not in html
+        assert "String(data.order_id)" not in html  # 내부 PK 는 토스 orderId 가 아니다
 
     def test_admin_can_access_any_order(self, client, user, order):
         """관리자는 모든 주문 접근 가능"""

@@ -33,7 +33,8 @@ class PaymentRequestResponseSerializer(drf_serializers.Serializer):
     """결제 요청 성공 응답"""
 
     payment_id = drf_serializers.IntegerField(help_text="생성된 결제 ID")
-    order_id = drf_serializers.IntegerField(help_text="주문 ID")
+    order_id = drf_serializers.IntegerField(help_text="주문 ID (내부 PK)")
+    toss_order_id = drf_serializers.CharField(help_text="결제창에 넘길 토스 orderId (주문번호)")
     order_name = drf_serializers.CharField(help_text="주문명 (예: 노트북 외 2건)")
     customer_name = drf_serializers.CharField(help_text="구매자 이름")
     customer_email = drf_serializers.EmailField(help_text="구매자 이메일")
@@ -199,7 +200,8 @@ class PaymentRequestView(EmailVerificationRequiredMixin, APIView):
             # 결제 정보 반환
             response_data = {
                 "payment_id": payment.id,
-                "order_id": order.id,  # order.id를 반환 (내부 ID)
+                "order_id": order.id,  # 우리 내부 주문 PK
+                "toss_order_id": payment.toss_order_id,  # 결제창에 그대로 넘길 orderId (토스 규칙: 6~64자)
                 "order_name": order_name,
                 "customer_name": request.user.get_full_name() or request.user.username,
                 "customer_email": request.user.email,

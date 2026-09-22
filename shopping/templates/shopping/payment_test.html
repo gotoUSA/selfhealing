@@ -332,7 +332,7 @@
             </div>
             <div class="info-row">
                 <span class="info-label">결제금액</span>
-                <span class="info-value total-amount">{{ order.total_amount|floatformat:0 }}원</span>
+                <span class="info-value total-amount">{{ final_amount|floatformat:0 }}원</span>
             </div>
         </div>
 
@@ -347,7 +347,7 @@
         </div>
 
         <button id="payment-button" class="pay-button">
-            결제하기 ({{ order.total_amount|floatformat:0 }}원)
+            결제하기 ({{ final_amount|floatformat:0 }}원)
         </button>
 
         <div class="loading">
@@ -420,11 +420,11 @@
                 console.log('결제 요청 성공:', data);
 
                 // 2. 토스페이먼츠 결제창 호출
-                // orderId·amount 는 방금 받은 결제 요청 응답을 그대로 쓴다 — Payment.toss_order_id 는 str(order.id),
-                // 금액은 배송비 포함 결제 금액이라 템플릿의 order_number / total_amount 를 넘기면 승인·조회가 어긋난다
+                // orderId·amount 는 방금 받은 결제 요청 응답을 그대로 쓴다 — 우리가 저장한 Payment.toss_order_id 와
+                // 실제 결제 금액(배송비 포함)이라야 승인·조회·웹훅이 같은 결제를 가리킨다
                 await tossPayments.requestPayment(selectedMethod, {
                     amount: data.amount,
-                    orderId: String(data.order_id),
+                    orderId: data.toss_order_id,
                     orderName: data.order_name || '주문 #{{ order.id }}',
                     customerName: '{{ order.shipping_name }}',
                     customerEmail: '{{ order.user.email|default:"test@example.com" }}',

@@ -104,6 +104,9 @@ class TestPaymentRequestNormalCase:
         import re
 
         assert re.fullmatch(r"[A-Za-z0-9_-]{6,64}", payment.toss_order_id)
+        # 응답이 결제창에 넘길 orderId 를 직접 알려 준다 (클라이언트가 PK 로 재조립하면 안 된다)
+        assert response.data["toss_order_id"] == payment.toss_order_id
+        assert response.data["amount"] == int(payment.amount)
         assert payment.method == "card"  # 기본값
 
     def test_response_data_structure(self, authenticated_client, order, user):
