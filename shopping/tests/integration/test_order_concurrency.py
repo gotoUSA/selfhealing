@@ -729,3 +729,157 @@ class TestOrderConcurrencyIntegration:
         success_count = sum(1 for r in results if r.get("success", False))
         assert success_count >= 1, f"최소 1개는 성공해야 함. 성공: {success_count}"
         assert Order.objects.filter(user=user).count() == 1  # 중복 주문 없어야 함
+
+
+# =============================================================================
+# D. 락 순서 불변 조건 (Lock Ordering Invariant)
+# =============================================================================
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.concurrency
+@pytest.mark.order_race
+@pytest.mark.slow
+class TestOrderLockOrderInvariant:
+    """
+    핵심 불변 조건: 여러 상품을 잠글 때 순서가 고정되어 순환 대기가 생기지 않는다
+
+    Purpose:
+        담은 순서가 서로 반대인 두 장바구니가 동시에 주문될 때,
+        process_order_heavy_tasks가 상품 ID 순으로 잠그므로 데드락이 나지 않는지 검증
+    Type:
+        Core invariant test — order_tasks.py의 order_by("product_id")를 지우면 빨개진다
+    Concurrency Control:
+        cart items를 product_id로 정렬한 뒤 select_for_update (전역 락 순서)
+    Assertion choice:
+        데드락은 "데이터가 틀리는" 축이 아니라 "서로 기다리는" 축이라 단언 대상이 다르다.
+        - 소요 시간 단언: 느린 CI에서 거짓 실패하므로 쓰지 않는다
+        - 로그 단언: Celery task logger가 caplog으로 전파되지 않아 잡히지 않는다
+        - 대신 상태로 단언한다. 테스트 설정은 eager + eager_propagates라 retry()가
+          재실행이 아니라 Retry를 올리므로, 데드락이 나면 주문이 pending으로 남고
+          재고가 덜 빠진다 — 그 두 가지를 본다.
+    """
+
+    ROUNDS = 10
+    INITIAL_STOCK = 100
+
+    @staticmethod
+    def _refill_carts(users, first_order, second_order):
+        """두 사용자의 장바구니를 서로 반대 순서로 다시 채운다.
+
+        CartItem.Meta.ordering = ["-added_at"] 이므로 담은 순서의 역순으로 잠근다.
+        """
+        for user, products in ((users[0], first_order), (users[1], second_order)):
+            cart, _ = Cart.get_or_create_active_cart(user)
+            cart.items.all().delete()
+            for product in products:
+                CartItem.objects.create(cart=cart, product=product, quantity=1)
+                time.sleep(0.01)  # added_at 이 같은 값이 되지 않도록
+
+    def test_opposite_cart_order_does_not_deadlock(self, category, shipping_data):
+        """
+        Purpose:
+            상품 두 개를 서로 반대 순서로 담은 두 주문이 동시에 들어와도
+            데드락 없이 둘 다 확정되고 재고가 정확한지 검증
+        Scenario:
+            user A: P1 → P2 담음 (잠그는 순서 P2, P1)
+            user B: P2 → P1 담음 (잠그는 순서 P1, P2)
+            두 사용자가 threading.Barrier 로 같은 순간에 주문, 10회 반복
+        Expected:
+            모든 요청 202, 주문 20건 전부 confirmed, 두 상품 재고 정확히 20 감소
+        Note:
+            1회만 돌리면 두 스레드의 락 획득 창이 어긋나 운으로 통과할 수 있어 반복한다
+        """
+        # Arrange
+        product_a = ProductFactory(
+            name="락 순서 테스트 상품 A",
+            slug="lock-order-a",
+            category=category,
+            price=Decimal("10000"),
+            stock=self.INITIAL_STOCK,
+            sku="LOCK-ORDER-A",
+        )
+        product_b = ProductFactory(
+            name="락 순서 테스트 상품 B",
+            slug="lock-order-b",
+            category=category,
+            price=Decimal("10000"),
+            stock=self.INITIAL_STOCK,
+            sku="LOCK-ORDER-B",
+        )
+        assert product_a.id < product_b.id, "상품 ID 순서를 전제로 하는 테스트"
+
+        users = [
+            UserFactory(
+                username=f"lock_order_{i}",
+                email=f"lock_order_{i}@test.com",
+                phone_number=f"010-7777-{i:04d}",
+                points=0,
+                is_email_verified=True,
+            )
+            for i in range(2)
+        ]
+        tokens = []
+        for user in users:
+            _, token, error = login_and_get_token(user.username)
+            assert error is None, error
+            tokens.append(token)
+
+        # 담은 순서가 실제로 반대인지 확인 — CartItem.Meta.ordering 이 바뀌면
+        # 이 테스트가 조용히 아무것도 검증하지 않게 되므로 전제를 단언한다
+        self._refill_carts(users, (product_a, product_b), (product_b, product_a))
+        lock_orders = [
+            list(Cart.get_or_create_active_cart(user)[0].items.values_list("product_id", flat=True)) for user in users
+        ]
+        assert lock_orders[0] == lock_orders[1][::-1], f"두 장바구니의 잠금 순서가 반대여야 함: {lock_orders}"
+
+        # Act
+        rounds = []
+        for round_index in range(self.ROUNDS):
+            if round_index > 0:
+                self._refill_carts(users, (product_a, product_b), (product_b, product_a))
+
+            barrier = threading.Barrier(2)
+            responses: dict[int, Any] = {}
+            lock = threading.Lock()
+
+            def place_order(index: int):
+                try:
+                    barrier.wait(timeout=30)
+                    client = APIClient()
+                    client.credentials(HTTP_AUTHORIZATION=f"Bearer {tokens[index]}")
+                    response = client.post("/api/orders/", shipping_data, format="json")
+                    with lock:
+                        responses[index] = response.status_code
+                except Exception as e:
+                    with lock:
+                        responses[index] = f"error: {e}"
+                finally:
+                    close_db_connection()
+
+            threads = [threading.Thread(target=place_order, args=(i,)) for i in range(2)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+
+            rounds.append({"round": round_index, "codes": [responses.get(0), responses.get(1)]})
+
+        # Assert
+        product_a.refresh_from_db()
+        product_b.refresh_from_db()
+        expected_sold = self.ROUNDS * 2
+
+        bad_rounds = [r for r in rounds if r["codes"] != [status.HTTP_202_ACCEPTED] * 2]
+        assert not bad_rounds, f"모든 주문이 접수돼야 함(데드락 희생자는 500). 실패 라운드: {bad_rounds}"
+
+        confirmed = Order.objects.filter(status="confirmed").count()
+        pending = Order.objects.filter(status="pending").count()
+        assert confirmed == expected_sold, f"주문 {expected_sold}건이 확정돼야 함. confirmed={confirmed}, pending={pending}"
+
+        assert product_a.stock == self.INITIAL_STOCK - expected_sold, (
+            f"상품 A 재고가 {expected_sold}개 빠져야 함. 실제: {product_a.stock}"
+        )
+        assert product_b.stock == self.INITIAL_STOCK - expected_sold, (
+            f"상품 B 재고가 {expected_sold}개 빠져야 함. 실제: {product_b.stock}"
+        )
