@@ -188,6 +188,8 @@ jobs:
             --timeout=300
 
       - name: Run Concurrency Tests
+        # 앞 step(fuzz)이 실패해도 동시성 테스트는 돌게 한다 — 건너뛰면 락 순서 회귀를 아무도 모른다
+        if: "!cancelled()"
         run: |
           echo "🔄 Concurrency Tests"
           pytest -m concurrency \
