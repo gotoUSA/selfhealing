@@ -420,10 +420,12 @@
                 console.log('결제 요청 성공:', data);
 
                 // 2. 토스페이먼츠 결제창 호출
+                // orderId·amount 는 방금 받은 결제 요청 응답을 그대로 쓴다 — Payment.toss_order_id 는 str(order.id),
+                // 금액은 배송비 포함 결제 금액이라 템플릿의 order_number / total_amount 를 넘기면 승인·조회가 어긋난다
                 await tossPayments.requestPayment(selectedMethod, {
-                    amount: {{ order.total_amount|floatformat:0 }},
-                    orderId: '{{ order.order_number }}',
-                    orderName: '주문 #{{ order.id }}',
+                    amount: data.amount,
+                    orderId: String(data.order_id),
+                    orderName: data.order_name || '주문 #{{ order.id }}',
                     customerName: '{{ order.shipping_name }}',
                     customerEmail: '{{ order.user.email|default:"test@example.com" }}',
                     customerMobilePhone: '{{ order.shipping_phone }}'.replace(/\D/g, ''),  // 토스는 숫자만 받는다 (010-1234-5678 → 01012345678)

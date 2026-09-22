@@ -66,6 +66,16 @@ class TestPaymentTestPageNormalCase:
             in html
         )
 
+    def test_toss_window_uses_payment_request_response(self, client, user, order):
+        """결제창의 orderId·amount 는 /api/payments/request/ 응답값 — Payment.toss_order_id(str(order.id))·결제 금액과 같아야 승인·조회가 맞는다"""
+        client.force_login(user)
+        response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
+        html = response.content.decode()
+
+        assert "orderId: String(data.order_id)" in html
+        assert "amount: data.amount" in html
+        assert "orderId: '" + order.order_number + "'" not in html
+
     def test_admin_can_access_any_order(self, client, user, order):
         """관리자는 모든 주문 접근 가능"""
         # Arrange
