@@ -42,6 +42,21 @@ class TestPaymentTestPageNormalCase:
         assert response.status_code == status.HTTP_200_OK
         assert "shopping/payment_test.html" in [t.name for t in response.templates]
 
+    def test_redirect_urls_point_at_mounted_routes(self, client, user, order):
+        """결제창 성공/실패 리다이렉트가 실제로 존재하는 경로(/api/payment/…)를 가리킨다
+
+        2025-11-30 에 앱 마운트가 /shopping/ → /api/ 로 바뀌었는데 이 페이지의 successUrl 은
+        /shopping/payment/success/ 로 남아 결제창에서 돌아오면 404 였다.
+        """
+        client.force_login(user)
+        response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
+        html = response.content.decode()
+
+        assert "/api/payment/success/" in html
+        assert "/api/payment/fail/" in html
+        assert "/shopping/payment/" not in html
+        assert reverse("payment_success") == "/api/payment/success/"
+
     def test_admin_can_access_any_order(self, client, user, order):
         """관리자는 모든 주문 접근 가능"""
         # Arrange

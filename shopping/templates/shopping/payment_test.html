@@ -427,8 +427,8 @@
                     customerName: '{{ order.shipping_name }}',
                     customerEmail: '{{ order.user.email|default:"test@example.com" }}',
                     customerMobilePhone: '{{ order.shipping_phone }}',
-                    successUrl: window.location.origin + '/shopping/payment/success/',
-                    failUrl: window.location.origin + '/shopping/payment/fail/'
+                    successUrl: window.location.origin + '/api/payment/success/',
+                    failUrl: window.location.origin + '/api/payment/fail/'
                 });
 
             } catch (error) {
