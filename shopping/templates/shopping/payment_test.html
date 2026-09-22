@@ -426,7 +426,7 @@
                     orderName: '주문 #{{ order.id }}',
                     customerName: '{{ order.shipping_name }}',
                     customerEmail: '{{ order.user.email|default:"test@example.com" }}',
-                    customerMobilePhone: '{{ order.shipping_phone }}',
+                    customerMobilePhone: '{{ order.shipping_phone }}'.replace(/\D/g, ''),  // 토스는 숫자만 받는다 (010-1234-5678 → 01012345678)
                     successUrl: window.location.origin + '/api/payment/success/',
                     failUrl: window.location.origin + '/api/payment/fail/'
                 });

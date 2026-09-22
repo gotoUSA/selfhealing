@@ -3,23 +3,20 @@
 Note: URL namespace가 설정되어 있지 않으므로 reverse("payment_test") 형식 사용
 """
 
-
-from django.urls import reverse
-
 import pytest
+from django.urls import reverse
 from rest_framework import status
 
 from shopping.services.payment_service import PaymentConfirmError
 from shopping.tests.factories import (
+    CompletedPaymentFactory,
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
-    CompletedPaymentFactory,
-    UserFactory,
     TossResponseBuilder,
+    UserFactory,
 )
 from shopping.utils.toss_payment import TossPaymentError
-
 
 # ==========================================
 # payment_test_page 테스트
@@ -56,6 +53,18 @@ class TestPaymentTestPageNormalCase:
         assert "/api/payment/fail/" in html
         assert "/shopping/payment/" not in html
         assert reverse("payment_success") == "/api/payment/success/"
+
+    def test_customer_phone_is_passed_digits_only(self, client, user, order):
+        """토스 결제창의 customerMobilePhone 은 숫자만 허용 — 하이픈 있는 배송 연락처를 그대로 넘기면 결제창이 거부한다"""
+        client.force_login(user)
+        response = client.get(reverse("payment_test", kwargs={"order_id": order.id}))
+        html = response.content.decode()
+
+        assert "-" in order.shipping_phone  # fixture 는 010-9999-8888 꼴
+        assert (
+            "customerMobilePhone: '" + order.shipping_phone + "'.replace(/\\D/g, '')"
+            in html
+        )
 
     def test_admin_can_access_any_order(self, client, user, order):
         """관리자는 모든 주문 접근 가능"""
