@@ -73,6 +73,11 @@ def process_order_heavy_tasks(order_id: int, cart_id: int, use_points: int = 0) 
                         f"재고 부족: product_id={product.pk}, " f"requested={cart_item.quantity}, available={product.stock}"
                     )
 
+                    # 앞 반복에서 이미 차감한 재고 복구
+                    # (이 분기는 예외 없이 return 하므로 트랜잭션이 커밋된다 — 되돌리지 않으면 부분 차감이 남는다)
+                    for item in order.order_items.all():
+                        Product.objects.filter(pk=item.product.pk).update(stock=F("stock") + item.quantity)
+
                     # 주문 실패 처리
                     order.status = "failed"
                     order.failure_reason = (

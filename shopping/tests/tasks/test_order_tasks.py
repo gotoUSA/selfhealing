@@ -245,6 +245,61 @@ class TestOrderTasksException:
         product.refresh_from_db()
         assert product.stock == 1
 
+    def test_insufficient_stock_on_later_item_restores_earlier_items(
+        self, user, product_factory
+    ):
+        """두 번째 상품에서 재고 부족 → 먼저 차감된 첫 상품 재고가 남아 있으면 안 된다
+
+        실패 분기가 예외 없이 return 하면 트랜잭션이 커밋되므로,
+        앞 상품의 차감이 그대로 남는지(부분 차감 커밋) 확인한다.
+        """
+        # Arrange: 충분한 상품 A를 먼저 만들어 product_id가 작고, CartItem은 B → A 순으로 담아
+        # product_id 정렬이든 added_at 역순이든 어느 순회 순서에서도 A가 먼저 처리되게 한다
+        product_a = product_factory(name="충분 상품", sku="SKU-ENOUGH", stock=10)
+        product_b = product_factory(name="부족 상품", sku="SKU-SHORT", stock=1)
+
+        cart = Cart.objects.create(user=user, is_active=True)
+        CartItem.objects.create(cart=cart, product=product_b, quantity=2)
+        CartItem.objects.create(cart=cart, product=product_a, quantity=2)
+
+        total = product_a.price * 2 + product_b.price * 2
+        order = Order.objects.create(
+            user=user,
+            status="pending",
+            total_amount=total,
+            final_amount=total,
+            shipping_name="홍길동",
+            shipping_phone="010-1234-5678",
+            shipping_postal_code="12345",
+            shipping_address="서울시 강남구",
+            shipping_address_detail="101호",
+        )
+
+        # Act
+        result = process_order_heavy_tasks(
+            order_id=order.id,
+            cart_id=cart.id,
+            use_points=0
+        )
+
+        # Assert: 실패 응답 + 주문 실패 상태
+        assert result["status"] == "failed"
+        assert result["reason"] == "insufficient_stock"
+        assert product_b.name in result["product"]
+
+        order.refresh_from_db()
+        assert order.status == "failed"
+
+        # 실패한 주문은 재고를 하나도 쥐고 있으면 안 된다
+        product_a.refresh_from_db()
+        product_b.refresh_from_db()
+        assert product_a.stock == 10, f"먼저 차감된 상품이 복구되지 않음: {product_a.stock}"
+        assert product_b.stock == 1
+
+        # 장바구니는 되살아나야 재주문이 가능하다
+        cart.refresh_from_db()
+        assert cart.is_active is True
+
     def test_point_deduction_failure_rollback_stock(
         self, user, product
     ):
