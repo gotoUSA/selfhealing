@@ -26,7 +26,7 @@ from .point_service import PointService
 
 logger = logging.getLogger(__name__)
 
-# Redis TTL 상수 — 토스 첫 재전송이 1분 뒤이므로, 정상 처리된 이벤트의 첫 재전송을 DB 전에 걸러낸다
+# Redis TTL 상수 — 토스 첫 재전송이 1분 뒤이므로, 정상 처리(커밋)된 이벤트의 첫 재전송을 DB 전에 걸러낸다
 WEBHOOK_EVENT_TTL = 60  # 60초
 
 
@@ -101,9 +101,23 @@ class TossWebhookService:
 
     @staticmethod
     def mark_webhook_processed(order_id: str, event_type: str) -> None:
-        """Redis에 웹훅 처리 완료 마킹 (TTL 60초)"""
+        """
+        Redis에 웹훅 처리 완료 마킹 (TTL 60초)
+
+        cache.add 는 키가 없을 때만 쓰는 원자 연산(SETNX)이라 같은 이벤트가 겹쳐도 마킹은 한 번이다.
+        """
         cache_key = TossWebhookService._get_webhook_cache_key(order_id, event_type)
-        cache.set(cache_key, "1", timeout=WEBHOOK_EVENT_TTL)
+        cache.add(cache_key, "1", timeout=WEBHOOK_EVENT_TTL)
+
+    @staticmethod
+    def mark_webhook_processed_on_commit(order_id: str, event_type: str) -> None:
+        """
+        현재 트랜잭션이 커밋된 뒤에만 Redis 마킹
+
+        마킹을 커밋 전에 하면 핸들러가 예외로 롤백돼도 키가 60초 남아, 토스의 첫 재전송(+1분)이
+        1층에서 "중복"으로 버려질 수 있다. 커밋 뒤로 미루면 롤백된 처리는 흔적을 남기지 않는다.
+        """
+        transaction.on_commit(lambda: TossWebhookService.mark_webhook_processed(order_id, event_type))
 
     @staticmethod
     def log_webhook_event(order_id: str, event_type: str) -> None:
@@ -131,21 +145,18 @@ class TossWebhookService:
         웹훅이 먼저 도착할 수 있으므로 중복 처리 방지 필요
 
         중복 방어:
-        1. Redis TTL 60초 (빠른 중복 체크)
-        2. is_paid 상태 체크 (2차 방어)
+        1. Redis TTL 60초 (빠른 중복 체크 — 마킹은 커밋 뒤에만, cache.add 로 원자적으로)
+        2. is_paid 상태 체크 (2차 방어, 행 락 안에서 — 진짜 보장)
 
         Args:
             event_data: 토스 Payment 객체 (결제 조회 API 응답)
         """
         order_id = event_data.get("orderId")
 
-        # 1. Redis 중복 체크 (60초 내 동일 웹훅 방어)
+        # 1. Redis 중복 체크 (60초 내 동일 웹훅 방어) — 빠른 필터일 뿐, 보장은 아래 행 락이 한다
         if TossWebhookService.is_webhook_duplicate(order_id, "DONE"):
             logger.info(f"Webhook duplicate blocked by Redis: {order_id}")
             return
-
-        # 2. Redis에 먼저 마킹 (다른 요청 차단)
-        TossWebhookService.mark_webhook_processed(order_id, "DONE")
 
         try:
             payment = Payment.objects.select_for_update().get(toss_order_id=order_id)
@@ -153,7 +164,7 @@ class TossWebhookService:
             logger.error(f"Payment not found for order_id: {order_id}")
             return
 
-        # 3. 이미 처리된 결제인지 확인 (2차 방어)
+        # 2. 이미 처리된 결제인지 확인 (2차 방어)
         if payment.is_paid:
             logger.info(f"Payment already processed: {order_id}")
             return
@@ -173,6 +184,9 @@ class TossWebhookService:
                 data=event_data,
             )
             return
+
+        # 3. 여기서부터 실제 처리 — 마킹은 커밋된 뒤에만 (롤백되면 키도 없다)
+        TossWebhookService.mark_webhook_processed_on_commit(order_id, "DONE")
 
         # Payment 정보 업데이트
         payment.mark_as_paid(event_data)
@@ -244,21 +258,18 @@ class TossWebhookService:
         결제 취소(status=CANCELED) 처리
 
         중복 방어:
-        1. Redis TTL 60초 (빠른 중복 체크)
-        2. is_canceled 상태 체크 (2차 방어)
+        1. Redis TTL 60초 (빠른 중복 체크 — 마킹은 커밋 뒤에만, cache.add 로 원자적으로)
+        2. is_canceled 상태 체크 (2차 방어, 행 락 안에서 — 진짜 보장)
 
         Args:
             event_data: 토스 Payment 객체 (결제 조회 API 응답, 취소 이력은 cancels[])
         """
         order_id = event_data.get("orderId")
 
-        # 1. Redis 중복 체크 (60초 내 동일 웹훅 방어)
+        # 1. Redis 중복 체크 (60초 내 동일 웹훅 방어) — 빠른 필터일 뿐, 보장은 아래 행 락이 한다
         if TossWebhookService.is_webhook_duplicate(order_id, "CANCELED"):
             logger.info(f"Webhook duplicate blocked by Redis: {order_id}")
             return
-
-        # 2. Redis에 먼저 마킹 (다른 요청 차단)
-        TossWebhookService.mark_webhook_processed(order_id, "CANCELED")
 
         try:
             payment = Payment.objects.select_for_update().get(toss_order_id=order_id)
@@ -266,7 +277,7 @@ class TossWebhookService:
             logger.error(f"Payment not found for order_id: {order_id}")
             return
 
-        # 3. 이미 취소된 결제인지 확인 (2차 방어)
+        # 2. 이미 취소된 결제인지 확인 (2차 방어)
         if payment.is_canceled:
             logger.info(f"Payment already canceled: {order_id}")
             return
@@ -275,6 +286,9 @@ class TossWebhookService:
         if payment.status in ["aborted"]:
             logger.info(f"Payment already failed (aborted), ignoring CANCELED event: {order_id}")
             return
+
+        # 3. 여기서부터 실제 처리 — 마킹은 커밋된 뒤에만 (롤백되면 키도 없다)
+        TossWebhookService.mark_webhook_processed_on_commit(order_id, "CANCELED")
 
         # Payment 정보 업데이트
         payment.mark_as_canceled(event_data)
