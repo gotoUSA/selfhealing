@@ -204,6 +204,68 @@ class TestPaymentTestPageException:
 
 
 @pytest.mark.django_db
+class TestPaymentSuccessVirtualAccount:
+    """가상계좌 승인 응답(WAITING_FOR_DEPOSIT)은 '완료'가 아니라 '입금 대기'로 보여 준다"""
+
+    def test_waiting_for_deposit_shows_account_not_completion(self, client, user, order, mocker):
+        client.force_login(user)
+        payment = PaymentFactory(order=order)
+        issued = {
+            "status": "WAITING_FOR_DEPOSIT",
+            "paymentKey": "va_key_001",
+            "orderId": payment.toss_order_id,
+            "totalAmount": int(payment.amount),
+            "method": "가상계좌",
+            "secret": "ps_test_secret",
+            "virtualAccount": {
+                "bankCode": "06",
+                "accountNumber": "X5909014384357",
+                "dueDate": "2026-09-29T22:05:08+09:00",
+                "expired": False,
+            },
+        }
+        mocker.patch(
+            "shopping.services.payment_service.TossPaymentClient.confirm_payment",
+            return_value=issued,
+        )
+
+        response = client.get(
+            reverse("payment_success"),
+            {"paymentKey": "va_key_001", "orderId": payment.toss_order_id, "amount": str(int(payment.amount))},
+        )
+        html = response.content.decode()
+
+        assert response.status_code == status.HTTP_200_OK
+        assert "결제가 완료되었습니다" not in html
+        assert "입금을 기다리고 있어요" in html
+        assert "X5909014384357" in html
+
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        assert payment.status == "waiting_for_deposit"
+        assert order.status == "confirmed"
+
+    def test_card_payment_still_shows_completion(self, client, user, order, mocker):
+        client.force_login(user)
+        payment = PaymentFactory(order=order)
+        mocker.patch(
+            "shopping.services.payment_service.TossPaymentClient.confirm_payment",
+            return_value=TossResponseBuilder.success_response(
+                payment_key="card_key_001", order_id=payment.toss_order_id, amount=int(payment.amount)
+            ),
+        )
+
+        response = client.get(
+            reverse("payment_success"),
+            {"paymentKey": "card_key_001", "orderId": payment.toss_order_id, "amount": str(int(payment.amount))},
+        )
+        html = response.content.decode()
+
+        assert "결제가 완료되었습니다" in html
+        assert "입금을 기다리고 있어요" not in html
+
+
+@pytest.mark.django_db
 class TestPaymentSuccessCallbackNormalCase:
     """정상 케이스 - 결제 성공 콜백"""
 

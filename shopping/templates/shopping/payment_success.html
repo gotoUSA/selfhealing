@@ -47,6 +47,20 @@
 </head>
 <body>
     <div class="success-container">
+        {% if payment.is_waiting_for_deposit %}
+        {# 가상계좌: 승인 = 계좌 발급이고 결제 완료가 아니다. 입금 웹훅이 와야 주문이 paid 가 된다 #}
+        <div class="success-icon">🏦</div>
+        <h1>입금을 기다리고 있어요</h1>
+
+        <div class="info">
+            <p><strong>주문번호:</strong> {{ order.order_number }}</p>
+            <p><strong>입금금액:</strong> {{ payment.amount|floatformat:0 }}원</p>
+            <p><strong>입금은행:</strong> {{ payment.virtual_account_bank_code }}</p>
+            <p><strong>계좌번호:</strong> {{ payment.virtual_account_number }}</p>
+            <p><strong>입금기한:</strong> {{ payment.virtual_account_due_date }}</p>
+            <p>입금이 확인되면 주문이 자동으로 결제 완료로 바뀝니다.</p>
+        </div>
+        {% else %}
         <div class="success-icon">✅</div>
         <h1>결제가 완료되었습니다!</h1>
 
@@ -58,10 +72,11 @@
             <p><strong>카드사:</strong> {{ payment.card_company }}</p>
             {% endif %}
         </div>
+        {% endif %}
 
         <div>
-            <a href="/shopping/orders/{{ order.id }}/" class="btn">주문 상세보기</a>
-            <a href="/shopping/" class="btn">쇼핑 계속하기</a>
+            <a href="/api/orders/{{ order.id }}/" class="btn">주문 상세보기</a>
+            <a href="/api/products/" class="btn">쇼핑 계속하기</a>
         </div>
     </div>
 </body>
