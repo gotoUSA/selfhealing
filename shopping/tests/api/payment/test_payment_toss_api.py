@@ -167,8 +167,8 @@ class TestTossConfirmPaymentBoundary:
         # Assert
         assert result["totalAmount"] == max_amount
 
-    def test_confirm_payment_timeout_at_30_seconds(self, mocker):
-        """정확히 30초에 타임아웃 발생"""
+    def test_confirm_payment_timeout_is_connect_3_read_20(self, mocker):
+        """(연결 3초, 읽기 20초) — 합이 승인 태스크의 soft_time_limit(25초)보다 짧아야 한다"""
         # Arrange
         mock_response = Mock()
         mock_response.status_code = 200
@@ -184,7 +184,7 @@ class TestTossConfirmPaymentBoundary:
 
         # Assert
         call_kwargs = mock_post.call_args[1]
-        assert call_kwargs["timeout"] == 30
+        assert call_kwargs["timeout"] == (3, 20)
 
 
 @pytest.mark.django_db

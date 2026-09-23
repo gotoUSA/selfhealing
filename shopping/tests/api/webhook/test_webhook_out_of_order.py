@@ -5,7 +5,7 @@ from decimal import Decimal
 import pytest
 
 from shopping.models.order import Order, OrderItem
-from shopping.models.payment import Payment
+from shopping.models.payment import Payment, PaymentLog
 from shopping.services.toss_webhook_service import TossWebhookService
 from shopping.tests.factories import ProductFactory, UserFactory
 
@@ -193,6 +193,33 @@ class TestWebhookDuplicate:
         # Assert
         product.refresh_from_db()
         assert product.stock == initial_stock
+
+    def test_aborted_then_done_alerts_instead_of_ignoring(self, category, mocker):
+        """우리는 aborted 로 끝냈는데 토스 현재 상태가 DONE = 청구됐는데 실패 처리
+
+        예전에는 최종 상태로 보고 INFO 한 줄로 버렸다 — 고아 결제를 알려 주는 유일한 신호였다.
+        되살리지는 않는다(롤백이 재고를 이미 돌려놨다). 기록하고 운영자에게 알린다.
+        """
+        user = UserFactory(is_email_verified=True, points=0)
+        product = ProductFactory(category=category, stock=10, price=Decimal("10000"))
+        order, payment = _create_order_with_payment(user, product, "payment_failed", "aborted")
+        notify = mocker.patch("shopping.tasks.payment_tasks.notify_payment_failure.delay")
+        stock_before = product.stock
+
+        TossWebhookService.handle_payment_done(_make_done_event(payment))
+
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        product.refresh_from_db()
+        assert payment.status == "aborted"
+        assert order.status == "payment_failed"
+        assert product.stock == stock_before
+        assert PaymentLog.objects.filter(
+            payment=payment, log_type="error", message__contains="수동 대사"
+        ).exists()
+        notify.assert_called_once()
+        assert notify.call_args.args[:2] == (order.id, "charged_but_failed")
+        assert notify.call_args.kwargs["severity"] == "critical"
 
     def test_done_payment_ignores_failed(self, category):
         """done 상태에서 FAILED 웹훅 도착 시 done 유지"""

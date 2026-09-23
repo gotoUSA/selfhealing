@@ -7,6 +7,8 @@ from django.conf import settings
 
 import requests
 
+from ..constants import TOSS_CONFIRM_TIMEOUT
+
 
 class TossPaymentClient:
     """
@@ -69,7 +71,7 @@ class TossPaymentClient:
                 url,
                 json=data,
                 headers=self.headers,
-                timeout=30,
+                timeout=TOSS_CONFIRM_TIMEOUT,
             )
 
             # 성공 응답 (200)
@@ -147,7 +149,7 @@ class TossPaymentClient:
                 status_code=500,
             )
 
-    def get_payment(self, payment_key: str, timeout: float = 30) -> dict[str, Any]:
+    def get_payment(self, payment_key: str, timeout: float | tuple[float, float] = 30) -> dict[str, Any]:
         """
         결제 정보 조회
 
@@ -155,7 +157,8 @@ class TossPaymentClient:
 
         Args:
             payment_key: 토스페이먼츠 결제 키
-            timeout: 요청 타임아웃(초). 웹훅 경로는 토스의 10초 응답 제한보다 짧게 준다.
+            timeout: 요청 타임아웃(초, 또는 (연결, 읽기)). 웹훅 경로는 토스의 10초 응답 제한보다 짧게,
+                승인 태스크 안의 대사는 태스크 시간 제한보다 짧게 준다.
 
         Returns:
             결제 정보 (Payment 객체)

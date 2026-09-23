@@ -26,6 +26,15 @@ ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES = frozenset(["in_progress", "waiting_for
 ORDER_EXPIRED_FAILURE_REASON = "결제 시간 초과"
 
 
+# ==================== Toss 결제 승인 타임아웃 ====================
+# 승인 API 의 (연결, 읽기) 타임아웃(초). 합이 call_toss_confirm_api 의 soft_time_limit 보다 짧아야 한다 —
+# 길면 느린 응답이 HTTP 타임아웃(TossPaymentError → 재시도 → 조회 API 대사)이 아니라 태스크 시간 제한
+# (SoftTimeLimitExceeded)으로 먼저 끝나, 토스가 승인한 결제를 확인 없이 실패 처리하게 된다.
+TOSS_CONFIRM_TIMEOUT = (3, 20)
+TOSS_CONFIRM_SOFT_TIME_LIMIT = 25
+TOSS_CONFIRM_TIME_LIMIT = 30
+
+
 # ==================== Toss 결제 API 에러 코드 분류 ====================
 # 승인 요청이 이미 PG 에 닿았을 수 있는 오류 — 롤백 전에 결제 조회 API 로 실제 상태를 확인한다
 # (우리 요청은 승인됐는데 응답만 잃은 타임아웃 뒤의 재시도가 이 코드를 받는다)

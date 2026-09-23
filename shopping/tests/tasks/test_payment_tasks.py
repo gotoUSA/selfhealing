@@ -5,9 +5,13 @@ tests/hybrid/test_payment_tasks.py 는 requires_db 마커로 CI 에서 빠진다
 돈이 걸린 경로는 여기(shopping/tests) 에 두어 CI 가 항상 돌리게 한다.
 """
 
+import threading
+import time
 from decimal import Decimal
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+from celery.exceptions import SoftTimeLimitExceeded
 from django.db.models import F
 
 from shopping.models.order import Order, OrderItem
@@ -18,12 +22,14 @@ from shopping.tasks.payment_tasks import (
     detect_orphaned_orders,
     finalize_payment_confirm,
 )
+from shopping.constants import TOSS_CONFIRM_TIMEOUT, TOSS_RETRYABLE_ERRORS
 from shopping.tests.factories import TossResponseBuilder
-from shopping.utils.toss_payment import TossPaymentError
+from shopping.utils.toss_payment import TossPaymentClient, TossPaymentError
 
 CONFIRM = "shopping.utils.toss_payment.TossPaymentClient.confirm_payment"
 LOOKUP = "shopping.utils.toss_payment.TossPaymentClient.get_payment"
 ROLLBACK_DELAY = "shopping.tasks.payment_tasks.rollback_payment_failure.delay"
+NOTIFY_DELAY = "shopping.tasks.payment_tasks.notify_payment_failure.delay"
 
 
 def _already_processed():
@@ -42,6 +48,18 @@ def in_progress_payment(order):
         status="in_progress",
         payment_key="test_key_reconcile",
     )
+
+
+def _last_attempt(payment, order):
+    """재시도를 다 쓴 마지막 시도 — retry 를 mock 하지 않고 실제 Celery retry 의 소진 분기를 탄다
+
+    Celery 의 retry(exc=...) 는 소진 시 MaxRetriesExceededError 가 아니라 exc 를 다시 던진다.
+    그 예외를 mock 으로 억지로 만들면, 실제로는 한 번도 실행되지 않는 분기가 초록이 된다.
+    """
+    return call_toss_confirm_api.apply(
+        args=[payment.payment_key, order.id, int(payment.amount)],
+        retries=call_toss_confirm_api.max_retries,
+    ).get()
 
 
 def _done_lookup(order, payment):
@@ -81,7 +99,7 @@ class TestConfirmReconciliation:
         toss_response = call_toss_confirm_api(
             payment.payment_key, order.id, int(payment.amount)
         )
-        lookup.assert_called_once_with(payment.payment_key)
+        lookup.assert_called_once_with(payment.payment_key, timeout=TOSS_CONFIRM_TIMEOUT)
         assert toss_response["status"] == "DONE"
         rollback.assert_not_called()
 
@@ -199,17 +217,12 @@ class TestConfirmReconciliation:
             LOOKUP, side_effect=TossPaymentError("NETWORK_ERROR", "네트워크 오류", 500)
         )
         rollback = mocker.patch(ROLLBACK_DELAY)
-        notify = mocker.patch(
-            "shopping.tasks.payment_tasks.notify_payment_failure.delay"
-        )
-        mocker.patch.object(
-            call_toss_confirm_api,
-            "retry",
-            side_effect=call_toss_confirm_api.MaxRetriesExceededError(),
-        )
+        notify = mocker.patch(NOTIFY_DELAY)
 
-        with pytest.raises(call_toss_confirm_api.MaxRetriesExceededError):
-            call_toss_confirm_api(payment.payment_key, order.id, int(payment.amount))
+        with pytest.raises(TossPaymentError) as exc_info:
+            _last_attempt(payment, order)
+
+        assert exc_info.value.code == "NETWORK_ERROR"
 
         rollback.assert_not_called()
         notify.assert_called_once()
@@ -258,6 +271,165 @@ class TestConfirmReconciliation:
 
         lookup.assert_not_called()
         rollback.assert_called_once()
+
+
+@pytest.mark.django_db(transaction=True)
+class TestConfirmRetryKeepsPaymentInProgress:
+    """재시도 대기 중에는 in_progress 를 유지하고, 소진됐을 때만 aborted + 롤백
+
+    예전에는 분류 전에 aborted 로 덮어서 재시도를 기다리는 동안(당시 180초) 폴링은 '실패'를 보였고,
+    그 사이 도착한 토스 DONE 웹훅은 최종 상태로 보고 버려졌다. 소진 분기는 한 번도 실행되지 않았다.
+    """
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            TossPaymentError("NETWORK_ERROR", "네트워크 오류", 500),
+            TossPaymentError("SOME_GATEWAY_ERROR", "게이트웨이 오류", 502),
+        ],
+        ids=["retryable_code", "http_5xx"],
+    )
+    def test_retry_keeps_in_progress_and_uses_backoff(
+        self, mocker, order, in_progress_payment, error
+    ):
+        payment = in_progress_payment
+        mocker.patch(CONFIRM, side_effect=error)
+        rollback = mocker.patch(ROLLBACK_DELAY)
+        retry = mocker.patch.object(
+            call_toss_confirm_api,
+            "retry",
+            side_effect=TossPaymentError("RETRY", "retry"),
+        )
+
+        with pytest.raises(TossPaymentError):
+            call_toss_confirm_api(payment.payment_key, order.id, int(payment.amount))
+
+        # 첫 재시도: retry_backoff=10 → full jitter 로 0~10초 (Celery 기본 180초 고정이 아니다)
+        assert 0 <= retry.call_args.kwargs["countdown"] <= 10
+        rollback.assert_not_called()
+        payment.refresh_from_db()
+        assert payment.status == "in_progress"
+        assert PaymentLog.objects.filter(payment=payment, log_type="error").exists()
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            TossPaymentError("NETWORK_ERROR", "네트워크 오류", 500),
+            TossPaymentError("SOME_GATEWAY_ERROR", "게이트웨이 오류", 502),
+        ],
+        ids=["retryable_code", "http_5xx"],
+    )
+    def test_retries_exhausted_rolls_back(self, mocker, order, in_progress_payment, error):
+        payment = in_progress_payment
+        mocker.patch(CONFIRM, side_effect=error)
+        rollback = mocker.patch(ROLLBACK_DELAY)
+
+        with pytest.raises(TossPaymentError):
+            _last_attempt(payment, order)
+
+        rollback.assert_called_once()
+        payment.refresh_from_db()
+        assert payment.status == "aborted"
+
+
+@pytest.mark.django_db(transaction=True)
+class TestConfirmSoftTimeLimit:
+    """태스크 시간 제한 초과는 승인 여부를 모르는 상태 — 롤백하지 않는다
+
+    예전에는 status=timeout + 즉시 롤백이었다. 토스가 승인한 뒤 응답이 늦은 경우, 고객은 청구됐는데
+    주문은 payment_failed 로 끝났다(가짜 토스 서버 + 실제 워커로 재현).
+    """
+
+    def test_soft_time_limit_retries_instead_of_rolling_back(
+        self, mocker, order, in_progress_payment
+    ):
+        payment = in_progress_payment
+        mocker.patch(CONFIRM, side_effect=SoftTimeLimitExceeded())
+        rollback = mocker.patch(ROLLBACK_DELAY)
+        retry = mocker.patch.object(
+            call_toss_confirm_api,
+            "retry",
+            side_effect=TossPaymentError("RETRY", "retry"),
+        )
+
+        with pytest.raises(TossPaymentError):
+            call_toss_confirm_api(payment.payment_key, order.id, int(payment.amount))
+
+        retry.assert_called_once()
+        rollback.assert_not_called()
+        payment.refresh_from_db()
+        assert payment.status == "in_progress"
+        order.refresh_from_db()
+        assert order.status == "confirmed"
+        assert PaymentLog.objects.filter(
+            payment=payment, log_type="error", message__contains="시간 초과"
+        ).exists()
+
+    def test_soft_time_limit_exhausted_escalates_without_rollback(
+        self, mocker, order, in_progress_payment
+    ):
+        payment = in_progress_payment
+        mocker.patch(CONFIRM, side_effect=SoftTimeLimitExceeded())
+        rollback = mocker.patch(ROLLBACK_DELAY)
+        notify = mocker.patch(NOTIFY_DELAY)
+
+        with pytest.raises(SoftTimeLimitExceeded):
+            _last_attempt(payment, order)
+
+        rollback.assert_not_called()
+        notify.assert_called_once()
+        assert notify.call_args.args[:2] == (order.id, "confirm_timeout_unresolved")
+        assert notify.call_args.kwargs["severity"] == "critical"
+        payment.refresh_from_db()
+        assert payment.status == "in_progress"
+
+
+class _SlowTossHandler(BaseHTTPRequestHandler):
+    """응답을 늦게 주는 가짜 토스 — 실제 소켓 읽기 타임아웃을 만든다"""
+
+    delay = 1.5
+
+    def do_POST(self):
+        time.sleep(self.delay)
+        try:
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"{}")
+        except OSError:
+            pass  # 클라이언트가 먼저 끊었다
+
+    def log_message(self, *args):
+        pass
+
+
+class TestConfirmTimeoutBudget:
+    """느린 응답은 태스크 시간 제한이 아니라 HTTP 타임아웃으로 끝나야 재시도·대사 경로를 탄다"""
+
+    def test_http_timeout_ends_before_task_time_limits(self):
+        assert sum(TOSS_CONFIRM_TIMEOUT) < call_toss_confirm_api.soft_time_limit
+        assert call_toss_confirm_api.soft_time_limit < call_toss_confirm_api.time_limit
+
+    def test_slow_response_becomes_a_retryable_error(self, mocker, settings):
+        """mock 예외가 아니라 실제로 늦게 응답하는 서버 — '어떤 장치가 먼저 울리는지'를 본다"""
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _SlowTossHandler)
+        server.daemon_threads = True
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            settings.TOSS_BASE_URL = f"http://127.0.0.1:{server.server_address[1]}"
+            mocker.patch("shopping.utils.toss_payment.TOSS_CONFIRM_TIMEOUT", (1, 0.3))
+
+            started = time.monotonic()
+            with pytest.raises(TossPaymentError) as exc_info:
+                TossPaymentClient().confirm_payment(
+                    payment_key="k", order_id="ORDER_000001", amount=1000
+                )
+            elapsed = time.monotonic() - started
+        finally:
+            server.shutdown()
+            server.server_close()
+
+        assert exc_info.value.code in TOSS_RETRYABLE_ERRORS
+        assert elapsed < _SlowTossHandler.delay
 
 
 @pytest.mark.django_db(transaction=True)

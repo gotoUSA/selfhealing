@@ -169,8 +169,37 @@ class TossWebhookService:
             logger.info(f"Payment already processed: {order_id}")
             return
 
-        # 최종 상태 보호 - 취소/실패된 결제는 재승인 불가
-        if payment.status in ["canceled", "aborted"]:
+        # 우리는 실패로 끝냈는데 토스의 현재 상태는 승인(DONE) — 고객은 청구됐다.
+        # 자동으로 되살리지 않는다(롤백이 재고를 이미 돌려놨다). 사람이 대사·환불하도록 기록하고 알린다.
+        if payment.status == "aborted":
+            logger.critical(f"Charged payment recorded as failed, manual reconciliation needed: {order_id}")
+            PaymentLog.objects.create(
+                payment=payment,
+                log_type="error",
+                message="실패 처리한 결제에 토스 승인(DONE) 확인 — 수동 대사·환불 필요",
+                data=event_data,
+            )
+            order_pk = payment.order_id
+            payment_key = event_data.get("paymentKey", "")
+
+            def _notify() -> None:
+                try:
+                    from ..tasks.payment_tasks import notify_payment_failure
+
+                    notify_payment_failure.delay(
+                        order_pk,
+                        "charged_but_failed",
+                        details=f"토스 DONE(paymentKey={payment_key}) 인데 결제는 aborted — 대사·환불 필요",
+                        severity="critical",
+                    )
+                except Exception as notify_error:
+                    logger.error(f"Charged-but-failed notification failed: {order_id}, error={notify_error}")
+
+            transaction.on_commit(_notify)
+            return
+
+        # 최종 상태 보호 - 취소된 결제는 재승인 불가
+        if payment.status == "canceled":
             logger.info(f"Payment in final state {payment.status}, ignoring DONE event: {order_id}")
             return
 
