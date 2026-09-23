@@ -26,6 +26,12 @@ ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES = frozenset(["in_progress", "waiting_for
 ORDER_EXPIRED_FAILURE_REASON = "결제 시간 초과"
 
 
+# ==================== 발행이 끊긴 주문 ====================
+# 비동기 경로는 Order 를 커밋한 뒤 처리 태스크를 발행한다. 결제 만료 시간이 지나도 한 번도 처리되지 못한 주문
+# (pending·OrderItem 0개)을 republish_stalled_orders 가 실패로 닫을 때 기록하는 사유
+ORDER_STALLED_FAILURE_REASON = "주문 처리 지연"
+
+
 # ==================== Toss 결제 승인 타임아웃 ====================
 # 승인 API 의 (연결, 읽기) 타임아웃(초). 합이 call_toss_confirm_api 의 soft_time_limit 보다 짧아야 한다 —
 # 길면 느린 응답이 HTTP 타임아웃(TossPaymentError → 재시도 → 조회 API 대사)이 아니라 태스크 시간 제한

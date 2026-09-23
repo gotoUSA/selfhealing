@@ -14,6 +14,7 @@ from ..constants import (
     ORDER_EXPIRABLE_STATUSES,
     ORDER_EXPIRED_FAILURE_REASON,
     ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES,
+    ORDER_STALLED_FAILURE_REASON,
 )
 
 logger = get_task_logger(__name__)
@@ -24,6 +25,9 @@ logger = get_task_logger(__name__)
     queue="order_processing",
     max_retries=3,
     default_retry_delay=10,
+    # 처리를 끝낸 뒤 ack — 처리 중 워커 프로세스가 죽으면(task_reject_on_worker_lost) 메시지가 큐로 돌아간다.
+    # 아래 주문 행 락 + pending 재검사가 있어 두 번 배달돼도 한 번만 처리된다.
+    acks_late=True,
 )
 def process_order_heavy_tasks(order_id: int, cart_id: int, use_points: int = 0) -> dict:
     """
@@ -85,9 +89,7 @@ def process_order_heavy_tasks(order_id: int, cart_id: int, use_points: int = 0) 
                     )
                     order.save(update_fields=["status", "failure_reason", "updated_at"])
 
-                    # 장바구니 복구
-                    Cart.objects.filter(pk=cart_id).update(is_active=True)
-                    logger.info(f"장바구니 복구: cart_id={cart_id}")
+                    _restore_cart(cart_id)
 
                     return {
                         "status": "failed",
@@ -136,9 +138,7 @@ def process_order_heavy_tasks(order_id: int, cart_id: int, use_points: int = 0) 
                     order.failure_reason = f"포인트 사용 실패: {result['message']}"
                     order.save(update_fields=["status", "failure_reason", "updated_at"])
 
-                    # 장바구니 복구
-                    Cart.objects.filter(pk=cart_id).update(is_active=True)
-                    logger.info(f"장바구니 복구: cart_id={cart_id}")
+                    _restore_cart(cart_id)
 
                     return {
                         "status": "failed",
@@ -167,6 +167,143 @@ def process_order_heavy_tasks(order_id: int, cart_id: int, use_points: int = 0) 
 
         # 재시도
         raise process_order_heavy_tasks.retry(exc=e)
+
+
+def _restore_cart(cart_id: int) -> None:
+    """
+    주문이 실패했을 때 장바구니 상품을 사용자에게 돌려준다 (호출자의 트랜잭션 안에서)
+
+    처리가 늦어지는 사이 사용자가 새 장바구니를 만들었을 수 있다. 사용자당 활성 장바구니는 하나라
+    (unique_active_cart_per_user) 주문 장바구니를 다시 켜면 제약 위반으로 실패 처리 전체가 롤백되고
+    주문이 pending 에 남는다 — 그 경우 상품을 새 장바구니로 옮긴다. 새 장바구니에 이미 있는 상품은
+    사용자가 나중에 고른 수량을 그대로 둔다.
+    """
+    from ..models.cart import Cart
+
+    cart = Cart.objects.select_for_update().get(pk=cart_id)
+    active_cart = None
+    if cart.user_id is not None:
+        active_cart = Cart.objects.select_for_update().filter(user_id=cart.user_id, is_active=True).exclude(pk=cart_id).first()
+
+    if active_cart is None:
+        Cart.objects.filter(pk=cart_id).update(is_active=True)
+        logger.info(f"장바구니 복구: cart_id={cart_id}")
+        return
+
+    already_in_active = active_cart.items.values_list("product_id", flat=True)
+    moved = cart.items.exclude(product_id__in=list(already_in_active)).update(cart=active_cart)
+    logger.info(f"장바구니 복구: cart_id={cart_id} → active_cart_id={active_cart.pk}, moved_items={moved}")
+
+
+def _abandon_stalled_order(order_id: int) -> bool:
+    """
+    결제 만료 시간까지 처리되지 못한 주문을 실패로 닫고 장바구니를 돌려준다 (독립 트랜잭션)
+
+    pending·OrderItem 0개 주문은 재고·포인트가 아직 차감되지 않았으므로 되돌릴 것은 장바구니뿐이다.
+
+    Returns:
+        True 이면 닫음, False 이면 잠근 뒤 재검증 결과 건너뜀 (그 사이 워커가 처리함)
+    """
+    from ..models.order import Order
+
+    with transaction.atomic():
+        order = Order.objects.select_for_update().get(pk=order_id)
+        if order.status != "pending" or order.order_items.exists():
+            logger.info(f"처리 지연 주문 닫기 건너뜀: order_id={order_id}, status={order.status}")
+            return False
+
+        order.status = "failed"
+        order.failure_reason = ORDER_STALLED_FAILURE_REASON
+        order.save(update_fields=["status", "failure_reason", "updated_at"])
+
+        if order.cart_id is not None:
+            _restore_cart(order.cart_id)
+
+    logger.warning(f"처리 지연 주문 실패 처리: order_id={order_id}, order_number={order.order_number}")
+    return True
+
+
+@shared_task(
+    bind=True,
+    name="shopping.tasks.order_tasks.republish_stalled_orders",
+    queue="order_processing",
+    max_retries=0,
+)
+def republish_stalled_orders(self, stall_minutes: int | None = None, give_up_minutes: int | None = None) -> dict:
+    """
+    발행이 끊긴 주문(pending·OrderItem 0개)을 다시 발행한다
+
+    create_order_hybrid 는 Order 를 커밋한 뒤 process_order_heavy_tasks 를 발행한다. 커밋 뒤 발행이 실패하거나
+    (브로커 장애), 워커가 메시지를 잃거나, 재시도를 다 쓰고 끝나면 주문이 pending·OrderItem 0개로 남는다.
+    expire_unpaid_orders 는 이 주문을 건너뛰므로(돌려놓을 재고가 없음) 여기서 처리한다.
+
+    - stall_minutes 가 지난 주문 → 다시 발행. 원래 메시지가 늦게 도착해도 태스크가 주문 행 락 + pending
+      재검사로 시작하므로 한 번만 처리된다.
+    - give_up_minutes 가 지나도 남은 주문 → 실패로 닫고 장바구니를 돌려준다 (_abandon_stalled_order).
+      같은 원인으로 계속 실패하는 주문을 영원히 다시 발행하지 않게 하는 상한이다.
+
+    Args:
+        stall_minutes: 재발행 기준(분). None 이면 settings.ORDER_REPUBLISH_AFTER_MINUTES
+        give_up_minutes: 포기 기준(분). None 이면 settings.ORDER_PAYMENT_TIMEOUT_MINUTES
+
+    Returns:
+        처리 결과 (candidates / republished / abandoned / skipped / errors)
+    """
+    from ..models.order import Order, OrderItem
+
+    if stall_minutes is None:
+        stall_minutes = settings.ORDER_REPUBLISH_AFTER_MINUTES
+    if give_up_minutes is None:
+        give_up_minutes = settings.ORDER_PAYMENT_TIMEOUT_MINUTES
+
+    now = timezone.now()
+    give_up_cutoff = now - timedelta(minutes=give_up_minutes)
+
+    candidates = list(
+        Order.objects.filter(status="pending", created_at__lt=now - timedelta(minutes=stall_minutes))
+        .filter(~Exists(OrderItem.objects.filter(order_id=OuterRef("pk"))))
+        .order_by("id")
+        .values_list("id", "cart_id", "used_points", "created_at")
+    )
+
+    republished_count = 0
+    abandoned_count = 0
+    skipped_count = 0
+    errors: list[str] = []
+
+    for order_id, cart_id, used_points, created_at in candidates:
+        try:
+            if created_at < give_up_cutoff:
+                if _abandon_stalled_order(order_id):
+                    abandoned_count += 1
+                else:
+                    skipped_count += 1
+            elif cart_id is None:
+                # 장바구니 기록이 없는 주문은 다시 발행할 수 없다 — 포기 기준이 지나면 위에서 닫힌다
+                skipped_count += 1
+            else:
+                process_order_heavy_tasks.delay(order_id=order_id, cart_id=cart_id, use_points=used_points)
+                republished_count += 1
+                logger.warning(f"처리 지연 주문 재발행: order_id={order_id}, cart_id={cart_id}")
+        except Exception as e:
+            error_msg = f"order_id={order_id}: {e}"
+            errors.append(error_msg)
+            logger.error(f"처리 지연 주문 재발행 실패: {error_msg}")
+
+    if candidates:
+        logger.warning(
+            f"처리 지연 주문 검사 완료: candidates={len(candidates)}, republished={republished_count}, "
+            f"abandoned={abandoned_count}, skipped={skipped_count}, errors={len(errors)}"
+        )
+
+    return {
+        "status": "completed",
+        "candidates": len(candidates),
+        "republished": republished_count,
+        "abandoned": abandoned_count,
+        "skipped": skipped_count,
+        "errors": errors,
+    }
 
 
 class _OrderNotExpirable(Exception):

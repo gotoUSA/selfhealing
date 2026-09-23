@@ -48,6 +48,17 @@ class Order(models.Model):
         verbose_name="주문자",
     )
 
+    # 주문을 만든 장바구니 (비동기 처리 태스크가 이 장바구니의 상품으로 재고를 차감한다
+    # — 발행이 끊긴 주문을 다시 발행할 때 필요)
+    cart = models.ForeignKey(
+        "shopping.Cart",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="orders",
+        verbose_name="주문 장바구니",
+    )
+
     # 주문 상태
     status = models.CharField(
         max_length=20,

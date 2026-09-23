@@ -187,12 +187,15 @@ class OrderService:
         shipping_address_detail: str,
         order_memo: str = "",
         use_points: int = 0,
-    ) -> tuple[Order, str]:
+    ) -> tuple[Order, str | None]:
         """
         주문 생성 (하이브리드 방식)
 
         1. Order 레코드만 빠르게 생성 (동기, 즉시 응답)
-        2. 재고/포인트 처리는 비동기 태스크로 위임
+        2. 재고/포인트 처리는 비동기 태스크로 위임 (커밋 뒤 발행)
+
+        커밋 뒤 발행이 실패해도 주문은 이미 접수된 것이므로 예외를 올리지 않는다
+        — task_id 가 None 이고, republish_stalled_orders 가 ORDER_REPUBLISH_AFTER_MINUTES 뒤 다시 발행한다.
 
         Args:
             user: 주문 사용자
@@ -206,7 +209,7 @@ class OrderService:
             use_points: 사용할 포인트
 
         Returns:
-            (Order, task_id) 튜플
+            (Order, task_id) 튜플 — 발행에 실패하면 task_id 는 None
 
         Raises:
             OrderServiceError: 장바구니 비어있음, 포인트 부족 등
@@ -244,6 +247,7 @@ class OrderService:
 
             order = Order.objects.create(
                 user=user,
+                cart=locked_cart,  # 처리 태스크가 읽을 장바구니 (재발행 시 필요)
                 status="pending",  # 아직 미확정
                 total_amount=total_amount,
                 shipping_fee=shipping_result["shipping_fee"],
@@ -267,10 +271,19 @@ class OrderService:
 
         logger.info(f"Order 레코드 생성 완료: order_id={order.id}, order_number={order.order_number}")
 
-        # 6. 무거운 작업은 비동기로 (재고, 포인트)
+        # 6. 무거운 작업은 비동기로 (재고, 포인트) — 커밋 뒤에 발행해야 워커가 커밋 전 주문을 보지 않는다
         from ..tasks.order_tasks import process_order_heavy_tasks
 
-        task_result = process_order_heavy_tasks.delay(order_id=order.id, cart_id=cart.id, use_points=use_points)
+        try:
+            task_result = process_order_heavy_tasks.delay(order_id=order.id, cart_id=cart.id, use_points=use_points)
+        except Exception as e:
+            # 주문은 이미 커밋됐다 — 여기서 실패를 올리면 사용자는 500 을 받고 주문은 pending 으로 남는다.
+            # 발행하지 못한 주문은 republish_stalled_orders(Beat)가 다시 발행한다.
+            logger.error(
+                f"주문 태스크 발행 실패 (재발행 대기): order_id={order.id}, error={e}",
+                exc_info=True,
+            )
+            return order, None
 
         logger.info(f"주문 비동기 처리 시작: order_id={order.id}, task_id={task_result.id}")
 

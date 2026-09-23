@@ -161,6 +161,17 @@ app.conf.beat_schedule = {
             "queue": "order_processing",
         },
     },
+    # 발행이 끊긴 주문 재발행 - 2분마다
+    # pending·OrderItem 0개로 settings.ORDER_REPUBLISH_AFTER_MINUTES(기본 5분)가 지난 주문을 다시 발행하고,
+    # 결제 만료 시간까지 처리되지 못한 주문은 실패로 닫는다 (expire-unpaid-orders 는 이 주문을 건너뜀)
+    "republish-stalled-orders": {
+        "task": "shopping.tasks.order_tasks.republish_stalled_orders",
+        "schedule": crontab(minute="*/2"),  # 2분마다
+        "options": {
+            "expires": 110,
+            "queue": "order_processing",
+        },
+    },
     # ==========================================================================
     # Self-Healing Tasks (selfhealing package)
     # ==========================================================================

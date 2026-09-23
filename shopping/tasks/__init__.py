@@ -13,7 +13,7 @@ from .cleanup_tasks import (
     delete_unverified_users_task,
 )
 from .email_tasks import retry_failed_emails_task, send_email_task, send_verification_email_task
-from .order_tasks import expire_unpaid_orders, process_order_heavy_tasks
+from .order_tasks import expire_unpaid_orders, process_order_heavy_tasks, republish_stalled_orders
 from .payment_tasks import call_toss_confirm_api, finalize_payment_confirm
 from .payment_recovery_tasks import (
     check_sla_violations,
@@ -51,6 +51,7 @@ __all__ = [
     # 주문 태스크
     "process_order_heavy_tasks",
     "expire_unpaid_orders",
+    "republish_stalled_orders",
     # 결제 태스크
     "call_toss_confirm_api",
     "finalize_payment_confirm",

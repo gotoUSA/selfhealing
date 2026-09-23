@@ -646,3 +646,47 @@ class TestOrderCreateException:
         # Assert
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
         assert response.data["error"] == "주문 생성 중 오류가 발생했습니다."
+
+
+@pytest.mark.django_db
+class TestOrderCreateAfterCommit:
+    """주문이 커밋된 뒤의 응답 — 사용자에게 주문 상태를 사실대로 알린다"""
+
+    def test_publish_failure_after_commit_still_returns_202(
+        self, authenticated_client, user, product, add_to_cart_helper, shipping_data, mocker
+    ):
+        """주문이 커밋된 뒤 태스크 발행이 실패해도 202 — 주문은 접수됐고 재발행 스윕이 다시 발행한다"""
+        add_to_cart_helper(user, product, quantity=1)
+
+        from shopping.tasks.order_tasks import process_order_heavy_tasks
+
+        mocker.patch.object(process_order_heavy_tasks, "delay", side_effect=ConnectionError("broker down"))
+
+        response = authenticated_client.post("/api/orders/", shipping_data, format="json")
+
+        assert response.status_code == status.HTTP_202_ACCEPTED
+        assert response.data["task_id"] is None
+        order = Order.objects.get(id=response.data["order_id"])
+        assert order.status == "pending"
+        assert order.cart is not None
+        assert order.cart.items.count() == 1
+
+    @pytest.mark.parametrize(
+        ("order_status", "expected_message"),
+        [
+            ("pending", "주문이 처리 중입니다. 잠시 후 주문 내역에서 확인해주세요."),
+            ("confirmed", "이미 접수된 주문이 있습니다. 주문 내역에서 결제를 진행해주세요."),
+        ],
+    )
+    def test_reorder_with_empty_cart_describes_the_existing_order(
+        self, authenticated_client, user, order_factory, shipping_data, order_status, expected_message
+    ):
+        """빈 장바구니로 다시 주문하면 최근 주문을 돌려주되, 처리 중인 주문을 '완료'라고 하지 않는다"""
+        Cart.objects.create(user=user, is_active=True)
+        order = order_factory(user, status=order_status)
+
+        response = authenticated_client.post("/api/orders/", shipping_data, format="json")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["order_id"] == order.id
+        assert response.data["message"] == expected_message

@@ -264,7 +264,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         except OrderServiceError as e:
             raise serializers.ValidationError(str(e))
 
-    def create_hybrid(self, validated_data: dict[str, Any]) -> tuple[Order, str]:
+    def create_hybrid(self, validated_data: dict[str, Any]) -> tuple[Order, str | None]:
         """
         주문 생성 (하이브리드 방식 - 비동기 처리)
 

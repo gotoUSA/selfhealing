@@ -234,6 +234,10 @@ RETURN_REQUEST_DEADLINE_DAYS = int(os.environ.get("RETURN_REQUEST_DEADLINE_DAYS"
 # 점유한 재고를 돌려놓는다 (Beat: expire-unpaid-orders)
 ORDER_PAYMENT_TIMEOUT_MINUTES = int(os.environ.get("ORDER_PAYMENT_TIMEOUT_MINUTES", 30))
 
+# 주문이 이 시간(분)이 지나도 pending·OrderItem 0개이면 처리 태스크가 발행되지 못했거나 메시지를 잃은 것으로 보고
+# 다시 발행한다 (Beat: republish-stalled-orders). 정상 처리(재시도 포함)보다 충분히 길어야 한다.
+ORDER_REPUBLISH_AFTER_MINUTES = int(os.environ.get("ORDER_REPUBLISH_AFTER_MINUTES", 5))
+
 # ==========================================================================
 # REST Framework
 # ==========================================================================

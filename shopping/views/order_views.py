@@ -32,9 +32,34 @@ class OrderCreateResponseSerializer(drf_serializers.Serializer):
     order_id = drf_serializers.IntegerField(help_text="생성된 주문 ID")
     order_number = drf_serializers.CharField(help_text="주문 번호")
     status = drf_serializers.CharField(help_text="주문 상태 (pending)")
-    task_id = drf_serializers.CharField(help_text="비동기 작업 ID")
+    task_id = drf_serializers.CharField(
+        allow_null=True, help_text="비동기 작업 ID (발행에 실패하면 null — 주문은 접수됐고 자동으로 다시 발행된다)"
+    )
     message = drf_serializers.CharField()
     status_url = drf_serializers.CharField(help_text="주문 상태 확인 URL")
+
+
+# 같은 장바구니로 다시 주문했을 때 돌려주는 최근 주문의 안내 문구 — pending 은 아직 재고도 확보되지 않은 상태라
+# "완료"라고 하면 안 된다
+EXISTING_ORDER_MESSAGES = {
+    "pending": "주문이 처리 중입니다. 잠시 후 주문 내역에서 확인해주세요.",
+    "confirmed": "이미 접수된 주문이 있습니다. 주문 내역에서 결제를 진행해주세요.",
+}
+
+
+def _existing_order_response(order: Order) -> Response:
+    """새 주문 대신 진행 중인 최근 주문을 돌려준다 (멱등 응답)"""
+    return Response(
+        {
+            "order_id": order.id,
+            "order_number": order.order_number,
+            "status": order.status,
+            "message": EXISTING_ORDER_MESSAGES.get(order.status, "이미 접수된 주문이 있습니다."),
+            "status_url": f"/api/orders/{order.id}/",
+            "idempotent": True,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 class OrderCancelResponseSerializer(drf_serializers.Serializer):
@@ -233,17 +258,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                         f"Idempotent 주문 반환: order_id={recent_order.id}, "
                         f"user_id={request.user.id} (장바구니 비어있음 - 이미 주문됨)"
                     )
-                    return Response(
-                        {
-                            "order_id": recent_order.id,
-                            "order_number": recent_order.order_number,
-                            "status": recent_order.status,
-                            "message": "이미 주문이 완료되었습니다.",
-                            "status_url": f"/api/orders/{recent_order.id}/",
-                            "idempotent": True,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
+                    return _existing_order_response(recent_order)
 
             logger.error(f"주문 생성 실패 (ValidationError): user_id={request.user.id}, error={str(e)}")
             return Response(
@@ -264,17 +279,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                     logger.info(
                         f"Idempotent 주문 반환: order_id={recent_order.id}, " f"user_id={request.user.id} ({error_msg})"
                     )
-                    return Response(
-                        {
-                            "order_id": recent_order.id,
-                            "order_number": recent_order.order_number,
-                            "status": recent_order.status,
-                            "message": "이미 주문이 완료되었습니다.",
-                            "status_url": f"/api/orders/{recent_order.id}/",
-                            "idempotent": True,
-                        },
-                        status=status.HTTP_200_OK,
-                    )
+                    return _existing_order_response(recent_order)
 
             logger.error(f"주문 생성 실패 (OrderServiceError): user_id={request.user.id}, error={str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
