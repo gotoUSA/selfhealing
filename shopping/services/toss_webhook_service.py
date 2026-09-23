@@ -74,6 +74,40 @@ def _restore_stock_for_order(order, restore_sold_count: bool = True) -> None:
             )
 
 
+def _reclaim_earned_points(order, payment, reason: str) -> bool:
+    """주문으로 적립한 포인트를 FIFO 로 회수한다 — 잔액과 적립 건별 사용량을 함께 줄인다
+
+    잔액만 줄이면(비FIFO use_points) 적립 건의 used_amount 가 그대로 남아, 나중에 만료 배치가 같은 포인트를
+    잔액에서 한 번 더 뺀다. 주문 취소·결제 취소 API 와 같은 use_points_fifo(cancel_deduct) 를 쓴다.
+
+    고객이 적립 포인트를 이미 써서 회수할 수 없으면 False 를 돌려주고 결제 로그에 남긴다. 토스 쪽 상태 변경은
+    이미 끝난 일이라 웹훅 처리는 계속한다(여기서 실패시키면 주문이 토스와 다른 상태로 남는다).
+    """
+    amount = order.earned_points
+    result = PointService().use_points_fifo(
+        user=order.user,
+        amount=amount,
+        type="cancel_deduct",
+        order=order,
+        description=f"{reason}로 인한 적립 포인트 회수 ({order.order_number})",
+        metadata={"order_id": order.id, "order_number": order.order_number},
+    )
+    if result["success"]:
+        return True
+
+    logger.warning(
+        f"Earned points not reclaimed: order={order.id}, user={order.user_id}, amount={amount}, "
+        f"reason={result['message']}"
+    )
+    PaymentLog.objects.create(
+        payment=payment,
+        log_type="error",
+        message=f"적립 포인트 미회수 {amount}P — {reason}, {result['message']} (수동 확인 필요)",
+        data={"order_id": order.id, "amount": amount, "reason": result["message"]},
+    )
+    return False
+
+
 class TossWebhookService:
     """토스페이먼츠 웹훅 이벤트 처리 서비스"""
 
@@ -338,16 +372,8 @@ class TossWebhookService:
             _restore_stock_for_order(order, restore_sold_count=False)
 
         # 포인트 회수 (상태 변경 전)
-        if order.user and order.status in ["paid", "preparing"]:
-            points_to_deduct = order.earned_points
-            if points_to_deduct > 0:
-                PointService.use_points(
-                    user=order.user,
-                    amount=points_to_deduct,
-                    type="cancel_deduct",
-                    order=order,
-                    description=f"주문 취소로 인한 적립 포인트 회수 ({order.order_number})",
-                )
+        if order.user and order.status in ["paid", "preparing"] and order.earned_points > 0:
+            _reclaim_earned_points(order, payment, "주문 취소")
 
         # 주문 상태 변경
         order.status = "canceled"
@@ -408,14 +434,8 @@ class TossWebhookService:
                         sold_count=F("sold_count") - order_item.quantity,
                     )
 
-            if order.user and order.earned_points > 0:
-                PointService.use_points(
-                    user=order.user,
-                    amount=order.earned_points,
-                    type="cancel_deduct",
-                    order=order,
-                    description=f"가상계좌 입금 취소로 인한 적립 포인트 회수 ({order.order_number})",
-                )
+            # 회수하지 못한 적립은 주문에 남긴다 — 0으로 지우면 무엇을 못 돌려받았는지 기록이 사라진다
+            if order.user and order.earned_points > 0 and _reclaim_earned_points(order, payment, "가상계좌 입금 취소"):
                 order.earned_points = 0
 
             order.status = "confirmed"

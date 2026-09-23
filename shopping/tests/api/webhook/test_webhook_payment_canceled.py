@@ -10,6 +10,7 @@ import pytest
 from rest_framework import status
 
 from shopping.models.payment import PaymentLog
+from shopping.services.point_service import PointService
 
 
 @pytest.mark.django_db
@@ -52,8 +53,9 @@ class TestPaymentCanceledWebhook:
         # 포인트 적립 시뮬레이션 (배송비 제외된 total_amount 기준)
         initial_points = self.user.points
         earned_points = int(self.order.total_amount * Decimal("0.01"))
-        self.user.points = initial_points + earned_points
-        self.user.save()
+        # 적립은 운영과 같은 경로로 — 적립 건(PointHistory earn)이 있어야 FIFO 회수가 가능하다
+        PointService.add_points(self.user, earned_points, order=self.order, description="테스트 구매 적립")
+        self.user.refresh_from_db()
 
         # order.earned_points도 설정 (회수 시 이 값 사용)
         self.order.earned_points = earned_points
@@ -124,8 +126,9 @@ class TestPaymentCanceledWebhook:
         # 포인트 적립 시뮬레이션 (배송비 제외된 total_amount 기준)
         initial_points = self.user.points
         earned_points = int(self.order.total_amount * Decimal("0.01"))
-        self.user.points = initial_points + earned_points
-        self.user.save()
+        # 적립은 운영과 같은 경로로 — 적립 건(PointHistory earn)이 있어야 FIFO 회수가 가능하다
+        PointService.add_points(self.user, earned_points, order=self.order, description="테스트 구매 적립")
+        self.user.refresh_from_db()
 
         # order.earned_points도 설정 (회수 시 이 값 사용)
         self.order.earned_points = earned_points
@@ -366,8 +369,9 @@ class TestPaymentCanceledWebhook:
         # 포인트 적립 시뮬레이션 (배송비 제외된 total_amount 기준)
         initial_points = self.user.points
         earned_points = int(self.order.total_amount * Decimal("0.01"))
-        self.user.points = initial_points + earned_points
-        self.user.save()
+        # 적립은 운영과 같은 경로로 — 적립 건(PointHistory earn)이 있어야 FIFO 회수가 가능하다
+        PointService.add_points(self.user, earned_points, order=self.order, description="테스트 구매 적립")
+        self.user.refresh_from_db()
 
         # order.earned_points도 설정 (회수 시 이 값 사용)
         self.order.earned_points = earned_points

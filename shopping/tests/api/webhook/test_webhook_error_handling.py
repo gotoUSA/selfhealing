@@ -15,6 +15,7 @@ from rest_framework import status
 
 from shopping.models.payment import PaymentLog
 from shopping.models.product import Product
+from shopping.services.point_service import PointService
 
 
 @pytest.mark.django_db
@@ -740,9 +741,9 @@ class TestWebhookEventSpecificErrors:
         self.payment.status = "done"
         self.payment.save()
 
-        # 유저 포인트에 적립분 추가 (실제 시나리오 시뮬레이션)
-        self.user.points += earned_points
-        self.user.save()
+        # 적립은 운영과 같은 경로로 — 적립 건(PointHistory earn)이 있어야 FIFO 회수가 가능하다
+        PointService.add_points(self.user, earned_points, order=self.order, description="테스트 구매 적립")
+        self.user.refresh_from_db()
         initial_points = self.user.points
 
         webhook_data = webhook_data_builder(
