@@ -27,7 +27,7 @@
 | 두 번 배달돼도 한 번 | `shopping/tasks/point_tasks.py` `add_points_after_payment`, `shopping/tasks/email_tasks.py` | `acks_late`라 워커가 죽으면 같은 메시지가 다시 온다. 적립은 주문 행 락 → "이미 적립했나" 검사 → 적립·기록을 한 트랜잭션으로(+ 주문당 구매 적립 1건 부분 유니크 제약), 인증 메일은 토큰별 로그가 발송 상태면 건너뛰고, 일반 메일은 Celery task id로 같은 메시지를 알아본다(내용이 같은 두 번의 요청은 두 통). 실패 메일 재발송 스윕은 발송 태스크의 재시도가 끝난 뒤(10분)에만, 최대 3회, 로그를 먼저 집고 보낸다. 워커 프로세스를 죽여 실제로 재배달시키는 실험으로 확인 (`shopping/tests/tasks/test_task_at_least_once.py`) |
 | 포인트 FIFO | `shopping/services/point_service.py` `use_points_fifo` | 만료 임박 순으로 적립 건을 잠그고 차감, 만료 배치는 `Greatest(F("points") - n, 0)`으로 음수 방지 |
 | 목록 집계는 조인이 아니라 서브쿼리 | `shopping/views/product_views.py` `annotate_list_stats` | 평점·리뷰 수·찜 수·내 찜 여부를 LEFT JOIN 둘 + GROUP BY로 붙였더니 상품×리뷰×찜으로 행이 곱해지고(2만 상품에 64만 행, 700ms), `is_wished`의 CASE가 GROUP BY에 들어가 내가 찜한 상품을 남도 찜하면 목록에 두 번 나왔다. `EXPLAIN`을 보다가 찾았고 상관 서브쿼리(`Subquery`/`Exists`)로 바꿔 상품당 한 행, 1ms (`test_wishlist.py::TestProductListWishlistStats`) |
-| 결제 복구 계층(라이브러리의 원형) | `shopping/services/payment_recovery_service.py` | 서킷 브레이커 확인 · SLA 타임아웃 · 백오프 재시도 · DLQ 이동 규칙. 이 510줄이 세 군데 필요해지는 시점에 라이브러리로 뺐다 |
+| 결제 복구 계층(라이브러리의 원형) | `shopping/services/payment_recovery_service.py` | 서킷 브레이커 확인 · 백오프 재시도 · DLQ 이동 규칙을 모듈로 만들고 테스트로 검증했다(2025-12-08). **결제 흐름에는 연결되지 않았다** — 설계 문서에 적은 연결(승인 실패 시 `handle_failure` 호출)을 구현하지 않았고, 테스트가 서비스를 직접 불러 초록이라 빠진 걸 몰랐다. 이메일·소셜 로그인 같은 다른 외부 호출에도 같은 규칙이 필요해 라이브러리로 옮겼고, 분리 뒤 이 모듈의 DLQ 저장 함수는 옮겨간 모델을 가리켜 동작하지 않는다. 원형 기록으로만 남겨 둔 코드다 — 결제 승인·취소의 실제 복구는 `payment_tasks.py`의 재시도·대사 스윕이 한다 |
 
 아래 [알려진 한계](#알려진-한계)도 같이 보면 좋다. 위 코드에서 내가 아는 구멍을 적어 뒀다.
 
