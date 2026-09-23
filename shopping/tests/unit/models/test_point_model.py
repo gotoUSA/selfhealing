@@ -108,9 +108,9 @@ class TestPointHistoryManagerOptimizedQuery:
         """order select_related 로드로 N+1 쿼리 방지"""
         # Arrange
         user = UserFactory()
-        order = OrderFactory(user=user)
-        PointHistoryFactory(user=user, order=order)
-        PointHistoryFactory(user=user, order=order)
+        # 구매 적립은 주문당 한 건이라(unique_earn_per_order) 주문 두 개에 하나씩
+        PointHistoryFactory(user=user, order=OrderFactory(user=user))
+        PointHistoryFactory(user=user, order=OrderFactory(user=user))
 
         # Act
         with django_assert_num_queries(1):

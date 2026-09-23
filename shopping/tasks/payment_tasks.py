@@ -5,7 +5,6 @@ import time
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from celery.utils.log import get_task_logger
-from celery.utils.time import get_exponential_backoff_interval
 from django.db import transaction
 from django.db.models import F
 
@@ -28,6 +27,7 @@ from ..models.product import Product
 from ..services.payment_service import PaymentService
 from ..services.point_service import PointService
 from ..utils.toss_payment import TossPaymentClient, TossPaymentError
+from .retry_policy import retry_unless_exhausted, retry_with_backoff
 
 # Chaos injection imports
 from ..chaos.decorators import (
@@ -44,31 +44,6 @@ from ..chaos.decorators import (
 )
 
 logger = get_task_logger(__name__)
-
-
-def _retry_countdown(task) -> int:
-    """태스크의 retry_backoff / retry_backoff_max / retry_jitter 로 다음 재시도까지의 대기(초)를 계산한다
-
-    Celery 는 이 옵션들을 autoretry_for 자동 재시도에서만 쓴다. 손으로 부르는 self.retry(exc=e) 는
-    countdown 이 없으면 default_retry_delay(180초 고정)를 쓰므로, 같은 옵션을 따르도록 직접 넘긴다.
-    """
-    return get_exponential_backoff_interval(
-        factor=int(task.retry_backoff),
-        retries=task.request.retries,
-        maximum=task.retry_backoff_max,
-        full_jitter=task.retry_jitter,
-    )
-
-
-def _retry_unless_exhausted(task, exc: Exception) -> None:
-    """재시도 여유가 있으면 백오프 countdown 으로 재시도한다(Retry 발생). 소진됐으면 그냥 돌아온다
-
-    Celery 의 retry(exc=...) 는 소진 시 MaxRetriesExceededError 가 아니라 exc 를 그대로 다시 던진다.
-    그래서 'except MaxRetriesExceededError' 로는 소진 처리를 잡을 수 없다 — 부르기 전에 횟수로 판단한다.
-    호출자는 이 함수가 돌아오면 소진 처리(롤백·알림)를 하고 예외를 올린다.
-    """
-    if task.request.retries < task.max_retries:
-        raise task.retry(exc=exc, countdown=_retry_countdown(task))
 
 
 def _mark_confirm_aborted(order_id: int) -> None:
@@ -111,7 +86,7 @@ def _reconcile_confirmed_payment(
         payment_data = toss_client.get_payment(payment_key, timeout=TOSS_CONFIRM_TIMEOUT)
     except TossPaymentError as lookup_error:
         logger.error(f"결제 조회 실패: order_id={order_id}, error={lookup_error.code} - {lookup_error.message}")
-        _retry_unless_exhausted(task, lookup_error)
+        retry_unless_exhausted(task, lookup_error)
         logger.critical(
             f"결제 조회 재시도 소진 — 승인 여부 미확인, 수동 대사 필요: order_id={order_id}, "
             f"payment_key={payment_key}"
@@ -166,7 +141,7 @@ def _reconcile_confirmed_payment(
     name="shopping.tasks.payment_tasks.call_toss_confirm_api",
     queue="external_api",
     max_retries=3,
-    # 수동 self.retry 에도 적용되도록 _retry_countdown 이 읽는다 (0~10초, 0~20초, 0~40초)
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~10초, 0~20초, 0~40초)
     retry_backoff=10,
     retry_backoff_max=60,
     retry_jitter=True,
@@ -221,7 +196,7 @@ def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int, to
         except Exception as log_error:
             logger.error(f"타임아웃 로그 기록 실패: {str(log_error)}")
 
-        _retry_unless_exhausted(self, e)
+        retry_unless_exhausted(self, e)
         # 소진: 승인 여부를 끝내 확인 못 함 — 롤백하지 않고 사람이 본다 (대사 조회 소진과 같은 정책)
         logger.critical(f"결제 승인 시간 초과 재시도 소진 — 승인 여부 미확인, 수동 대사 필요: order_id={order_id}")
         notify_payment_failure.delay(
@@ -267,7 +242,7 @@ def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int, to
         # 2. 명시적 재시도 가능 오류 (NETWORK_ERROR, TIMEOUT 등)
         if e.code in TOSS_RETRYABLE_ERRORS:
             logger.warning(f"재시도 가능 오류, 재시도: {e.code}")
-            _retry_unless_exhausted(self, e)
+            retry_unless_exhausted(self, e)
             logger.error(f"최대 재시도 횟수 초과: order_id={order_id}")
             _mark_confirm_aborted(order_id)
             rollback_payment_failure.delay(order_id, f"결제 실패 (재시도 초과): {e.message}")
@@ -276,7 +251,7 @@ def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int, to
         # 3. HTTP 5xx 오류는 재시도
         if hasattr(e, "status_code") and e.status_code >= 500:
             logger.warning(f"서버 오류, 재시도: {e.code}")
-            _retry_unless_exhausted(self, e)
+            retry_unless_exhausted(self, e)
             logger.error(f"최대 재시도 횟수 초과 (서버 오류): order_id={order_id}")
             _mark_confirm_aborted(order_id)
             rollback_payment_failure.delay(order_id, f"결제 실패 (서버 오류 재시도 초과): {e.message}")
@@ -294,8 +269,9 @@ def call_toss_confirm_api(self, payment_key: str, order_id: int, amount: int, to
     name="shopping.tasks.payment_tasks.finalize_payment_confirm",
     queue="payment_critical",
     max_retries=5,
-    retry_backoff=True,
-    retry_backoff_max=180,
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~5, 0~10, 0~20, 0~40, 0~60초)
+    retry_backoff=5,
+    retry_backoff_max=60,
     retry_jitter=True,
     time_limit=60,
     soft_time_limit=55,
@@ -444,8 +420,37 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
     except Exception as e:
         logger.error(f"결제 최종 처리 실패: payment_id={payment_id}, error={str(e)}")
 
-        # 재시도
-        raise self.retry(exc=e)
+        retry_unless_exhausted(self, e)
+        # 소진: 토스는 승인(청구)했는데 우리 DB 에 반영하지 못했다. 결제는 in_progress 로 남는다 —
+        # reconcile_stalled_payments 가 토스 조회로 다시 마감을 시도하고, 여기서는 사람이 알 수 있게 알린다.
+        logger.critical(f"결제 최종 처리 재시도 소진 — 토스 승인분 미반영: payment_id={payment_id}")
+        _alert_finalize_exhausted(payment_id, e)
+        raise
+
+
+def _alert_finalize_exhausted(payment_id: int, error: Exception) -> None:
+    """결제 마감 재시도 소진을 결제 로그와 critical 알림으로 남긴다 (각각 독립적으로 실패 허용)"""
+    order_id = None
+    try:
+        payment = Payment.objects.get(pk=payment_id)
+        order_id = payment.order_id
+        PaymentLog.objects.create(
+            payment=payment,
+            log_type="error",
+            message="결제 최종 처리 재시도 소진 — 토스 승인분 미반영, 대사 대기",
+            data={"error": str(error)[:500]},
+        )
+    except Exception as log_error:
+        logger.error(f"마감 소진 로그 기록 실패: payment_id={payment_id}, error={str(log_error)}")
+    try:
+        notify_payment_failure.delay(
+            order_id,
+            "finalize_exhausted",
+            details=f"payment_id={payment_id} 결제 마감 재시도 소진: {str(error)[:300]}",
+            severity="critical",
+        )
+    except Exception as notify_error:
+        logger.error(f"마감 소진 알림 발행 실패: payment_id={payment_id}, error={str(notify_error)}")
 
 
 @shared_task(
@@ -453,7 +458,8 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
     name="shopping.tasks.payment_tasks.rollback_payment_failure",
     queue="payment_critical",
     max_retries=3,
-    retry_backoff=True,
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~5, 0~10, 0~20초)
+    retry_backoff=5,
     retry_backoff_max=60,
     retry_jitter=True,
     time_limit=30,
@@ -585,7 +591,7 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
 
     except Exception as e:
         logger.error(f"결제 실패 롤백 처리 실패: order_id={order_id}, error={str(e)}")
-        raise self.retry(exc=e)
+        raise retry_with_backoff(self, e)
 
 
 @shared_task(
@@ -661,6 +667,113 @@ def detect_orphaned_orders(self, threshold_minutes: int = 10) -> dict:
         "triggered": triggered_count,
         "errors": errors,
     }
+
+
+RECONCILE_UNRESOLVED_MESSAGE = "대사 미해결"
+
+
+def _flag_stalled_payment_unresolved(payment: Payment, reason: str) -> bool:
+    """자동으로 닫을 수 없는 멈춘 결제를 한 번만 기록·알린다. 새로 알렸으면 True"""
+    if PaymentLog.objects.filter(payment=payment, message__startswith=RECONCILE_UNRESOLVED_MESSAGE).exists():
+        return False
+    PaymentLog.objects.create(
+        payment=payment,
+        log_type="error",
+        message=f"{RECONCILE_UNRESOLVED_MESSAGE} — {reason} (수동 확인 필요)",
+        data={"order_id": payment.order_id, "payment_key": payment.payment_key, "reason": reason},
+    )
+    try:
+        notify_payment_failure.delay(payment.order_id, "stalled_payment_unresolved", details=reason, severity="critical")
+    except Exception as notify_error:
+        logger.error(f"멈춘 결제 알림 발행 실패: payment_id={payment.id}, error={str(notify_error)}")
+    return True
+
+
+@shared_task(
+    bind=True,
+    name="shopping.tasks.payment_tasks.reconcile_stalled_payments",
+    queue="external_api",
+    time_limit=120,
+    soft_time_limit=110,
+)
+def reconcile_stalled_payments(self, stall_minutes: int | None = None) -> dict:
+    """
+    승인 처리 중(in_progress)으로 오래 멈춘 결제를 토스 조회 API 로 대사한다 (Beat: reconcile-stalled-payments)
+
+    결제 마감(finalize) 재시도가 소진되거나 승인 체인 메시지를 잃으면 결제가 in_progress 로 남는다.
+    만료 배치는 in_progress 를 건너뛰고 고아 감지는 aborted 만 보므로, 여기서 토스에 현재 상태를 묻는다.
+    - 승인(DONE)·가상계좌 발급이고 주문번호·금액이 맞으면 finalize_payment_confirm 을 다시 발행한다
+      (마감은 행 락 + is_paid 재검사로 멱등 — 원래 체인과 겹쳐도 한 번만 처리)
+    - 그 외(미승인·토스가 모르는 결제·키 없음)는 자동으로 롤백하지 않는다. 확인 없는 롤백이 바로
+      고아 결제를 만드는 행동이라, 한 번만 기록·알리고 사람이 본다.
+
+    Args:
+        stall_minutes: in_progress 로 이 시간(분) 넘게 멈춘 결제만 본다. 기본 settings.PAYMENT_RECONCILE_AFTER_MINUTES
+
+    Returns:
+        candidates / refinalized / unresolved / errors
+    """
+    from datetime import timedelta
+
+    from django.conf import settings
+    from django.utils import timezone
+
+    if stall_minutes is None:
+        stall_minutes = settings.PAYMENT_RECONCILE_AFTER_MINUTES
+    cutoff = timezone.now() - timedelta(minutes=stall_minutes)
+    stalled = Payment.objects.filter(status="in_progress", updated_at__lt=cutoff).select_related("order")
+
+    result = {"status": "completed", "candidates": 0, "refinalized": 0, "unresolved": 0, "errors": []}
+    toss_client = TossPaymentClient()
+
+    for payment in stalled:
+        result["candidates"] += 1
+        try:
+            if not payment.payment_key:
+                if _flag_stalled_payment_unresolved(payment, "payment_key 없음 — 토스 조회 불가"):
+                    result["unresolved"] += 1
+                continue
+
+            try:
+                payment_data = toss_client.get_payment(payment.payment_key, timeout=TOSS_CONFIRM_TIMEOUT)
+            except TossPaymentError as lookup_error:
+                if lookup_error.status_code == 404:
+                    if _flag_stalled_payment_unresolved(payment, "토스가 모르는 결제 (승인 요청이 닿지 않음)"):
+                        result["unresolved"] += 1
+                else:
+                    # 조회 자체 실패 — 다음 주기에 다시 본다
+                    result["errors"].append(f"payment_id={payment.id}: {lookup_error.code}")
+                continue
+
+            status = payment_data.get("status")
+            expected_order_id = payment.toss_order_id or str(payment.order_id)
+            matches = (
+                str(payment_data.get("orderId")) == expected_order_id
+                and payment_data.get("totalAmount") is not None
+                and int(payment_data["totalAmount"]) == int(payment.amount)
+            )
+
+            if status in (TOSS_PAYMENT_STATUS_DONE, TOSS_PAYMENT_STATUS_WAITING_FOR_DEPOSIT) and matches:
+                logger.warning(f"멈춘 결제 대사: 토스 {status} 확인 → 마감 재발행: payment_id={payment.id}")
+                PaymentLog.objects.create(
+                    payment=payment,
+                    log_type="approve",
+                    message=f"대사: 멈춘 결제의 토스 상태 {status} 확인 → 결제 마감 재발행",
+                    data={"status": status, "order_id": payment.order_id},
+                )
+                finalize_payment_confirm.delay(payment_data, payment.id, payment.order.user_id)
+                result["refinalized"] += 1
+            elif _flag_stalled_payment_unresolved(
+                payment, f"토스 상태 {status}, 주문번호·금액 일치 {matches}"
+            ):
+                result["unresolved"] += 1
+        except Exception as e:
+            result["errors"].append(f"payment_id={payment.id}: {str(e)}")
+            logger.error(f"멈춘 결제 대사 실패: payment_id={payment.id}, error={str(e)}")
+
+    if result["candidates"]:
+        logger.warning(f"멈춘 결제 대사 완료: {result}")
+    return result
 
 
 @shared_task(

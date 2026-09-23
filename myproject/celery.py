@@ -161,6 +161,17 @@ app.conf.beat_schedule = {
             "queue": "order_processing",
         },
     },
+    # 승인 처리 중(in_progress)으로 멈춘 결제 대사 - 5분마다
+    # settings.PAYMENT_RECONCILE_AFTER_MINUTES(기본 10분) 넘게 멈춘 결제를 토스 조회로 확인해
+    # 승인됐으면 결제 마감을 다시 발행하고, 아니면 한 번만 알린다 (자동 롤백 없음)
+    "reconcile-stalled-payments": {
+        "task": "shopping.tasks.payment_tasks.reconcile_stalled_payments",
+        "schedule": crontab(minute="*/5"),  # 5분마다
+        "options": {
+            "expires": 290,
+            "queue": "external_api",
+        },
+    },
     # 발행이 끊긴 주문 재발행 - 2분마다
     # pending·OrderItem 0개로 settings.ORDER_REPUBLISH_AFTER_MINUTES(기본 5분)가 지난 주문을 다시 발행하고,
     # 결제 만료 시간까지 처리되지 못한 주문은 실패로 닫는다 (expire-unpaid-orders 는 이 주문을 건너뜀)
@@ -330,6 +341,7 @@ app.conf.beat_schedule = {
     # - */5분 - 실패한 이메일 재시도
     # - */5분 - 고아 주문 감지
     # - */5분 - 미결제 주문 만료 (재고 반환)
+    # - */5분 - 멈춘 결제 대사 (토스 조회)
     # 새벽 시간대에 정리 작업을 몰아서 처리하여
     # 서버 부하를 최소화합니다.
 }

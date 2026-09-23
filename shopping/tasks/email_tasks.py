@@ -8,11 +8,14 @@ from typing import Any
 from celery import Task, shared_task
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db.models import F
 from django.template.loader import render_to_string
 from django.utils import timezone
 
 from shopping.models.email_verification import EmailLog, EmailVerificationToken
 from shopping.models.user import User
+
+from .retry_policy import retry_with_backoff
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +27,17 @@ def _handle_email_failure(email_log: EmailLog | None, error: Exception, recipien
     logger.error(f"❌ 이메일 발송 실패: {recipient} - {str(error)}")
 
 
-def _is_already_sent(email_log: EmailLog, is_resend: bool, recipient: str) -> bool:
-    """이미 발송된 이메일인지 확인"""
-    if email_log.status == "sent" and not is_resend:
+# 발송이 끝난 뒤의 상태들 — 이 중 하나면 같은 메일을 다시 보내지 않는다
+SENT_EMAIL_STATUSES = ("sent", "opened", "clicked", "verified")
+
+
+def _is_already_sent(email_log: EmailLog, recipient: str) -> bool:
+    """이미 발송된 이메일인지 확인
+
+    인증 메일 로그는 토큰마다 하나이고, 사용자가 재발송을 누르면 새 토큰이 만들어진다. 그래서 같은
+    토큰의 로그가 이미 발송 상태라면 재발송 여부와 관계없이 재배달·재시도·스윕이 만든 중복이다.
+    """
+    if email_log.status in SENT_EMAIL_STATUSES:
         logger.info(f"이미 발송된 이메일입니다: {recipient}")
         return True
     return False
@@ -35,7 +46,8 @@ def _is_already_sent(email_log: EmailLog, is_resend: bool, recipient: str) -> bo
 @shared_task(
     bind=True,
     max_retries=3,
-    retry_backoff=True,
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~30, 0~60, 0~120초)
+    retry_backoff=30,
     retry_backoff_max=180,
     retry_jitter=True,
     acks_late=True,
@@ -70,9 +82,8 @@ def send_verification_email_task(self: Task, user_id: int, token_id: int, is_res
             },
         )
 
-        # 이미 발송 성공한 경우 중복 발송 방지
-        if email_log.status == "send" and not is_resend:
-            logger.info(f"이미 발송된 이메일입니다: {user.email}")
+        # 이미 발송 성공한 경우 중복 발송 방지 (재배달·재시도·재발송 스윕이 겹친 경우)
+        if _is_already_sent(email_log, user.email):
             return {
                 "success": True,
                 "message": "이미 발송된 이메일입니다.",
@@ -144,7 +155,7 @@ def send_verification_email_task(self: Task, user_id: int, token_id: int, is_res
         # SMTP 오류 - 네트워크/서버 문제, 재시도 가치 있음
         recipient = user.email if "user" in locals() else "unknown"
         _handle_email_failure(email_log if "email_log" in locals() else None, e, recipient)
-        raise self.retry(exc=e)
+        raise retry_with_backoff(self, e)
 
     except Exception as e:
         recipient = user.email if "user" in locals() else "unknown"
@@ -161,19 +172,31 @@ def retry_failed_emails_task(self: Task) -> dict[str, Any]:
     """
     실패한 이메일 재발송 태스크 (주기적 실행)
 
-    최근 24시간 이내 실패한 이메일 중,
-    재시도 횟수가 3회 미만인 것만 재발송
+    최근 24시간 이내 실패한 이메일 중, 재발송 횟수가 settings.EMAIL_MAX_RESENDS 미만이고
+    마지막 실패 뒤 settings.EMAIL_RESEND_AFTER_MINUTES 가 지난 것만 재발송한다.
+
+    마지막 실패 뒤 대기: 발송 태스크는 스스로 재시도(최대 3회, 백오프)하므로, 그 재시도가 아직 살아 있는
+    로그를 여기서 또 보내면 복구 순간 같은 메일이 여러 통 간다. 재발송 전에 로그를 pending 으로 바꿔
+    (조건부 UPDATE) 다음 주기와 다른 스윕이 같은 로그를 다시 집지 않게 한다.
 
     Returns:
         dict: 재시도 결과 통계
     """
     try:
         # 24시간 이내 실패한 이메일 로그 조회
-        failed_logs = EmailLog.objects.filter(
-            status="failed",
-            created_at__gte=timezone.now() - timedelta(hours=24),
-            email_type="verification",
-        ).select_related("token", "user")
+        now = timezone.now()
+        failed_logs = (
+            EmailLog.objects.filter(
+                status="failed",
+                created_at__gte=now - timedelta(hours=24),
+                email_type="verification",
+                resend_count__lt=settings.EMAIL_MAX_RESENDS,
+            )
+            .exclude(failed_at__gt=now - timedelta(minutes=settings.EMAIL_RESEND_AFTER_MINUTES))
+            .select_related("token", "user")
+        )
+        # 루프에서 집은 로그는 pending 으로 바뀌므로 대상은 먼저 확정해 둔다
+        failed_logs = list(failed_logs)
 
         retry_count = 0
         success_count = 0
@@ -191,6 +214,12 @@ def retry_failed_emails_task(self: Task) -> dict[str, Any]:
 
             # 재발송 시도
             try:
+                # 먼저 집는다 — 이 UPDATE 가 성공한 스윕만 발행한다 (그 사이 발송 성공·다른 스윕이 집은 경우 건너뜀)
+                claimed = EmailLog.objects.filter(pk=email_log.pk, status="failed").update(
+                    status="pending", resend_count=F("resend_count") + 1
+                )
+                if not claimed:
+                    continue
                 retry_count += 1
 
                 # 비동기 태스크 호출
@@ -208,7 +237,7 @@ def retry_failed_emails_task(self: Task) -> dict[str, Any]:
 
         result = {
             "success": True,
-            "total_failed": failed_logs.count(),
+            "total_failed": len(failed_logs),
             "retry_attempted": retry_count,
             "retry_success": success_count,
         }
@@ -227,7 +256,8 @@ def retry_failed_emails_task(self: Task) -> dict[str, Any]:
 @shared_task(
     bind=True,
     max_retries=3,
-    retry_backoff=True,
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~30, 0~60, 0~120초)
+    retry_backoff=30,
     retry_backoff_max=180,
     retry_jitter=True,
     acks_late=True,
@@ -268,21 +298,25 @@ def send_email_task(
             except User.DoesNotExist:
                 logger.warning(f"사용자를 찾을 수 없습니다: user_id={user_id}")
 
-        # EmailLog 조회 또는 생성
+        # EmailLog 조회 또는 생성 — 이 메시지(task id)의 로그. 같은 메시지가 재배달·재시도로 다시 오면
+        # 같은 로그를 찾는다. 인자(제목·수신자)로 찾으면 사용자가 정당하게 다시 요청한 메일(비밀번호 재설정
+        # 두 번)까지 중복으로 막게 되므로 인자로는 판단하지 않는다.
         if user and email_type:
-            email_log, created = EmailLog.objects.get_or_create(
-                user=user,
-                email_type=email_type,
-                recipient_email=recipient_list[0] if recipient_list else "",
-                subject=subject,
-                status="pending",
-                defaults={
-                    "status": "pending",
-                },
-            )
+            log_fields = {
+                "user": user,
+                "email_type": email_type,
+                "recipient_email": recipient_list[0] if recipient_list else "",
+                "subject": subject,
+                "status": "pending",
+            }
+            task_id = self.request.id
+            if task_id:
+                email_log, created = EmailLog.objects.get_or_create(task_id=task_id, defaults=log_fields)
+            else:
+                email_log, created = EmailLog.objects.create(**log_fields), True
 
             # 이미 발송 성공한 경우 중복 발송 방지
-            if not created and email_log.status == "sent":
+            if not created and email_log.status in SENT_EMAIL_STATUSES:
                 logger.info(f"이미 발송된 이메일입니다: {recipient_list[0]}")
                 return {
                     "success": True,
@@ -316,7 +350,7 @@ def send_email_task(
     except SMTPException as e:
         # SMTP 오류는 재시도 가치 있음
         _handle_email_failure(email_log if "email_log" in locals() else None, e, str(recipient_list))
-        raise self.retry(exc=e)
+        raise retry_with_backoff(self, e)
 
     except Exception as e:
         # 그 외 오류는 재시도 안 함 (Fail-Fast)

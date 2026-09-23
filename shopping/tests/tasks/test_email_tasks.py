@@ -55,12 +55,16 @@ class TestSendVerificationEmailTask:
         assert email_log.sent_at is not None
 
     def test_send_verification_email_resend(self, mocker):
-        """재발송 테스트"""
+        """재발송 테스트 — 재발송은 새 토큰으로 간다 (EmailVerificationService.send_verification_email)
+
+        같은 토큰의 로그가 이미 발송 상태면 그건 재배달·재시도의 중복이라 보내지 않는다
+        (test_task_at_least_once.py). 재발송 버튼은 옛 토큰을 무효화하고 새 토큰을 만든다.
+        """
         # Arrange - Factory 사용
         mock_send_mail = mocker.patch("shopping.tasks.email_tasks.send_mail", return_value=1)
         user = UserFactory.unverified()
+        EmailLogFactory.sent(user=user, token=EmailVerificationTokenFactory(user=user, is_used=True))
         token = EmailVerificationTokenFactory(user=user)
-        EmailLogFactory.sent(user=user, token=token)
 
         # Act
         result = send_verification_email_task(

@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.core.cache import cache
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import F
 from django.db.models.functions import Greatest
 
@@ -431,8 +431,16 @@ class PaymentService:
                 raise PaymentConfirmError(f"유효하지 않은 결제 상태입니다: {payment.get_status_display()}")
 
             # 처리 중 상태로 변경 (이 시점부터 다른 요청은 차단됨)
+            # payment_key 도 함께 저장한다 — 승인 체인이 끝나지 못하고 멈추면 reconcile_stalled_payments 가
+            # 이 키로 토스에 현재 상태를 묻는다. updated_at 은 멈춘 시간을 재는 기준이다.
             payment.status = "in_progress"
-            payment.save(update_fields=["status"])
+            payment.payment_key = payment_key
+            try:
+                with transaction.atomic():
+                    payment.save(update_fields=["status", "payment_key", "updated_at"])
+            except IntegrityError:
+                # 다른 결제가 이미 쓰는 paymentKey — 정상 결제창 흐름에서는 생길 수 없다
+                raise PaymentConfirmError("유효하지 않은 결제 키입니다.")
 
         # 2. Celery Chain: Toss API 호출 → 최종 처리
         # 테스트 환경(EAGER=True)에서는 chain이 .get()을 호출하여 에러 발생

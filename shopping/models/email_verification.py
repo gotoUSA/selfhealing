@@ -227,6 +227,28 @@ class EmailLog(models.Model):
         help_text="발송 실패 시 에러 메시지",
     )
 
+    # 발송 태스크의 Celery task id — 같은 메시지가 재배달·재시도로 다시 와도 같은 로그를 찾는다
+    task_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        unique=True,
+        verbose_name="발송 태스크 ID",
+    )
+
+    failed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="마지막 실패 일시",
+        help_text="재발송 스윕이 진행 중인 재시도와 겹치지 않도록 기다리는 기준",
+    )
+
+    resend_count = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name="재발송 횟수",
+        help_text="retry_failed_emails_task 가 다시 보낸 횟수",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="생성일시")
 
     class Meta:
@@ -294,7 +316,8 @@ class EmailLog(models.Model):
         """발송 실패 처리"""
         self.status = "failed"
         self.error_message = error_message
-        self.save(update_fields=["status", "error_message"])
+        self.failed_at = timezone.now()
+        self.save(update_fields=["status", "error_message", "failed_at"])
 
     def mark_as_verified(self) -> None:
         """인증 완료 처리"""

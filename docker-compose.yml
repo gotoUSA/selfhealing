@@ -104,7 +104,9 @@ services:
   # Celery Worker (백그라운드 작업 처리)
   celery_worker:
     image: myproject-app:latest
-    command: celery -A myproject worker -l info --concurrency=8 -Q default,payment_critical,order_processing,external_api,points,notifications --prefetch-multiplier=1
+    # 외부 API(external_api 큐)는 아래 celery_worker_external 이 따로 처리한다 — 토스가 느려져도
+    # 주문 처리·결제 마감이 같은 프로세스 칸을 두고 기다리지 않게 (큐만 나누면 격리가 안 된다)
+    command: celery -A myproject worker -n main@%h -l info --concurrency=8 -Q default,payment_critical,order_processing,points,notifications --prefetch-multiplier=1
     volumes:
       - .:/code
     env_file:
@@ -131,6 +133,17 @@ services:
       - PHASE2_POINT_ORPHAN=true
       - PHASE2_RACE_AMPLIFY=true
       - PHASE2_CACHE_DIVERGENCE=true
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Celery Worker — 외부 API 호출 전용 (토스 승인·멈춘 결제 대사)
+  celery_worker_external:
+    extends:
+      service: celery_worker
+    command: celery -A myproject worker -n external@%h -l info --concurrency=8 -Q external_api --prefetch-multiplier=1
     depends_on:
       db:
         condition: service_healthy

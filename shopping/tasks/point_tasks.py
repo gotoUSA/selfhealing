@@ -9,6 +9,7 @@ from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.conf import settings
 from django.core.mail import send_mail
+from django.db import transaction
 from django.utils import timezone
 
 # Phase 2 chaos injection
@@ -17,6 +18,8 @@ from shopping.chaos.decorators import (
     Phase2PointOrphanError,
 )
 
+from .retry_policy import retry_with_backoff
+
 logger = get_task_logger(__name__)
 
 
@@ -24,7 +27,8 @@ logger = get_task_logger(__name__)
     bind=True,
     name="shopping.tasks.expire_points_task",
     max_retries=3,
-    retry_backoff=True,
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~30초부터 두 배씩, 최대 180초)
+    retry_backoff=30,
     retry_backoff_max=180,
     retry_jitter=True,
     acks_late=True,
@@ -59,14 +63,15 @@ def expire_points_task(self) -> dict[str, Any]:
         logger.error(f"포인트 만료 처리 실패: {str(e)}\n{traceback.format_exc()}")
 
         # 재시도
-        raise self.retry(exc=e)
+        raise retry_with_backoff(self, e)
 
 
 @shared_task(
     bind=True,
     name="shopping.tasks.send_expiry_notification_task",
     max_retries=3,
-    retry_backoff=True,
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~30초부터 두 배씩, 최대 180초)
+    retry_backoff=30,
     retry_backoff_max=180,
     retry_jitter=True,
     acks_late=True,
@@ -99,7 +104,7 @@ def send_expiry_notification_task(self) -> dict[str, Any]:
 
     except Exception as e:
         logger.error(f"포인트 만료 알림 발송 실패: {str(e)}\n{traceback.format_exc()}")
-        raise self.retry(exc=e)
+        raise retry_with_backoff(self, e)
 
 
 @shared_task(
@@ -107,7 +112,8 @@ def send_expiry_notification_task(self) -> dict[str, Any]:
     name="shopping.tasks.send_email_notification",
     queue="notifications",
     max_retries=5,
-    retry_backoff=True,
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~30초부터 두 배씩, 최대 180초)
+    retry_backoff=30,
     retry_backoff_max=180,
     retry_jitter=True,
     acks_late=True,
@@ -141,7 +147,7 @@ def send_email_notification(self, email: str, subject: str, message: str, html_m
     except SMTPException as e:
         # SMTP 오류는 재시도 가치 있음
         logger.error(f"SMTP 오류: {email} - {str(e)}")
-        raise self.retry(exc=e)
+        raise retry_with_backoff(self, e)
 
     except Exception as e:
         # 그 외 오류는 재시도 안 함
@@ -155,7 +161,8 @@ def send_email_notification(self, email: str, subject: str, message: str, html_m
     queue="points",
     priority=5,  # 낮은 우선순위
     max_retries=5,
-    retry_backoff=True,
+    # 수동 self.retry 에도 적용되도록 retry_countdown 이 읽는다 (0~10, 0~20, 0~40, 0~80, 0~160초)
+    retry_backoff=10,
     retry_backoff_max=180,
     retry_jitter=True,
     acks_late=True,
@@ -163,6 +170,10 @@ def send_email_notification(self, email: str, subject: str, message: str, html_m
 def add_points_after_payment(self, user_id: int, order_id: int) -> dict[str, Any]:
     """
     결제 완료 후 포인트 적립 처리 (비동기)
+
+    acks_late 라 워커가 죽으면 같은 메시지가 다시 오고, 재시도도 처음부터 다시 실행한다.
+    그래서 주문 행을 잠그고 "이미 적립했나"를 확인한 뒤 적립·주문 기록·결제 로그를 한 트랜잭션으로
+    커밋한다 — 중간에 죽으면 전부 롤백되고, 커밋된 뒤 다시 오면 이미 적립한 것으로 보고 돌아간다.
 
     Args:
         user_id: 사용자 ID
@@ -175,82 +186,94 @@ def add_points_after_payment(self, user_id: int, order_id: int) -> dict[str, Any
 
     from shopping.models.order import Order
     from shopping.models.payment import PaymentLog
+    from shopping.models.point import PointHistory
     from shopping.models.user import User
     from shopping.services.point_service import PointService
 
     logger.info(f"포인트 적립 처리 시작: user_id={user_id}, order_id={order_id}")
 
     try:
-        user = User.objects.get(pk=user_id)
-        order = Order.objects.get(pk=order_id)
+        with transaction.atomic():
+            order = Order.objects.select_for_update().get(pk=order_id)
+            user = User.objects.get(pk=user_id)
 
-        # 포인트 적립 계산
-        # 포인트로만 결제한 경우는 적립하지 않음
-        if order.final_amount <= 0:
-            logger.info(f"포인트 전액 결제로 적립 없음: order_id={order_id}")
-            return {
-                "status": "skipped",
-                "message": "포인트 전액 결제로 적립하지 않음",
-                "order_id": order_id,
-            }
+            # 이미 적립한 주문 — 재배달·재시도로 다시 온 메시지
+            if order.earned_points > 0 or PointHistory.objects.filter(order=order, type="earn").exists():
+                logger.info(f"이미 적립된 주문, 건너뜀: order_id={order_id}, earned_points={order.earned_points}")
+                return {
+                    "status": "already_processed",
+                    "user_id": user_id,
+                    "order_id": order_id,
+                    "points_added": 0,
+                }
 
-        # 등급별 적립률 적용
-        earn_rate = user.get_earn_rate()  # 1, 2, 3, 5 (%)
-        # total_amount는 이미 순수 상품 금액 (배송비 미포함)
-        product_amount = order.total_amount
-        points_to_add = int(product_amount * Decimal(earn_rate) / Decimal("100"))
+            # 포인트 적립 계산
+            # 포인트로만 결제한 경우는 적립하지 않음
+            if order.final_amount <= 0:
+                logger.info(f"포인트 전액 결제로 적립 없음: order_id={order_id}")
+                return {
+                    "status": "skipped",
+                    "message": "포인트 전액 결제로 적립하지 않음",
+                    "order_id": order_id,
+                }
 
-        if points_to_add <= 0:
-            logger.info(f"적립할 포인트 없음: order_id={order_id}, final_amount={order.final_amount}")
-            return {
-                "status": "skipped",
-                "message": "적립할 포인트 없음",
-                "order_id": order_id,
-            }
+            # 등급별 적립률 적용
+            earn_rate = user.get_earn_rate()  # 1, 2, 3, 5 (%)
+            # total_amount는 이미 순수 상품 금액 (배송비 미포함)
+            product_amount = order.total_amount
+            points_to_add = int(product_amount * Decimal(earn_rate) / Decimal("100"))
 
-        # [CHAOS PHASE 2] BP-29: Point accumulation orphan
-        # Payment succeeded but points won't be accumulated
-        try:
-            inject_phase2_point_orphan(user_id=user_id, order_id=order_id, points=points_to_add)
-        except Phase2PointOrphanError as e:
-            logger.error(f"[CHAOS BP-29] Point orphan: user={user_id}, order={order_id}, points={points_to_add}")
-            # INTENTIONAL: Customer paid but won't get points
-            # Self-healing should detect missing points via reconciliation
-            raise self.retry(exc=e, countdown=3)
+            if points_to_add <= 0:
+                logger.info(f"적립할 포인트 없음: order_id={order_id}, final_amount={order.final_amount}")
+                return {
+                    "status": "skipped",
+                    "message": "적립할 포인트 없음",
+                    "order_id": order_id,
+                }
 
-        logger.info(f"포인트 적립: user_id={user.id}, order_id={order.id}, " f"points={points_to_add}, earn_rate={earn_rate}%")
+            # [CHAOS PHASE 2] BP-29: Point accumulation orphan
+            # Payment succeeded but points won't be accumulated
+            try:
+                inject_phase2_point_orphan(user_id=user_id, order_id=order_id, points=points_to_add)
+            except Phase2PointOrphanError as e:
+                logger.error(f"[CHAOS BP-29] Point orphan: user={user_id}, order={order_id}, points={points_to_add}")
+                # INTENTIONAL: Customer paid but won't get points
+                # Self-healing should detect missing points via reconciliation
+                raise self.retry(exc=e, countdown=3)
 
-        # 포인트 적립
-        PointService.add_points(
-            user=user,
-            amount=points_to_add,
-            type="earn",
-            order=order,
-            description=f"주문 #{order.order_number} 구매 적립",
-            metadata={
-                "order_id": order.id,
-                "order_number": order.order_number,
-                "payment_amount": str(order.final_amount),
-                "product_amount": str(product_amount),
-                "shipping_fee": str(order.get_total_shipping_fee()),
-                "earn_rate": f"{earn_rate}%",
-                "membership_level": user.membership_level,
-            },
-        )
+            logger.info(f"포인트 적립: user_id={user.id}, order_id={order.id}, " f"points={points_to_add}, earn_rate={earn_rate}%")
 
-        # 주문에 적립 포인트 기록
-        order.earned_points = points_to_add
-        order.save(update_fields=["earned_points"])
-
-        # 포인트 적립 로그
-        # Order와 Payment는 OneToOne 관계이므로 .payment로 접근
-        if hasattr(order, "payment"):
-            PaymentLog.objects.create(
-                payment=order.payment,
-                log_type="approve",
-                message=f"포인트 {points_to_add}점 적립",
-                data={"points": points_to_add},
+            # 포인트 적립
+            PointService.add_points(
+                user=user,
+                amount=points_to_add,
+                type="earn",
+                order=order,
+                description=f"주문 #{order.order_number} 구매 적립",
+                metadata={
+                    "order_id": order.id,
+                    "order_number": order.order_number,
+                    "payment_amount": str(order.final_amount),
+                    "product_amount": str(product_amount),
+                    "shipping_fee": str(order.get_total_shipping_fee()),
+                    "earn_rate": f"{earn_rate}%",
+                    "membership_level": user.membership_level,
+                },
             )
+
+            # 주문에 적립 포인트 기록
+            order.earned_points = points_to_add
+            order.save(update_fields=["earned_points"])
+
+            # 포인트 적립 로그
+            # Order와 Payment는 OneToOne 관계이므로 .payment로 접근
+            if hasattr(order, "payment"):
+                PaymentLog.objects.create(
+                    payment=order.payment,
+                    log_type="approve",
+                    message=f"포인트 {points_to_add}점 적립",
+                    data={"points": points_to_add},
+                )
 
         logger.info(f"포인트 적립 완료: user_id={user.id}, order_id={order.id}, points={points_to_add}")
 
@@ -275,8 +298,8 @@ def add_points_after_payment(self, user_id: int, order_id: int) -> dict[str, Any
     except Exception as e:
         logger.error(f"포인트 적립 처리 실패: user_id={user_id}, order_id={order_id}, error={str(e)}")
 
-        # 재시도
-        raise self.retry(exc=e)
+        # 재시도 — 적립까지 한 트랜잭션이라 실패한 시도는 아무것도 남기지 않는다
+        raise retry_with_backoff(self, e)
 
 
 @shared_task(name="shopping.tasks.process_single_user_points", queue="points")

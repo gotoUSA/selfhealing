@@ -9,7 +9,6 @@ from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
     PaymentFactory,
-    PointHistoryFactory,
     ProductFactory,
     TossResponseBuilder,
 )
@@ -416,15 +415,8 @@ class TestPaymentCancelNormalCase:
         paid_order.earned_points = earned_points
         paid_order.save()
 
-        # 적립 이력 생성
-        PointHistoryFactory(
-            user=user,
-            points=earned_points,
-            balance=user.points,
-            type="earn",
-            order=paid_order,
-            description="결제 완료 적립",
-        )
+        # 적립 이력은 paid_payment 픽스처가 이미 만들었다 (구매 적립은 주문당 한 건 — unique_earn_per_order)
+        assert PointHistory.objects.filter(order=paid_order, type="earn").count() == 1
 
         toss_cancel_response = toss_cancel_response_builder()
 

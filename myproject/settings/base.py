@@ -238,6 +238,16 @@ ORDER_PAYMENT_TIMEOUT_MINUTES = int(os.environ.get("ORDER_PAYMENT_TIMEOUT_MINUTE
 # 다시 발행한다 (Beat: republish-stalled-orders). 정상 처리(재시도 포함)보다 충분히 길어야 한다.
 ORDER_REPUBLISH_AFTER_MINUTES = int(os.environ.get("ORDER_REPUBLISH_AFTER_MINUTES", 5))
 
+# 결제가 이 시간(분)이 지나도 승인 처리 중(in_progress)이면 승인 체인이 멈춘 것으로 보고 토스 조회로 대사한다
+# (Beat: reconcile-stalled-payments). 승인 호출·마감 재시도를 다 합친 시간보다 충분히 길어야 한다.
+PAYMENT_RECONCILE_AFTER_MINUTES = int(os.environ.get("PAYMENT_RECONCILE_AFTER_MINUTES", 10))
+
+# 실패한 인증 메일 재발송 스윕(Beat: retry-failed-emails): 마지막 실패 뒤 이 시간(분)이 지난 것만 다시 보낸다.
+# 발송 태스크 자체의 재시도(최대 약 3.5분)가 끝난 뒤여야 같은 메일이 여러 통 가지 않는다.
+EMAIL_RESEND_AFTER_MINUTES = int(os.environ.get("EMAIL_RESEND_AFTER_MINUTES", 10))
+# 같은 인증 메일을 스윕이 다시 보내는 최대 횟수 (주소가 틀려 영구 실패하는 경우 무한 반복 방지)
+EMAIL_MAX_RESENDS = int(os.environ.get("EMAIL_MAX_RESENDS", 3))
+
 # ==========================================================================
 # REST Framework
 # ==========================================================================

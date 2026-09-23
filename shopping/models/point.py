@@ -176,6 +176,14 @@ class PointHistory(models.Model):
             models.Index(fields=["order"]),
             models.Index(fields=["expires_at"]),  # 만료 포인트 배치 조회용
         ]
+        constraints = [
+            # 구매 적립은 주문당 한 번 — 적립 태스크가 재배달·재시도로 다시 돌아도 DB 가 두 번째를 거절한다
+            models.UniqueConstraint(
+                fields=["order"],
+                condition=models.Q(type="earn"),
+                name="unique_earn_per_order",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.user.username} - {self.get_type_display()} {self.points:+d}P"
