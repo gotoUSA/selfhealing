@@ -124,9 +124,16 @@ class TestExpiryUsageRaceConditionInvariant:
 
         assert use_result is not None, "포인트 사용 결과 없음"
         assert expire_result is not None, "만료 처리 결과 없음"
-        assert use_result.get("success") is True, f"포인트 사용 실패: {use_result}"
+        assert "error" not in use_result and "error" not in expire_result, f"예외: {results}"
 
-        # 최종 잔액 검증 (순서 무관하게 0P)
+        # 어느 쪽이 먼저 락을 잡느냐에 따라 두 결과가 다 맞다:
+        # - 사용이 먼저: 500P 사용 성공, 만료가 남은 1,500P 를 만료
+        # - 만료가 먼저: 2,000P 전부 만료, 이어진 500P 사용은 잔액 부족으로 거절
+        # 순서와 무관한 불변식: 쓴 양 + 만료된 양 = 2,000 (이중 차감 없음), 최종 잔액 0P
+        used = 500 if use_result["success"] else 0
+        expired = -sum(PointHistory.objects.filter(user=user, type="expire").values_list("points", flat=True))
+        assert used + expired == 2000, f"사용 {used} + 만료 {expired} != 2000"
+
         user.refresh_from_db()
         assert user.points == 0, f"최종 잔액 0P. 실제: {user.points}"
 

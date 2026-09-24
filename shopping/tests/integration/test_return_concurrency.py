@@ -44,8 +44,17 @@ from shopping.tests.factories import (
     ProductFactory,
     ReturnFactory,
     ReturnItemFactory,
+    TossResponseBuilder,
     UserFactory,
 )
+
+# 토스 부분 취소 API — 실제 응답 모양(complete_refund 가 cancels[]·canceledAt 를 결제 행에 저장한다).
+# 스레드마다 patch 를 걸고 풀면 한 스레드가 푼 순간 다른 스레드가 진짜 클라이언트를 부를 수 있어, 스레드 풀 바깥에서 한 번 건다
+TOSS_CANCEL = "shopping.utils.toss_payment.TossPaymentClient.cancel_payment"
+
+
+def _toss_cancel(payment_key, cancel_reason, **kwargs):
+    return TossResponseBuilder.cancel_response(payment_key=payment_key, cancel_reason=cancel_reason)
 
 
 # =============================================================================
@@ -115,8 +124,7 @@ class TestRefundDuplicatePreventionInvariant:
             close_db_connection()
             try:
                 ret = Return.objects.get(id=ret_id)
-                with patch("shopping.utils.toss_payment.TossPaymentClient"):
-                    result = ReturnService.complete_refund(ret)
+                result = ReturnService.complete_refund(ret)
                 return {"success": True, "status": result.status}
             except ValueError as e:
                 return {"success": False, "error": str(e)}
@@ -124,7 +132,7 @@ class TestRefundDuplicatePreventionInvariant:
                 return {"success": False, "error": f"{type(e).__name__}: {str(e)}"}
 
         # Act
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with patch(TOSS_CANCEL, side_effect=_toss_cancel), ThreadPoolExecutor(max_workers=2) as executor:
             futures = [executor.submit(call_complete_refund, return_id) for _ in range(2)]
             results = [f.result() for f in as_completed(futures)]
 
@@ -205,14 +213,13 @@ class TestRefundPointInvariant:
             close_db_connection()
             try:
                 ret = Return.objects.get(id=ret_id)
-                with patch("shopping.utils.toss_payment.TossPaymentClient"):
-                    ReturnService.complete_refund(ret)
+                ReturnService.complete_refund(ret)
                 return {"success": True, "return_id": ret_id}
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
         # Act
-        with ThreadPoolExecutor(max_workers=5) as executor:
+        with patch(TOSS_CANCEL, side_effect=_toss_cancel), ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(call_complete_refund, r.id) for r in returns]
             results = [f.result() for f in as_completed(futures)]
 
@@ -572,14 +579,13 @@ class TestDifferentReturnsConcurrency:
             close_db_connection()
             try:
                 ret = Return.objects.get(id=ret_id)
-                with patch("shopping.utils.toss_payment.TossPaymentClient"):
-                    ReturnService.complete_refund(ret)
+                ReturnService.complete_refund(ret)
                 return {"success": True, "return_id": ret_id}
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
         # Act
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with patch(TOSS_CANCEL, side_effect=_toss_cancel), ThreadPoolExecutor(max_workers=2) as executor:
             futures = [
                 executor.submit(call_complete_refund, return_obj1.id),
                 executor.submit(call_complete_refund, return_obj2.id),
