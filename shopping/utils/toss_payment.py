@@ -99,6 +99,7 @@ class TossPaymentClient:
         cancel_reason: str,
         cancel_amount: int | None = None,
         refund_account: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """
         결제 취소 요청
@@ -107,7 +108,9 @@ class TossPaymentClient:
             payment_key: 토스페이먼츠 결제 키
             cancel_reason: 취소 사유
             cancel_amount: 취소 금액 (None이면 전체 취소)
-            refund_account: 환불 계좌 정보 (가상계좌 결제시)
+            refund_account: 환불 계좌 정보 (가상계좌 결제에만 — 토스: 다른 결제수단 취소에는 사용하지 않는다)
+            idempotency_key: 멱등키 — 같은 키로 다시 요청하면 토스가 처리 없이 첫 응답을 돌려준다(15일).
+                우리 쪽이 환불 뒤 실패해 재시도해도 두 번 환불되지 않게 한다
 
         Returns:
             토스페이먼츠 응답 데이터
@@ -130,7 +133,10 @@ class TossPaymentClient:
             data["refundReceiveAccount"] = refund_account
 
         try:
-            response = requests.post(url, json=data, headers=self.headers, timeout=30)
+            headers = self.headers
+            if idempotency_key:
+                headers = {**self.headers, "Idempotency-Key": idempotency_key}
+            response = requests.post(url, json=data, headers=headers, timeout=30)
 
             if response.status_code == 200:
                 return response.json()

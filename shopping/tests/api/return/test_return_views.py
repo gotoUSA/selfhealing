@@ -17,6 +17,7 @@ from rest_framework import status
 from shopping.tests.factories import (
     OrderFactory,
     OrderItemFactory,
+    PaymentFactory,
     ProductFactory,
     ReturnFactory,
     ReturnItemFactory,
@@ -270,7 +271,7 @@ class TestReturnViewFiltering:
 class TestReturnViewIntegration:
     """통합 테스트 - 주요 흐름 검증"""
 
-    def test_full_refund_flow(self, api_client):
+    def test_full_refund_flow(self, api_client, mocker):
         """환불 전체 흐름: 신청 → 승인 → 송장입력 → 수령확인 → 완료"""
         # Arrange
         seller = UserFactory(is_seller=True)
@@ -278,6 +279,12 @@ class TestReturnViewIntegration:
         buyer = UserFactory(is_seller=False)
         order = OrderFactory.delivered(user=buyer)
         order_item = OrderItemFactory(order=order, product=product, quantity=1)
+        # 배송 완료 주문에는 결제가 있다 — 결제 없이 반품이 "완료"되면 돈을 안 돌려준 것이다
+        PaymentFactory(order=order, status="done", payment_key="test_key_flow", amount=order.final_amount)
+        mocker.patch(
+            "shopping.utils.toss_payment.TossPaymentClient.cancel_payment",
+            return_value={"status": "PARTIAL_CANCELED", "cancels": [{"cancelAmount": 0, "cancelReason": "반품"}]},
+        )
 
         # Act & Assert - 1. 신청
         api_client.force_authenticate(user=buyer)

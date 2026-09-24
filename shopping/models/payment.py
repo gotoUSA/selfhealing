@@ -336,15 +336,23 @@ class Payment(models.Model):
 
     def mark_as_partial_canceled(self, partial_amount: Decimal, cancel_data: dict[str, Any]) -> None:
         """
-        부분 취소 처리
+        부분 취소 처리 (반품 환불) — 취소 금액을 누적하고, 결제 금액을 다 돌려주면 전체 취소로 본다
 
-        TODO: 부분 취소 로직 구현 필요
-        - 취소 금액 누적 관리
-        - 부분 취소 내역 추적
-        - 잔여 금액 계산
+        토스는 부분 취소마다 cancels[] 에 한 줄을 더하고 balanceAmount 를 줄인다.
         """
-        # 구현 예정
-        raise NotImplementedError("부분 취소 기능은 향후 구현 예정입니다.")
+        self.canceled_amount = (self.canceled_amount or Decimal("0")) + Decimal(partial_amount)
+        if self.canceled_amount >= self.amount:
+            self.status = "canceled"
+            self.is_canceled = True
+        else:
+            self.status = "partial_canceled"
+
+        cancels = cancel_data.get("cancels") or []
+        latest_cancel = cancels[-1] if cancels else cancel_data
+        self.cancel_reason = latest_cancel.get("cancelReason", "")
+        self.canceled_at = latest_cancel.get("canceledAt")
+        self.raw_response = self.sanitize_raw_response(cancel_data)
+        self.save()
 
     def sanitize_raw_response(self, response: dict[str, Any]) -> dict[str, Any]:
         """

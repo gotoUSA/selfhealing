@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal
 from typing import TYPE_CHECKING
 
 from django.db import transaction
@@ -104,11 +104,22 @@ class ReturnService:
             except OrderItem.DoesNotExist:
                 raise ReturnValidationError(f"주문 상품(ID: {order_item_id})을 찾을 수 없습니다.")
 
-            # 수량 검증
-            if quantity > order_item.quantity:
+            # 수량 검증 — 이미 환불 반품으로 돌려받은 수량은 뺀다 (부분 반품 뒤 나머지만 반품 가능)
+            from django.db.models import Sum
+
+            from shopping.models.return_request import ReturnItem
+
+            already_returned = (
+                ReturnItem.objects.filter(
+                    order_item=order_item, return_request__type="refund", return_request__status="completed"
+                ).aggregate(q=Sum("quantity"))["q"]
+                or 0
+            )
+            returnable = order_item.quantity - already_returned
+            if quantity > returnable:
                 raise ReturnValidationError(
                     f"{order_item.product_name}: 반품 수량({quantity})이 "
-                    f"주문 수량({order_item.quantity})을 초과할 수 없습니다."
+                    f"반품 가능 수량({returnable})을 초과할 수 없습니다."
                 )
 
             validated_items.append(order_item)
@@ -413,187 +424,191 @@ class ReturnService:
         return return_obj
 
     @staticmethod
+    def _proportional_share(total: Decimal, part: Decimal, whole: Decimal) -> int:
+        """total 을 whole 중 part 만큼의 비율로 나눈 몫 (원 미만 버림). 누적값끼리 빼서 쓰면 마지막 반품에 끝전이 모인다"""
+        if whole <= 0:
+            return 0
+        return int((Decimal(total) * Decimal(part) / Decimal(whole)).to_integral_value(rounding=ROUND_DOWN))
+
+    @staticmethod
     @transaction.atomic
     def complete_refund(return_obj: Return) -> Return:
         """
-        환불 완료 처리
+        반품 환불 완료 처리
 
-        실제 환불 처리:
-        1. 토스페이먼츠 API 호출하여 환불
-        2. 재고 복구
-        3. 포인트 처리 (향후 구현)
-        4. 상태 변경
+        돌려받은 상품값을 주문 때 낸 방식대로 나눠 돌려준다:
+        - 포인트로 낸 몫 = 사용 포인트 × (반품 상품값 / 주문 상품 합계) → 포인트로 환불
+        - 나머지 = 현금 → 토스 부분 취소 (반품 배송비는 현금에서 뺀다, 원래 배송비는 돌려주지 않는다)
+        - 적립 포인트도 같은 비율만큼만 회수
+        비율 몫은 이전 반품까지의 누적값과의 차이로 구해서, 여러 번 나눠 반품해도 합이 정확히 맞는다.
 
-        Args:
-            return_obj: 환불 처리할 Return 객체
-
-        Returns:
-            Return: 환불 완료된 Return 객체
+        되돌릴 수 없는 토스 환불 전에 검증을 끝낸다(적립 포인트 회수 가능, 토스 잔액). 토스 호출에는 반품별
+        멱등키를 붙여서, 환불 뒤 우리 쪽이 실패해 판매자가 다시 눌러도 토스는 두 번 환불하지 않는다.
+        주문 상품을 모두 돌려받으면 주문은 refunded, 일부면 delivered 로 남아 나머지도 반품할 수 있다.
 
         Raises:
-            ValueError: 환불 처리 불가능한 상태인 경우
+            ValueError: 환불할 수 없는 상태·금액이거나 적립 포인트를 이미 사용했거나 토스가 거절함
         """
-        # 동시성 제어: Return 객체에 락 획득
-        return_obj = Return.objects.select_for_update().get(pk=return_obj.pk)
+        from django.contrib.auth import get_user_model
+        from django.db.models import F, Sum
+        from django.db.models.functions import Greatest
 
+        from shopping.models import Notification, Product
+        from shopping.models.order import Order
+        from shopping.models.payment import Payment, PaymentLog
+        from shopping.models.point import PointHistory
+        from shopping.models.return_request import ReturnItem
+        from shopping.utils.toss_payment import TossPaymentClient, TossPaymentError
+
+        # 1. 락과 상태 검증 (반품 → 결제 → 주문 → 사용자 순)
+        return_obj = Return.objects.select_for_update().get(pk=return_obj.pk)
         if return_obj.type != "refund":
             raise ValueError("환불 타입에서만 사용 가능합니다.")
-
         if return_obj.status != "received":
             raise ValueError("반품 도착 상태에서만 환불 처리할 수 있습니다.")
+        # 상태를 손으로 되돌린 완료 반품(관리자 화면 등) — 돈·재고·포인트를 다시 움직이지 않는다
+        if (
+            PaymentLog.objects.filter(data__return_id=return_obj.id).exists()
+            or PointHistory.objects.filter(metadata__return_id=return_obj.id).exists()
+        ):
+            raise ValueError("이미 환불 처리된 반품입니다.")
 
-        # 성능 최적화: N+1 쿼리 방지
-        return_items = return_obj.return_items.select_related("order_item__product").all()
+        payment = Payment.objects.select_for_update().filter(order_id=return_obj.order_id).first()
+        order = Order.objects.select_for_update().get(pk=return_obj.order_id)
+        user = get_user_model().objects.select_for_update().get(pk=return_obj.user_id)
+        return_items = list(return_obj.return_items.select_related("order_item__product"))
 
-        # 1. 토스페이먼츠 환불 처리
-        actual_refund_amount = return_obj.refund_amount - return_obj.return_shipping_fee
+        # 2. 금액 나누기 — 이전에 끝난 반품까지의 누적과 이번 반품을 더한 누적의 차이
+        goods_total = order.total_amount
+        used_for_goods = min(Decimal(order.used_points), goods_total)
+        previous = Return.objects.filter(order=order, type="refund", status="completed").aggregate(s=Sum("refund_amount"))[
+            "s"
+        ] or Decimal("0")
+        this_goods = return_obj.refund_amount
+        share = ReturnService._proportional_share
+        points_back = share(used_for_goods, previous + this_goods, goods_total) - share(used_for_goods, previous, goods_total)
+        earned_back = share(order.earned_points, previous + this_goods, goods_total) - share(
+            order.earned_points, previous, goods_total
+        )
+        cash_back = this_goods - points_back - return_obj.return_shipping_fee
+        if cash_back < 0:
+            # 반품 배송비가 현금 몫보다 크면 나머지는 포인트 몫에서 빼고, 그래도 모자라면 0 — 더 청구하지는 않는다
+            points_back = max(points_back + int(cash_back), 0)
+            cash_back = Decimal("0")
+        if points_back > 0 and not PointHistory.objects.filter(order=order, type="use").exists():
+            points_back = 0  # 차감된 적 없는 포인트는 돌려주지 않는다
 
-        if hasattr(return_obj.order, "payment") and return_obj.order.payment:
-            from shopping.utils.toss_payment import TossPaymentClient
-
-            toss_client = TossPaymentClient()
-
-            if actual_refund_amount > 0:
-                refund_account = None
-                if return_obj.refund_account_number:
-                    # 복호화된 계좌번호 사용
-                    decrypted_account = return_obj.get_decrypted_account_number()
-                    refund_account = {
-                        "bank": return_obj.refund_account_bank,
-                        "accountNumber": decrypted_account,
-                        "holderName": return_obj.refund_account_holder,
-                    }
-
-                toss_client.cancel_payment(
-                    payment_key=return_obj.order.payment.payment_key,
-                    cancel_reason=f"{return_obj.get_reason_display()} - {return_obj.reason_detail}",
-                    cancel_amount=int(actual_refund_amount),
-                    refund_account=refund_account,
+        # 3. 되돌릴 수 없는 토스 환불 전 검증
+        if earned_back > 0:
+            reclaimable = min(user.points + points_back, PointService().get_usable_points(user, for_cancel=True))
+            if reclaimable < earned_back:
+                raise ValueError(
+                    f"유효한 포인트가 부족합니다. 적립 포인트를 이미 사용해 환불할 수 없습니다. "
+                    f"(필요: {earned_back}P, 사용 가능: {reclaimable}P)"
                 )
+        if cash_back > 0:
+            if payment is None:
+                raise ValueError("결제 정보가 없어 현금 환불을 할 수 없습니다.")
+            balance = payment.amount - (payment.canceled_amount or Decimal("0"))
+            if cash_back > balance:
+                raise ValueError(f"환불 금액({cash_back}원)이 남은 결제 금액({balance}원)보다 큽니다.")
 
-        # 2. 재고 복구 (동시성 제어를 위해 락 획득)
-        from shopping.models import Product
+        # 4. 토스 부분 취소 — 반품별 멱등키
+        if cash_back > 0:
+            refund_account = None
+            if payment.method == "가상계좌" and return_obj.refund_account_number:
+                refund_account = {
+                    "bank": return_obj.refund_account_bank,
+                    "accountNumber": return_obj.get_decrypted_account_number(),
+                    "holderName": return_obj.refund_account_holder,
+                }
+            try:
+                cancel_data = TossPaymentClient().cancel_payment(
+                    payment_key=payment.payment_key,
+                    cancel_reason=f"{return_obj.get_reason_display()} - {return_obj.reason_detail}",
+                    cancel_amount=int(cash_back),
+                    refund_account=refund_account,
+                    idempotency_key=f"return-refund-{return_obj.id}",
+                )
+            except TossPaymentError as e:
+                raise ValueError(f"토스 환불 실패: {e.message}") from e
+            payment.mark_as_partial_canceled(cash_back, cancel_data)
+            PaymentLog.objects.create(
+                payment=payment,
+                log_type="cancel",
+                message=f"반품 환불 {return_obj.return_number}: 현금 {int(cash_back)}원",
+                data={"return_id": return_obj.id, "cash": int(cash_back), "points": points_back},
+            )
 
+        # 5. 재고·판매량
         for return_item in return_items:
             if return_item.order_item.product:
-                # select_for_update로 동시성 제어 (Race Condition 방지)
-                product = Product.objects.select_for_update().get(pk=return_item.order_item.product.pk)
-                product.stock += return_item.quantity
-                product.save(update_fields=["stock"])
+                Product.objects.filter(pk=return_item.order_item.product_id).update(
+                    stock=F("stock") + return_item.quantity,
+                    sold_count=Greatest(F("sold_count") - return_item.quantity, 0),
+                )
 
-        # 3. 포인트 처리
-        order = return_obj.order
-        user = return_obj.user
-        points_refunded = 0
-        points_deducted = 0
-
-        # 3-1. 사용한 포인트 환불
-        if order.used_points > 0:
-            points_refunded = order.used_points
-            logger.info(f"포인트 환불 시작: user_id={user.id}, order_id={order.id}, " f"points={points_refunded}")
-
+        # 6. 포인트 — 사용 포인트 몫 환불, 적립 포인트 몫 회수
+        meta = {
+            "order_id": order.id,
+            "order_number": order.order_number,
+            "return_id": return_obj.id,
+            "return_number": return_obj.return_number,
+        }
+        if points_back > 0:
             PointService.add_points(
                 user=user,
-                amount=points_refunded,
+                amount=points_back,
                 type="cancel_refund",
                 order=order,
                 description=f"환불 #{return_obj.return_number} - 사용 포인트 환불",
-                metadata={
-                    "order_id": order.id,
-                    "order_number": order.order_number,
-                    "return_id": return_obj.id,
-                    "return_number": return_obj.return_number,
-                },
+                metadata=meta,
             )
-
-            logger.info(f"포인트 환불 완료: user_id={user.id}, points={points_refunded}")
-
-        # 3-2. 적립된 포인트 회수
-        points_deducted = 0
-        if order.earned_points > 0:
-            # 중복 처리 방지: 이미 해당 주문에 대한 cancel_deduct가 처리되었는지 확인
-            # select_for_update로 동시성 제어 (Race Condition 방지)
-            from shopping.models.point import PointHistory
-
-            existing_cancel_deduct = (
-                PointHistory.objects.select_for_update()
-                .filter(
-                    user=user,
-                    type="cancel_deduct",
-                    order=order,
-                )
-                .exists()
+        if earned_back > 0:
+            result = PointService().use_points_fifo(
+                user=user,
+                amount=earned_back,
+                type="cancel_deduct",
+                order=order,
+                description=f"환불 #{return_obj.return_number} - 적립 포인트 회수",
+                metadata=meta,
             )
+            if not result["success"]:
+                raise ValueError(f"포인트 회수 실패: {result['message']}")
 
-            if existing_cancel_deduct:
-                logger.info(f"이미 적립 포인트 회수 완료됨: user_id={user.id}, order_id={order.id}")
-            else:
-                user.refresh_from_db()
-                point_service = PointService()
-
-                # 실제 회수 가능한 포인트 확인 (원장 기준)
-                # 주의: 이 값은 예비 검증용이며, 실제 차감은 use_points_fifo에서 락과 함께 수행
-                usable_points = point_service.get_usable_points(user)
-
-                if usable_points < order.earned_points:
-                    logger.warning(
-                        f"유효한 포인트 부족으로 환불 처리 불가: user_id={user.id}, "
-                        f"required={order.earned_points}, usable={usable_points}, cached={user.points}"
-                    )
-                    raise ValueError(
-                        f"유효한 포인트가 부족합니다. " f"(필요: {order.earned_points}P, 사용 가능: {usable_points}P)"
-                    )
-
-                points_deducted = order.earned_points
-                logger.info(f"적립 포인트 차감 시작: user_id={user.id}, order_id={order.id}, " f"points={points_deducted}")
-
-                result = point_service.use_points_fifo(
-                    user=user,
-                    amount=points_deducted,
-                    type="cancel_deduct",
-                    order=order,
-                    description=f"환불 #{return_obj.return_number} - 적립 포인트 회수",
-                    metadata={
-                        "order_id": order.id,
-                        "order_number": order.order_number,
-                        "return_id": return_obj.id,
-                        "return_number": return_obj.return_number,
-                    },
-                )
-
-                if not result["success"]:
-                    raise ValueError(f"포인트 회수 실패: {result['message']}")
-
-                logger.info(f"적립 포인트 차감 완료: user_id={user.id}, points={points_deducted}")
-
-        # 4. 상태 변경
+        # 7. 상태 — 주문 상품을 모두 돌려받았을 때만 주문 refunded
         return_obj.status = "completed"
         return_obj.completed_at = timezone.now()
         return_obj.save()
-
-        # 5. 주문 상태 변경
-        return_obj.order.status = "refunded"
-        return_obj.order.save(update_fields=["status"])
-
-        # 알림 발송
-        from shopping.models import Notification
+        returned = (
+            ReturnItem.objects.filter(
+                return_request__order=order, return_request__type="refund", return_request__status="completed"
+            ).aggregate(q=Sum("quantity"))["q"]
+            or 0
+        )
+        ordered = order.order_items.aggregate(q=Sum("quantity"))["q"] or 0
+        if returned >= ordered:
+            order.status = "refunded"
+            order.save(update_fields=["status", "updated_at"])
 
         Notification.objects.create(
-            user=return_obj.user,
+            user=user,
             notification_type="return",
             title="환불 완료",
-            message=f"{return_obj.return_number} 환불이 완료되었습니다. 환불 금액: {actual_refund_amount:,}원",
+            message=f"{return_obj.return_number} 환불이 완료되었습니다. 환불 금액: {int(cash_back):,}원 + {points_back:,}P",
             link=f"/returns/{return_obj.id}",
             metadata={
                 "return_id": return_obj.id,
                 "return_number": return_obj.return_number,
-                "refund_amount": str(actual_refund_amount),
+                "refund_amount": str(cash_back),
+                "points_refunded": points_back,
+                "points_deducted": earned_back,
             },
         )
 
         logger.info(
-            f"환불 완료: return_id={return_obj.id}, "
-            f"return_number={return_obj.return_number}, refund_amount={actual_refund_amount}"
+            f"환불 완료: return_id={return_obj.id}, return_number={return_obj.return_number}, "
+            f"cash={cash_back}, points_refunded={points_back}, points_deducted={earned_back}, order_status={order.status}"
         )
 
         return return_obj

@@ -564,6 +564,14 @@ class PaymentService:
         # 4. Order를 락으로 보호
         order = Order.objects.select_for_update().get(pk=payment.order_id)
 
+        # 배송이 시작된 주문의 돈은 반품(ReturnService.complete_refund)으로만 돌려준다 — 상품은 고객에게 있다.
+        # canceled 는 환불 없이 주문만 취소된 예전 데이터(아래에서 돈만 돌려준다)
+        if order.status not in ("paid", "canceled"):
+            raise PaymentCancelError(
+                f"결제를 취소할 수 없는 주문 상태입니다({order.get_status_display()}). "
+                f"배송이 시작된 주문은 반품으로 신청해주세요."
+            )
+
         # 5. 되돌릴 수 없는 토스 환불 전에 검증을 끝낸다 — 환불 뒤에 거절하면 트랜잭션만 롤백되고 돈은 나간다
         #    - 주문이 이미 취소됐으면(환불 없이 주문만 취소된 예전 데이터·결제 마감 경합) 재고·포인트는 이미
         #      돌아갔다 → 돈만 돌려준다

@@ -13,15 +13,32 @@ from shopping.tests.factories import CompletedPaymentFactory, OrderFactory, Orde
 class TestPartialCancel:
     """부분 취소"""
 
-    def test_mark_as_partial_canceled_raises_not_implemented(self, user, product):
+    def test_mark_as_partial_canceled_accumulates_until_fully_canceled(self, user, product):
+        """반품 환불은 부분 취소를 누적하고, 결제 금액을 다 돌려주면 전체 취소가 된다"""
         # Arrange
-        order = OrderFactory(user=user, status="paid", total_amount=product.price)
-        OrderItemFactory(order=order, product=product)
-        payment = CompletedPaymentFactory(order=order)
+        order = OrderFactory(user=user, status="delivered", total_amount=Decimal("20000"))
+        OrderItemFactory(order=order, product=product, quantity=2)
+        payment = CompletedPaymentFactory(order=order, amount=Decimal("20000"))
+        toss = {"cancels": [{"cancelAmount": 5000, "cancelReason": "반품 1", "canceledAt": "2026-09-24T12:00:00+09:00"}]}
 
-        # Act & Assert
-        with pytest.raises(NotImplementedError):
-            payment.mark_as_partial_canceled(Decimal("5000"), {"cancelReason": "test"})
+        # Act — 첫 부분 취소
+        payment.mark_as_partial_canceled(Decimal("5000"), toss)
+        payment.refresh_from_db()
+
+        # Assert
+        assert payment.status == "partial_canceled"
+        assert payment.canceled_amount == Decimal("5000")
+        assert payment.is_canceled is False
+        assert payment.cancel_reason == "반품 1"
+
+        # Act — 나머지
+        payment.mark_as_partial_canceled(Decimal("15000"), toss)
+        payment.refresh_from_db()
+
+        # Assert
+        assert payment.status == "canceled"
+        assert payment.canceled_amount == Decimal("20000")
+        assert payment.is_canceled is True
 
     def test_canceled_amount_exceeds_payment_raises_error(self, user, product):
         # Arrange

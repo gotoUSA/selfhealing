@@ -21,6 +21,15 @@ from shopping.tests.factories import (
 )
 
 
+# 토스 취소 API 응답 모양 — 부분 취소는 결제 행에 기록되므로 MagicMock 이 아니라 dict 여야 한다
+TOSS_CANCEL_OK = {
+    "return_value.cancel_payment.return_value": {
+        "status": "PARTIAL_CANCELED",
+        "cancels": [{"cancelAmount": 0, "cancelReason": "반품", "canceledAt": "2026-09-24T12:00:00+09:00"}],
+    }
+}
+
+
 @pytest.mark.django_db
 class TestGenerateReturnNumber:
     """교환/환불 번호 생성 테스트"""
@@ -634,7 +643,7 @@ class TestCompleteRefund:
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient") as mock_toss:
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK) as mock_toss:
             mock_instance = mock_toss.return_value
             mock_instance.cancel_payment.return_value = {
                 "paymentKey": "test_key_123",
@@ -663,7 +672,7 @@ class TestCompleteRefund:
         initial_stock = product.stock
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient") as mock_toss:
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK) as mock_toss:
             mock_instance = mock_toss.return_value
             mock_instance.cancel_payment.return_value = {
                 "paymentKey": "test_key",
@@ -681,7 +690,7 @@ class TestCompleteRefund:
         """계좌 환불 (복호화 테스트)"""
         # Arrange - 실제 환불 시나리오처럼 OrderItem과 ReturnItem 생성
         product = ProductFactory(stock=10)
-        order = OrderFactory.delivered()
+        order = OrderFactory.delivered(total_amount=Decimal("50000"))
         order_item = OrderItemFactory(order=order, product=product, price=Decimal("50000"), quantity=1)
 
         return_obj = ReturnFactory.received(
@@ -698,10 +707,11 @@ class TestCompleteRefund:
         return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
         return_obj.save()
 
-        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+        # 환불 계좌는 가상계좌 결제에만 쓴다 (토스: 다른 결제수단 취소에는 사용하지 않는다)
+        PaymentFactory(order=order, status="done", payment_key="test_key_123", method="가상계좌", amount=order.final_amount)
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient") as mock_toss:
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK) as mock_toss:
             mock_instance = mock_toss.return_value
 
             # Act
@@ -729,7 +739,7 @@ class TestCompleteRefund:
         PaymentFactory(order=return_obj.order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act
             ReturnService.complete_refund(return_obj)
 
@@ -745,7 +755,7 @@ class TestCompleteRefund:
         PaymentFactory(order=return_obj.order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient") as mock_toss:
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK) as mock_toss:
             mock_instance = mock_toss.return_value
 
             # Act
@@ -787,7 +797,7 @@ class TestCompleteRefund:
         PaymentFactory(order=return_obj.order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act
             ReturnService.complete_refund(return_obj)
 
@@ -804,6 +814,7 @@ class TestCompleteRefund:
 
         order = OrderFactory.delivered(user=user, used_points=2000)
         order_item = OrderItemFactory(order=order, product=product, quantity=1)
+        PointHistoryFactory(user=user, points=-2000, balance=user.points, type="use", order=order)
 
         return_obj = ReturnFactory.received(type="refund", order=order, user=user)
         ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
@@ -813,7 +824,7 @@ class TestCompleteRefund:
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act
             ReturnService.complete_refund(return_obj)
 
@@ -861,7 +872,7 @@ class TestCompleteRefund:
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act
             ReturnService.complete_refund(return_obj)
 
@@ -891,6 +902,7 @@ class TestCompleteRefund:
 
         order = OrderFactory.delivered(user=user, used_points=used_points, earned_points=earned_points)
         order_item = OrderItemFactory(order=order, product=product, quantity=1)
+        PointHistoryFactory(user=user, points=-used_points, balance=user.points, type="use", order=order)
 
         # 적립 이력 생성
         PointHistoryFactory(
@@ -910,7 +922,7 @@ class TestCompleteRefund:
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act
             ReturnService.complete_refund(return_obj)
 
@@ -957,7 +969,7 @@ class TestCompleteRefund:
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
         # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act & Assert
             with pytest.raises(ValueError) as exc_info:
                 ReturnService.complete_refund(return_obj)
@@ -1118,90 +1130,76 @@ class TestCompleteExchange:
 
 
 @pytest.mark.django_db
-class TestCompleteRefundDuplicatePrevention:
+class TestCompleteRefundSplitReturns:
     """
-    중복 cancel_deduct 방지 테스트
+    나눠서 반품해도 돈·포인트 합계가 정확히 맞는다
 
-    동일 주문에 대해 이미 cancel_deduct가 처리된 경우,
-    중복으로 포인트를 회수하지 않아야 함
+    예전엔 적립 포인트를 한 번에 전액 회수하고, 같은 주문의 회수 이력이 있으면 건너뛰었다(부분 반품이면
+    첫 반품에서 다 빼 버림). 지금은 반품마다 상품값 비율만큼 — 누적 차이로 구해 마지막 반품에 끝전이 모인다.
     """
 
-    def test_complete_refund_skips_duplicate_cancel_deduct(self):
-        """이미 cancel_deduct가 있으면 포인트 회수 스킵"""
-        # Arrange
-        product = ProductFactory(stock=10)
-        earned_points = 100
-        user = UserFactory(points=5000)  # cancel_deduct로 회수 후 잔액
-        initial_points = user.points
-
-        order = OrderFactory.delivered(user=user, earned_points=earned_points)
-        order_item = OrderItemFactory(order=order, product=product, quantity=1)
-
-        # 이미 cancel_deduct 이력이 있는 상황 (이전에 처리됨)
-        PointHistoryFactory(
-            user=user,
-            points=-earned_points,
-            balance=user.points,
-            type="cancel_deduct",
-            order=order,
-            description="주문 취소로 인한 적립 포인트 차감",
+    def _order(self, user, product, qty=3, price=Decimal("10000"), used=1000, earned=300):
+        order = OrderFactory.delivered(
+            user=user, total_amount=price * qty, used_points=used, earned_points=earned, final_amount=price * qty - used
         )
+        order_item = OrderItemFactory(order=order, product=product, quantity=qty, price=price)
+        PointHistoryFactory(user=user, points=-used, balance=user.points, type="use", order=order)
+        PointHistoryFactory.earn(
+            user=user, points=earned, balance=user.points, order=order, expires_at=timezone.now() + timedelta(days=365)
+        )
+        payment = PaymentFactory(order=order, status="done", payment_key="test_key_split", amount=price * qty - used)
+        return order, order_item, payment
 
+    def _return(self, order, user, order_item, qty):
         return_obj = ReturnFactory.received(type="refund", order=order, user=user)
-        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
+        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=qty)
         return_obj.refund_amount = ReturnService.calculate_refund_amount(return_obj.return_items.all())
         return_obj.save()
+        return return_obj
 
-        PaymentFactory(order=order, status="done", payment_key="test_key_123")
-
-        # Mock 토스 API
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
-            # Act
-            ReturnService.complete_refund(return_obj)
-
-            # Assert - 포인트가 중복으로 차감되지 않음
-            user.refresh_from_db()
-            assert user.points == initial_points
-
-            # cancel_deduct 이력이 1개만 있어야 함 (기존 것)
-            cancel_deduct_count = PointHistory.objects.filter(user=user, type="cancel_deduct", order=order).count()
-            assert cancel_deduct_count == 1
-
-    def test_complete_refund_skips_duplicate_cancel_deduct_logging(self, caplog):
-        """중복 cancel_deduct 스킵 시 로깅 확인"""
-        import logging
-
-        caplog.set_level(logging.INFO, logger="shopping.services.return_service")
-
-        # Arrange
+    def test_three_single_returns_add_up_exactly(self):
         product = ProductFactory(stock=10)
         user = UserFactory(points=5000)
-        order = OrderFactory.delivered(user=user, earned_points=100)
-        order_item = OrderItemFactory(order=order, product=product, quantity=1)
+        order, order_item, payment = self._order(user, product)
+        cash = []
 
-        # 이미 cancel_deduct 이력 존재
-        PointHistoryFactory(
-            user=user,
-            points=-100,
-            balance=user.points,
-            type="cancel_deduct",
-            order=order,
-        )
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK) as mock_toss:
+            for i in range(3):
+                ReturnService.complete_refund(self._return(order, user, order_item, 1))
+                cash.append(mock_toss.return_value.cancel_payment.call_args.kwargs["cancel_amount"])
+                order.refresh_from_db()
+                assert order.status == ("refunded" if i == 2 else "delivered")
 
-        return_obj = ReturnFactory.received(type="refund", order=order, user=user)
-        ReturnItemFactory(return_request=return_obj, order_item=order_item, quantity=1)
-        return_obj.refund_amount = Decimal("10000")
-        return_obj.save()
+        # 상품 30,000 = 현금 29,000 + 포인트 1,000 → 현금 9,667·9,667·9,666, 포인트 333·333·334
+        assert sum(cash) == 29000
+        refunded = PointHistory.objects.filter(order=order, type="cancel_refund").values_list("points", flat=True)
+        reclaimed = PointHistory.objects.filter(order=order, type="cancel_deduct").values_list("points", flat=True)
+        assert sum(refunded) == 1000
+        assert sum(reclaimed) == -300
+        payment.refresh_from_db()
+        assert payment.canceled_amount == 29000
+        assert payment.status == "canceled"
 
-        PaymentFactory(order=order, status="done", payment_key="test_key_123")
+    def test_partial_return_keeps_the_order_returnable(self):
+        product = ProductFactory(stock=10)
+        user = UserFactory(points=5000)
+        order, order_item, payment = self._order(user, product, qty=2, used=1000, earned=200)
 
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
-            # Act
-            ReturnService.complete_refund(return_obj)
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK) as mock_toss:
+            ReturnService.complete_refund(self._return(order, user, order_item, 1))
+            assert mock_toss.return_value.cancel_payment.call_args.kwargs["cancel_amount"] == 9500
 
-            # Assert - 스킵 로그 확인
-            log_messages = [record.message for record in caplog.records]
-            assert any("이미 적립 포인트 회수 완료됨" in msg for msg in log_messages)
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == "delivered"
+        assert payment.status == "partial_canceled"
+        assert payment.canceled_amount == 9500
+        assert list(PointHistory.objects.filter(order=order, type="cancel_refund").values_list("points", flat=True)) == [500]
+        assert list(PointHistory.objects.filter(order=order, type="cancel_deduct").values_list("points", flat=True)) == [-100]
+        # 남은 1개는 반품할 수 있고, 2개는 안 된다
+        ReturnService.validate_return_items(order, [{"order_item_id": order_item.id, "quantity": 1}])
+        with pytest.raises(Exception, match="반품 가능 수량"):
+            ReturnService.validate_return_items(order, [{"order_item_id": order_item.id, "quantity": 2}])
 
 
 @pytest.mark.django_db
@@ -1245,7 +1243,7 @@ class TestCompleteRefundUsablePointsValidation:
 
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act
             result = ReturnService.complete_refund(return_obj)
 
@@ -1282,7 +1280,7 @@ class TestCompleteRefundUsablePointsValidation:
 
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act & Assert
             with pytest.raises(ValueError) as exc_info:
                 ReturnService.complete_refund(return_obj)
@@ -1326,7 +1324,7 @@ class TestCompleteRefundUsablePointsValidation:
 
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act & Assert
             with pytest.raises(ValueError) as exc_info:
                 ReturnService.complete_refund(return_obj)
@@ -1373,7 +1371,7 @@ class TestCompleteRefundIdempotency:
 
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act - 첫 번째 호출 (성공)
             result = ReturnService.complete_refund(return_obj)
             assert result.status == "completed"
@@ -1418,7 +1416,7 @@ class TestCompleteRefundIdempotency:
 
         PaymentFactory(order=order, status="done", payment_key="test_key_123")
 
-        with patch("shopping.utils.toss_payment.TossPaymentClient"):
+        with patch("shopping.utils.toss_payment.TossPaymentClient", **TOSS_CANCEL_OK):
             # Act - 첫 번째 호출
             ReturnService.complete_refund(return_obj)
 
@@ -1430,8 +1428,9 @@ class TestCompleteRefundIdempotency:
             return_obj.status = "received"
             return_obj.save()
 
-            # Act - 두 번째 호출
-            ReturnService.complete_refund(return_obj)
+            # Act - 두 번째 호출: 이미 환불된 반품이라 거절
+            with pytest.raises(ValueError, match="이미 환불 처리된 반품"):
+                ReturnService.complete_refund(return_obj)
 
             # Assert - 포인트가 중복 차감되지 않음
             user.refresh_from_db()
