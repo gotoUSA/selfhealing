@@ -382,6 +382,53 @@ class PaymentService:
         )
 
     @staticmethod
+    @transaction.atomic
+    def cancel_virtual_account_before_deposit(order_id: int, user) -> None:
+        """
+        입금 전 가상계좌 결제의 주문 취소 — 토스에 계좌를 먼저 닫고 주문을 취소한다
+
+        토스 결제 취소 API 를 입금 전(WAITING_FOR_DEPOSIT) 결제에 부르면 그 계좌로 더 이상 입금할 수 없다.
+        돈이 들어오지 않았으므로 환불 계좌도 필요 없다. 주문만 취소하고 계좌를 열어 두면 뒤늦은 입금이
+        취소된 주문에 들어와 입금 웹훅이 주문을 결제 완료로 되살렸다.
+
+        순서: 결제·주문 락 → 검증 → 토스 취소(계좌 닫기) → 결제 canceled → OrderService.cancel_order
+        (재고·쓴 포인트 복구). 토스 취소 뒤 DB 가 실패해도 계좌는 닫혔으므로 입금은 들어올 수 없고,
+        토스가 보내는 CANCELED 웹훅이 주문을 취소한다.
+
+        Raises:
+            PaymentCancelError: 입금 대기 상태가 아니거나(그 사이 입금됨 등) 토스가 취소를 거절함
+        """
+        from .order_service import OrderService
+
+        payment = Payment.objects.select_for_update().filter(order_id=order_id, order__user=user).first()
+        if payment is None or payment.status != "waiting_for_deposit":
+            raise PaymentCancelError("결제 상태가 바뀌었습니다. 주문 상태를 확인한 뒤 다시 시도해주세요.")
+
+        order = Order.objects.select_for_update().get(pk=order_id)
+        if order.status not in ["pending", "confirmed"]:
+            raise PaymentCancelError("취소할 수 없는 주문입니다.")
+
+        try:
+            cancel_data = TossPaymentClient().cancel_payment(
+                payment_key=payment.payment_key, cancel_reason="고객 주문 취소 (입금 전 가상계좌 반납)"
+            )
+        except TossPaymentError as e:
+            # 방금 입금이 들어왔으면 토스가 입금 전 취소를 거절한다 — 입금 웹훅이 결제를 마감한다
+            logger.warning(f"가상계좌 반납 실패: payment_id={payment.id}, code={e.code}, message={e.message}")
+            raise PaymentCancelError(f"가상계좌를 닫지 못했습니다: {e.message}") from e
+
+        payment.mark_as_canceled(cancel_data)
+        PaymentLog.objects.create(
+            payment=payment,
+            log_type="cancel",
+            message="입금 전 가상계좌 반납 — 주문 취소",
+            data={"order_id": order_id},
+        )
+        logger.info(f"입금 전 가상계좌 반납: payment_id={payment.id}, order_id={order_id}")
+
+        OrderService.cancel_order(order)
+
+    @staticmethod
     def confirm_payment_async(payment: Payment, payment_key: str, order_id: int, amount: int, user) -> dict[str, Any]:
         """
         결제 승인 처리 (비동기 버전)

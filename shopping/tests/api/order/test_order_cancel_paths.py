@@ -9,6 +9,7 @@
 - 결제 취소가 토스 환불을 먼저 하고 적립 포인트 회수 검사를 뒤에 해서, 거절될 때 돈만 나갔다
 - 토스 취소 웹훅은 사용한 포인트를 돌려주지 않았다
 - 처리 전(pending) 주문을 취소하면 아직 차감하지 않은 포인트까지 환불했다
+- 가상계좌 입금 대기 주문을 취소하면 주문만 취소되고 계좌는 열려 있어, 입금되면 주문이 결제 완료로 되살아났다
 """
 
 import pytest
@@ -29,6 +30,7 @@ from shopping.services.point_service import PointService
 from shopping.services.toss_webhook_service import TossWebhookService
 from shopping.tasks.payment_tasks import finalize_payment_confirm
 from shopping.tests.factories import TossResponseBuilder
+from shopping.utils.toss_payment import TossPaymentError
 
 TOSS_CANCEL = "shopping.utils.toss_payment.TossPaymentClient.cancel_payment"
 NOTIFY_DELAY = "shopping.tasks.payment_tasks.notify_payment_failure.delay"
@@ -302,3 +304,83 @@ class TestUnprocessedPendingOrder:
         assert order.status == "canceled"
         assert _snapshot(user, product) == before
         assert not PointHistory.objects.filter(order=order, type="cancel_refund").exists()
+
+
+@pytest.mark.django_db
+class TestWaitingVirtualAccount:
+    """가상계좌 입금 대기 주문 — 취소는 계좌를 먼저 닫는다"""
+
+    def _waiting(self, user, product):
+        order = _processed_order(user, product)
+        payment = Payment.objects.create(
+            order=order,
+            amount=order.final_amount,
+            status="waiting_for_deposit",
+            toss_order_id=str(order.id),
+            payment_key=f"k_va_{order.id}",
+            toss_secret="sec_va",
+        )
+        return order, payment
+
+    def test_order_cancel_closes_the_virtual_account_before_cancelling(self, authenticated_client, user, product, toss_cancel):
+        _seed_points(user)
+        before = _snapshot(user, product)
+        order, payment = self._waiting(user, product)
+
+        response = authenticated_client.post(reverse("order-cancel", kwargs={"pk": order.id}))
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["refund_amount"] == 0
+        toss_cancel.assert_called_once()
+        assert toss_cancel.call_args.kwargs["payment_key"] == payment.payment_key
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        assert payment.status == "canceled"
+        assert order.status == "canceled"
+        assert _snapshot(user, product) == before
+
+    def test_order_stays_when_toss_refuses_to_close_the_account(self, authenticated_client, user, product, mocker):
+        """방금 입금돼 토스가 입금 전 취소를 거절하면 아무것도 바꾸지 않는다 — 입금 웹훅이 마감한다"""
+        _seed_points(user)
+        order, payment = self._waiting(user, product)
+        before = _snapshot(user, product)
+        mocker.patch(TOSS_CANCEL, side_effect=TossPaymentError("NOT_CANCELABLE_PAYMENT", "취소할 수 없는 결제입니다.", 400))
+
+        response = authenticated_client.post(reverse("order-cancel", kwargs={"pk": order.id}))
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        payment.refresh_from_db()
+        order.refresh_from_db()
+        assert payment.status == "waiting_for_deposit"
+        assert order.status == "confirmed"
+        assert _snapshot(user, product) == before
+
+    def test_deposit_webhook_does_not_resurrect_a_cancelled_order(
+        self, user, product, mocker, django_capture_on_commit_callbacks
+    ):
+        """계좌가 열린 채 취소된 주문(예전 데이터 등)에 입금이 오면 되살리지 않는다 — 결제 done + 알림"""
+        order, payment = self._waiting(user, product)
+        Product.objects.filter(pk=product.pk).update(stock=F("stock") + QTY)
+        Order.objects.filter(pk=order.pk).update(status="canceled")
+        before = _snapshot(user, product)
+        notify = mocker.patch(NOTIFY_DELAY)
+        event = {
+            "paymentKey": payment.payment_key,
+            "orderId": payment.toss_order_id,
+            "status": "DONE",
+            "method": "가상계좌",
+            "totalAmount": int(payment.amount),
+            "approvedAt": "2026-09-24T12:00:00+09:00",
+        }
+
+        with django_capture_on_commit_callbacks(execute=True):
+            TossWebhookService.handle_payment_done(event)
+
+        order.refresh_from_db()
+        payment.refresh_from_db()
+        assert order.status == "canceled"
+        assert payment.status == "done"
+        assert _snapshot(user, product) == before
+        assert PaymentLog.objects.filter(payment=payment, log_type="error").exists()
+        notify.assert_called_once()
+        assert notify.call_args.args[1] == "canceled_order_charged"

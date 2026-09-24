@@ -19,6 +19,7 @@ from django.db.models import F
 
 from ..constants import TOSS_PAYMENT_STATUS_EXPIRED
 from ..models.cart import Cart
+from ..models.order import Order
 from ..models.payment import Payment, PaymentLog
 from ..models.product import Product
 from ..models.webhook_event import WebhookEvent
@@ -251,11 +252,40 @@ class TossWebhookService:
         # 3. 여기서부터 실제 처리 — 마킹은 커밋된 뒤에만 (롤백되면 키도 없다)
         TossWebhookService.mark_webhook_processed_on_commit(order_id, "DONE")
 
+        # 주문도 잠그고 본다 — 취소된 주문을 결제 완료로 되살리지 않는다 (결제 마감과 같은 규칙).
+        # 입금 대기 주문 취소는 가상계좌를 먼저 닫으므로 여기 걸리는 건 그 밖의 경로뿐이다.
+        # 돈은 들어왔으니 결제는 사실대로 done 으로 남기고, 환불은 사람이 한다 — 알림.
+        order = Order.objects.select_for_update().get(pk=payment.order_id)
+
         # Payment 정보 업데이트
         payment.mark_as_paid(event_data)
 
-        # Order 상태 변경
-        order = payment.order
+        if order.status == "canceled":
+            logger.critical(f"Charged payment on a cancelled order, refund needed: {order_id}")
+            PaymentLog.objects.create(
+                payment=payment,
+                log_type="error",
+                message="취소된 주문에 결제 완료(입금) 확인 — 환불 필요",
+                data=event_data,
+            )
+            canceled_order_pk = order.pk
+            payment_key = event_data.get("paymentKey", "")
+
+            def _notify_canceled_order_charged() -> None:
+                try:
+                    from ..tasks.payment_tasks import notify_payment_failure
+
+                    notify_payment_failure.delay(
+                        canceled_order_pk,
+                        "canceled_order_charged",
+                        details=f"토스 DONE(paymentKey={payment_key}) 인데 주문은 취소됨 — 환불 필요",
+                        severity="critical",
+                    )
+                except Exception as notify_error:
+                    logger.error(f"Canceled-order-charged notification failed: {order_id}, error={notify_error}")
+
+            transaction.on_commit(_notify_canceled_order_charged)
+            return
 
         # 이미 paid 상태면 스킵 (confirm API에서 이미 처리)
         if order.status == "paid":

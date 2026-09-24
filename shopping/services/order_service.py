@@ -427,6 +427,8 @@ class OrderService:
         - 결제 전(pending/confirmed): cancel_order — 재고·쓴 포인트 복구, 붙어 있는 결제는 닫는다
         - 결제 완료(paid): PaymentService.cancel_payment — 토스 환불 + 재고·판매량·포인트 복구
           (주문 취소 버튼이 환불 없이 주문만 취소하던 경로를 막는다)
+        - 가상계좌 입금 대기: PaymentService.cancel_virtual_account_before_deposit — 토스에 계좌를 먼저 닫고
+          주문을 취소한다 (주문만 취소하면 열린 계좌로 입금이 들어와 취소된 주문이 결제 완료로 되살아났다)
 
         상태는 락 없이 읽어 경로만 고른다. 그 사이 결제가 끝나 paid 가 됐으면 cancel_order 가 락 안에서
         다시 보고 거절하므로(다시 시도하면 환불 경로로 간다) 환불 없는 취소는 생기지 않는다.
@@ -450,6 +452,15 @@ class OrderService:
             except PaymentCancelError as e:
                 raise OrderServiceError(str(e)) from e
             return {"refunded": True, "refund_amount": int(result["canceled_amount"])}
+
+        if Payment.objects.filter(order_id=order.pk, status="waiting_for_deposit").exists():
+            from .payment_service import PaymentCancelError, PaymentService
+
+            try:
+                PaymentService.cancel_virtual_account_before_deposit(order_id=order.pk, user=user)
+            except PaymentCancelError as e:
+                raise OrderServiceError(str(e)) from e
+            return {"refunded": False, "refund_amount": 0}
 
         OrderService.cancel_order(order)
         return {"refunded": False, "refund_amount": 0}

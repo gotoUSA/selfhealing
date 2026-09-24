@@ -27,7 +27,8 @@ LIVE_PAYMENT_STATUSES = frozenset(["in_progress", "waiting_for_deposit", "done"]
 LIVE_PAYMENT_CANCEL_MESSAGES = {
     "in_progress": "결제 승인이 진행 중입니다. 잠시 후 다시 시도해주세요.",
     "done": "결제 승인이 진행 중입니다. 잠시 후 다시 시도해주세요.",
-    "waiting_for_deposit": "가상계좌 입금 대기 중인 주문은 입금 기한이 지나면 자동으로 취소됩니다.",
+    # 고객 취소는 입금 대기 계좌를 먼저 닫는다(cancel_by_customer). 여기 오는 건 그 확인 직후 발급된 경우뿐
+    "waiting_for_deposit": "가상계좌 발급이 방금 끝났습니다. 잠시 후 다시 시도해주세요.",
 }
 
 # 만료된 주문에 기록하는 실패 사유
