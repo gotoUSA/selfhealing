@@ -400,6 +400,7 @@ from django.utils import timezone
 from shopping.constants import ORDER_EXPIRED_FAILURE_REASON
 from shopping.models.order import OrderItem
 from shopping.models.payment import Payment, PaymentLog
+from shopping.models.point import PointHistory
 from shopping.models.product import Product
 from shopping.tasks.order_tasks import expire_unpaid_orders
 
@@ -462,6 +463,8 @@ class TestExpireUnpaidOrders:
             used_points=1000,
             final_amount=product.price * 2 - 1000,
         )
+        # 주문 처리 태스크가 남기는 차감 이력 — cancel_order 는 실제로 차감된 포인트만 돌려준다
+        PointHistory.objects.create(user=user, order=order, type="use", points=-1000, balance=5000, description="주문 사용")
         _age_order(order, minutes=31)
 
         result = expire_unpaid_orders(timeout_minutes=30)
@@ -608,10 +611,10 @@ class TestExpireUnpaidOrders:
 
         original_cancel = OrderService.cancel_order
 
-        def cancel_or_blow_up(order):
+        def cancel_or_blow_up(order, **kwargs):
             if order.pk == failing.pk:
                 raise RuntimeError("boom")
-            return original_cancel(order)
+            return original_cancel(order, **kwargs)
 
         mocker.patch.object(OrderService, "cancel_order", side_effect=cancel_or_blow_up)
 

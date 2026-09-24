@@ -516,6 +516,29 @@ class PaymentService:
 
         # 4. Order를 락으로 보호
         order = Order.objects.select_for_update().get(pk=payment.order_id)
+
+        # 5. 되돌릴 수 없는 토스 환불 전에 검증을 끝낸다 — 환불 뒤에 거절하면 트랜잭션만 롤백되고 돈은 나간다
+        #    - 주문이 이미 취소됐으면(환불 없이 주문만 취소된 예전 데이터·결제 마감 경합) 재고·포인트는 이미
+        #      돌아갔다 → 돈만 돌려준다
+        #    - 적립 포인트를 회수할 수 없으면(이미 써 버림) 취소를 거절한다. 회수는 FIFO 로 적립 건에서 빼므로
+        #      잔액이 아니라 회수 가능한 적립 건으로 본다. 사용자 행을 잠가 회수 전까지 포인트 사용을 막는다
+        order_already_canceled = order.status == "canceled"
+        if not order_already_canceled and order.earned_points > 0:
+            locked_user = type(user).objects.select_for_update().get(pk=user.pk)
+            # 잔액 조건(사용 포인트 환불 뒤 잔액)과 FIFO 조건(회수 가능한 적립 건) 둘 다 — 회수 단계가 보는 두 가지
+            reclaimable = min(
+                locked_user.points + order.used_points,
+                PointService().get_usable_points(locked_user, for_cancel=True),
+            )
+            if reclaimable < order.earned_points:
+                logger.warning(
+                    f"적립 포인트 회수 불가로 결제 취소 거절: payment_id={payment_id}, "
+                    f"required={order.earned_points}, reclaimable={reclaimable}"
+                )
+                raise PaymentCancelError(
+                    f"포인트가 부족하여 결제를 취소할 수 없습니다. 적립 포인트를 이미 사용했습니다. "
+                    f"(회수 필요: {order.earned_points}P, 회수 가능: {reclaimable}P)"
+                )
         logger.info(f"결제 취소 검증 완료: payment_id={payment_id}, order_id={order.id}")
 
         # 5. 토스페이먼츠 API 클라이언트
@@ -534,6 +557,25 @@ class PaymentService:
             # 7. Payment 정보 업데이트
             payment.mark_as_canceled(cancel_data)
             logger.info(f"결제 정보 업데이트 완료: payment_id={payment_id}, status={payment.status}")
+
+            if order_already_canceled:
+                # 재고·포인트는 주문 취소 때 이미 돌아갔다 — 다시 하면 두 번 복구된다
+                PaymentLog.objects.create(
+                    payment=payment,
+                    log_type="cancel",
+                    message="이미 취소된 주문의 결제 환불 (재고·포인트는 주문 취소 때 복구됨)",
+                    data={"cancel_reason": cancel_reason, "canceled_amount": str(payment.canceled_amount)},
+                )
+                logger.info(f"취소된 주문의 결제 환불 완료: payment_id={payment_id}, order_id={order.id}")
+                return {
+                    "payment_id": payment.id,
+                    "status": payment.status,
+                    "canceled_amount": payment.canceled_amount,
+                    "cancel_reason": payment.cancel_reason,
+                    "canceled_at": payment.canceled_at,
+                    "points_refunded": 0,
+                    "points_deducted": 0,
+                }
 
             # 8. 재고 복구 (Product 락으로 동시성 제어)
             logger.info(f"재고 복구 시작: order_id={order.id}")

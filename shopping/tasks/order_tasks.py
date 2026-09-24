@@ -11,10 +11,10 @@ from django.db.models import Exists, F, OuterRef
 from django.utils import timezone
 
 from ..constants import (
-    ORDER_EXPIRABLE_STATUSES,
+    LIVE_PAYMENT_STATUSES,
     ORDER_EXPIRED_FAILURE_REASON,
-    ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES,
     ORDER_STALLED_FAILURE_REASON,
+    ORDER_UNPAID_STATUSES,
 )
 
 logger = get_task_logger(__name__)
@@ -319,26 +319,23 @@ def _expire_order(order_id: int) -> bool:
     """
     from ..models.order import Order
     from ..models.payment import Payment, PaymentLog
-    from ..services.order_service import OrderService
+    from ..services.order_service import OrderService, PaymentInProgressError
 
     try:
         with transaction.atomic():
             # 1. 주문 잠금 후 상태 재검증 (후보 조회와 여기 사이에 결제가 끝났을 수 있음)
             order = Order.objects.select_for_update().get(pk=order_id)
-            if order.status not in ORDER_EXPIRABLE_STATUSES:
+            if order.status not in ORDER_UNPAID_STATUSES:
                 raise _OrderNotExpirable(f"status={order.status}")
 
-            # 2. 결제 울타리: 살아 있는 결제(승인 진행 중·입금 대기·승인 완료)가 붙어 있으면 건드리지 않고,
-            #    아니면 결제를 expired 로 바꿔 이후의 승인 요청이 PaymentService 에서 거부되게 한다.
-            #    조건부 UPDATE 라 승인 요청이 먼저 in_progress 로 바꿨으면 0행이 갱신되고 아래 검사에 걸린다.
+            # 2. 취소 — 결제 울타리(살아 있는 결제면 거절, 아니면 결제를 expired 로)는 cancel_order 안에 있다.
+            #    고객 취소 버튼과 같은 울타리를 쓴다. 재고·포인트 복구도 cancel_order 가 한다.
             payments = Payment.objects.filter(order_id=order_id)
             previous_statuses = dict(payments.values_list("id", "status"))
-            payments.exclude(status__in=ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES).update(status="expired")
-            if payments.filter(status__in=ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES).exists():
+            try:
+                OrderService.cancel_order(order, closed_payment_status="expired")
+            except PaymentInProgressError:
                 raise _OrderNotExpirable("payment is live")
-
-            # 3. 취소 (재고·판매량·포인트 복구는 cancel_order 에 있음)
-            OrderService.cancel_order(order)
             Order.objects.filter(pk=order_id).update(failure_reason=ORDER_EXPIRED_FAILURE_REASON)
 
             for payment in payments:
@@ -394,9 +391,9 @@ def expire_unpaid_orders(self, timeout_minutes: int | None = None) -> dict:
     logger.info(f"미결제 주문 만료 검사 시작: timeout={timeout_minutes}분, cutoff={cutoff.isoformat()}")
 
     candidate_ids = list(
-        Order.objects.filter(status__in=ORDER_EXPIRABLE_STATUSES, created_at__lt=cutoff)
+        Order.objects.filter(status__in=ORDER_UNPAID_STATUSES, created_at__lt=cutoff)
         .filter(Exists(OrderItem.objects.filter(order_id=OuterRef("pk"))))
-        .exclude(payment__status__in=ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES)
+        .exclude(payment__status__in=LIVE_PAYMENT_STATUSES)
         .order_by("id")
         .values_list("id", flat=True)
     )

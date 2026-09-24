@@ -357,8 +357,22 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
                     "order_id": payment.order_id,
                 }
 
+            # 주문도 잠그고 본다 — 취소된 주문을 결제 완료로 되살리지 않는다. 주문 취소의 결제 울타리가 승인 중
+            # 취소를 막으므로 여기 걸리는 건 울타리 밖의 경합뿐이다. 토스는 청구했으니 결제는 사실대로 done 으로
+            # 남기고, 환불은 결제 취소로 한다(주문이 이미 canceled 면 cancel_payment 는 돈만 돌려준다) — 알림.
+            order = Order.objects.select_for_update().get(pk=payment.order_id)
             payment.mark_as_paid(toss_response)
-            order = payment.order
+            if order.status == "canceled":
+                PaymentLog.objects.create(
+                    payment=payment,
+                    log_type="error",
+                    message="취소된 주문의 결제가 승인됨 — 결제 취소로 환불 필요",
+                    data=toss_response,
+                )
+                logger.critical(f"취소된 주문의 결제 승인: payment_id={payment_id}, order_id={order.id} — 환불 필요")
+                canceled_order_id = order.id
+                transaction.on_commit(lambda: _alert_canceled_order_charged(payment_id, canceled_order_id))
+                return {"status": "order_canceled", "payment_id": payment_id, "order_id": order.id}
 
             # 2. 재고 차감 (sold_count만 증가, stock은 주문 생성 시 이미 차감)
             stock_start_time = time.time()
@@ -426,6 +440,19 @@ def finalize_payment_confirm(self, toss_response: dict, payment_id: int, user_id
         logger.critical(f"결제 최종 처리 재시도 소진 — 토스 승인분 미반영: payment_id={payment_id}")
         _alert_finalize_exhausted(payment_id, e)
         raise
+
+
+def _alert_canceled_order_charged(payment_id: int, order_id: int) -> None:
+    """취소된 주문에 청구된 결제를 critical 알림으로 남긴다 (환불은 사람이 결제 취소로)"""
+    try:
+        notify_payment_failure.delay(
+            order_id,
+            "canceled_order_charged",
+            details=f"payment_id={payment_id} 취소된 주문의 결제가 승인됨 — 결제 취소 API로 환불 필요",
+            severity="critical",
+        )
+    except Exception as notify_error:
+        logger.error(f"취소 주문 청구 알림 발행 실패: payment_id={payment_id}, error={str(notify_error)}")
 
 
 def _alert_finalize_exhausted(payment_id: int, error: Exception) -> None:

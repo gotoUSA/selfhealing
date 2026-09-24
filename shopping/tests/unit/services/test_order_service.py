@@ -251,8 +251,8 @@ class TestOrderServiceCancelOrder:
         product.refresh_from_db()
         assert product.stock == initial_stock
 
-    def test_cancel_paid_order(self):
-        """paid 상태 주문 취소 (sold_count도 차감)"""
+    def test_cancel_paid_order_is_refused(self):
+        """paid 주문은 cancel_order 가 받지 않는다 — 환불이 필요해 결제 취소로 간다 (cancel_by_customer)"""
         # Arrange
         user = UserFactory.with_points(10000)
         product = ProductFactory(stock=100)
@@ -277,16 +277,15 @@ class TestOrderServiceCancelOrder:
         initial_sold_count = product.sold_count
 
         # Act
-        OrderService.cancel_order(order)
+        with pytest.raises(OrderServiceError, match="결제 취소"):
+            OrderService.cancel_order(order)
 
-        # Assert
+        # Assert — 아무것도 안 움직였다
         order.refresh_from_db()
-        assert order.status == "canceled"
-
-        # 재고 복구 및 sold_count 차감 확인
+        assert order.status == "paid"
         product.refresh_from_db()
-        assert product.stock == initial_stock + 2
-        assert product.sold_count == initial_sold_count - 2
+        assert product.stock == initial_stock
+        assert product.sold_count == initial_sold_count
 
     def test_cancel_order_not_allowed(self):
         """취소 불가능한 주문 (shipped 상태)"""

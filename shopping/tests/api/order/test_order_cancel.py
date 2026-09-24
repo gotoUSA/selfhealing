@@ -8,7 +8,18 @@ from rest_framework import status
 from shopping.models.order import OrderItem
 from shopping.models.point import PointHistory
 from shopping.models.product import Product
-from shopping.tests.factories import PointHistoryFactory
+from shopping.tests.factories import PaymentFactory, PointHistoryFactory, TossResponseBuilder
+
+
+@pytest.fixture
+def toss_cancel(mocker):
+    """결제 완료 주문 취소는 토스 환불을 거친다 — 호출 횟수가 곧 환불 횟수"""
+    return mocker.patch(
+        "shopping.utils.toss_payment.TossPaymentClient.cancel_payment",
+        side_effect=lambda payment_key, cancel_reason, **kw: TossResponseBuilder.cancel_response(
+            payment_key=payment_key, cancel_reason=cancel_reason
+        ),
+    )
 
 
 @pytest.mark.django_db
@@ -34,9 +45,10 @@ class TestOrderCancelHappyPath:
         product.refresh_from_db()
         assert product.stock == initial_stock + 1
 
-    def test_cancel_paid_order(self, authenticated_client, paid_order, product):
-        """paid 상태 주문 취소 성공"""
+    def test_cancel_paid_order(self, authenticated_client, paid_order, product, toss_cancel):
+        """paid 상태 주문 취소 = 토스 환불 1회 + 결제 canceled (예전엔 환불 없이 주문만 취소됐다)"""
         # Arrange
+        payment = PaymentFactory.done(order=paid_order)
         initial_stock = product.stock
         url = reverse("order-cancel", kwargs={"pk": paid_order.id})
 
@@ -52,6 +64,11 @@ class TestOrderCancelHappyPath:
 
         product.refresh_from_db()
         assert product.stock == initial_stock + 1
+
+        toss_cancel.assert_called_once()
+        payment.refresh_from_db()
+        assert payment.status == "canceled"
+        assert response.data["refund_amount"] == int(payment.amount)
 
     def test_cancel_order_single_product_stock_restored(self, authenticated_client, user, product, order_factory):
         """단일 상품 주문 취소 시 재고 복구"""
@@ -123,7 +140,7 @@ class TestOrderCancelHappyPath:
         assert pending_order.status == "canceled"
         assert pending_order.can_cancel is False
 
-    def test_cancel_order_refunds_used_points(self, authenticated_client, user, product, order_factory):
+    def test_cancel_order_refunds_used_points(self, authenticated_client, user, product, order_factory, toss_cancel):
         """주문 취소 시 사용한 포인트 환불 확인"""
         # Arrange
         user.points = 3000
@@ -141,6 +158,7 @@ class TestOrderCancelHappyPath:
             used_points=2000,
             final_amount=product.price - Decimal("2000"),
         )
+        PaymentFactory.done(order=order)
         OrderItem.objects.create(
             order=order,
             product=product,
@@ -169,7 +187,7 @@ class TestOrderCancelHappyPath:
         assert refund_history is not None
         assert refund_history.points == 2000
 
-    def test_cancel_order_deducts_earned_points(self, authenticated_client, user, product, order_factory):
+    def test_cancel_order_deducts_earned_points(self, authenticated_client, user, product, order_factory, toss_cancel):
         """주문 취소 시 적립된 포인트 회수 확인"""
         # Arrange
         earned_points = 100
@@ -187,6 +205,7 @@ class TestOrderCancelHappyPath:
             total_amount=product.price,
             earned_points=earned_points,
         )
+        PaymentFactory.done(order=order)
         OrderItem.objects.create(
             order=order,
             product=product,
@@ -225,7 +244,9 @@ class TestOrderCancelHappyPath:
         assert deduct_history is not None
         assert deduct_history.points == -earned_points
 
-    def test_cancel_order_with_both_used_and_earned_points(self, authenticated_client, user, product, order_factory):
+    def test_cancel_order_with_both_used_and_earned_points(
+        self, authenticated_client, user, product, order_factory, toss_cancel
+    ):
         """주문 취소 시 사용 포인트 환불 + 적립 포인트 회수 동시 처리"""
         # Arrange
         used_points = 1000
@@ -246,6 +267,7 @@ class TestOrderCancelHappyPath:
             earned_points=earned_points,
             final_amount=product.price - Decimal(str(used_points)),
         )
+        PaymentFactory.done(order=order)
         OrderItem.objects.create(
             order=order,
             product=product,
@@ -519,9 +541,9 @@ class TestOrderCancelException:
         assert not Product.objects.filter(id=product_id).exists()
 
     def test_cancel_order_fails_with_insufficient_points_to_deduct(
-        self, authenticated_client, user, product, order_factory
+        self, authenticated_client, user, product, order_factory, toss_cancel
     ):
-        """적립 포인트 회수할 잔액 부족 시 취소 실패"""
+        """적립 포인트 회수할 잔액 부족 시 취소 실패 — 토스 환불을 부르기 전에 거절한다"""
         # Arrange
         earned_points = 500
         user.points = 100  # 회수해야 할 500P보다 적음
@@ -539,6 +561,7 @@ class TestOrderCancelException:
             total_amount=product.price,
             earned_points=earned_points,
         )
+        payment = PaymentFactory.done(order=order)
         OrderItem.objects.create(
             order=order,
             product=product,
@@ -565,6 +588,9 @@ class TestOrderCancelException:
         # Assert
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "포인트가 부족" in response.data["error"]
+        toss_cancel.assert_not_called()
+        payment.refresh_from_db()
+        assert payment.status == "done"
 
         # 롤백 확인: 주문 상태, 포인트, 재고 모두 원래대로
         order.refresh_from_db()

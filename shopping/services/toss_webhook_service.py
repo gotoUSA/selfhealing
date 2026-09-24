@@ -375,6 +375,18 @@ class TossWebhookService:
         if order.user and order.status in ["paid", "preparing"] and order.earned_points > 0:
             _reclaim_earned_points(order, payment, "주문 취소")
 
+        # 사용한 포인트 환불 — 결제 취소 버튼과 같은 결과가 되도록 (토스 대시보드 취소, 우리 쪽 롤백 뒤 도착한
+        # 취소 웹훅). 이미 canceled 인 주문은 위에서 건너뛰므로 두 번 환불되지 않는다
+        if order.user and order.status in ["confirmed", "paid", "preparing"] and order.used_points > 0:
+            PointService.add_points(
+                user=order.user,
+                amount=order.used_points,
+                type="cancel_refund",
+                order=order,
+                description=f"주문 #{order.order_number} 결제 취소로 인한 포인트 환불",
+                metadata={"order_id": order.id, "order_number": order.order_number, "source": "webhook"},
+            )
+
         # 주문 상태 변경
         order.status = "canceled"
         order.save(update_fields=["status", "updated_at"])

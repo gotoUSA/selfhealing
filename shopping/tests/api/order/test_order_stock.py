@@ -173,14 +173,21 @@ class TestOrderStockRestore:
         product.refresh_from_db()
         assert product.stock == initial_stock
 
-    def test_paid_order_cancel_restores_stock_and_sold_count(self, authenticated_client, user, product, order_factory):
-        """paid 상태 주문 취소 시 재고 복구 및 sold_count 차감"""
+    def test_paid_order_cancel_restores_stock_and_sold_count(self, authenticated_client, user, product, order_factory, mocker):
+        """paid 상태 주문 취소 시 토스 환불 + 재고 복구 및 sold_count 차감"""
+        from shopping.tests.factories import PaymentFactory, TossResponseBuilder
+
+        toss_cancel = mocker.patch(
+            "shopping.utils.toss_payment.TossPaymentClient.cancel_payment",
+            return_value=TossResponseBuilder.cancel_response(),
+        )
         # Arrange
         initial_stock = product.stock
         initial_sold_count = product.sold_count
         order_quantity = 2
 
         order = order_factory(user, status="paid", total_amount=product.price * order_quantity, payment_method="card")
+        PaymentFactory.done(order=order)
         OrderItem.objects.create(
             order=order,
             product=product,
@@ -211,6 +218,7 @@ class TestOrderStockRestore:
         product.refresh_from_db()
         assert product.stock == initial_stock
         assert product.sold_count == initial_sold_count
+        toss_cancel.assert_called_once()
 
     def test_multiple_products_cancel_restores_all_stock(self, authenticated_client, user, multiple_products, order_factory):
         """여러 상품 주문 취소 시 모든 재고 복구"""

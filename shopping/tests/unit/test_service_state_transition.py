@@ -54,8 +54,9 @@ class TestOrderCancelPipeline:
         assert product.stock == 10  # 재고 복구
         assert product.sold_count == 0  # sold_count는 유지
 
-    def test_cancel_paid_order_restores_stock_and_sold_count(self):
-        """paid 주문 취소 시 재고 + sold_count 모두 복구"""
+    @patch("shopping.utils.toss_payment.TossPaymentClient.cancel_payment", return_value={"status": "CANCELED", "cancels": []})
+    def test_cancel_paid_order_restores_stock_and_sold_count(self, toss_cancel):
+        """paid 주문 취소(고객 경로 = 결제 취소) 시 토스 환불 + 재고 + sold_count 모두 복구"""
         # Arrange
         user = UserFactory(is_email_verified=True)
         category = CategoryFactory()
@@ -63,6 +64,7 @@ class TestOrderCancelPipeline:
 
         # earned_points=0으로 설정하여 포인트 회수 로직 스킵
         order = OrderFactory.paid(user=user, total_amount=Decimal("10000"), earned_points=0)
+        PaymentFactory.done(order=order)
         OrderItemFactory(order=order, product=product, quantity=2, price=product.price)
 
         # 결제 완료 시 상태 시뮬레이션
@@ -71,7 +73,8 @@ class TestOrderCancelPipeline:
         product.save()
 
         # Act
-        OrderService.cancel_order(order)
+        OrderService.cancel_by_customer(order, user)
+        toss_cancel.assert_called_once()
 
         # Assert
         product.refresh_from_db()
@@ -119,7 +122,8 @@ class TestOrderCancelPipeline:
         assert refund_history is not None
         assert refund_history.points == 2000
 
-    def test_cancel_order_with_earned_points_deducts_points(self):
+    @patch("shopping.utils.toss_payment.TossPaymentClient.cancel_payment", return_value={"status": "CANCELED", "cancels": []})
+    def test_cancel_order_with_earned_points_deducts_points(self, toss_cancel):
         """적립 포인트 있는 주문 취소 시 적립 포인트 회수"""
         # Arrange
         user = UserFactory(is_email_verified=True, points=0)
@@ -136,6 +140,7 @@ class TestOrderCancelPipeline:
             total_amount=Decimal("50000"),
             earned_points=500,  # 1% 적립
         )
+        PaymentFactory.done(order=order)
         OrderItemFactory(order=order, product=product, quantity=1, price=product.price)
         product.stock = 9
         product.sold_count = 1
@@ -144,7 +149,7 @@ class TestOrderCancelPipeline:
         initial_points = user.points
 
         # Act
-        OrderService.cancel_order(order)
+        OrderService.cancel_by_customer(order, user)
 
         # Assert
         user.refresh_from_db()
@@ -182,7 +187,8 @@ class TestOrderCancelPipeline:
         with pytest.raises(OrderServiceError, match="취소할 수 없는 주문"):
             OrderService.cancel_order(order)
 
-    def test_cancel_paid_order_sold_count_not_negative(self):
+    @patch("shopping.utils.toss_payment.TossPaymentClient.cancel_payment", return_value={"status": "CANCELED", "cancels": []})
+    def test_cancel_paid_order_sold_count_not_negative(self, toss_cancel):
         """주문 취소 시 sold_count가 음수가 되지 않음"""
         # Arrange
         user = UserFactory(is_email_verified=True)
@@ -191,6 +197,7 @@ class TestOrderCancelPipeline:
 
         # paid 주문 생성 (earned_points=0 설정하여 포인트 회수 스킵)
         order = OrderFactory.paid(user=user, total_amount=Decimal("10000"), earned_points=0)
+        PaymentFactory.done(order=order)
         OrderItemFactory(order=order, product=product, quantity=5, price=product.price)
 
         # sold_count가 quantity보다 적은 비정상 상황 시뮬레이션
@@ -200,7 +207,7 @@ class TestOrderCancelPipeline:
         product.save()
 
         # Act
-        OrderService.cancel_order(order)
+        OrderService.cancel_by_customer(order, user)
 
         # Assert
         product.refresh_from_db()

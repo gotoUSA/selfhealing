@@ -6,14 +6,18 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import F
-from django.db.models.functions import Greatest
 
 from ..constants import (
+    LIVE_PAYMENT_CANCEL_MESSAGES,
+    LIVE_PAYMENT_STATUSES,
     LOCK_CONTENTION_CRITICAL_THRESHOLD,
     LOCK_CONTENTION_WARNING_THRESHOLD,
+    ORDER_UNPAID_STATUSES,
 )
 from ..models.cart import Cart
 from ..models.order import Order, OrderItem
+from ..models.payment import Payment
+from ..models.point import PointHistory
 from ..models.product import Product
 from .point_service import PointService
 from .shipping_service import ShippingService
@@ -25,6 +29,16 @@ class OrderServiceError(Exception):
     """주문 서비스 관련 에러"""
 
     pass
+
+
+class PaymentInProgressError(OrderServiceError):
+    """결제 전 주문이지만 결제가 살아 있어(승인 중·입금 대기·마감 대기) 취소할 수 없음"""
+
+    pass
+
+
+# 고객이 결제 완료 주문을 주문 취소 버튼으로 취소할 때 토스에 보내는 취소 사유
+CUSTOMER_ORDER_CANCEL_REASON = "고객 주문 취소"
 
 
 class OrderService:
@@ -406,68 +420,104 @@ class OrderService:
         logger.info(f"포인트 사용 완료: user_id={user.id}, order_id={order.id}, " f"use_points={use_points}")
 
     @staticmethod
-    @transaction.atomic
-    def cancel_order(order: Order) -> None:
+    def cancel_by_customer(order: Order, user) -> dict:
         """
-        주문 취소 처리
+        고객의 주문 취소 요청 — 결제 상태에 따라 경로를 가른다
 
-        주문 상태를 취소로 변경하고, 재고를 복구합니다.
-        - pending 상태: 재고만 복구
-        - paid 상태: 재고 복구 + sold_count 차감
+        - 결제 전(pending/confirmed): cancel_order — 재고·쓴 포인트 복구, 붙어 있는 결제는 닫는다
+        - 결제 완료(paid): PaymentService.cancel_payment — 토스 환불 + 재고·판매량·포인트 복구
+          (주문 취소 버튼이 환불 없이 주문만 취소하던 경로를 막는다)
+
+        상태는 락 없이 읽어 경로만 고른다. 그 사이 결제가 끝나 paid 가 됐으면 cancel_order 가 락 안에서
+        다시 보고 거절하므로(다시 시도하면 환불 경로로 간다) 환불 없는 취소는 생기지 않는다.
+
+        Returns:
+            {"refunded": bool, "refund_amount": int}
+
+        Raises:
+            OrderServiceError: 취소할 수 없는 주문 (결제가 살아 있으면 PaymentInProgressError)
+        """
+        if order.status == "paid":
+            from .payment_service import PaymentCancelError, PaymentService
+
+            payment = Payment.objects.filter(order_id=order.pk).first()
+            if payment is None:
+                raise OrderServiceError("결제 정보를 찾을 수 없습니다.")
+            try:
+                result = PaymentService.cancel_payment(
+                    payment_id=payment.id, user=user, cancel_reason=CUSTOMER_ORDER_CANCEL_REASON
+                )
+            except PaymentCancelError as e:
+                raise OrderServiceError(str(e)) from e
+            return {"refunded": True, "refund_amount": int(result["canceled_amount"])}
+
+        OrderService.cancel_order(order)
+        return {"refunded": False, "refund_amount": 0}
+
+    @staticmethod
+    @transaction.atomic
+    def cancel_order(order: Order, closed_payment_status: str = "canceled") -> None:
+        """
+        결제 전 주문 취소
+
+        재고와 쓴 포인트를 되돌리고 붙어 있는 결제를 닫는다. 결제 완료 주문은 환불이 필요해서 받지 않는다
+        (고객 요청은 cancel_by_customer 가 PaymentService.cancel_payment 로 보낸다).
+
+        결제 울타리: 결제가 살아 있으면(승인 중·입금 대기·마감 대기) 취소하지 않는다 — 승인 응답이 도착하면
+        결제 마감이 취소된 주문을 결제 완료로 되살리기 때문이다. 아니면 결제를 closed_payment_status 로 먼저
+        바꿔서 뒤이은 승인 요청이 PaymentService 에서 거부되게 한다. 조건부 UPDATE 라 승인 요청이 먼저
+        in_progress 로 바꿨으면 0행이 갱신되고 아래 검사에 걸린다. 고객 버튼과 만료 배치
+        (closed_payment_status="expired")가 같은 울타리를 쓴다.
 
         Args:
             order: 취소할 주문
+            closed_payment_status: 붙어 있는 (살아 있지 않은) 결제를 바꿀 상태
 
         Raises:
-            OrderServiceError: 취소할 수 없는 주문인 경우
+            OrderServiceError: 결제 전 상태가 아닌 주문
+            PaymentInProgressError: 결제가 살아 있는 주문
         """
-        # 동시성 제어: 주문 잠금 (select_for_update)
+        # 동시성 제어: 주문 잠금 — 상태 검사는 반드시 락 안에서 (두 번 눌러도 한 번만)
         order = Order.objects.select_for_update().get(pk=order.pk)
 
-        # 트랜잭션 내에서 취소 가능 여부 체크
-        if not order.can_cancel:
+        if order.status not in ORDER_UNPAID_STATUSES:
             logger.warning(
                 f"취소 불가능한 주문 취소 시도: order_id={order.id}, " f"status={order.status}, user_id={order.user.id}"
             )
+            if order.status == "paid":
+                raise OrderServiceError("결제가 완료된 주문은 결제 취소(환불)로 취소해야 합니다.")
             raise OrderServiceError("취소할 수 없는 주문입니다.")
+
+        # 결제 울타리
+        payments = Payment.objects.filter(order_id=order.pk)
+        payments.exclude(status__in=LIVE_PAYMENT_STATUSES).update(status=closed_payment_status)
+        live_status = payments.filter(status__in=LIVE_PAYMENT_STATUSES).values_list("status", flat=True).first()
+        if live_status:
+            logger.warning(f"결제가 살아 있어 주문 취소 거절: order_id={order.id}, payment_status={live_status}")
+            raise PaymentInProgressError(LIVE_PAYMENT_CANCEL_MESSAGES[live_status])
 
         logger.info(
             f"주문 취소 시작: order_id={order.id}, order_number={order.order_number}, "
             f"status={order.status}, user_id={order.user.id}"
         )
 
-        # 주문 상태에 따라 재고/sold_count 복구
+        # 재고 복구 (결제 전이라 sold_count 는 아직 안 올렸다; 처리 전 pending 이면 아이템이 없어 할 일도 없다)
         for item in order.order_items.select_for_update():
             if item.product:
-                if order.status == "paid":
-                    # paid 상태: 재고 복구 + sold_count 차감 (음수 방지)
-                    Product.objects.filter(pk=item.product.pk).update(
-                        stock=F("stock") + item.quantity,
-                        sold_count=Greatest(F("sold_count") - item.quantity, 0),
-                    )
-                    logger.info(
-                        f"재고 및 판매량 복구: product_id={item.product.pk}, "
-                        f"product_name={item.product_name}, quantity={item.quantity}"
-                    )
-                elif order.status in ["pending", "confirmed"]:
-                    # pending/confirmed 상태: 재고만 복구 (sold_count는 아직 증가 안했음)
-                    Product.objects.filter(pk=item.product.pk).update(stock=F("stock") + item.quantity)
-                    logger.info(
-                        f"재고 복구: product_id={item.product.pk}, "
-                        f"product_name={item.product_name}, quantity={item.quantity}"
-                    )
+                Product.objects.filter(pk=item.product.pk).update(stock=F("stock") + item.quantity)
+                logger.info(
+                    f"재고 복구: product_id={item.product.pk}, " f"product_name={item.product_name}, quantity={item.quantity}"
+                )
 
         # 주문 상태 변경
         order.status = "canceled"
         order.save(update_fields=["status", "updated_at"])
 
-        # 포인트 처리
+        # 사용한 포인트 환불 — 실제로 차감된 경우만. 비동기 경로는 주문 처리 태스크가 포인트를 차감하므로,
+        # 처리 전에 취소된 pending 주문에는 used_points 가 적혀 있어도 차감 이력이 없다.
         user = order.user
         points_refunded = 0
-        points_deducted = 0
-
-        # 사용한 포인트 환불
-        if order.used_points > 0:
+        if order.used_points > 0 and PointHistory.objects.filter(order=order, type="use").exists():
             points_refunded = order.used_points
             logger.info(f"포인트 환불 시작: user_id={user.id}, order_id={order.id}, " f"points={points_refunded}")
 
@@ -485,41 +535,7 @@ class OrderService:
 
             logger.info(f"포인트 환불 완료: user_id={user.id}, points={points_refunded}")
 
-        # 적립된 포인트 회수
-        if order.earned_points > 0:
-            user.refresh_from_db()
-            if user.points < order.earned_points:
-                logger.warning(
-                    f"포인트 부족으로 주문 취소 불가: user_id={user.id}, "
-                    f"required={order.earned_points}, available={user.points}"
-                )
-                raise OrderServiceError(
-                    f"포인트가 부족하여 주문을 취소할 수 없습니다. " f"(필요: {order.earned_points}P, 보유: {user.points}P)"
-                )
-
-            points_deducted = order.earned_points
-            logger.info(f"적립 포인트 차감 시작: user_id={user.id}, order_id={order.id}, " f"points={points_deducted}")
-
-            point_service = PointService()
-            result = point_service.use_points_fifo(
-                user=user,
-                amount=points_deducted,
-                type="cancel_deduct",
-                order=order,
-                description=f"주문 #{order.order_number} 취소로 인한 적립 포인트 회수",
-                metadata={
-                    "order_id": order.id,
-                    "order_number": order.order_number,
-                },
-            )
-
-            if not result["success"]:
-                raise OrderServiceError(f"포인트 회수 실패: {result['message']}")
-
-            logger.info(f"적립 포인트 차감 완료: user_id={user.id}, points={points_deducted}")
-
         logger.info(
             f"주문 취소 완료: order_id={order.id}, order_number={order.order_number}, "
-            f"user_id={order.user.id}, points_refunded={points_refunded}, "
-            f"points_deducted={points_deducted}"
+            f"user_id={order.user.id}, points_refunded={points_refunded}"
         )

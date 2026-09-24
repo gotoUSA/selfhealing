@@ -66,6 +66,7 @@ class OrderCancelResponseSerializer(drf_serializers.Serializer):
     """주문 취소 성공 응답"""
 
     message = drf_serializers.CharField()
+    refund_amount = drf_serializers.IntegerField(help_text="토스로 환불한 금액 (결제 전 주문은 0)")
 
 
 class OrderErrorResponseSerializer(drf_serializers.Serializer):
@@ -295,9 +296,8 @@ class OrderViewSet(viewsets.ModelViewSet):
         },
         summary="주문을 취소한다.",
         description="""처리 내용:
-- 배송 전 상태의 주문을 취소한다.
-- 사용한 포인트를 환불한다.
-- 재고를 복구한다.""",
+- 결제 전 주문: 재고와 사용한 포인트를 되돌리고 결제를 닫는다. 결제 승인이 진행 중이면 거절한다.
+- 결제 완료 주문: 결제 취소와 같다 — 토스로 환불하고 재고·판매량·포인트를 되돌린다.""",
         tags=["Orders"],
     )
     @action(detail=True, methods=["post"])
@@ -306,9 +306,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
 
         try:
-            OrderService.cancel_order(order)
-            logger.info(f"주문 취소 성공: order_id={order.id}, order_number={order.order_number}, user_id={request.user.id}")
-            return Response({"message": "주문이 취소되었습니다."})
+            result = OrderService.cancel_by_customer(order, request.user)
+            logger.info(
+                f"주문 취소 성공: order_id={order.id}, order_number={order.order_number}, user_id={request.user.id}, "
+                f"refund_amount={result['refund_amount']}"
+            )
+            return Response({"message": "주문이 취소되었습니다.", "refund_amount": result["refund_amount"]})
         except OrderServiceError as e:
             logger.warning(f"주문 취소 실패: order_id={order.id}, user_id={request.user.id}, error={str(e)}")
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)

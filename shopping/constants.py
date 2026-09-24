@@ -12,15 +12,23 @@ LOCK_CONTENTION_WARNING_THRESHOLD = 1.0  # 초
 LOCK_CONTENTION_CRITICAL_THRESHOLD = 3.0  # 초
 
 
-# ==================== 미결제 주문 만료 ====================
-# 이 상태의 주문만 만료 대상 (재고를 점유한 채 결제를 기다리는 상태)
-ORDER_EXPIRABLE_STATUSES = frozenset(["pending", "confirmed"])
+# ==================== 주문 취소 · 미결제 주문 만료 ====================
+# 결제 전 주문 — 재고를 점유한 채 결제를 기다리는 상태. OrderService.cancel_order 가 직접 취소하는 것도,
+# 만료 배치가 만료시키는 것도 이 상태뿐이다 (결제 완료 주문은 환불이 필요해 PaymentService.cancel_payment 로 간다)
+ORDER_UNPAID_STATUSES = frozenset(["pending", "confirmed"])
 
-# 결제가 이 상태이면 주문을 만료시키지 않는다
-# - in_progress: 승인 API 호출 중 (취소하면 승인된 결제가 고아가 됨)
+# 결제가 이 상태이면 결제 전 주문이라도 취소·만료시키지 않는다 (고객 버튼과 만료 배치가 같은 울타리를 쓴다)
+# - in_progress: 승인 API 호출 중 (취소하면 승인 응답이 취소된 주문을 결제 완료로 되살린다)
 # - waiting_for_deposit: 가상계좌 입금 대기 (입금 기한은 PG가 관리)
 # - done: 승인 완료, 최종 처리(finalize) 대기 중
-ORDER_EXPIRY_PROTECTED_PAYMENT_STATUSES = frozenset(["in_progress", "waiting_for_deposit", "done"])
+LIVE_PAYMENT_STATUSES = frozenset(["in_progress", "waiting_for_deposit", "done"])
+
+# 살아 있는 결제 때문에 고객 취소를 거절할 때의 안내 (결제 상태별)
+LIVE_PAYMENT_CANCEL_MESSAGES = {
+    "in_progress": "결제 승인이 진행 중입니다. 잠시 후 다시 시도해주세요.",
+    "done": "결제 승인이 진행 중입니다. 잠시 후 다시 시도해주세요.",
+    "waiting_for_deposit": "가상계좌 입금 대기 중인 주문은 입금 기한이 지나면 자동으로 취소됩니다.",
+}
 
 # 만료된 주문에 기록하는 실패 사유
 ORDER_EXPIRED_FAILURE_REASON = "결제 시간 초과"
