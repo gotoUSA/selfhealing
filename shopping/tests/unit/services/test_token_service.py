@@ -269,3 +269,85 @@ class TestBlacklistToken:
             TokenService.validate_and_refresh_token(str(refresh))
 
         assert exc_info.value.code == "TOKEN_BLACKLISTED"
+
+
+@pytest.mark.django_db
+class TestRefreshRotationBookkeeping:
+    """회전: 제출된 토큰 차지 · 새 토큰 등록 · 계정 상태 확인"""
+
+    def test_rotated_refresh_token_is_registered_as_outstanding(self):
+        """회전으로 발급한 새 refresh 토큰도 발급 목록에 있어야 전체 무효화가 찾는다"""
+        from rest_framework_simplejwt.token_blacklist.models import OutstandingToken
+
+        # Arrange
+        user = UserFactory()
+
+        # Act
+        result = TokenService.validate_and_refresh_token(str(RefreshToken.for_user(user)))
+
+        # Assert
+        new_jti = RefreshToken(result.refresh_token)["jti"]
+        assert OutstandingToken.objects.filter(jti=new_jti, user=user).exists()
+
+    def test_lost_claim_issues_no_new_token(self):
+        """같은 토큰을 다른 요청이 먼저 회전시켰으면(블랙리스트 행을 못 만들면) 새 토큰을 주지 않는다"""
+        # Arrange
+        user = UserFactory()
+        refresh = RefreshToken.for_user(user)
+
+        # Act & Assert
+        with patch.object(RefreshToken, "blacklist", return_value=(None, False)):
+            with pytest.raises(TokenServiceError) as exc_info:
+                TokenService.validate_and_refresh_token(str(refresh))
+
+        assert exc_info.value.code == "TOKEN_BLACKLISTED"
+
+    def test_refresh_rejected_for_inactive_user(self):
+        """탈퇴·비활성 계정의 refresh 토큰으로는 새 토큰을 받을 수 없다"""
+        # Arrange
+        user = UserFactory()
+        refresh = RefreshToken.for_user(user)
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+
+        # Act & Assert
+        with pytest.raises(TokenServiceError) as exc_info:
+            TokenService.validate_and_refresh_token(str(refresh))
+
+        assert exc_info.value.code == "USER_INACTIVE"
+
+
+@pytest.mark.django_db
+class TestRevokeAllForUser:
+    """비밀번호 변경·재설정·탈퇴용 전체 무효화"""
+
+    def test_revokes_login_and_rotated_tokens(self):
+        """로그인으로 받은 토큰과 회전으로 받은 토큰이 모두 무효화된다"""
+        # Arrange
+        user = UserFactory()
+        login_token = str(RefreshToken.for_user(user))
+        rotated = TokenService.validate_and_refresh_token(str(RefreshToken.for_user(user))).refresh_token
+
+        # Act
+        TokenService.revoke_all_for_user(user)
+
+        # Assert
+        for token in (login_token, rotated):
+            with pytest.raises(TokenServiceError):
+                TokenService.validate_and_refresh_token(token)
+
+    def test_keeps_the_given_token(self):
+        """keep_refresh_token으로 넘긴 토큰(비밀번호를 바꾼 현재 기기)만 남는다"""
+        # Arrange
+        user = UserFactory()
+        other_device = str(RefreshToken.for_user(user))
+        this_device = str(RefreshToken.for_user(user))
+
+        # Act
+        revoked = TokenService.revoke_all_for_user(user, keep_refresh_token=this_device)
+
+        # Assert
+        assert revoked == 1
+        assert TokenService.validate_and_refresh_token(this_device).access_token
+        with pytest.raises(TokenServiceError):
+            TokenService.validate_and_refresh_token(other_device)

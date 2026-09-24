@@ -3,6 +3,8 @@ from django.utils import timezone
 
 import pytest
 from rest_framework import status
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
 from rest_framework_simplejwt.tokens import RefreshToken
 
 
@@ -411,3 +413,26 @@ class TestWithdrawalSecurity:
 
         # Assert - 실패해야 함
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+class TestWithdrawalRevokesRotatedTokens:
+    """탈퇴 시 회전으로 받은 refresh 토큰까지 무효화"""
+
+    def test_rotated_refresh_blacklisted_after_withdrawal(self, api_client, user):
+        """로그인 → 갱신 1회(회전) → 탈퇴: 회전된 토큰도 블랙리스트에 있고 갱신이 거부된다"""
+        # Arrange
+        login = api_client.post(reverse("auth-login"), {"username": "testuser", "password": "testpass123"})
+        rotated = APIClient().post(reverse("token-refresh"), {"refresh": login.cookies["refresh_token"].value}, format="json")
+        rotated_refresh = rotated.cookies["refresh_token"].value
+
+        # Act
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {login.data['token']['access']}")
+        response = api_client.post(reverse("user-withdraw"), {"password": "testpass123"}, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+        # Assert
+        jti = RefreshToken(rotated_refresh, verify=False)["jti"]
+        assert BlacklistedToken.objects.filter(token__jti=jti).exists()
+        after = APIClient().post(reverse("token-refresh"), {"refresh": rotated_refresh}, format="json")
+        assert after.status_code == status.HTTP_401_UNAUTHORIZED

@@ -297,37 +297,36 @@
 
         function generateState(provider) {
             // state에 provider 정보 포함 (콜백에서 사용)
-            const random = Math.random().toString(36).substring(2, 15);
+            const bytes = new Uint8Array(16);
+            crypto.getRandomValues(bytes);
+            const random = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
             const state = provider + '_' + random;
             sessionStorage.setItem('oauth_state', state);
+            // 콜백이 서버에서 state를 대조할 수 있게 쿠키로도 심는다 (콜백 경로에만 전송)
+            document.cookie = 'oauth_state=' + state + '; path=/api/social/callback/; max-age=600; SameSite=Lax';
             return state;
         }
 
-        // URL 파라미터에서 토큰 확인 (리다이렉트 후)
+        // URL 조각(#)에서 access 토큰 확인 (리다이렉트 후) — refresh 토큰은 HttpOnly 쿠키로 받음
         window.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const access = urlParams.get('access_token');
-            const refresh = urlParams.get('refresh_token');
+            const hashParams = new URLSearchParams(window.location.hash.substring(1));
+            const access = hashParams.get('access_token');
 
             if (access) {
-                // 토큰을 localStorage에 저장
                 localStorage.setItem('access_token', access);
-                if (refresh) {
-                    localStorage.setItem('refresh_token', refresh);
-                }
 
                 showResponse({
                     success: true,
                     message: '🎉 로그인 성공!',
                     access_token: access,
-                    refresh_token: refresh,
-                    tip: 'localStorage에 토큰이 저장되었습니다.'
+                    tip: 'access token은 localStorage에, refresh token은 HttpOnly 쿠키에 저장되었습니다.'
                 });
 
-                // URL에서 토큰 파라미터 제거 (보안)
+                // URL에서 토큰 조각 제거
                 window.history.replaceState({}, document.title, window.location.pathname);
             }
 
+            const urlParams = new URLSearchParams(window.location.search);
             const error = urlParams.get('error');
             if (error) {
                 const errorDesc = urlParams.get('error_description') || '알 수 없는 오류';

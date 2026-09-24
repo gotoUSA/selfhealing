@@ -2,6 +2,7 @@ from django.urls import reverse
 
 import pytest
 from rest_framework import status
+from rest_framework.test import APIClient
 
 
 @pytest.mark.django_db
@@ -503,3 +504,41 @@ class TestPasswordChangeEdgeCases:
 
         # Assert
         assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.django_db
+class TestPasswordChangeRevokesOtherSessions:
+    """비밀번호 변경 시 다른 기기의 refresh 토큰 무효화"""
+
+    CHANGE = {"old_password": "testpass123", "new_password": "ChangedPassword999!", "new_password2": "ChangedPassword999!"}
+
+    def test_other_device_refresh_rejected_after_password_change(self, api_client, user):
+        """기기 B에서 비밀번호를 바꾸면 기기 A의 refresh 토큰은 새 토큰을 받지 못한다"""
+        # Arrange - 기기 A, 기기 B 각각 로그인
+        login_url = reverse("auth-login")
+        a_login = APIClient().post(login_url, {"username": "testuser", "password": "testpass123"})
+        a_refresh = a_login.cookies["refresh_token"].value
+        b_login = api_client.post(login_url, {"username": "testuser", "password": "testpass123"})
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {b_login.data['token']['access']}")
+
+        # Act - 기기 B가 비밀번호 변경
+        response = api_client.post(reverse("user-password-change"), self.CHANGE, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+        # Assert
+        a_after = APIClient().post(reverse("token-refresh"), {"refresh": a_refresh}, format="json")
+        assert a_after.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_changing_device_keeps_its_refresh_token(self, api_client, user):
+        """비밀번호를 바꾼 기기는 쿠키의 refresh 토큰으로 계속 갱신할 수 있다"""
+        # Arrange - 로그인 (api_client가 refresh_token 쿠키를 보관)
+        b_login = api_client.post(reverse("auth-login"), {"username": "testuser", "password": "testpass123"})
+        api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {b_login.data['token']['access']}")
+
+        # Act
+        response = api_client.post(reverse("user-password-change"), self.CHANGE, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+        # Assert
+        b_after = api_client.post(reverse("token-refresh"), {}, format="json")
+        assert b_after.status_code == status.HTTP_200_OK

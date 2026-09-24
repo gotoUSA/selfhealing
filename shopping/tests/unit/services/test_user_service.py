@@ -13,7 +13,7 @@ import pytest
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from shopping.models.email_verification import EmailLog, EmailVerificationToken
-from shopping.services.user_service import UserService
+from shopping.services.user_service import UserService, UserServiceError
 from shopping.tests.factories import EmailVerificationTokenFactory, UserFactory
 
 
@@ -790,3 +790,42 @@ class TestUserServiceGenerateUniqueUsername:
 
         # Assert - 사용 가능한 다음 번호(3)가 붙어야 함
         assert username == "multi_kakao_3"
+
+
+@pytest.mark.django_db
+class TestProcessSocialLoginAccountLinking:
+    """소셜 콜백 경로의 기존 계정 연결 규칙 (어댑터 경로와 같은 규칙)"""
+
+    def test_unverified_local_account_is_not_logged_in(self):
+        """이메일 인증을 안 한 일반 계정에는 이메일이 같다는 이유만으로 로그인시키지 않는다"""
+        # Arrange
+        local = UserFactory(email="unverified_local@social.test", is_email_verified=False)
+
+        # Act & Assert
+        with pytest.raises(UserServiceError) as exc_info:
+            UserService.process_social_login("google", {"email": local.email, "provider_id": "g-1", "name": "x"})
+
+        assert exc_info.value.code == "EMAIL_NOT_VERIFIED"
+
+    def test_inactive_account_is_not_logged_in(self):
+        """탈퇴·비활성 계정에는 소셜 로그인으로 토큰을 발급하지 않는다"""
+        # Arrange
+        user = UserFactory(email="inactive@social.test", is_active=False)
+
+        # Act & Assert
+        with pytest.raises(UserServiceError) as exc_info:
+            UserService.process_social_login("google", {"email": user.email, "provider_id": "g-2"})
+
+        assert exc_info.value.code == "ACCOUNT_INACTIVE"
+
+    def test_verified_local_account_is_logged_in(self):
+        """이메일 인증을 마친 계정에는 연결된다"""
+        # Arrange
+        local = UserFactory(email="verified_local@social.test", is_email_verified=True)
+
+        # Act
+        result = UserService.process_social_login("google", {"email": local.email, "provider_id": "g-3"})
+
+        # Assert
+        assert result.user.pk == local.pk
+        assert result.is_new_user is False

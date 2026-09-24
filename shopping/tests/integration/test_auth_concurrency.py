@@ -311,18 +311,18 @@ class TestRefreshTokenConcurrency:
     Purpose:
         동일 Refresh Token으로 동시 갱신 시 race condition 검증
     Note:
-        SimpleJWT는 select_for_update를 사용하지 않아 race condition 발생 가능
-        실무에서는 Redis 기반 TokenBlacklist 권장
+        회전은 제출된 토큰의 블랙리스트 행을 만든 요청 하나만 새 토큰을 받는다
+        (행의 유일 제약이 판정 — 확인 후 등록 사이의 틈을 두지 않는다)
     """
 
-    def test_concurrent_refresh_at_least_one_succeeds(self):
+    def test_concurrent_refresh_exactly_one_succeeds(self):
         """
         Purpose:
-            동일 Refresh Token 동시 갱신 시 최소 1개 성공
+            동일 Refresh Token 동시 갱신 시 정확히 1개만 새 토큰을 받는다
         Scenario:
-            5개 스레드가 동일 refresh token으로 갱신 시도
+            5개 스레드가 동일 refresh token으로 동시에 갱신 시도
         Expected:
-            1~5개 성공 (SimpleJWT 라이브러리 제약)
+            200은 1개, 나머지는 401 — 한 번 쓴 토큰에서 살아 있는 refresh 계보는 하나뿐
         """
         if not settings.SIMPLE_JWT.get("ROTATE_REFRESH_TOKENS"):
             pytest.skip("ROTATE_REFRESH_TOKENS가 비활성화됨")
@@ -333,15 +333,16 @@ class TestRefreshTokenConcurrency:
         refresh_token_str = str(refresh)
         refresh_url = reverse("token-refresh")
         concurrent_count = 5
+        barrier = threading.Barrier(concurrent_count)
 
         def refresh_thread(**kwargs):
             client = APIClient()
             try:
+                barrier.wait(timeout=10)
                 response = client.post(refresh_url, {"refresh": refresh_token_str}, format="json")
                 return {
                     "status": response.status_code,
                     "success": response.status_code == status.HTTP_200_OK,
-                    "new_access": response.data.get("access") if response.status_code == status.HTTP_200_OK else None,
                 }
             except Exception as e:
                 return {"error": str(e)}
@@ -350,8 +351,11 @@ class TestRefreshTokenConcurrency:
         results = concurrent_api_call(refresh_thread, concurrent_count)
 
         # Assert
-        success_count = sum(1 for r in results if r.get("success"))
-        assert 1 <= success_count <= concurrent_count, f"1-{concurrent_count}개 성공 가능. 실제: {success_count}"
+        assert not [r for r in results if "error" in r], results
+        statuses = sorted(r["status"] for r in results)
+        assert statuses == [status.HTTP_200_OK] + [status.HTTP_401_UNAUTHORIZED] * (
+            concurrent_count - 1
+        ), f"정확히 1개만 성공해야 함. 실제: {statuses}"
 
         close_db_connections()
 

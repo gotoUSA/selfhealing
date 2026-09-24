@@ -18,6 +18,8 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from shopping.services.token_service import TokenService
+
 if TYPE_CHECKING:
     from shopping.models.user import User
 
@@ -239,11 +241,6 @@ class UserService:
         Returns:
             WithdrawResult: 탈퇴 처리 결과
         """
-        from rest_framework_simplejwt.token_blacklist.models import (
-            BlacklistedToken,
-            OutstandingToken,
-        )
-
         logger.info(f"회원 탈퇴 처리 시작: user_id={user.id}, username={user.username}")
 
         with transaction.atomic():
@@ -254,20 +251,10 @@ class UserService:
             user.save(update_fields=["is_withdrawn", "withdrawn_at", "is_active"])
             logger.info(f"사용자 탈퇴 상태 변경 완료: user_id={user.id}")
 
-            # 2. 모든 JWT 토큰 무효화
-            outstanding_tokens = OutstandingToken.objects.filter(user=user)
-            invalidated_count = 0
+            # 2. 모든 JWT 토큰 무효화 (로그인·회전으로 발급한 살아 있는 refresh 토큰 전부)
+            invalidated_count = TokenService.revoke_all_for_user(user)
 
-            for outstanding_token in outstanding_tokens:
-                # 이미 블랙리스트에 없는 토큰만 추가
-                _, created = BlacklistedToken.objects.get_or_create(token=outstanding_token)
-                if created:
-                    invalidated_count += 1
-
-            logger.info(
-                f"JWT 토큰 무효화 완료: user_id={user.id}, "
-                f"total={outstanding_tokens.count()}, invalidated={invalidated_count}"
-            )
+            logger.info(f"JWT 토큰 무효화 완료: user_id={user.id}, invalidated={invalidated_count}")
 
         return WithdrawResult(
             success=True,
@@ -285,6 +272,8 @@ class UserService:
 
         비즈니스 로직:
         1. 이메일로 기존 사용자 확인
+           - 탈퇴·비활성 계정은 거부
+           - 이메일 인증을 마쳤거나 소셜 계정이 연결된 계정에만 로그인 (어댑터와 같은 규칙)
         2. 없으면 새 사용자 생성
         3. JWT 토큰 발급
 
@@ -324,6 +313,21 @@ class UserService:
         is_new_user = False
         try:
             user = User.objects.get(email=email)
+
+            if not user.is_active:
+                logger.warning(f"비활성 계정 소셜 로그인 거부: user_id={user.id} via {provider}")
+                raise UserServiceError("탈퇴했거나 비활성화된 계정입니다.", code="ACCOUNT_INACTIVE")
+
+            # 미인증 일반 계정에는 이메일이 같다는 이유만으로 로그인시키지 않는다
+            # (CustomSocialAccountAdapter.pre_social_login과 같은 연결 규칙)
+            if not (user.is_email_verified or user.socialaccount_set.exists()):
+                logger.warning(f"미인증 계정 소셜 로그인 거부: user_id={user.id} via {provider}")
+                raise UserServiceError(
+                    "이 이메일로 가입된 계정이 있지만 이메일 인증이 되어 있지 않습니다. "
+                    "기존 계정으로 로그인해 이메일 인증을 마친 뒤 다시 시도해주세요.",
+                    code="EMAIL_NOT_VERIFIED",
+                )
+
             # 기존 사용자 로그인 시간 업데이트
             user.last_login = timezone.now()
             user.save(update_fields=["last_login"])

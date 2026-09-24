@@ -6,6 +6,7 @@ from django.utils import timezone
 
 import pytest
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from shopping.models.password_reset import PasswordResetToken
 
@@ -458,3 +459,24 @@ class TestPasswordResetBoundary:
 
         # Assert - 성공해야 함
         assert response.status_code == status.HTTP_200_OK
+
+
+@pytest.mark.django_db
+class TestPasswordResetRevokesSessions:
+    """비밀번호 재설정 시 기존 로그인 무효화"""
+
+    def test_existing_refresh_rejected_after_reset(self, api_client, user, password_reset_confirm_data_factory):
+        """재설정 전에 로그인해 둔 기기의 refresh 토큰은 새 토큰을 받지 못한다"""
+        # Arrange - 기존 기기 로그인
+        login = APIClient().post(reverse("auth-login"), {"username": "testuser", "password": "testpass123"})
+        old_refresh = login.cookies["refresh_token"].value
+
+        # Act - 비밀번호 재설정
+        raw_token = PasswordResetToken.generate_token(user=user)
+        data = password_reset_confirm_data_factory(token=raw_token)
+        response = api_client.post(reverse("password-reset-confirm"), data, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+        # Assert
+        after = APIClient().post(reverse("token-refresh"), {"refresh": old_refresh}, format="json")
+        assert after.status_code == status.HTTP_401_UNAUTHORIZED

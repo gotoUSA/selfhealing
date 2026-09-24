@@ -136,6 +136,7 @@ class PasswordResetService:
         1. 비밀번호 변경
         2. 토큰 사용 처리 (is_used=True, used_at 설정)
         3. EmailLog 상태 업데이트
+        4. 기존 로그인(Refresh Token) 전체 무효화
 
         Args:
             user: 비밀번호를 변경할 사용자
@@ -169,6 +170,12 @@ class PasswordResetService:
 
             if updated_count > 0:
                 logger.debug(f"EmailLog 업데이트 완료: count={updated_count}")
+
+            # 4. 기존 로그인 무효화 ("새 비밀번호로 로그인해주세요" 안내와 실제 상태를 맞춘다)
+            from shopping.services.token_service import TokenService
+
+            revoked = TokenService.revoke_all_for_user(user)
+            logger.info(f"비밀번호 재설정 후 기존 로그인 무효화: user_id={user.id}, count={revoked}")
 
         logger.info(f"비밀번호 재설정 확인 완료: user_id={user.id}")
 

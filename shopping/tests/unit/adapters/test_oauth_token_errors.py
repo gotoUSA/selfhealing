@@ -16,6 +16,8 @@ from shopping.views.social_auth_views import SocialCallbackView
 def _create_mock_request(code="test_auth_code", state="google_abc123", error=None):
     mock_request = Mock()
     mock_request.GET = {"code": code, "state": state}
+    # 로그인을 시작한 브라우저가 심어 둔 state 쿠키 (콜백이 GET의 state와 대조)
+    mock_request.COOKIES = {"oauth_state": state}
     if error:
         mock_request.GET["error"] = error
         mock_request.GET["error_description"] = f"{error} description"

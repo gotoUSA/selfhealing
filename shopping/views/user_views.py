@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, serializers as drf_serializers, status
 from rest_framework.decorators import api_view, permission_classes
@@ -11,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from shopping.serializers.user_serializers import PasswordChangeSerializer, UserSerializer
+from shopping.services.token_service import TokenService
 from shopping.services.user_service import UserService, UserServiceError
 
 logger = logging.getLogger(__name__)
@@ -133,13 +135,20 @@ class PasswordChangeView(APIView):
         summary="비밀번호를 변경한다.",
         description="""처리 내용:
 - 현재 비밀번호를 확인한다.
-- 새 비밀번호로 변경한다.""",
+- 새 비밀번호로 변경한다.
+- 다른 기기의 로그인(Refresh Token)을 모두 무효화한다. 요청한 기기의 토큰은 유지한다.""",
     )
     def post(self, request: Request) -> Response:
         serializer = PasswordChangeSerializer(data=request.data, context={"request": request})
 
         if serializer.is_valid():
-            serializer.save()
+            with transaction.atomic():
+                serializer.save()
+                # 다른 기기의 로그인을 끊는다 — 비밀번호를 바꾼 이 기기의 refresh 토큰만 남긴다
+                TokenService.revoke_all_for_user(
+                    request.user,
+                    keep_refresh_token=request.COOKIES.get("refresh_token") or request.data.get("refresh"),
+                )
             logger.info(f"비밀번호 변경 완료: user_id={request.user.id}")
             return Response({"message": "비밀번호가 변경되었습니다."}, status=status.HTTP_200_OK)
 
