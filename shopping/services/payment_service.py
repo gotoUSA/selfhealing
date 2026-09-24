@@ -659,8 +659,8 @@ class PaymentService:
                 points_refunded = order.used_points
                 logger.info(f"포인트 환불 시작: user_id={user.id}, order_id={order.id}, " f"points={points_refunded}")
 
-                # 포인트 환불 (PointService 사용)
-                PointService.add_points(
+                # 포인트 환불 — 쓴 적립 건과 만료일까지 되돌린다
+                PointService().refund_used_points(
                     user=user,
                     amount=points_refunded,
                     type="cancel_refund",

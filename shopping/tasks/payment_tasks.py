@@ -560,7 +560,7 @@ def rollback_payment_failure(self, order_id: int, fail_reason: str = "") -> dict
             points_refunded = 0
             if order.used_points > 0:
                 points_refunded = order.used_points
-                PointService.add_points(
+                PointService().refund_used_points(
                     user=order.user,
                     amount=points_refunded,
                     type="payment_fail_refund",

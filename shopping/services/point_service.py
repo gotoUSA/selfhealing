@@ -29,6 +29,18 @@ if TYPE_CHECKING:
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
+# 주문에 쓴 포인트를 돌려준 이력 — 적립 건을 얼마나 되돌렸는지(restored_details)를 담는다
+USED_POINTS_REFUND_TYPES = ("cancel_refund", "payment_fail_refund")
+
+
+class PointExpiryIncompleteError(Exception):
+    """만료 배치에서 일부 적립 건을 처리하지 못했다 (처리된 건은 이미 커밋됨 — 다시 돌리면 남은 건만 처리)"""
+
+    def __init__(self, expired_count: int, failed_history_ids: list[int]):
+        self.expired_count = expired_count
+        self.failed_history_ids = failed_history_ids
+        super().__init__(f"포인트 만료 {expired_count}건 처리, {len(failed_history_ids)}건 실패: {failed_history_ids}")
+
 
 class PointService:
     """포인트 관련 서비스 클래스"""
@@ -147,7 +159,7 @@ class PointService:
         """
         now = timezone.now()
 
-        # 만료되지 않은 적립 포인트 중 만료일이 지난 것들
+        # 만료되지 않은 적립 포인트 중 만료일이 지난 것들 (처리 순서를 고정 — 만료일, 생성 순)
         expired_points = (
             PointHistory.objects.filter(type="earn", expires_at__lte=now)
             .exclude(
@@ -155,6 +167,7 @@ class PointService:
                 metadata__contains={"expired": True}
             )
             .select_related("user")
+            .order_by("expires_at", "id")
         )
 
         return list(expired_points)
@@ -185,72 +198,86 @@ class PointService:
 
         return list(expiring_points)
 
-    @transaction.atomic
     def expire_points(self) -> int:
         """
-        만료된 포인트 일괄 처리
+        만료된 포인트 일괄 처리 — 적립 건 하나가 트랜잭션 하나
+
+        배치 전체를 한 트랜잭션으로 묶으면 한 건의 DB 에러(락 대기 타임아웃, 데드락)가 PostgreSQL 트랜잭션을
+        aborted 로 만들어 뒤의 모든 건이 실패하고 커밋이 롤백된다 — 그날 만료분 전체가 사라지는데 결과는
+        성공으로 남는다. 잡은 사용자 행 락도 배치가 끝날 때까지 풀리지 않는다. 건마다 커밋하면 실패한 건만
+        남고, 이미 만료 처리된 건은 다음 실행에서 건너뛰므로 다시 돌려도 안전하다.
 
         Returns:
             처리된 포인트 건수
+
+        Raises:
+            PointExpiryIncompleteError: 처리하지 못한 건이 있을 때 (처리된 건은 커밋된 뒤)
         """
         expired_points = self.get_expired_points()
         expired_count = 0
+        failed_history_ids: list[int] = []
 
         for point_history in expired_points:
             try:
-                # 남은 포인트 계산
-                remaining = self.get_remaining_points(point_history)
-
-                if remaining > 0:
-                    # 동시성 제어 1: User 락 획득 (Deadlock 방지를 위해 User 먼저 락)
-                    user = User.objects.select_for_update().get(pk=point_history.user_id)
-
-                    # 동시성 제어 2: PointHistory 락 획득 및 상태 재확인
-                    # 이미 다른 트랜잭션에서 만료 처리했을 수 있음
-                    current_ph = PointHistory.objects.select_for_update().get(pk=point_history.id)
-                    if current_ph.metadata.get("expired"):
-                        continue
-
-                    # 재계산 (혹시 그 사이 사용되었을 수 있음)
-                    remaining = self.get_remaining_points(current_ph)
-                    if remaining <= 0:
-                        continue
-
-                    # F() 객체로 안전하게 차감 (Greatest로 0 이하 방지)
-                    User.objects.filter(pk=user.pk).update(points=Greatest(F("points") - remaining, 0))
-
-                    # F() 객체로 업데이트 후 최신 값 가져오기
-                    user.refresh_from_db()
-
-                    # 만료 이력 생성
-                    PointHistory.create_history(
-                        user=user,
-                        points=-remaining,
-                        balance=user.points,
-                        type="expire",
-                        description=f"포인트 만료 (적립일: {point_history.created_at.date()})",
-                        metadata={
-                            "original_history_id": point_history.id,
-                            "original_points": point_history.points,
-                            "expired_amount": remaining,
-                        },
-                    )
-
-                    # 원본 이력에 만료 표시
-                    current_ph.metadata["expired"] = True
-                    current_ph.metadata["expired_at"] = timezone.now().isoformat()
-                    current_ph.metadata["expired_amount"] = remaining
-                    current_ph.save(update_fields=["metadata"])
-
+                if self._expire_one(point_history):
                     expired_count += 1
-
-                    logger.info(f"포인트 만료 처리: User={user.username}, " f"Amount={remaining}, HistoryID={current_ph.id}")
-
             except Exception as e:
+                failed_history_ids.append(point_history.id)
                 logger.error(f"포인트 만료 처리 실패: HistoryID={point_history.id}, " f"Error={str(e)}")
-                continue
 
+        if failed_history_ids:
+            raise PointExpiryIncompleteError(expired_count, failed_history_ids)
         return expired_count
+
+    @transaction.atomic
+    def _expire_one(self, point_history: PointHistory) -> bool:
+        """적립 건 하나를 만료 처리한다 (독립 트랜잭션). 만료시킨 게 있으면 True."""
+        # 락 없이 읽은 목록 기준 — 남은 게 없으면 락을 잡지 않는다
+        if self.get_remaining_points(point_history) <= 0:
+            return False
+
+        # 동시성 제어 1: User 락 획득 (Deadlock 방지를 위해 User 먼저 락)
+        user = User.objects.select_for_update().get(pk=point_history.user_id)
+
+        # 동시성 제어 2: PointHistory 락 획득 및 상태 재확인
+        # 이미 다른 트랜잭션에서 만료 처리했을 수 있음
+        current_ph = PointHistory.objects.select_for_update().get(pk=point_history.id)
+        if current_ph.metadata.get("expired"):
+            return False
+
+        # 재계산 (혹시 그 사이 사용되었을 수 있음)
+        remaining = self.get_remaining_points(current_ph)
+        if remaining <= 0:
+            return False
+
+        # F() 객체로 안전하게 차감 (Greatest로 0 이하 방지)
+        User.objects.filter(pk=user.pk).update(points=Greatest(F("points") - remaining, 0))
+
+        # F() 객체로 업데이트 후 최신 값 가져오기
+        user.refresh_from_db()
+
+        # 만료 이력 생성
+        PointHistory.create_history(
+            user=user,
+            points=-remaining,
+            balance=user.points,
+            type="expire",
+            description=f"포인트 만료 (적립일: {point_history.created_at.date()})",
+            metadata={
+                "original_history_id": point_history.id,
+                "original_points": point_history.points,
+                "expired_amount": remaining,
+            },
+        )
+
+        # 원본 이력에 만료 표시
+        current_ph.metadata["expired"] = True
+        current_ph.metadata["expired_at"] = timezone.now().isoformat()
+        current_ph.metadata["expired_amount"] = remaining
+        current_ph.save(update_fields=["metadata"])
+
+        logger.info(f"포인트 만료 처리: User={user.username}, " f"Amount={remaining}, HistoryID={current_ph.id}")
+        return True
 
     def get_remaining_points(self, point_history: PointHistory) -> int:
         """
@@ -262,14 +289,7 @@ class PointService:
         Returns:
             남은 포인트
         """
-        if point_history.type != "earn":
-            return 0
-
-        # 메타데이터에서 사용된 포인트 확인
-        used_amount = point_history.metadata.get("used_amount", 0)
-        remaining = point_history.points - used_amount
-
-        return max(0, remaining)
+        return point_history.remaining_points
 
     def _validate_point_usage(self, amount: int, type: str, minimum_use_amount: int = 100) -> Optional[dict[str, Any]]:
         """
@@ -515,6 +535,127 @@ class PointService:
             remaining_to_use -= use_from_this
 
         return used_details, remaining_to_use
+
+    @transaction.atomic
+    def refund_used_points(
+        self,
+        user: AbstractBaseUser,
+        amount: int,
+        order: Order,
+        type: str = "cancel_refund",
+        description: str = "",
+        metadata: Optional[dict] = None,
+    ) -> dict[str, Any]:
+        """
+        주문에 쓴 포인트를 돌려준다 — 잔액과 적립 건을 함께
+
+        주문 취소·결제 취소·토스 취소 웹훅·반품·결제 실패가 모두 이 함수를 쓴다. 잔액만 올리면 쓴 적립 건은
+        "다 씀"으로 남고 돌려준 포인트엔 만료일이 없어져, 주문하고 취소하는 것만으로 만료 직전 포인트가
+        만료 없는 포인트가 된다.
+
+        그 주문의 사용 이력(use)에 적힌 used_details 를 거꾸로(만료일이 늦은 적립 건부터) 따라가 적립 건의
+        used_amount 를 줄인다 — 원래 만료일이 그대로 돌아오고 만료 배치가 그날 만료시킨다. 원래 만료일이
+        이미 지난 적립 건의 몫은 되돌리는 즉시 만료 이력을 남긴다(배치가 이미 그 건을 닫았을 수 있어, 되돌려도
+        다시 만료되지 않는다). 적립 건에 묶이지 않은 몫(적립 외 포인트로 쓴 양)은 잔액만 돌려준다.
+        같은 주문의 이전 환불(나눠 한 반품)이 되돌린 양을 빼고 계산하므로 여러 번 나눠 환불해도 합이 맞는다.
+
+        Args:
+            user: 사용자
+            amount: 돌려줄 포인트
+            order: 포인트를 쓴 주문
+            type: cancel_refund 또는 payment_fail_refund
+            description: 설명
+            metadata: 추가 메타데이터
+
+        Returns:
+            {'success', 'amount', 'restored': [{'history_id', 'amount', 'expires_at'}], 'expired', 'unbacked'}
+        """
+        if amount <= 0:
+            return {"success": False, "amount": 0, "restored": [], "expired": 0, "unbacked": 0}
+
+        # 락 순서: 사용자 행 → 적립 건 (사용·만료 배치와 같다)
+        User.objects.select_for_update().get(pk=user.pk)
+
+        # 이 주문이 적립 건별로 쓴 양 − 이전 환불이 이미 되돌린 양
+        outstanding: dict[int, int] = {}
+        for use in PointHistory.objects.filter(order=order, type="use"):
+            for detail in (use.metadata or {}).get("used_details", []):
+                outstanding[detail["history_id"]] = outstanding.get(detail["history_id"], 0) + detail["amount"]
+        for refund in PointHistory.objects.filter(order=order, type__in=USED_POINTS_REFUND_TYPES):
+            for detail in (refund.metadata or {}).get("restored_details", []):
+                outstanding[detail["history_id"]] = outstanding.get(detail["history_id"], 0) - detail["amount"]
+
+        earn_rows = (
+            PointHistory.objects.select_for_update()
+            .filter(pk__in=[pk for pk, left in outstanding.items() if left > 0], type="earn")
+            .order_by("-expires_at", "-id")
+        )
+
+        now = timezone.now()
+        to_restore = amount
+        restored: list[dict[str, Any]] = []
+        expired_now = 0
+        for earn in earn_rows:
+            if to_restore <= 0:
+                break
+            back = min(outstanding[earn.pk], to_restore)
+            to_restore -= back
+            restored.append({"history_id": earn.pk, "amount": back, "expires_at": earn.expires_at.isoformat()})
+
+            if earn.expires_at <= now:
+                # 원래 만료일이 지났다 — 되돌리는 즉시 만료 (적립 건의 사용량은 그대로 두어 배치가 두 번 만료시키지 않게)
+                expired_now += back
+                continue
+
+            earn_metadata = earn.metadata.copy() if earn.metadata else {}
+            earn_metadata["used_amount"] = max(0, earn_metadata.get("used_amount", 0) - back)
+            earn_metadata.setdefault("refund_history", []).append(
+                {"amount": back, "order_id": order.id, "refunded_at": now.isoformat()}
+            )
+            earn.metadata = earn_metadata
+            earn.save(update_fields=["metadata"])
+
+        User.objects.filter(pk=user.pk).update(points=F("points") + amount)
+        user.refresh_from_db()
+
+        history_metadata = metadata.copy() if metadata else {}
+        history_metadata["restored_details"] = restored
+        history_metadata["expired_on_refund"] = expired_now
+        history_metadata["unbacked"] = to_restore
+        refund_history = PointHistory.create_history(
+            user=user,
+            points=amount,
+            balance=user.points,
+            type=type,
+            order=order,
+            description=description or f"주문 #{order.order_number} 포인트 환불",
+            metadata=history_metadata,
+        )
+
+        if expired_now > 0:
+            User.objects.filter(pk=user.pk).update(points=Greatest(F("points") - expired_now, 0))
+            user.refresh_from_db()
+            PointHistory.create_history(
+                user=user,
+                points=-expired_now,
+                balance=user.points,
+                type="expire",
+                order=order,
+                description="환불된 포인트 만료 (원래 유효기간 경과)",
+                metadata={"refund_history_id": refund_history.id, "expired_amount": expired_now},
+            )
+
+        logger.info(
+            f"사용 포인트 환불: user_id={user.pk}, order_id={order.id}, amount={amount}, "
+            f"restored={sum(d['amount'] for d in restored)}, expired={expired_now}, unbacked={to_restore}"
+        )
+        return {
+            "success": True,
+            "amount": amount,
+            "restored": restored,
+            "expired": expired_now,
+            "unbacked": to_restore,
+        }
 
     def send_expiry_notifications(self) -> int:
         """

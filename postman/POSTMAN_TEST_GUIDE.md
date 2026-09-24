@@ -487,8 +487,6 @@ GET  /api/payments/{id}/status/   # 결제 상태
 ```
 GET  /api/points/my/              # 내 포인트
 GET  /api/points/history/         # 포인트 이력
-POST /api/points/use/             # 포인트 사용
-POST /api/points/cancel/          # 포인트 취소 처리
 ```
 
 ### 웹훅 (Webhook)

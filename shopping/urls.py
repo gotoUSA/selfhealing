@@ -352,8 +352,7 @@ urlpatterns = [
         name="point_history",
     ),
     path("points/check/", point_views.PointCheckView.as_view(), name="point_check"),
-    path("points/use/", point_views.PointUseView.as_view(), name="point_use"),
-    path("points/cancel/", point_views.PointCancelView.as_view(), name="point_cancel"),
+    # 포인트 사용·환불은 주문·취소·반품 서비스 안에서만 일어난다 — 고객이 직접 부르는 API 는 두지 않는다
     path(
         "points/expiring/",
         point_views.ExpiringPointsView.as_view(),

@@ -3,7 +3,6 @@ point_serializers.py 단위 테스트
 
 테스트 범위:
 - PointHistorySerializer: validate_points, validate (type별 부호, balance 검증)
-- PointUseSerializer: validate_order_id (None 반환)
 - PointCheckSerializer: validate (order_amount 초과, 정상 사용 가능)
 
 커버리지 대상 라인: 36-38, 42-62, 159, 275-276, 282
@@ -18,9 +17,8 @@ from rest_framework.exceptions import ValidationError
 from shopping.serializers.point_serializers import (
     PointCheckSerializer,
     PointHistorySerializer,
-    PointUseSerializer,
 )
-from shopping.tests.factories import OrderFactory, UserFactory
+from shopping.tests.factories import UserFactory
 
 
 # ==========================================
@@ -244,79 +242,6 @@ class TestPointHistorySerializer:
 
         # Assert
         assert result == attrs
-
-
-# ==========================================
-# PointUseSerializer 테스트
-# ==========================================
-
-
-@pytest.mark.django_db
-class TestPointUseSerializerValidation:
-    """PointUseSerializer 검증 테스트"""
-
-    def test_validate_order_id_none_returns_none(self):
-        """order_id가 None일 때 None 반환"""
-        # Arrange
-        user = UserFactory.with_points(5000)
-        mock_request = MagicMock()
-        mock_request.user = user
-
-        serializer = PointUseSerializer(context={"request": mock_request})
-
-        # Act
-        result = serializer.validate_order_id(None)
-
-        # Assert
-        assert result is None
-
-    def test_validate_order_id_valid_order_passes(self):
-        """유효한 주문 ID 검증 통과"""
-        # Arrange
-        user = UserFactory.with_points(5000)
-        order = OrderFactory(user=user)
-        mock_request = MagicMock()
-        mock_request.user = user
-
-        serializer = PointUseSerializer(context={"request": mock_request})
-
-        # Act
-        result = serializer.validate_order_id(order.id)
-
-        # Assert
-        assert result == order.id
-
-    def test_validate_order_id_nonexistent_raises_error(self):
-        """존재하지 않는 주문 ID - ValidationError"""
-        # Arrange
-        user = UserFactory.with_points(5000)
-        mock_request = MagicMock()
-        mock_request.user = user
-
-        serializer = PointUseSerializer(context={"request": mock_request})
-
-        # Act & Assert
-        with pytest.raises(ValidationError) as exc_info:
-            serializer.validate_order_id(99999)
-
-        assert "유효하지 않은 주문" in str(exc_info.value.detail[0])
-
-    def test_validate_order_id_other_users_order_raises_error(self):
-        """다른 사용자의 주문 ID - ValidationError"""
-        # Arrange
-        user = UserFactory.with_points(5000)
-        other_user = UserFactory()
-        other_order = OrderFactory(user=other_user)
-        mock_request = MagicMock()
-        mock_request.user = user
-
-        serializer = PointUseSerializer(context={"request": mock_request})
-
-        # Act & Assert
-        with pytest.raises(ValidationError) as exc_info:
-            serializer.validate_order_id(other_order.id)
-
-        assert "유효하지 않은 주문" in str(exc_info.value.detail[0])
 
 
 # ==========================================

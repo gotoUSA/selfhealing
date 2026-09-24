@@ -53,7 +53,7 @@ from .payment_serializers import (
 )
 
 # Point 관련 Serializers
-from .point_serializers import PointHistorySerializer, PointUseSerializer, UserPointSerializer
+from .point_serializers import PointHistorySerializer, UserPointSerializer
 
 # Product Q&A 관련 Serializers
 from .product_qa_serializers import (
@@ -158,7 +158,6 @@ __all__ = [
     # Point
     "PointHistorySerializer",
     "UserPointSerializer",
-    "PointUseSerializer",
     # Notification
     "NotificationSerializer",
     "NotificationMarkReadSerializer",

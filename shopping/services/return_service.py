@@ -556,7 +556,7 @@ class ReturnService:
             "return_number": return_obj.return_number,
         }
         if points_back > 0:
-            PointService.add_points(
+            PointService().refund_used_points(
                 user=user,
                 amount=points_back,
                 type="cancel_refund",

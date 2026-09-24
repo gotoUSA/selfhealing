@@ -225,6 +225,10 @@ class PointQueryService:
         # 월별 그룹화 - Python에서 처리 (복잡한 DB 함수 대신)
         monthly_data: dict[str, MonthlyExpiringSummary] = {}
 
+        # 남은 양이 있는 적립 건만 — 다 쓴 적립 건은 만료될 게 없다
+        remaining_ids = [h.pk for h in expiring_histories if h.remaining_points > 0]
+        expiring_histories = expiring_histories.filter(pk__in=remaining_ids)
+
         for history in expiring_histories:
             month_key = history.expires_at.strftime("%Y-%m")
             if month_key not in monthly_data:
@@ -233,7 +237,7 @@ class PointQueryService:
                     points=0,
                     count=0,
                 )
-            monthly_data[month_key].points += history.points
+            monthly_data[month_key].points += history.remaining_points
             monthly_data[month_key].count += 1
 
         # 총 만료 예정 포인트 - Manager 메서드 활용

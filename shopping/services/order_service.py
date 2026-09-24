@@ -532,7 +532,7 @@ class OrderService:
             points_refunded = order.used_points
             logger.info(f"포인트 환불 시작: user_id={user.id}, order_id={order.id}, " f"points={points_refunded}")
 
-            PointService.add_points(
+            PointService().refund_used_points(
                 user=user,
                 amount=points_refunded,
                 type="cancel_refund",

@@ -60,15 +60,16 @@ class PointHistoryManager(models.Manager):
         from django.utils import timezone
 
         expire_date = timezone.now() + timedelta(days=days)
-        result = self.filter(
+        histories = self.filter(
             user=user,
             type="earn",
             points__gt=0,
             expires_at__isnull=False,
             expires_at__lte=expire_date,
             expires_at__gt=timezone.now(),
-        ).aggregate(total=Sum("points"))
-        return result["total"] or 0
+        )
+        # 원래 적립액이 아니라 남은 양 — 이미 쓴 포인트는 만료되지 않는다
+        return sum(h.remaining_points for h in histories)
 
     def get_month_statistics(self, user: User, start_date) -> dict[str, int]:
         """
@@ -224,6 +225,21 @@ class PointHistory(models.Model):
         """
         raise ValueError("포인트 이력은 삭제할 수 없습니다. " "오류 수정은 반제(Reversal) 거래를 생성해주세요.")
 
+    @property
+    def remaining_points(self) -> int:
+        """
+        적립 건의 남은 양 (적립액 − 사용량). 적립이 아니거나 만료 처리된 건은 0.
+
+        만료 배치·만료 안내 메일·만료 예정 화면이 모두 이 값을 쓴다 — 같은 개념을 두 곳에서 따로 계산하면
+        한쪽은 원래 적립액을, 다른 쪽은 남은 양을 보게 된다.
+        """
+        if self.type != "earn":
+            return 0
+        metadata = self.metadata or {}
+        if metadata.get("expired"):
+            return 0
+        return max(0, self.points - metadata.get("used_amount", 0))
+
     def save(self, *args: Any, **kwargs: Any) -> None:
         """
         포인트 이력 저장 (수정 제한)
@@ -343,7 +359,6 @@ class PointHistory(models.Model):
         """
         from datetime import timedelta
 
-        from django.db.models import Sum
         from django.utils import timezone
 
         now = timezone.now()
@@ -359,8 +374,12 @@ class PointHistory(models.Model):
             expires_at__gte=now,
         ).order_by("expires_at")
 
+        # 남은 양이 있는 적립 건만 — 다 쓴 적립 건은 만료될 게 없다
+        remaining_ids = [h.pk for h in expiring_histories if h.remaining_points > 0]
+        expiring_histories = expiring_histories.filter(pk__in=remaining_ids)
+
         # 만료 예정 포인트 총합
-        total_expiring = expiring_histories.aggregate(total=Sum("points"))["total"] or 0
+        total_expiring = sum(h.remaining_points for h in expiring_histories)
 
         # 가장 빠른 만료일
         earliest_expire = expiring_histories.values_list("expires_at", flat=True).first()
