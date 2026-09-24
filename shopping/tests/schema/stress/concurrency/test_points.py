@@ -4,11 +4,10 @@ import time
 from decimal import Decimal
 
 import pytest
-from django.urls import reverse
 
 from shopping.tests.factories import ProductFactory, UserFactory, CategoryFactory, OrderFactory
 
-from .helpers import close_db_connection, login_and_get_token, run_concurrent_requests
+from .helpers import close_db_connection, run_concurrent_requests
 
 
 # 여기에 test_concurrency.py의 956~1242줄을 복사하세요
@@ -71,86 +70,80 @@ class TestConcurrentPointOperations:
         """
         동시 포인트 사용 시 잔액 음수 방지 테스트
 
-        10,000 포인트를 가진 사용자가 10개의 동시 요청으로
-        각각 2,000 포인트씩 사용하려 할 때,
-        잔액이 음수가 되지 않는지 확인합니다.
+        10,000 포인트를 가진 사용자의 주문 10건(각 2,000 포인트 사용)을 주문 처리 태스크가 동시에 처리할 때
+        정확히 5건만 확정되고 잔액이 음수가 되지 않는지 확인합니다.
+
+        포인트 차감은 주문 API 가 아니라 주문 처리 태스크(워커)에서 일어난다. API 는 잔액만 보고 202 를 주므로
+        같은 포인트로 낸 주문 여러 건이 모두 접수되고, 워커 여러 개가 그 주문들을 동시에 처리한다 — 이 테스트는
+        그 지점을 잰다. (예전 버전은 주문 API 에 `used_points`(응답 필드명)를 보내 포인트를 아예 쓰지 않았고,
+        장바구니 하나를 스레드 10개가 나눠 써서 포인트 단계까지 가는 요청도 거의 없었다.)
 
         🔍 검증 포인트:
-        - 포인트 잔액 >= 0
-        - 성공 요청 수 <= 5 (10000 / 2000)
-        - 포인트 부족 요청은 적절한 에러 반환
-        - 5xx 에러 없음
-
-        동시성 이슈 예방:
-        - select_for_update() 사용
-        - DB 레벨에서 포인트 >= 0 체크
+        - 확정 주문 정확히 5건 (10000 / 2000), 나머지 5건은 "포인트 사용 실패"로 실패
+        - 포인트 잔액 = 초기 - 확정 × 2000 (= 0), 음수 없음
+        - 실패한 주문의 재고는 복구 (재고 = 초기 - 5)
+        - 태스크 예외 없음
         """
+        from shopping.models.cart import Cart, CartItem
+        from shopping.models.order import Order
+        from shopping.services.point_service import PointService
+        from shopping.tasks.order_tasks import process_order_heavy_tasks
+
         user = user_with_points
         product = point_test_setup["product"]
-        initial_points = user.points
         points_to_use = 2000
-        num_requests = 10
+        num_orders = 10
 
-        def use_points(username, product_id, points):
-            """포인트 사용 주문 시도"""
-            client, token, error = login_and_get_token(username)
-            if error:
-                return {"status_code": 0, "error": error}
+        # 잔액을 적립 건으로 채운다 (FIFO 가 실제로 적립 건을 깎도록)
+        type(user).objects.filter(pk=user.pk).update(points=0)
+        PointService.add_points(user=user, amount=10000, type="earn", description="stress seed")
+        user.refresh_from_db()
+        initial_points = user.points
+        initial_stock = product.stock
 
-            client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
-
-            # 장바구니에 상품 추가
-            cart_response = client.post(
-                reverse("cart-add-item"),
-                {"product_id": product_id, "quantity": 1},
-                format="json",
+        # 주문 API 가 만들어 둔 상태: 주문마다 비활성화된 장바구니 + pending 주문 (포인트는 아직 안 깎임)
+        jobs = []
+        for _ in range(num_orders):
+            cart = Cart.objects.create(user=user, is_active=False)
+            CartItem.objects.create(cart=cart, product=product, quantity=1)
+            order = Order.objects.create(
+                user=user,
+                status="pending",
+                total_amount=product.price,
+                used_points=points_to_use,
+                final_amount=product.price - points_to_use,
+                shipping_name="홍길동",
+                shipping_phone="010-1234-5678",
+                shipping_postal_code="12345",
+                shipping_address="서울시 강남구 테헤란로 123",
+                shipping_address_detail="101동",
             )
-            if cart_response.status_code not in [200, 201]:
-                return {"status_code": cart_response.status_code, "step": "cart"}
+            jobs.append((order.id, cart.id, points_to_use))
 
-            # 포인트를 사용한 주문 생성 시도
-            order_response = client.post(
-                reverse("order-list"),
-                {
-                    "shipping_address": "서울시 강남구 테헤란로 123",
-                    "shipping_name": "홍길동",
-                    "shipping_phone": "010-1234-5678",
-                    "shipping_postal_code": "12345",
-                    "payment_method": "card",
-                    "used_points": points,
-                },
-                format="json",
-            )
-            return {
-                "status_code": order_response.status_code,
-                "step": "order",
-                "data": order_response.json() if order_response.status_code < 500 else None,
-            }
+        def process(order_id, cart_id, use_points):
+            """워커 하나가 주문 태스크 하나를 처리"""
+            return process_order_heavy_tasks(order_id, cart_id, use_points)
 
-        # 동시 요청 실행
-        args_list = [(user.username, product.id, points_to_use) for _ in range(num_requests)]
-        results = run_concurrent_requests(use_points, args_list, max_workers=num_requests)
+        results = run_concurrent_requests(process, jobs, max_workers=num_orders)
 
-        # 결과 분석
-        success_count = sum(1 for r in results if r.get("status_code") in [200, 201])
-        error_5xx_count = sum(1 for r in results if r.get("status_code", 0) >= 500)
+        errors = [r for r in results if "exception_type" in r]
+        assert errors == [], f"태스크 예외: {errors}"
 
-        # Assert: 5xx 에러 없음
-        assert error_5xx_count == 0, f"서버 에러 발생! 5xx 응답 {error_5xx_count}개"
+        orders = Order.objects.filter(pk__in=[j[0] for j in jobs])
+        confirmed = orders.filter(status="confirmed").count()
+        failed = orders.filter(status="failed", failure_reason__startswith="포인트 사용 실패").count()
+        max_possible_orders = initial_points // points_to_use
+        assert confirmed == max_possible_orders, f"확정 {confirmed}건 (기대 {max_possible_orders})"
+        assert failed == num_orders - max_possible_orders, f"포인트 부족 실패 {failed}건"
 
-        # Assert: 포인트 잔액 음수 확인
+        # ✅ 회계 무결성: 사용된 포인트 = 확정 × 2000, 잔액 음수 없음
         user.refresh_from_db()
         assert user.points >= 0, f"포인트가 음수! points={user.points}"
+        assert initial_points - user.points == confirmed * points_to_use
 
-        # Assert: 성공 주문 수가 가능한 범위 내
-        max_possible_orders = initial_points // points_to_use
-        assert success_count <= max_possible_orders, f"예상보다 많은 주문 성공: {success_count} > {max_possible_orders}"
-
-        # ✅ 회계 무결성 검증
-        # 사용된 포인트 = 초기 포인트 - 현재 포인트
-        used_total = initial_points - user.points
-        expected_used = success_count * points_to_use
-        assert used_total <= expected_used, f"포인트 사용 계산 오류: 실제 사용({used_total}) > 예상 사용({expected_used})"
+        # 실패한 주문의 재고는 돌아왔다
+        product.refresh_from_db()
+        assert product.stock == initial_stock - confirmed
 
     def test_concurrent_point_earning(self, db, point_test_setup):
         """
