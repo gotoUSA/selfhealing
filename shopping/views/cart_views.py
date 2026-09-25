@@ -33,6 +33,7 @@ from shopping.serializers import (
     SimpleCartSerializer,
 )
 from shopping.services.cart_service import CartService, CartServiceError
+from shopping.services.product_query_service import prefetch_product_cards
 
 
 # ===== Swagger 문서화용 응답 Serializers =====
@@ -142,14 +143,15 @@ class CartViewSet(viewsets.GenericViewSet):
         }
         return action_serializer_map.get(self.action, CartSerializer)
 
-    def _get_cart(self) -> Cart:
+    def _get_cart(self, product_cards: bool = False) -> Cart:
         """
         현재 사용자/세션의 활성 장바구니를 가져오거나 생성
 
         서비스 레이어에 위임합니다.
+        product_cards: 항목마다 상품 카드를 그리는 응답이면 True (N+1 방지)
         """
         user = self.request.user if self.request.user.is_authenticated else None
-        return CartService.get_or_create_cart(user=user, request=self.request)
+        return CartService.get_or_create_cart(user=user, request=self.request, product_cards=product_cards)
 
     @extend_schema(
         responses={200: CartSerializer},
@@ -162,7 +164,7 @@ class CartViewSet(viewsets.GenericViewSet):
     )
     def retrieve(self, request: Request) -> Response:
         """장바구니 전체 정보 조회"""
-        cart = self._get_cart()
+        cart = self._get_cart(product_cards=True)
 
         # 자동으로 재고/가격 변경 확인
         from dataclasses import asdict
@@ -260,10 +262,10 @@ class CartViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=["get"])
     def items(self, request: Request) -> Response:
         """장바구니 아이템 목록 조회"""
-        cart = self._get_cart()
+        cart = self._get_cart(product_cards=True)
 
-        items = cart.items.select_related("product").order_by("-added_at")
-        serializer = CartItemSerializer(items, many=True)
+        # 최근 추가 순으로 이미 읽어 둔 항목 (상품 카드 포함)
+        serializer = CartItemSerializer(cart.items.all(), many=True, context={"request": request})
         return Response(serializer.data)
 
     @extend_schema(
@@ -406,9 +408,16 @@ class CartViewSet(viewsets.GenericViewSet):
         try:
             result = CartService.bulk_add_items(cart=cart, items_data=items_data)
 
+            # 추가된 항목을 상품 카드 모양으로 다시 읽는다 (항목마다 상품 쿼리가 늘지 않게, 순서 유지)
+            user_id = request.user.id if request.user.is_authenticated else None
+            loaded = CartItem.objects.prefetch_related(prefetch_product_cards("product", user_id)).in_bulk(
+                [item.pk for item in result.added_items]
+            )
+            added_items = [loaded[item.pk] for item in result.added_items]
+
             response_data = {
                 "message": f"{result.success_count}개의 상품이 추가되었습니다.",
-                "added_items": CartItemSerializer(result.added_items, many=True).data,
+                "added_items": CartItemSerializer(added_items, many=True).data,
             }
 
             if result.errors:
@@ -637,7 +646,8 @@ class CartItemViewSet(viewsets.GenericViewSet):
                     return CartItem.objects.none()
                 cart = Cart.objects.get(session_key=session_key, is_active=True)
 
-            return cart.items.select_related("product").order_by("-added_at")
+            user_id = self.request.user.id if self.request.user.is_authenticated else None
+            return cart.items.prefetch_related(prefetch_product_cards("product", user_id)).order_by("-added_at")
         except Cart.DoesNotExist:
             return CartItem.objects.none()
 

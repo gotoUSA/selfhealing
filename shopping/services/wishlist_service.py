@@ -38,6 +38,7 @@ if TYPE_CHECKING:
 from ..models.cart import Cart, CartItem
 from ..models.product import Product
 from .base import ServiceError, log_service_call
+from .product_query_service import wishlist_count_subquery
 
 logger = logging.getLogger(__name__)
 
@@ -349,7 +350,12 @@ class WishlistService:
         """
         filters = filters or WishlistFilter()
 
-        queryset = user.wishlist_products.select_related("category").prefetch_related("images")
+        # 찜 수는 서브쿼리로, 이미지는 한 번에 — 상품마다 따로 세거나 읽지 않는다
+        queryset = (
+            user.wishlist_products.select_related("category")
+            .prefetch_related("images")
+            .annotate(wishlist_cnt=wishlist_count_subquery())
+        )
 
         # 구매 가능 필터
         if filters.is_available is True:

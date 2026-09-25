@@ -517,10 +517,9 @@ class TestOrderListException:
         url = reverse("order-list")
 
         # Act & Assert - 쿼리 수 확인
-        # 실제 쿼리: 인증(1) + count(1) + orders with select_related/prefetch_related(1)
-        #            + annotate(1) + session(1) = 5
-        # 리팩토링 후 select_related("user")로 user 조회 최적화 완료
-        with django_assert_num_queries(5):
+        # 실제 쿼리: 인증 사용자(1) + count(1) + 주문 목록(select_related user + item_count annotate)(1) = 3
+        # 목록은 주문 항목을 그리지 않으므로 항목·상품을 읽지 않는다 (상세만 상품 카드 prefetch)
+        with django_assert_num_queries(3):
             response = authenticated_client.get(url)
 
         assert response.status_code == status.HTTP_200_OK

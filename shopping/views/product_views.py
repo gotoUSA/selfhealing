@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db.models import Avg, BooleanField, Count, Exists, FloatField, IntegerField, OuterRef, Q, Subquery, Value
+from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
 from django.db.models.functions import Coalesce
 from django.utils.text import slugify
 
 from shopping.dtos.product_filter import ProductFilterParams
+from shopping.services.product_query_service import product_card_queryset
 
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter
 from rest_framework import filters, permissions, serializers as drf_serializers, status, viewsets
@@ -28,6 +29,7 @@ from shopping.serializers import (
     ProductListSerializer,
     ProductReviewSerializer,
 )
+from shopping.serializers.category_serializers import build_full_paths
 
 # 권한
 from shopping.permissions import IsSellerAndOwner
@@ -60,40 +62,6 @@ class CategoryTreeItemSerializer(drf_serializers.Serializer):
     slug = drf_serializers.CharField()
     product_count = drf_serializers.IntegerField()
     children = drf_serializers.ListField()
-
-
-def annotate_list_stats(queryset: Any, user_id: int | None) -> Any:
-    """
-    상품 목록에 평균 평점·리뷰 수·찜 수·내 찜 여부를 붙인다 (상품당 정확히 한 행)
-
-    리뷰와 찜을 LEFT JOIN 하고 GROUP BY 하던 이전 방식은 두 가지 문제가 있었다:
-    - 상품 × 리뷰 × 찜으로 중간 행이 곱해진다 (상품 2만·리뷰 12만·찜 12만에서 64만 행, 700ms)
-    - is_wished 의 CASE 식이 GROUP BY 에 들어가, 내가 찜한 상품을 남도 찜했으면
-      (is_wished=True 그룹, False 그룹) 두 행으로 갈라져 목록에 같은 상품이 두 번 나오고
-      count() 와 wishlist_cnt 도 틀렸다
-    상관 서브쿼리는 상품마다 인덱스 조회 몇 번이고 GROUP BY 가 없어 둘 다 사라진다.
-
-    Args:
-        queryset: Product 쿼리셋
-        user_id: 현재 사용자 ID (비로그인이면 None → is_wished 는 항상 False)
-    """
-    reviews = ProductReview.objects.filter(product=OuterRef("pk")).order_by().values("product")
-    wishes = Product.wished_by_users.through.objects.filter(product=OuterRef("pk"))
-
-    if user_id is None:
-        is_wished = Value(False, output_field=BooleanField())
-    else:
-        is_wished = Exists(wishes.filter(user_id=user_id))
-
-    return queryset.annotate(
-        avg_rating=Subquery(reviews.annotate(v=Avg("rating")).values("v"), output_field=FloatField()),
-        review_cnt=Coalesce(Subquery(reviews.annotate(v=Count("id")).values("v"), output_field=IntegerField()), 0),
-        wishlist_cnt=Coalesce(
-            Subquery(wishes.order_by().values("product").annotate(v=Count("id")).values("v"), output_field=IntegerField()),
-            0,
-        ),
-        is_wished=is_wished,
-    )
 
 
 class ProductPagination(PageNumberPagination):
@@ -224,10 +192,11 @@ class ProductViewSet(viewsets.ModelViewSet):
         """
         상품 쿼리셋 조회 및 필터링
 
-        성능 최적화:
-        - select_related: seller, category (JOIN 최적화)
-        - prefetch_related: images, reviews (N+1 문제 방지)
-        - annotate: avg_rating, review_cnt, wishlist_cnt, is_wished (집계)
+        성능 최적화 (product_card_queryset — 쿼리 수가 상품 수와 무관):
+        - select_related: seller, category (JOIN)
+        - prefetch_related: images (리뷰는 가져오지 않는다 — 목록은 리뷰를 보여 주지 않는다)
+        - annotate: avg_rating, review_cnt, wishlist_cnt, is_wished (상관 서브쿼리)
+        - 상세(retrieve)는 부모 카테고리 이름도 보여 주므로 category__parent 까지 JOIN
 
         필터링:
         - category: 카테고리 및 하위 카테고리 포함
@@ -239,10 +208,9 @@ class ProductViewSet(viewsets.ModelViewSet):
         user_id = self.request.user.id if self.request.user.is_authenticated else None
 
         # 기본 쿼리셋 생성 (통계는 서브쿼리 — 조인 폭발·중복 행 방지)
-        queryset = annotate_list_stats(
-            Product.objects.filter(is_active=True).select_related("seller", "category").prefetch_related("images", "reviews"),
-            user_id,
-        )
+        queryset = product_card_queryset(user_id).filter(is_active=True)
+        if self.action == "retrieve":
+            queryset = queryset.select_related("category__parent")
 
         # Request에서 필터 파라미터 추출
         filters = ProductFilterParams.from_request(self.request)
@@ -412,12 +380,9 @@ class ProductViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=["get"])
     def popular(self, request: Request) -> Response:
-        popular_products = (
-            self.get_queryset()
-            .annotate(review_count=Count("reviews"))
-            .filter(review_count__gt=0)
-            .order_by("-review_count")[:12]
-        )
+        # get_queryset 의 review_cnt(서브쿼리)를 그대로 쓴다. 리뷰를 다시 JOIN 해 GROUP BY 하면
+        # 서브쿼리 값들이 GROUP BY 키가 되어 리뷰 행마다 다시 계산된다 (상품당 리뷰 2천 개에서 5초)
+        popular_products = self.get_queryset().filter(review_cnt__gt=0).order_by("-review_cnt")[:12]
 
         serializer = ProductListSerializer(popular_products, many=True)
         return Response(serializer.data)
@@ -433,10 +398,10 @@ class ProductViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=["get"])
     def best_rating(self, request: Request) -> Response:
+        # popular 와 같은 이유로 서브쿼리 값(avg_rating, review_cnt)을 그대로 쓴다
         best_products = (
             self.get_queryset()
-            .annotate(avg_rating=Avg("reviews__rating"), review_count=Count("reviews"))
-            .filter(review_count__gte=3)  # 최소 3개 이상의 리뷰가 있는 상품만
+            .filter(review_cnt__gte=3)  # 최소 3개 이상의 리뷰가 있는 상품만
             .order_by("-avg_rating")[:12]
         )
 
@@ -467,8 +432,8 @@ class ProductViewSet(viewsets.ModelViewSet):
 
         # 본인 상품 중 재고 부족 상품 조회
         low_stock_products = (
-            Product.objects.filter(seller=request.user, is_active=True, stock__lte=10)  # 본인 상품만  # 재고 10개 이하
-            .select_related("category")
+            product_card_queryset(request.user.id)
+            .filter(seller=request.user, is_active=True, stock__lte=10)  # 본인 상품만  # 재고 10개 이하
             .order_by("stock", "-created_at")  # 재고 적은 순, 최신 순
         )
 
@@ -614,13 +579,42 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
 
         - 활성 카테고리만 표시 (is_active=True)
         - select_related: parent (JOIN 최적화)
-        - annotate: products_count (상품 개수 집계)
+        - annotate: products_count (상품 개수 집계), active_children_count (직계 활성 하위 수)
+          하위 수는 상관 서브쿼리 — 상품과 같은 GROUP BY 에 JOIN 으로 세면 상품 수 × 하위 수로 곱해진다
         """
+        children = (
+            Category.objects.filter(parent=OuterRef("pk"), is_active=True)
+            .order_by()
+            .values("parent")
+            .annotate(c=Count("id"))
+            .values("c")
+        )
         return (
             Category.objects.filter(is_active=True)
             .select_related("parent")
-            .annotate(products_count=Count("products", filter=Q(products__is_active=True)))
+            .annotate(
+                products_count=Count("products", filter=Q(products__is_active=True)),
+                active_children_count=Coalesce(Subquery(children, output_field=IntegerField()), 0),
+            )
         )
+
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """
+        카테고리 목록 — 전체 경로(full_path)는 페이지 행들의 트리를 한 번에 읽어 계산한다
+
+        행마다 부모를 따라 올라가면 select_related("parent") 한 단계를 넘는 조상마다 쿼리가 하나씩 늘어난다.
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        rows = list(page) if page is not None else list(queryset)
+
+        context = self.get_serializer_context()
+        context["category_paths"] = build_full_paths(rows)
+        serializer = self.get_serializer_class()(rows, many=True, context=context)
+
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+        return Response(serializer.data)
 
     @extend_schema(
         responses={200: CategoryTreeItemSerializer(many=True)},
@@ -693,12 +687,9 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
         categories = category.get_descendants(include_self=True)
 
         # 상품 조회 (통계는 서브쿼리 — 조인 폭발·중복 행 방지)
-        products = annotate_list_stats(
-            Product.objects.filter(category__in=categories, is_active=True)
-            .select_related("seller", "category")
-            .prefetch_related("images", "reviews"),
-            user_id,
-        ).order_by("-created_at")
+        products = (
+            product_card_queryset(user_id).filter(category__in=categories, is_active=True).order_by("-created_at")
+        )
 
         # 페이지네이션 적용
         paginator = ProductPagination()

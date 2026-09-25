@@ -37,6 +37,7 @@ if TYPE_CHECKING:
 from ..models.cart import Cart, CartItem
 from ..models.product import Product
 from .base import ServiceError, log_service_call
+from .product_query_service import prefetch_product_cards
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +115,7 @@ class CartService:
         user: User | None = None,
         session_key: str | None = None,
         request: HttpRequest | None = None,
+        product_cards: bool = False,
     ) -> Cart:
         """
         사용자 또는 세션의 활성 장바구니 조회/생성
@@ -122,6 +124,8 @@ class CartService:
             user: 인증된 사용자 (회원)
             session_key: 세션 키 (비회원)
             request: HTTP 요청 객체 (세션 자동 생성용)
+            product_cards: True 면 항목의 상품을 상품 카드 모양(카테고리·판매자·이미지·통계)으로 함께 읽는다.
+                장바구니 화면처럼 항목마다 상품 카드를 그리는 응답용 — 없으면 항목마다 쿼리가 3개씩 늘어난다
 
         Returns:
             Cart: 활성 장바구니
@@ -159,12 +163,12 @@ class CartService:
             )
 
         # 성능 최적화: 관련 데이터 미리 로드
-        cart = Cart.objects.prefetch_related(
-            Prefetch(
-                "items",
-                queryset=CartItem.objects.select_related("product").order_by("-added_at"),
-            )
-        ).get(pk=cart.pk)
+        if product_cards:
+            user_id = user.id if user and user.is_authenticated else None
+            items = CartItem.objects.prefetch_related(prefetch_product_cards("product", user_id))
+        else:
+            items = CartItem.objects.select_related("product")
+        cart = Cart.objects.prefetch_related(Prefetch("items", queryset=items.order_by("-added_at"))).get(pk=cart.pk)
 
         return cart
 

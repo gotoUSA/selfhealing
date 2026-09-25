@@ -7,6 +7,30 @@ from rest_framework import serializers
 from ..models.product import Category
 
 
+def build_full_paths(categories: list[Category]) -> dict[int, str]:
+    """
+    카테고리들의 전체 경로("전자제품 > 컴퓨터 > 노트북")를 쿼리 한 번으로 계산
+
+    카테고리들이 속한 트리(MPTT tree_id)의 노드만 읽어 부모를 따라 올라간다.
+    """
+    if not categories:
+        return {}
+    tree_ids = {category.tree_id for category in categories}
+    nodes = {
+        node_id: (name, parent_id)
+        for node_id, name, parent_id in Category.objects.filter(tree_id__in=tree_ids).values_list("id", "name", "parent_id")
+    }
+    paths: dict[int, str] = {}
+    for category in categories:
+        parts = []
+        current = category.id
+        while current is not None and current in nodes:
+            name, current = nodes[current]
+            parts.append(name)
+        paths[category.id] = " > ".join(reversed(parts))
+    return paths
+
+
 class CategorySerializer(serializers.ModelSerializer):
     """
     카테고리 기본 serializer
@@ -70,14 +94,22 @@ class CategorySerializer(serializers.ModelSerializer):
         return obj.products.filter(is_active=True).count()
 
     def get_children_count(self, obj: Category) -> int:
-        """직계 하위 카테고리 수 반환"""
+        """직계 하위 카테고리 수 반환 (목록 쿼리셋이 서브쿼리로 미리 계산)"""
+        if hasattr(obj, "active_children_count"):
+            return obj.active_children_count
         return obj.children.filter(is_active=True).count()
 
     def get_full_path(self, obj: Category) -> str:
         """
         카테고리의 전체 경로를 반환
         예: "전자제품 > 컴퓨터 > 노트북"
+
+        목록은 뷰가 build_full_paths 로 한 번에 계산해 context 로 넘긴다.
         """
+        paths = self.context.get("category_paths")
+        if paths is not None and obj.id in paths:
+            return paths[obj.id]
+
         path_parts = []
         current = obj
 

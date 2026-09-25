@@ -145,8 +145,8 @@ import time
 from decimal import Decimal
 
 from django.urls import reverse
-from django.db import connection, reset_queries
-from django.conf import settings
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 import pytest
 from rest_framework import status
@@ -299,10 +299,10 @@ def count_queries(func):
         result, query_count = count_queries(test_func)
         assert query_count < 10
     """
-    reset_queries()
-    result = func()
-    query_count = len(connection.queries)
-    return result, query_count
+    # connection.queries 는 DEBUG=True 일 때만 쌓인다 (pytest-django 는 DEBUG=False) — 항상 세는 컨텍스트로
+    with CaptureQueriesContext(connection) as ctx:
+        result = func()
+    return result, len(ctx.captured_queries)
 
 
 # =============================================================================
@@ -817,29 +817,28 @@ class TestDatabaseQueryPerformance:
         3-5. 추가 정보 (평점, 리뷰 수 등)
 
         Note:
-        - DEBUG=False일 때는 connection.queries가 비어있으므로 쿼리 수 검증 생략
-        - 대신 응답 성공 여부만 확인
+        - CaptureQueriesContext 로 센다 (connection.queries 는 DEBUG=False 인 pytest 에서 늘 비어 있어
+          예전 검증은 한 번도 실행되지 않았다)
         """
         client = APIClient()
 
         # 첫 요청으로 캐시 워밍업
         client.get(reverse("product-list"))
 
-        # 쿼리 수 측정 (DEBUG=True일 때만)
-        reset_queries()
-        response = client.get(reverse("product-list"))
+        # 쿼리 수 측정
+        with CaptureQueriesContext(connection) as ctx:
+            response = client.get(reverse("product-list"))
 
-        # Assert: 성공 응답 (항상 검증)
+        # Assert: 성공 응답
         assert response.status_code == status.HTTP_200_OK
 
-        # Assert: 쿼리 수 검증 (DEBUG=True일 때만)
-        if settings.DEBUG:
-            query_count = len(connection.queries)
-            assert query_count < 15, (
-                f"상품 목록 쿼리 수 과다!\n"
-                f"실제: {query_count}개\n"
-                f"쿼리 목록:\n" + "\n".join(f"  {i+1}. {q['sql'][:100]}..." for i, q in enumerate(connection.queries))
-            )
+        # Assert: 쿼리 수 검증
+        query_count = len(ctx.captured_queries)
+        assert query_count < 15, (
+            f"상품 목록 쿼리 수 과다!\n"
+            f"실제: {query_count}개\n"
+            f"쿼리 목록:\n" + "\n".join(f"  {i+1}. {q['sql'][:100]}..." for i, q in enumerate(ctx.captured_queries))
+        )
 
 
 # =============================================================================

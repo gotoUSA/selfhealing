@@ -18,6 +18,7 @@ from ..models.order import Order
 from ..permissions import IsOrderOwnerOrAdmin
 from ..serializers.order_serializers import OrderCreateSerializer, OrderDetailSerializer, OrderListSerializer
 from ..services.order_service import OrderService, OrderServiceError
+from ..services.product_query_service import prefetch_product_cards
 from ..throttles import OrderCancelRateThrottle, OrderCreateRateThrottle
 
 logger = logging.getLogger(__name__)
@@ -163,18 +164,16 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         성능 최적화:
         - select_related("user"): N+1 방지
-        - prefetch_related("order_items__product"): 주문 아이템 최적화
-        - annotate(item_count): 아이템 개수 미리 계산
+        - annotate(item_count): 아이템 개수 미리 계산 (목록은 항목을 그리지 않으므로 항목을 읽지 않는다)
+        - 상세: 주문 항목의 상품을 상품 카드 모양으로 한 번에 (항목마다 카테고리·판매자·이미지를 따로 읽지 않게)
 
         보안:
         - 관리자: 전체 주문 조회
         - 일반 사용자: 본인 주문만 조회
         """
-        queryset = (
-            Order.objects.select_related("user")
-            .prefetch_related("order_items__product")
-            .annotate(item_count=Count("order_items"))
-        )
+        queryset = Order.objects.select_related("user").annotate(item_count=Count("order_items"))
+        if self.action != "list":
+            queryset = queryset.prefetch_related(prefetch_product_cards("order_items__product", self.request.user.id))
 
         if self.request.user.is_staff or self.request.user.is_superuser:
             return queryset

@@ -35,7 +35,9 @@ class WishlistProductSerializer(serializers.ModelSerializer):
         return obj.stock > 0 and obj.is_active
 
     def get_wishlist_count(self, obj: Product) -> int:
-        """이 상품을 찜한 사용자 수"""
+        """이 상품을 찜한 사용자 수 (찜 목록 쿼리셋이 서브쿼리로 미리 계산)"""
+        if hasattr(obj, "wishlist_cnt"):
+            return obj.wishlist_cnt
         return obj.wished_by_users.count()
 
     def get_discount_rate(self, obj: Product) -> float:
@@ -46,13 +48,19 @@ class WishlistProductSerializer(serializers.ModelSerializer):
         return 0
 
     def get_primary_image(self, obj: Product) -> str | None:
-        """대표 이미지 URL"""
-        primary = obj.images.filter(is_primary=True).first()
-        if primary:
-            return primary.image.url if hasattr(primary.image, "url") else None
-        # 대표 이미지가 없으면 첫 번째 이미지
-        first_image = obj.images.first()
-        return first_image.image.url if first_image and hasattr(first_image.image, "url") else None
+        """
+        대표 이미지 URL
+
+        prefetch 된 이미지 안에서 고른다 — images.filter(...) 는 prefetch 를 건너뛰고 상품마다 쿼리를 보낸다.
+        """
+        images = list(obj.images.all())
+        chosen = next((image for image in images if image.is_primary), None)
+        if chosen is None and images:
+            # 대표 이미지가 없으면 첫 번째 이미지
+            chosen = images[0]
+        if chosen is None:
+            return None
+        return chosen.image.url if hasattr(chosen.image, "url") else None
 
 
 class WishlistToggleSerializer(serializers.Serializer):
