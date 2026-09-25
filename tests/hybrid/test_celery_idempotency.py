@@ -120,7 +120,7 @@ class TestPaymentIdempotency:
         )
 
         # Assert
-        cache_key = f"payment:idempotency:{idempotency_key}"
+        cache_key = PaymentService._get_idempotency_cache_key(idempotency_key, order)
         cached_payment_id = cache.get(cache_key)
         assert cached_payment_id == payment.id
 

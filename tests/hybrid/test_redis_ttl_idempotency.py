@@ -64,7 +64,7 @@ class TestIdempotencyKeyRedisTTL:
         )
 
         # Assert - Redis에 저장되었는지 확인
-        cache_key = f"payment:idempotency:{idempotency_key}"
+        cache_key = PaymentService._get_idempotency_cache_key(idempotency_key, order)
         cached_value = cache.get(cache_key)
         assert cached_value == payment.id
 
@@ -107,7 +107,7 @@ class TestIdempotencyKeyRedisTTL:
         )
 
         # TTL 만료 시뮬레이션 (캐시 삭제)
-        cache_key = f"payment:idempotency:{idempotency_key}"
+        cache_key = PaymentService._get_idempotency_cache_key(idempotency_key, order1)
         cache.delete(cache_key)
 
         # Act - TTL 만료 후 새 주문에 동일 키로 요청

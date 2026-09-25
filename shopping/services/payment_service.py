@@ -53,12 +53,17 @@ class PaymentService:
     """결제 관련 비즈니스 로직을 처리하는 서비스"""
 
     @staticmethod
-    def _get_idempotency_cache_key(key: str) -> str:
-        """멱등성 키의 Redis 캐시 키 생성"""
-        return f"payment:idempotency:{key}"
+    def _get_idempotency_cache_key(key: str, order: Order) -> str:
+        """
+        멱등성 키의 Redis 캐시 키 — 주문한 사용자와 주문에 묶는다
+
+        클라이언트가 만든 키만으로 저장하면, 같은 키를 보낸 다른 주문·다른 사용자에게
+        먼저 만든 결제(주문번호·금액·상품명)를 돌려준다.
+        """
+        return f"payment:idempotency:{order.user_id}:{order.pk}:{key}"
 
     @staticmethod
-    def _check_idempotency_key(key: str) -> Payment | None:
+    def _check_idempotency_key(key: str, order: Order) -> Payment | None:
         """
         Redis에서 멱등성 키 확인 (TTL 60초)
 
@@ -68,12 +73,12 @@ class PaymentService:
         if not key:
             return None
 
-        cache_key = PaymentService._get_idempotency_cache_key(key)
+        cache_key = PaymentService._get_idempotency_cache_key(key, order)
         payment_id = cache.get(cache_key)
 
         if payment_id:
             try:
-                return Payment.objects.get(pk=payment_id)
+                return Payment.objects.get(pk=payment_id, order=order)
             except Payment.DoesNotExist:
                 # Redis에는 있지만 DB에 없는 경우 (드문 케이스)
                 cache.delete(cache_key)
@@ -81,10 +86,10 @@ class PaymentService:
         return None
 
     @staticmethod
-    def _set_idempotency_key(key: str, payment_id: int) -> None:
+    def _set_idempotency_key(key: str, order: Order, payment_id: int) -> None:
         """Redis에 멱등성 키 저장 (TTL 60초)"""
         if key:
-            cache_key = PaymentService._get_idempotency_cache_key(key)
+            cache_key = PaymentService._get_idempotency_cache_key(key, order)
             cache.set(cache_key, payment_id, timeout=IDEMPOTENCY_KEY_TTL)
 
     @staticmethod
@@ -112,7 +117,7 @@ class PaymentService:
         )
 
         # 멱등성 키 확인 (Redis TTL 60초)
-        existing_payment = PaymentService._check_idempotency_key(idempotency_key)
+        existing_payment = PaymentService._check_idempotency_key(idempotency_key, order)
         if existing_payment:
             logger.info(f"기존 결제 반환 (멱등성): idempotency_key={idempotency_key}, " f"payment_id={existing_payment.id}")
             return existing_payment
@@ -137,7 +142,7 @@ class PaymentService:
         )
 
         # Redis에 멱등성 키 저장 (TTL 60초)
-        PaymentService._set_idempotency_key(idempotency_key, payment.id)
+        PaymentService._set_idempotency_key(idempotency_key, order, payment.id)
 
         # 로그 기록
         PaymentLog.objects.create(
