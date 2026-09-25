@@ -263,6 +263,11 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ],
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # 속도 제한이 클라이언트를 알아보는 주소 = X-Forwarded-For 끝에서 앞단 프록시 수만큼 앞의 값.
+    # nginx 는 들어온 헤더 뒤에 자기가 본 주소를 붙이므로 믿을 수 있는 건 끝의 값뿐이다
+    # (설정이 없으면 DRF 가 헤더 전체를 쓰고, 클라이언트가 앞부분을 바꿀 때마다 새 클라이언트가 된다).
+    # docker-compose(nginx → gunicorn) = 1, gunicorn 을 바로 열면 0
+    "NUM_PROXIES": int(os.environ.get("DRF_NUM_PROXIES", "1")),
 }
 
 if SELFHEALING_AVAILABLE:
