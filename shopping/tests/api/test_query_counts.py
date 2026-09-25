@@ -226,21 +226,31 @@ class TestProductCardFields:
             product, viewer
         )
 
-    def test_single_item_response_has_every_field(self, world):
-        """장바구니 담기 응답(단건)도 필드가 빠지지 않는다 — 미리 계산하지 않은 상품은 직접 조회"""
+    @pytest.mark.parametrize(
+        "url, pick",
+        [
+            ("/api/cart/add_item/", lambda b: b["item"]["product"]),
+            ("/api/cart-items/", lambda b: b["product"]),
+        ],
+        ids=["cart-add-item", "cart-items-create"],
+    )
+    def test_single_item_response_has_every_field(self, world, url, pick):
+        """장바구니 담기 응답(단건)도 필드가 빠지지 않고 값이 맞다 — 미리 계산하지 않은 상품은 직접 조회
+
+        찜한 상품을 담는 사용자로 확인한다: 찜 여부는 요청의 사용자로 계산하므로, 응답을 만들 때
+        요청(context)을 넘기지 않으면 찜한 상품도 is_wished=false 가 된다.
+        """
         buyer = _user("single_buyer")
         product = world["big"]["focus"]
+        product.wished_by_users.add(buyer)
         client = APIClient()
         client.force_authenticate(user=buyer)
 
-        response = client.post(
-            "/api/cart/add_item/",
-            {"product_id": product.id, "quantity": 1},
-            format="json",
-        )
+        response = client.post(url, {"product_id": product.id, "quantity": 1}, format="json")
 
         assert response.status_code == 201, response.content[:500]
-        card = response.json()["item"]["product"]
+        card = pick(response.json())
+        assert card["is_wished"] is True
         assert set(card) == CARD_FIELDS
         assert {k: card[k] for k in ("average_rating", "review_count", "wishlist_count", "is_wished")} == _expected_card(
             product, buyer

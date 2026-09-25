@@ -7,7 +7,7 @@ from django.db.models import Count
 from django_filters.rest_framework import DjangoFilterBackend
 
 from drf_spectacular.utils import extend_schema, extend_schema_view
-from rest_framework import filters, permissions, serializers as drf_serializers, status, viewsets
+from rest_framework import filters, mixins, permissions, serializers as drf_serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
@@ -104,29 +104,13 @@ class OrderPagination(PageNumberPagination):
 - 본인 주문 또는 관리자만 조회 가능하다.""",
         tags=["Orders"],
     ),
-    update=extend_schema(
-        summary="주문 정보를 전체 수정한다.",
-        description="""처리 내용:
-- 주문 정보를 전체 수정한다.
-- 관리자만 사용 가능하다.""",
-        tags=["Orders"],
-    ),
-    partial_update=extend_schema(
-        summary="주문 정보를 부분 수정한다.",
-        description="""처리 내용:
-- 주문 정보를 부분 수정한다.
-- 관리자만 사용 가능하다.""",
-        tags=["Orders"],
-    ),
-    destroy=extend_schema(
-        summary="주문을 삭제한다.",
-        description="""처리 내용:
-- 주문을 삭제한다.
-- 관리자만 사용 가능하다.""",
-        tags=["Orders"],
-    ),
 )
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
     """
     주문 관리 ViewSet
 
@@ -138,7 +122,12 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     권한:
     - 인증된 사용자만 접근 가능
-    - 본인 주문 또는 관리자만 조회/수정 가능
+    - 본인 주문 또는 관리자만 조회 가능
+
+    수정·삭제 API는 두지 않는다. 주문의 상태와 금액은 생성·취소·결제 흐름으로만 바뀐다.
+    (예전엔 ModelViewSet 이라 PUT/PATCH/DELETE 가 열려 있었고, 스키마 설명은 "관리자만"이었지만
+    권한 클래스는 주문 주인도 통과시켰다 — 고객이 final_amount 를 0 으로 바꾼 뒤 포인트 전액 결제로
+    결제 없이 paid 를 만들 수 있었다)
     """
 
     permission_classes = [permissions.IsAuthenticated, IsOrderOwnerOrAdmin]

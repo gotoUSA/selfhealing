@@ -838,6 +838,11 @@ class PaymentService:
         if order.final_amount != 0:
             raise PaymentConfirmError(f"포인트 전액 결제가 아닙니다. 결제 금액: {order.final_amount}원")
 
+        # 2-1. 쓴 포인트가 상품 금액과 배송비를 실제로 덮는지 — final_amount 한 칸만 믿지 않는다
+        payable = order.total_amount + order.get_total_shipping_fee() - order.used_points
+        if payable > 0:
+            raise PaymentConfirmError(f"사용한 포인트가 결제 금액을 덮지 않습니다. 남은 결제 금액: {payable}원")
+
         # 3. 동시성 제어: Order를 락으로 보호
         order = Order.objects.select_for_update().get(pk=order.pk)
 

@@ -241,7 +241,7 @@ class CartViewSet(viewsets.GenericViewSet):
             return Response(
                 {
                     "message": "장바구니에 추가되었습니다.",
-                    "item": CartItemSerializer(cart_item).data,
+                    "item": CartItemSerializer(cart_item, context={"request": request}).data,
                 },
                 status=status.HTTP_201_CREATED,
             )
@@ -310,7 +310,7 @@ class CartViewSet(viewsets.GenericViewSet):
             return Response(
                 {
                     "message": "수량이 변경되었습니다.",
-                    "item": CartItemSerializer(cart_item).data,
+                    "item": CartItemSerializer(cart_item, context={"request": request}).data,
                 }
             )
         except CartServiceError as e:
@@ -417,7 +417,7 @@ class CartViewSet(viewsets.GenericViewSet):
 
             response_data = {
                 "message": f"{result.success_count}개의 상품이 추가되었습니다.",
-                "added_items": CartItemSerializer(added_items, many=True).data,
+                "added_items": CartItemSerializer(added_items, many=True, context={"request": request}).data,
             }
 
             if result.errors:
@@ -677,7 +677,7 @@ class CartItemViewSet(viewsets.GenericViewSet):
                 quantity=quantity,
             )
             return Response(
-                CartItemSerializer(cart_item).data,
+                CartItemSerializer(cart_item, context={"request": request}).data,
                 status=status.HTTP_201_CREATED,
             )
         except CartServiceError as e:
@@ -705,7 +705,7 @@ class CartItemViewSet(viewsets.GenericViewSet):
             if cart_item is None:
                 return Response(status=status.HTTP_204_NO_CONTENT)
 
-            return Response(CartItemSerializer(cart_item).data)
+            return Response(CartItemSerializer(cart_item, context={"request": request}).data)
         except CartServiceError as e:
             if e.code == "ITEM_NOT_FOUND":
                 raise NotFound(e.message)
